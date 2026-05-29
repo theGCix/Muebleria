@@ -1,0 +1,1 @@
+import{s as o}from"./index-DeeNySNj.js";import{P as t}from"./product._handle-gRhZYn-e.js";import"./button-D0XnMicE.js";import"./utils-DclmTqRz.js";const s=()=>o.jsx(t,{});export{s as notFoundComponent};
