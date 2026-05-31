@@ -14,7 +14,14 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://muebleria-q74c.onrender.com",
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
+  credentials: true,
+}));
 
 function getNiubizUrls() {
   return {
@@ -185,6 +192,8 @@ app.post("/niubiz-return.html", express.urlencoded({ extended: true }), (req, re
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
   res.redirect(`${frontendUrl}/checkout?${qs}`);
 });
+
+
 app.post("/api/orders", async (req, res) => {
   console.log("📦 Orden recibida:", JSON.stringify(req.body, null, 2)); 
   try {
