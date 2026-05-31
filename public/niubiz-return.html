@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Procesando pago...</title></head>
+<body>
+<p>Procesando pago...</p>
+<script>
+  // Niubiz envía los datos via POST en el body como form-urlencoded
+  // No podemos leer el body desde JS del lado cliente directamente,
+  // pero Niubiz también los manda como campos del formulario accesibles
+  // via document.forms o los agrega como query params en algunos casos.
+  
+  // Recolectar TODO lo disponible
+  const searchParams = Object.fromEntries(new URLSearchParams(window.location.search));
+  
+  // Intentar leer campos del formulario si Niubiz los inyecta en el DOM
+  const formData = {};
+  if (document.forms[0]) {
+    const form = document.forms[0];
+    for (const el of form.elements) {
+      if (el.name) formData[el.name] = el.value;
+    }
+  }
+
+  const params = { ...searchParams, ...formData };
+  console.log("Params combinados:", params);
+
+  // Enviar al opener o a la ventana padre
+  const target = window.opener || window.parent;
+  if (target && target !== window) {
+    target.postMessage({ type: "NIUBIZ_RESULT", params }, "*");
+    if (window.opener) setTimeout(() => window.close(), 500);
+  } else {
+    // Redirigir al checkout con los params como query string
+    const qs = new URLSearchParams(params).toString();
+    window.location.href = "/checkout?" + qs;
+  }
+</script>
+</body>
+</html>

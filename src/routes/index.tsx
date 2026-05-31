@@ -1,0 +1,34 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { Header } from "@/components/Header";
+import { Hero } from "@/components/Hero";
+import { Categories } from "@/components/Categories";
+import { ProductsSection } from "@/components/ProductsSection";
+import { Testimonials } from "@/components/Testimonials";
+import { Footer } from "@/components/Footer";
+
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "G&M Mueblería — Muebles artesanales en madera natural" },
+      { name: "description", content: "Sala, comedor, recámara y oficina. Muebles hechos a mano por artesanos. Compra online con entrega a domicilio." },
+      { property: "og:title", content: "G&M Mueblería — Muebles artesanales" },
+      { property: "og:description", content: "Piezas atemporales en madera natural para cada rincón de tu hogar." },
+    ],
+  }),
+  component: Index,
+});
+
+function Index() {
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main>
+        <Hero />
+        <Categories />
+        <ProductsSection />
+        <Testimonials />
+      </main>
+      <Footer />
+    </div>
+  );
+}

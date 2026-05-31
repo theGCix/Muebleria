@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: muebleria-gm
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
+    name: muebleria-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: FRONTEND_URL
+        value: https://muebleria-gm.onrender.com
+      - key: NIUBIZ_MERCHANT_ID
+        sync: false
+      - key: NIUBIZ_USER
+        sync: false
+      - key: NIUBIZ_PASSWORD
+        sync: false
+      - key: NIUBIZ_AMBIENTE
+        value: integracion
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false

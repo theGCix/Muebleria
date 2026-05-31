@@ -1,0 +1,218 @@
+import { z } from "zod";
+import { getAuthenticatedClient } from "@/integrations/supabase/auth-middleware";
+
+const ItemSchema = z.object({
+  product_id: z.string().uuid().optional().nullable(),
+  sku: z.string().optional().nullable(),
+  title: z.string().min(1).max(255),
+  qty: z.number().positive().max(9999),
+  unit_price: z.number().min(0).max(999999),
+});
+
+const SaleSchema = z.object({
+  tipo: z.enum(["boleta", "factura", "nota"]),
+  customer_id: z.string().uuid().nullable(),
+  metodo: z.enum(["efectivo", "tarjeta", "transferencia", "yape_plin"]),
+  notas: z.string().max(500).optional().nullable(),
+  items: z.array(ItemSchema).min(1).max(50),
+});
+
+export async function createSale(input: { data: z.infer<typeof SaleSchema> }) {
+  const data = SaleSchema.parse(input.data);
+  const { supabase } = await getAuthenticatedClient();
+  const { data: saleId, error } = await supabase.rpc("create_sale", {
+    _tipo: data.tipo,
+    _customer_id: data.customer_id as string,
+    _metodo: data.metodo,
+    _items: data.items as never,
+    _notas: (data.notas ?? "") as string,
+  });
+  if (error) throw new Error(error.message);
+  return { saleId };
+}
+
+const CustomerSchema = z.object({
+  doc_tipo: z.enum(["DNI", "RUC", "CE", "PASAPORTE"]),
+  doc_numero: z.string().min(6).max(20).regex(/^[A-Z0-9]+$/i),
+  nombre: z.string().min(1).max(255),
+  email: z.string().email().max(255).optional().nullable().or(z.literal("")),
+  telefono: z.string().max(30).optional().nullable(),
+  direccion: z.string().max(500).optional().nullable(),
+});
+
+export async function upsertCustomer(input: { data: z.infer<typeof CustomerSchema> }) {
+  const data = CustomerSchema.parse(input.data);
+  const { supabase, userId } = await getAuthenticatedClient();
+  const payload = { ...data, email: data.email || null, created_by: userId };
+  const { data: row, error } = await supabase
+    .from("customers")
+    .upsert(payload, { onConflict: "doc_tipo,doc_numero" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { customer: row };
+}
+
+export async function searchCustomers(input: { data: { q: string } }) {
+  const { q } = z.object({ q: z.string().max(100) }).parse(input.data);
+  const { supabase } = await getAuthenticatedClient();
+  const trimmed = q.trim();
+  let query = supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(20);
+  if (trimmed) query = query.or(`nombre.ilike.%${trimmed}%,doc_numero.ilike.%${trimmed}%`);
+  const { data: rows, error } = await query;
+  if (error) throw new Error(error.message);
+  return { customers: rows ?? [] };
+}
+
+export async function listSales() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("sales")
+    .select("*, customers(nombre, doc_numero, doc_tipo), sale_items(*)")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return { sales: data ?? [] };
+}
+
+export async function getSale(input: { id: string }) {
+  const { id } = z.object({ id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data: sale, error } = await supabase
+    .from("sales")
+    .select("*, customers(*), sale_items(*)")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return { sale };
+}
+
+export async function getDashboard() {
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const isAdmin = !!roles?.some((r) => r.role === "admin");
+
+  let salesQuery = supabase.from("sales").select("id, total, created_at, vendedor_id, customer_id");
+  if (!isAdmin) salesQuery = salesQuery.eq("vendedor_id", userId);
+  const { data: sales, error: salesErr } = await salesQuery;
+  if (salesErr) throw new Error(salesErr.message);
+
+  const { data: items } = await supabase
+    .from("sale_items")
+    .select("title, qty, total, sale_id, sales!inner(vendedor_id)")
+    .order("created_at", { ascending: false })
+    .limit(2000);
+
+  const { data: customers } = await supabase.from("customers").select("id, nombre, doc_numero");
+  const { data: profiles } = await supabase.from("profiles").select("id, full_name");
+
+  return {
+    sales: sales ?? [],
+    items: items ?? [],
+    customers: customers ?? [],
+    profiles: profiles ?? [],
+    isAdmin,
+  };
+}
+
+export async function createStaffUser(input: {
+  email: string;
+  password: string;
+  full_name: string;
+  role: "admin" | "vendedor" | "cliente";
+}) {
+  const { email, password, full_name, role } = z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    full_name: z.string().min(1),
+    role: z.enum(["admin", "vendedor", "cliente"]),
+  }).parse(input);
+
+  // Verificar que el llamante es admin
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { data: adminCheck } = await supabase
+    .from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle();
+  if (!adminCheck) throw new Error("Solo administradores pueden crear usuarios");
+
+  // Llamar a la Admin API de Supabase con la service role key
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
+  if (!SERVICE_KEY) throw new Error("VITE_SUPABASE_SERVICE_KEY no configurado");
+
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SERVICE_KEY,
+      "Authorization": `Bearer ${SERVICE_KEY}`,
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.msg ?? err?.message ?? "Error creando usuario");
+  }
+
+  const newUser = await res.json();
+
+  // Asignar rol en user_roles (el trigger ya crea el profile y asigna 'cliente')
+  // Si el rol deseado no es cliente, lo actualizamos
+  if (role !== "cliente") {
+    await supabase.from("user_roles")
+      .update({ role })
+      .eq("user_id", newUser.id);
+  }
+
+  return { ok: true, user: newUser };
+}
+
+export async function listUsers() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data: profiles, error } = await supabase.from("profiles").select("*").order("created_at");
+  if (error) throw new Error(error.message);
+  const { data: roles } = await supabase.from("user_roles").select("*");
+  return { profiles: profiles ?? [], roles: roles ?? [] };
+}
+
+export async function setUserRole(input: {
+  user_id: string;
+  role: "admin" | "vendedor" | "cliente";
+  action: "add" | "remove";
+}) {
+  const data = z.object({
+    user_id: z.string().uuid(),
+    role: z.enum(["admin", "vendedor", "cliente"]),
+    action: z.enum(["add", "remove"]),
+  }).parse(input);
+
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { data: adminCheck } = await supabase
+    .from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle();
+  if (!adminCheck) throw new Error("Solo administradores pueden cambiar roles");
+
+  if (data.action === "add") {
+    const { error } = await supabase.from("user_roles").insert({ user_id: data.user_id, role: data.role });
+    if (error && !error.message.includes("duplicate")) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("user_roles").delete().eq("user_id", data.user_id).eq("role", data.role);
+    if (error) throw new Error(error.message);
+  }
+  return { ok: true };
+}
+
+export async function anularVenta(input: { data: { id: string } }) {
+  const { id } = z.object({ id: z.string().uuid() }).parse(input.data);
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { data: roles } = await supabase
+    .from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
+  if (!roles) throw new Error("Solo administradores pueden anular comprobantes");
+  const { error } = await supabase.from("sales").update({ estado: "anulada" }).eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}

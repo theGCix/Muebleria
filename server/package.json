@@ -1,0 +1,17 @@
+{
+  "name": "muebleriagm",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n VITE,API -c cyan,green \"vite\" \"node server/index.js\"",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.0"
+  }
+}
