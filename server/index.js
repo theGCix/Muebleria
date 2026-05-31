@@ -181,12 +181,10 @@ app.listen(PORT, () => console.log(`✅ Niubiz proxy corriendo en http://localho
 import { URLSearchParams } from "url";
 
 app.post("/niubiz-return.html", express.urlencoded({ extended: true }), (req, res) => {
-  console.log("Niubiz POST body:", req.body);
   const qs = new URLSearchParams(req.body).toString();
-  // Redirigir directo al checkout en Vite
-  res.redirect(`http://localhost:5173/checkout?${qs}`);
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  res.redirect(`${frontendUrl}/checkout?${qs}`);
 });
-
 app.post("/api/orders", async (req, res) => {
   console.log("📦 Orden recibida:", JSON.stringify(req.body, null, 2)); 
   try {
