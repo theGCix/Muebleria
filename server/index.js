@@ -1,19 +1,18 @@
 import express from "express";
-import cors from "cors";
-import "dotenv/config";
-
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-
 import { createClient } from "@supabase/supabase-js";
+import { URLSearchParams } from "url";
 
-
+// ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
 app.use(express.json());
+
+// ── CORS ──────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -22,26 +21,40 @@ app.use((req, res, next) => {
   next();
 });
 
-function getNiubizUrls() {
-  return {
-    security: process.env.NIUBIZ_URL_SECURITY ?? "https://apitestenv.vnforapps.com/api.security/v1/security",
-    session:  process.env.NIUBIZ_URL_SESSION  ?? "https://apitestenv.vnforapps.com/api.ecommerce/v2/ecommerce/token/session",
-    js:       process.env.NIUBIZ_URL_JS       ?? "https://static-content-qas.vnforapps.com/v2/js/checkout.js",
-  };
-
-
-}
-
-
+// ── Supabase admin ────────────────────────────────────────────
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SECRET_KEY  // service_role key
+  process.env.SUPABASE_SECRET_KEY
 );
 
+// ── URLs de Niubiz según ambiente ─────────────────────────────
+// En .env pon: NIUBIZ_AMBIENTE=integracion  o  NIUBIZ_AMBIENTE=produccion
+function getNiubizUrls() {
+  const amb = process.env.NIUBIZ_AMBIENTE ?? "integracion";
+  const defaults = {
+    integracion: {
+      security: "https://apitestenv.vnforapps.com/api.security/v1/security",
+      session:  "https://apitestenv.vnforapps.com/api.ecommerce/v2/ecommerce/token/session",
+      js:       "https://static-content-qas.vnforapps.com/v2/js/checkout.js",
+    },
+    produccion: {
+      security: "https://apiprod.vnforapps.com/api.security/v1/security",
+      session:  "https://apiprod.vnforapps.com/api.ecommerce/v2/ecommerce/token/session",
+      js:       "https://static-content.vnforapps.com/v2/js/checkout.js",
+    },
+  };
+  const base = defaults[amb] ?? defaults.integracion;
+  return {
+    security: process.env.NIUBIZ_URL_SECURITY ?? base.security,
+    session:  process.env.NIUBIZ_URL_SESSION  ?? base.session,
+    js:       process.env.NIUBIZ_URL_JS       ?? base.js,
+  };
+}
+
 async function getSecurityToken() {
-  const user     = process.env.NIUBIZ_USER;
-  const password = process.env.NIUBIZ_PASSWORD;
-  const creds    = Buffer.from(`${user}:${password}`).toString("base64");
+  const creds = Buffer.from(
+    `${process.env.NIUBIZ_USER}:${process.env.NIUBIZ_PASSWORD}`
+  ).toString("base64");
   const res = await fetch(getNiubizUrls().security, {
     headers: { Authorization: `Basic ${creds}` },
   });
@@ -49,6 +62,7 @@ async function getSecurityToken() {
   return res.text();
 }
 
+// ── GET /api/niubiz/config ────────────────────────────────────
 app.get("/api/niubiz/config", (_req, res) => {
   res.json({
     merchantId: process.env.NIUBIZ_MERCHANT_ID,
@@ -57,21 +71,23 @@ app.get("/api/niubiz/config", (_req, res) => {
   });
 });
 
+// ── POST /api/niubiz/session ──────────────────────────────────
 app.post("/api/niubiz/session", async (req, res) => {
   try {
     const { amount, orderId, email } = req.body;
     const merchantId = process.env.NIUBIZ_MERCHANT_ID;
     const token      = await getSecurityToken();
-    const { session } = getNiubizUrls();
 
-    const r = await fetch(`${session}/${merchantId}`, {
+    const r = await fetch(`${getNiubizUrls().session}/${merchantId}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json", Authorization: token },
       body: JSON.stringify({
         amount: Number(amount).toFixed(2),
         antifraud: {
           clientIp: "127.0.0.1",
-          merchantDefineData: { MDD4: email ?? "", MDD32: merchantId, MDD75: "Ecommerce", MDD77: "0" },
+          merchantDefineData: {
+            MDD4: email ?? "", MDD32: merchantId, MDD75: "Ecommerce", MDD77: "0",
+          },
         },
         channel: "web", currency: "PEN", orderId,
       }),
@@ -79,19 +95,32 @@ app.post("/api/niubiz/session", async (req, res) => {
 
     if (!r.ok) throw new Error(`Niubiz session: ${r.status} ${await r.text()}`);
     const json = await r.json();
-    res.json({ sessionKey: json.sessionKey, merchantId, jsUrl: getNiubizUrls().js, currency: "PEN" });
+    res.json({
+      sessionKey: json.sessionKey,
+      merchantId,
+      jsUrl:      getNiubizUrls().js,
+      currency:   "PEN",
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Nuevo endpoint — agregar antes del app.listen:
+// ── POST /niubiz-return.html — recibe el POST de Niubiz ───────
+app.post("/niubiz-return.html", express.urlencoded({ extended: true }), (req, res) => {
+  console.log("Niubiz POST body:", req.body);
+  const qs          = new URLSearchParams(req.body).toString();
+  const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
+  res.redirect(`${frontendUrl}/checkout?${qs}`);
+});
+
+// ── POST /api/orders — guarda el pedido en Supabase ───────────
 app.post("/api/orders", async (req, res) => {
   try {
     const { order, items } = req.body;
+    console.log("📦 Orden recibida:", order?.orderNumber);
 
-    // Generar order_number único si viene vacío
-    const orderNumber = (order.orderNumber && order.orderNumber.trim())
+    const orderNumber = (order.orderNumber?.trim())
       ? order.orderNumber
       : `GM-${Date.now()}-${(order.transactionToken ?? "").slice(-6).toUpperCase()}`;
 
@@ -110,21 +139,21 @@ app.post("/api/orders", async (req, res) => {
       .from("orders")
       .insert({
         order_number:       orderNumber,
-        user_id:            order.userId ?? null, // opcional, si quieres relacionar con usuarios registrados
+        user_id:            order.userId ?? null,
         nombre:             order.nombre || "—",
-        email:              order.email || "—",
-        telefono:           order.telefono,
-        dni:                order.dni,
-        direccion:          order.direccion,
-        distrito:           order.distrito,
-        ciudad:             order.ciudad,
-        notas:              order.notas,
-        subtotal:           order.subtotal || 0,
-        envio:              order.envio ?? 0,
-        total:              order.total || 0,
+        email:              order.email  || "—",
+        telefono:           order.telefono  ?? null,
+        dni:                order.dni       ?? null,
+        direccion:          order.direccion ?? null,
+        distrito:           order.distrito  ?? null,
+        ciudad:             order.ciudad    ?? null,
+        notas:              order.notas     ?? null,
+        subtotal:           order.subtotal  ?? 0,
+        envio:              order.envio     ?? 0,
+        total:              order.total     ?? 0,
         currency:           "PEN",
-        niubiz_session_key: order.sessionKey,
-        niubiz_token:       order.transactionToken,
+        niubiz_session_key: order.sessionKey       ?? null,
+        niubiz_token:       order.transactionToken ?? null,
         status:             "pagado",
         paid_at:            new Date().toISOString(),
       })
@@ -136,7 +165,7 @@ app.post("/api/orders", async (req, res) => {
     const orderItems = (items ?? []).map((item) => ({
       order_id:   newOrder.id,
       product_id: item.product_id ?? null,
-      sku:        item.sku ?? null,
+      sku:        item.sku        ?? null,
       title:      item.title,
       qty:        item.qty,
       unit_price: item.price,
@@ -144,116 +173,28 @@ app.post("/api/orders", async (req, res) => {
       image_url:  item.image ?? null,
     }));
 
-    // if (orderItems.length > 0) {
-    //   const { error: itemsError } = await supabaseAdmin
-    //     .from("order_items")
-    //     .insert(orderItems);
-    //   if (itemsError) throw new Error(itemsError.message);
-    // }
     if (orderItems.length > 0) {
-        const { error: itemsError } = await supabaseAdmin
-          .from("order_items")
-          .insert(orderItems);
-        if (itemsError) throw new Error(itemsError.message);
+      const { error: itemsError } = await supabaseAdmin
+        .from("order_items")
+        .insert(orderItems);
+      if (itemsError) throw new Error(itemsError.message);
 
-        //reducir stock por cada producto
-        for (const item of orderItems) {
-          if (!item.product_id) continue;
-          const { data: product } = await supabaseAdmin
+      // Reducir stock
+      for (const item of orderItems) {
+        if (!item.product_id) continue;
+        const { data: product } = await supabaseAdmin
+          .from("products")
+          .select("stock")
+          .eq("id", item.product_id)
+          .single();
+        if (product) {
+          await supabaseAdmin
             .from("products")
-            .select("stock")
-            .eq("id", item.product_id)
-            .single();
-
-          if (product) {
-            await supabaseAdmin
-              .from("products")
-              .update({ stock: Math.max(0, (product.stock ?? 0) - item.qty) })
-              .eq("id", item.product_id);
-          }
+            .update({ stock: Math.max(0, (product.stock ?? 0) - item.qty) })
+            .eq("id", item.product_id);
         }
       }
-
-    res.json({ success: true, orderId: newOrder.id });
-  } catch (err) {
-    console.error("Error guardando orden:", err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Niubiz proxy corriendo en http://localhost:${PORT}`));
-
-import { URLSearchParams } from "url";
-
-app.post("/niubiz-return.html", express.urlencoded({ extended: true }), (req, res) => {
-  const qs = new URLSearchParams(req.body).toString();
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-  res.redirect(`${frontendUrl}/checkout?${qs}`);
-});
-
-
-app.post("/api/orders", async (req, res) => {
-  console.log("📦 Orden recibida:", JSON.stringify(req.body, null, 2)); 
-  try {
-    const { order, items } = req.body;
-
-    // Generar order_number desde transactionToken si viene vacío
-    const orderNumber = order.orderNumber || 
-      `GM-${Date.now()}-${order.transactionToken?.slice(-6).toUpperCase() ?? "XXXXX"}`;
-
-    // Verificar si ya existe este transactionToken
-    const { data: existing } = await supabaseAdmin
-      .from("orders")
-      .select("id")
-      .eq("niubiz_token", order.transactionToken)
-      .maybeSingle();
-
-    if (existing) {
-      return res.json({ success: true, orderId: existing.id, alreadyExists: true });
     }
-    const { data: newOrder, error: orderError } = await supabaseAdmin
-      .from("orders")
-      .insert({
-        order_number:       order.orderNumber,
-        nombre:             order.nombre,
-        email:              order.email,
-        telefono:           order.telefono,
-        dni:                order.dni,
-        direccion:          order.direccion,
-        distrito:           order.distrito,
-        ciudad:             order.ciudad,
-        notas:              order.notas,
-        subtotal:           order.subtotal,
-        envio:              order.envio ?? 0,
-        total:              order.total,
-        currency:           "PEN",
-        niubiz_session_key: order.sessionKey,
-        niubiz_token:       order.transactionToken,
-        status:             "pagado",
-        paid_at:            new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-
-    if (orderError) throw new Error(orderError.message);
-
-    const orderItems = items.map((item) => ({
-      order_id:   newOrder.id,
-      product_id: item.product_id ?? null,
-      sku:        item.sku ?? null,
-      title:      item.title,
-      qty:        item.qty,
-      unit_price: item.price,
-      total:      item.price * item.qty,
-      image_url:  item.image ?? null,
-    }));
-
-    const { error: itemsError } = await supabaseAdmin
-      .from("order_items")
-      .insert(orderItems);
-
-    if (itemsError) throw new Error(itemsError.message);
 
     res.json({ success: true, orderId: newOrder.id });
   } catch (err) {
@@ -262,3 +203,10 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
+// ── Iniciar servidor ──────────────────────────────────────────
+const PORT = process.env.PORT ?? 3001;
+app.listen(PORT, () => {
+  console.log(`✅ Niubiz proxy en puerto ${PORT}`);
+  console.log(`   Ambiente Niubiz: ${process.env.NIUBIZ_AMBIENTE ?? "integracion"}`);
+  console.log(`   Frontend URL:    ${process.env.FRONTEND_URL ?? "http://localhost:5173"}`);
+});

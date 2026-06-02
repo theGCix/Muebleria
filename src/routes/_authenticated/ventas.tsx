@@ -51,7 +51,7 @@ function saleToComprobanteData(sale: any): ComprobanteParaPDF {
     numero: sale.numero,
     fechaEmision: format(new Date(sale.created_at), "dd/MM/yyyy"),
     moneda: "PEN",
-    emisorRuc: import.meta.env.SUNAT_RUC ?? "00000000000",
+    emisorRuc: import.meta.env.VITE_SUNAT_RUC ?? "00000000000",
     emisorRazon: "G&M MUEBLERIA",
     emisorDireccion: "Lima, Perú",
     receptorDoc: sale.customers

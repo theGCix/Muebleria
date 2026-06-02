@@ -47,7 +47,8 @@ interface ModalDatos {
   actionDesc?: string;
 }
 
-const API = import.meta.env.VITE_API_URL ?? "";
+// const API = import.meta.env.VITE_API_URL ?? "";
+import { API_URL as API } from "@/config";
 
 async function fetchNiubizSession(payload: {
   amount: number;
