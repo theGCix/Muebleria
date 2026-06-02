@@ -14,7 +14,14 @@ app.use(express.json());
 
 // ── CORS ──────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin;
+  const allowed = [
+    "https://muebleria-q74c.onrender.com",
+    "http://localhost:5173"
+  ];
+  if (allowed.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.sendStatus(200);
