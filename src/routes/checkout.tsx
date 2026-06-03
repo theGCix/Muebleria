@@ -3,13 +3,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { LoginModal } from "@/components/LoginModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCartStore } from "@/stores/cartStore";
 import {
   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
-  CheckCircle2, XCircle,
+  CheckCircle2, XCircle, LogIn,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -75,7 +76,8 @@ async function fetchNiubizSession(payload: {
 function CheckoutPage() {
   const { items, total, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
 
   // ── Todos los refs aquí, en el cuerpo del componente ──────
   const jsUrlRef      = useRef<string | null>(null);

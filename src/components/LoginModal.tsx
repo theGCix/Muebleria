@@ -1,22 +1,24 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Mail } from "lucide-react";
 
-export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Acceso — G&M Mueblería" }] }),
-  component: LoginPage,
-});
+interface LoginModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
 
-// This route still exists for direct /login navigation (e.g. from admin links),
-// but the main consumer-facing login is now the LoginModal in the Header.
-function LoginPage() {
-  const navigate = useNavigate();
+export function LoginModal({ open, onOpenChange }: LoginModalProps) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,42 +26,15 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "facebook" | null>(null);
 
+  // Reset form when modal closes
   useEffect(() => {
-    const redirectByRole = async (userId: string) => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      const roles = (data ?? []).map((r: any) => r.role);
-      if (roles.includes("admin") || roles.includes("vendedor")) {
-        navigate({ to: "/dashboard" });
-      } else {
-        navigate({ to: "/" });
-      }
-    };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (s?.user) redirectByRole(s.user.id);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) redirectByRole(data.session.user.id);
-    });
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  const loginWithOAuth = async (provider: "google" | "facebook") => {
-    setOauthLoading(provider);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${window.location.origin}/` },
-      });
-      if (error) throw error;
-    } catch (err: any) {
-      toast.error(err.message || `Error al conectar con ${provider}`);
-      setOauthLoading(null);
+    if (!open) {
+      setEmail("");
+      setPassword("");
+      setFullName("");
+      setMode("login");
     }
-  };
+  }, [open]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,9 +51,12 @@ function LoginPage() {
         });
         if (error) throw error;
         toast.success("Cuenta creada. Revisa tu correo para confirmar.");
+        onOpenChange(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        toast.success("¡Bienvenido!");
+        onOpenChange(false);
       }
     } catch (err: any) {
       toast.error(err.message || "Error de autenticación");
@@ -87,17 +65,37 @@ function LoginPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary px-4">
-      <Card className="w-full max-w-md p-8 shadow-elegant">
-        <Link to="/" className="block text-center mb-6">
-          <h1 className="font-display text-3xl font-semibold">G&M Mueblería</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login" ? "Inicia sesión en tu cuenta" : "Crea tu cuenta"}
-          </p>
-        </Link>
+  const loginWithOAuth = async (provider: "google" | "facebook") => {
+    setOauthLoading(provider);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast.error(err.message || `Error al conectar con ${provider}`);
+      setOauthLoading(null);
+    }
+  };
 
-        {/* OAuth */}
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[400px] p-6">
+        <DialogHeader className="mb-4">
+          <DialogTitle className="font-display text-2xl font-semibold text-center">
+            {mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
+          </DialogTitle>
+          <DialogDescription className="text-center text-sm">
+            {mode === "login"
+              ? "Accede a tu cuenta de G&M Mueblería"
+              : "Regístrate para comenzar a comprar"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* OAuth buttons */}
         <div className="space-y-2 mb-4">
           <Button
             type="button"
@@ -118,6 +116,7 @@ function LoginPage() {
             )}
             Continuar con Google
           </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -136,6 +135,7 @@ function LoginPage() {
           </Button>
         </div>
 
+        {/* Divider */}
         <div className="relative mb-4">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t border-border" />
@@ -145,27 +145,57 @@ function LoginPage() {
           </div>
         </div>
 
-        <form onSubmit={submit} className="space-y-4">
+        {/* Email/Password form */}
+        <form onSubmit={submit} className="space-y-3">
           {mode === "signup" && (
             <div>
-              <Label htmlFor="full_name">Nombre completo</Label>
-              <Input id="full_name" required maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+              <Label htmlFor="modal_full_name" className="text-sm">Nombre completo</Label>
+              <Input
+                id="modal_full_name"
+                required
+                maxLength={100}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                disabled={loading}
+                className="mt-1"
+              />
             </div>
           )}
           <div>
-            <Label htmlFor="email">Correo</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="modal_email" className="text-sm">Correo electrónico</Label>
+            <Input
+              id="modal_email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              className="mt-1"
+            />
           </div>
           <div>
-            <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Label htmlFor="modal_password" className="text-sm">Contraseña</Label>
+            <Input
+              id="modal_password"
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              className="mt-1"
+            />
           </div>
           <Button type="submit" className="w-full gap-2" disabled={loading || !!oauthLoading}>
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {!loading && <Mail className="h-4 w-4" />}
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Mail className="h-4 w-4" />
+            )}
             {mode === "login" ? "Ingresar" : "Crear cuenta"}
           </Button>
         </form>
+
         <button
           type="button"
           onClick={() => setMode(mode === "login" ? "signup" : "login")}
@@ -173,7 +203,7 @@ function LoginPage() {
         >
           {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}
         </button>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
