@@ -36,18 +36,25 @@ const fmtDateTime = (d: string | null) => {
   }).format(new Date(d));
 };
 
-type OrderStatus = "pendiente" | "pagado" | "en_preparacion" | "enviado" | "entregado" | "cancelado";
+type OrderStatus =
+  | "pendiente" | "pagado" | "en_produccion"
+  | "control_calidad" | "listo_despacho"
+  | "enviado" | "entregado" | "cancelado";
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ElementType; color: string; bg: string }> = {
-  pendiente:      { label: "Pendiente",      icon: Clock,        color: "#92400e", bg: "#fef3c7" },
-  pagado:         { label: "Pago recibido",  icon: CheckCircle2, color: "#065f46", bg: "#d1fae5" },
-  en_preparacion: { label: "En preparación", icon: Package,      color: "#1e40af", bg: "#dbeafe" },
-  enviado:        { label: "En camino",      icon: Truck,        color: "#5b21b6", bg: "#ede9fe" },
-  entregado:      { label: "Entregado",      icon: CheckCircle2, color: "#14532d", bg: "#dcfce7" },
-  cancelado:      { label: "Cancelado",      icon: XCircle,      color: "#7f1d1d", bg: "#fee2e2" },
+  pendiente:       { label: "Pendiente",       icon: Clock,        color: "#92400e", bg: "#fef3c7" },
+  pagado:          { label: "Pago recibido",   icon: CheckCircle2, color: "#065f46", bg: "#d1fae5" },
+  en_produccion:   { label: "En producción",   icon: Package,      color: "#1e40af", bg: "#dbeafe" },
+  control_calidad: { label: "Control calidad", icon: Package,      color: "#5b21b6", bg: "#ede9fe" },
+  listo_despacho:  { label: "Listo despacho",  icon: Truck,        color: "#0e7490", bg: "#cffafe" },
+  enviado:         { label: "En camino",        icon: Truck,        color: "#6d28d9", bg: "#ede9fe" },
+  entregado:       { label: "Entregado",        icon: CheckCircle2, color: "#14532d", bg: "#dcfce7" },
+  cancelado:       { label: "Cancelado",        icon: XCircle,     color: "#7f1d1d", bg: "#fee2e2" },
 };
 
-const STATUS_STEPS: OrderStatus[] = ["pagado", "en_preparacion", "enviado", "entregado"];
+const STATUS_STEPS: OrderStatus[] = [
+  "pagado", "en_produccion", "control_calidad", "listo_despacho", "enviado", "entregado"
+];
 
 // ── Fetch pedidos del usuario ─────────────────────────────────
 async function fetchMisPedidos(userId: string) {

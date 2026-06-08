@@ -36,11 +36,13 @@ const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
 
 function generateOrderId() {
+  
   return `GM-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 }
 
 type ModalTipo = "exitoso" | "error" | null;
 interface ModalDatos {
+  
   purchase?: string;
   date?: string;
   amount?: string;
@@ -137,6 +139,8 @@ useEffect(() => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       order: {
+        // Dentro del payload que construyes antes de INSERT
+        user_id: user?.id ?? null,
         orderNumber:      purchaseNumber || `GM-${Date.now()}`,
         userId:           saved.userId ?? null,         // ← viene de localStorage
         nombre:           saved.nombre || "—",

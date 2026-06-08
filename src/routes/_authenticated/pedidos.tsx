@@ -83,8 +83,10 @@ async function fetchOrders() {
       )
     `)
     .order("created_at", { ascending: false });
+
   if (error) throw new Error(error.message);
   return data ?? [];
+  
 }
 
 async function fetchOrderItems(orderId: string) {
@@ -356,7 +358,7 @@ function PedidosPage() {
       )}
 
       {/* Modal detalle */}
-      <Dialog open={!!selectedId && !selectedId !== null} onOpenChange={(o) => !o && setSelectedId(null)}>
+      <Dialog open={!!selectedId} onOpenChange={(o) => !o && setSelectedId(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display text-lg">

@@ -38,6 +38,8 @@ const CustomerSchema = z.object({
   email: z.string().email().max(255).optional().nullable().or(z.literal("")),
   telefono: z.string().max(30).optional().nullable(),
   direccion: z.string().max(500).optional().nullable(),
+  distrito: z.string().max(100).optional().nullable(),   // nuevo
+  ciudad: z.string().max(100).optional().nullable(),     // nuevo
 });
 
 export async function upsertCustomer(input: { data: z.infer<typeof CustomerSchema> }) {
@@ -53,16 +55,32 @@ export async function upsertCustomer(input: { data: z.infer<typeof CustomerSchem
   return { customer: row };
 }
 
-export async function searchCustomers(input: { data: { q: string } }) {
-  const { q } = z.object({ q: z.string().max(100) }).parse(input.data);
+export async function searchCustomers(input: { data: { q: string; limit?: number } }) {
+  const { q, limit = 50 } = z.object({
+    q: z.string().max(100),
+    limit: z.number().int().min(1).max(200).optional(),
+  }).parse(input.data);
+
   const { supabase } = await getAuthenticatedClient();
   const trimmed = q.trim();
-  let query = supabase.from("customers").select("*").order("created_at", { ascending: false }).limit(20);
-  if (trimmed) query = query.or(`nombre.ilike.%${trimmed}%,doc_numero.ilike.%${trimmed}%`);
+
+  let query = supabase
+    .from("customers")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (trimmed) {
+    query = query.or(
+      `nombre.ilike.%${trimmed}%,doc_numero.ilike.%${trimmed}%,email.ilike.%${trimmed}%,telefono.ilike.%${trimmed}%`
+    );
+  }
+
   const { data: rows, error } = await query;
   if (error) throw new Error(error.message);
   return { customers: rows ?? [] };
 }
+
 
 export async function listSales() {
   const { supabase } = await getAuthenticatedClient();
@@ -216,3 +234,81 @@ export async function anularVenta(input: { data: { id: string } }) {
   if (error) throw new Error(error.message);
   return { ok: true };
 }
+
+
+
+
+
+//SE- GR#08062026
+// Obtener un cliente con su valor completo (vista v_customer_valor)
+export async function getCustomerValor(input: { id: string }) {
+  const { id } = z.object({ id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_customer_valor")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return { customer: data };
+}
+
+// Historial de compras POS de un cliente
+export async function getCustomerSales(input: { customer_id: string }) {
+  const { customer_id } = z.object({ customer_id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("sales")
+    .select("id, numero, tipo, total, metodo_pago, estado, created_at, sale_items(title, qty, unit_price)")
+    .eq("customer_id", customer_id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return { sales: data ?? [] };
+}
+
+// Historial de pedidos online de un cliente (por email)
+export async function getCustomerOrders(input: { email: string }) {
+  const { email } = z.object({ email: z.string().email() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, order_number, total, status, created_at")
+    .eq("email", email)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return { orders: data ?? [] };
+}
+
+// Actualizar segmento y notas de un cliente
+export async function updateCustomerCrm(input: {
+  id: string;
+  segmento: "nuevo" | "recurrente" | "vip" | "inactivo";
+  notas?: string | null;
+  tags?: string[];
+}) {
+  const data = z.object({
+    id: z.string().uuid(),
+    segmento: z.enum(["nuevo", "recurrente", "vip", "inactivo"]),
+    notas: z.string().max(2000).optional().nullable(),
+    tags: z.array(z.string()).optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: row, error } = await supabase
+    .from("customers")
+    .update({
+      segmento: data.segmento,
+      notas: data.notas ?? null,
+      tags: data.tags ?? [],
+      fecha_ultimo_contacto: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", data.id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { customer: row };
+}
+//EE- GR#08062026
