@@ -7,7 +7,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
 import { ShoppingBag } from "lucide-react"; // ya lo tienes importado
-import { ..., Boxes } from "lucide-react";
+import { Boxes } from "lucide-react";
 
 
 const items = [
