@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listInsumos, upsertInsumo, registrarMovimiento,
   getBom, calcularMrp, getStockBajo,
+  listProveedores,
 } from "@/lib/pos.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -242,11 +243,18 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
     unidad:       insumo?.unidad ?? "unidades",
     stock_minimo: insumo?.stock_minimo ?? 0,
     precio_unit:  insumo?.precio_unit ?? "",
-    proveedor:    insumo?.proveedor ?? "",
+    proveedor_id: insumo?.proveedor_id ?? "",
+    proveedor:    insumo?.proveedor ?? ""
   });
 
+  // Añadir query de proveedores dentro del componente InsumoDialog
+const { data: provData } = useQuery({
+  queryKey: ["proveedores"],
+  queryFn: () => listProveedores({ activo: true }),
+});
+
   const mut = useMutation({
-    mutationFn: () => upsertInsumo({ ...form, precio_unit: form.precio_unit ? Number(form.precio_unit) : null }),
+    mutationFn: () => upsertInsumo({ ...form, proveedor_id: form.proveedor_id || null, precio_unit: form.precio_unit ? Number(form.precio_unit) : null }),
     onSuccess: () => {
       toast.success(insumo ? "Insumo actualizado" : "Insumo creado");
       setOpen(false); onDone();
@@ -292,11 +300,21 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
               </SelectContent>
             </Select>
           </div>
+           <Label className="text-xs">Proveedor</Label>
+            <Select
+                value={form.proveedor_id ?? ""}
+                onValueChange={(v) => setForm((f) => ({ ...f, proveedor_id: v || null }))}
+            ></Select>
+
           <Button
             className="w-full"
             disabled={!form.nombre || mut.isPending}
             onClick={() => mut.mutate()}
           >
+             Sin proveedor
+      {(provData?.proveedores ?? []).map((p: any) => (
+        {p.nombre}
+      ))}
             {mut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             {insumo ? "Guardar" : "Crear"}
           </Button>

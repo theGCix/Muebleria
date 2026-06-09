@@ -3075,3 +3075,3009 @@ UPDATE public.bom_items SET modelo = 'Otro Nombre'  WHERE modelo = 'Rex';
 **`calcularMrp` y la limitación de `.or()`:** La función construye un OR dinámico para Supabase. Si en el futuro tienes más de ~10 combinaciones simultáneas, considera reemplazarlo por una función RPC en SQL para mejor rendimiento.
 
 **Integración con producción:** Cuando se cambia un pedido a `en_produccion` (módulo 2), puedes llamar automáticamente a `registrarMovimiento` con `tipo: "salida"` para cada insumo del BOM correspondiente. Eso mantiene el stock siempre actualizado sin entrada manual.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Módulo 5 — Producción y Órdenes de Fabricación
+**G&M Mueblería** · Panel de carpintería + integración MRP + vista carpintero
+
+---
+
+## Estado real del código
+
+| Pieza | Estado |
+|---|---|
+| Tabla `produccion` | ✅ Existe (migración `20260605b_produccion_tablas.sql`) |
+| Tabla `order_estado_historial` | ✅ Existe, con trigger automático |
+| Tabla `notificaciones` | ✅ Existe |
+| Función RPC `cambiar_estado_pedido` | ✅ Existe y valida transiciones |
+| Vista `v_produccion_panel` | ✅ Existe |
+| Rol `carpintero` en enum `app_role` | ✅ Existe |
+| RLS `carpintero` en `produccion` | ✅ Existe (solo sus propios registros) |
+| Ruta `/produccion` (frontend) | ❌ No existe — construir desde cero |
+| Vista del carpintero (`/mi-produccion`) | ❌ No existe — construir desde cero |
+| Integración MRP al pasar a `en_produccion` | ❌ No existe — ampliar `cambiar_estado_pedido` |
+| `AppRole` incluye `carpintero` | ❌ Solo tiene `admin\|vendedor\|cliente` — corregir |
+| Sidebar muestra rutas de producción | ❌ No existe — añadir |
+
+---
+
+## ⚠️ Correcciones previas obligatorias
+
+### 1. `useAuth.ts` — añadir `carpintero` al tipo `AppRole`
+
+El hook actual solo conoce `"admin" | "vendedor" | "cliente"`. El carpintero existe en DB pero el frontend lo ignora, así que un usuario con ese rol no ve nada en el sidebar y el `_authenticated` layout no lo deja pasar.
+
+```ts
+// src/hooks/useAuth.ts — línea 4
+// ❌ Actual
+export type AppRole = "admin" | "vendedor" | "cliente";
+
+// ✅ Corrección
+export type AppRole = "admin" | "vendedor" | "cliente" | "carpintero";
+```
+
+### 2. `_authenticated.tsx` — permitir acceso a carpinteros
+
+El layout redirige a `/login` si el usuario no tiene sesión, pero no valida roles específicos por ruta (eso lo hace cada ruta individualmente). Solo hay que asegurarse de que el carpintero llega al layout. **Este archivo no necesita cambios** siempre que `useAuth` devuelva `carpintero` en su array de roles.
+
+### 3. Bug en `pedidos.tsx` — Dialog siempre cerrado
+
+```tsx
+// ❌ Actual (bug: !selectedId !== null siempre es true, pero &&false cierra todo)
+<Dialog open={!!selectedId && !selectedId !== null} ...>
+
+// ✅ Corrección
+<Dialog open={!!selectedId} ...>
+```
+
+---
+
+## 1. Migración adicional — Integración MRP en producción
+
+Esta migración amplía la función `cambiar_estado_pedido` para que al pasar un pedido a `en_produccion` también descuente automáticamente los insumos del BOM del módulo 4.
+
+**Ejecutar solo después de tener las tablas `insumos` y `bom_items` del módulo 4.**
+
+```sql
+-- migrations/20260606_produccion_mrp_integration.sql
+-- Ampliar cambiar_estado_pedido para descontar insumos al iniciar producción
+
+CREATE OR REPLACE FUNCTION public.cambiar_estado_pedido(
+  _order_id     UUID,
+  _nuevo_estado public.order_status,
+  _motivo       TEXT DEFAULT NULL,
+  _modelo       TEXT DEFAULT NULL,   -- NUEVO: nombre del modelo (ej: 'Vintage')
+  _talla        TEXT DEFAULT NULL    -- NUEVO: talla (ej: '6 pies')
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _user_id UUID := auth.uid();
+  _order   public.orders;
+  _ok      BOOLEAN := false;
+  _bom_row RECORD;
+BEGIN
+  IF NOT (public.has_role(_user_id, 'admin') OR public.has_role(_user_id, 'vendedor')) THEN
+    RAISE EXCEPTION 'Sin permisos para cambiar estado de pedidos';
+  END IF;
+
+  SELECT * INTO _order FROM public.orders WHERE id = _order_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Pedido no encontrado'; END IF;
+
+  -- Validar transición
+  _ok := CASE _order.status
+    WHEN 'pendiente'        THEN _nuevo_estado IN ('pagado', 'cancelado')
+    WHEN 'pagado'           THEN _nuevo_estado IN ('en_produccion', 'cancelado')
+    WHEN 'en_produccion'    THEN _nuevo_estado IN ('control_calidad', 'cancelado')
+    WHEN 'control_calidad'  THEN _nuevo_estado IN ('listo_despacho', 'en_produccion')
+    WHEN 'listo_despacho'   THEN _nuevo_estado IN ('enviado', 'entregado')
+    WHEN 'enviado'          THEN _nuevo_estado IN ('entregado')
+    ELSE false
+  END;
+
+  IF NOT _ok THEN
+    RAISE EXCEPTION 'Transición inválida: % → %', _order.status, _nuevo_estado;
+  END IF;
+
+  UPDATE public.orders
+  SET status = _nuevo_estado, updated_at = now()
+  WHERE id = _order_id;
+
+  -- Al iniciar producción: crear registro + descontar insumos del BOM
+  IF _nuevo_estado = 'en_produccion' THEN
+    INSERT INTO public.produccion (order_id, fecha_inicio, fecha_fin_estimada)
+    VALUES (_order_id, now()::DATE, (now() + INTERVAL '7 days')::DATE)
+    ON CONFLICT (order_id) DO UPDATE SET
+      status       = 'en_proceso',
+      fecha_inicio = COALESCE(produccion.fecha_inicio, now()::DATE),
+      updated_at   = now();
+
+    -- Descontar insumos si se especificó modelo+talla y la tabla bom_items existe
+    IF _modelo IS NOT NULL AND _talla IS NOT NULL THEN
+      FOR _bom_row IN
+        SELECT b.insumo_id, b.cantidad
+        FROM public.bom_items b
+        WHERE b.modelo = _modelo AND b.talla = _talla
+      LOOP
+        INSERT INTO public.insumo_movimientos
+          (insumo_id, tipo, cantidad, motivo, referencia, registrado_por)
+        VALUES (
+          _bom_row.insumo_id,
+          'salida',
+          _bom_row.cantidad,
+          'Producción iniciada',
+          _order.order_number,
+          _user_id
+        );
+      END LOOP;
+    END IF;
+  END IF;
+
+  -- Encolar notificación (igual que antes)
+  INSERT INTO public.notificaciones
+    (order_id, destinatario_email, destinatario_nombre, tipo, canal, asunto)
+  VALUES (
+    _order_id,
+    _order.email,
+    _order.nombre,
+    CASE _nuevo_estado
+      WHEN 'pagado'          THEN 'pedido_confirmado'
+      WHEN 'en_produccion'   THEN 'en_produccion'
+      WHEN 'control_calidad' THEN 'control_calidad'
+      WHEN 'listo_despacho'  THEN 'listo_despacho'
+      WHEN 'entregado'       THEN 'entregado'
+      WHEN 'cancelado'       THEN 'cancelado'
+    END::public.notif_tipo,
+    'email',
+    CASE _nuevo_estado
+      WHEN 'pagado'          THEN 'Pedido confirmado — G&M Mueblería'
+      WHEN 'en_produccion'   THEN 'Tu mueble está en producción'
+      WHEN 'listo_despacho'  THEN 'Tu pedido está listo para despacho'
+      WHEN 'entregado'       THEN '¡Tu pedido fue entregado!'
+      WHEN 'cancelado'       THEN 'Pedido cancelado'
+      ELSE NULL
+    END
+  );
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'order_id', _order_id,
+    'estado_anterior', _order.status,
+    'estado_nuevo', _nuevo_estado
+  );
+END;
+$$;
+
+-- Función RPC para que el carpintero actualice su propio registro de producción
+CREATE OR REPLACE FUNCTION public.actualizar_produccion(
+  _produccion_id  UUID,
+  _status         public.produccion_status DEFAULT NULL,
+  _observaciones  TEXT DEFAULT NULL,
+  _prioridad      SMALLINT DEFAULT NULL,
+  _fecha_fin_real DATE DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _user_id UUID := auth.uid();
+  _prod    public.produccion;
+BEGIN
+  SELECT * INTO _prod FROM public.produccion WHERE id = _produccion_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Registro de producción no encontrado'; END IF;
+
+  -- Carpintero solo puede actualizar su propio registro
+  IF public.has_role(_user_id, 'carpintero') AND _prod.asignado_a <> _user_id THEN
+    RAISE EXCEPTION 'Solo puedes actualizar tus propias órdenes de fabricación';
+  END IF;
+
+  -- Admin/vendedor puede actualizar cualquier registro
+  IF NOT (
+    public.has_role(_user_id, 'admin') OR
+    public.has_role(_user_id, 'vendedor') OR
+    public.has_role(_user_id, 'carpintero')
+  ) THEN
+    RAISE EXCEPTION 'Sin permisos';
+  END IF;
+
+  UPDATE public.produccion SET
+    status         = COALESCE(_status, status),
+    observaciones  = COALESCE(_observaciones, observaciones),
+    prioridad      = COALESCE(_prioridad, prioridad),
+    fecha_fin_real = COALESCE(_fecha_fin_real, fecha_fin_real),
+    updated_at     = now()
+  WHERE id = _produccion_id;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.actualizar_produccion TO authenticated;
+
+-- Función para asignar carpintero a una orden de producción (solo admin/vendedor)
+CREATE OR REPLACE FUNCTION public.asignar_carpintero(
+  _produccion_id UUID,
+  _carpintero_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor')) THEN
+    RAISE EXCEPTION 'Sin permisos para asignar carpinteros';
+  END IF;
+
+  UPDATE public.produccion
+  SET asignado_a = _carpintero_id, updated_at = now()
+  WHERE id = _produccion_id;
+
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.asignar_carpintero TO authenticated;
+
+-- Vista para el carpintero: solo sus propias órdenes activas
+CREATE OR REPLACE VIEW public.v_mi_produccion AS
+SELECT
+  p.id              AS produccion_id,
+  o.id              AS order_id,
+  o.order_number,
+  o.nombre          AS cliente,
+  o.telefono,
+  o.total,
+  o.status          AS order_status,
+  p.status          AS prod_status,
+  p.prioridad,
+  p.fecha_inicio,
+  p.fecha_fin_estimada,
+  p.fecha_fin_real,
+  p.observaciones,
+  p.calidad_aprobada,
+  p.asignado_a
+FROM public.produccion p
+JOIN public.orders o ON o.id = p.order_id
+WHERE p.status NOT IN ('terminado');
+
+GRANT SELECT ON public.v_mi_produccion TO authenticated;
+```
+
+---
+
+## 2. Funciones en `pos.functions.ts`
+
+Añade al archivo existente:
+
+```ts
+// ── PRODUCCIÓN ───────────────────────────────────────────────
+
+// Panel admin: todas las órdenes de fabricación activas
+export async function listProduccion() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_produccion_panel")
+    .select("*")
+    .order("prioridad", { ascending: true })
+    .order("fecha_fin_estimada", { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return { ordenes: data ?? [] };
+}
+
+// Vista del carpintero: sus propias órdenes
+export async function listMiProduccion() {
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_mi_produccion")
+    .select("*")
+    .eq("asignado_a", userId)
+    .order("prioridad", { ascending: true });
+  if (error) throw new Error(error.message);
+  return { ordenes: data ?? [] };
+}
+
+// Detalle completo de una orden (items del pedido + insumos BOM)
+export async function getDetalleProduccion(input: { order_id: string }) {
+  const { order_id } = z.object({ order_id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+
+  const [itemsRes, produccionRes] = await Promise.all([
+    supabase
+      .from("order_items")
+      .select("id, sku, title, qty, unit_price, total, image_url")
+      .eq("order_id", order_id),
+    supabase
+      .from("produccion")
+      .select("*")
+      .eq("order_id", order_id)
+      .single(),
+  ]);
+
+  if (itemsRes.error) throw new Error(itemsRes.error.message);
+  return {
+    items: itemsRes.data ?? [],
+    produccion: produccionRes.data ?? null,
+  };
+}
+
+// Cambiar estado de orden incluyendo modelo+talla para descuento MRP
+export async function cambiarEstadoPedido(input: {
+  order_id: string;
+  nuevo_estado: string;
+  motivo?: string;
+  modelo?: string;
+  talla?: string;
+}) {
+  const data = z.object({
+    order_id:     z.string().uuid(),
+    nuevo_estado: z.string().min(1),
+    motivo:       z.string().optional(),
+    modelo:       z.string().optional(),
+    talla:        z.string().optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: result, error } = await supabase.rpc("cambiar_estado_pedido", {
+    _order_id:     data.order_id,
+    _nuevo_estado: data.nuevo_estado,
+    _motivo:       data.motivo ?? null,
+    _modelo:       data.modelo ?? null,
+    _talla:        data.talla ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return result;
+}
+
+// Actualizar estado interno de producción (carpintero o admin)
+export async function actualizarProduccion(input: {
+  produccion_id: string;
+  status?: string;
+  observaciones?: string;
+  prioridad?: number;
+  fecha_fin_real?: string;
+}) {
+  const data = z.object({
+    produccion_id: z.string().uuid(),
+    status:        z.string().optional(),
+    observaciones: z.string().max(2000).optional(),
+    prioridad:     z.number().int().min(1).max(3).optional(),
+    fecha_fin_real: z.string().optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase.rpc("actualizar_produccion", {
+    _produccion_id:  data.produccion_id,
+    _status:         data.status ?? null,
+    _observaciones:  data.observaciones ?? null,
+    _prioridad:      data.prioridad ?? null,
+    _fecha_fin_real: data.fecha_fin_real ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Asignar carpintero (solo admin/vendedor)
+export async function asignarCarpintero(input: {
+  produccion_id: string;
+  carpintero_id: string;
+}) {
+  const data = z.object({
+    produccion_id: z.string().uuid(),
+    carpintero_id: z.string().uuid(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase.rpc("asignar_carpintero", {
+    _produccion_id: data.produccion_id,
+    _carpintero_id: data.carpintero_id,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Listar carpinteros disponibles (para el selector de asignación)
+export async function listCarpinteros() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data: roles } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "carpintero");
+
+  if (!roles?.length) return { carpinteros: [] };
+
+  const ids = roles.map((r) => r.user_id);
+  const { data: profiles, error } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+  return { carpinteros: profiles ?? [] };
+}
+```
+
+---
+
+## 3. Ruta `/produccion` — Panel admin de fabricación
+
+Crea `src/routes/_authenticated/produccion.tsx`:
+
+```tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  listProduccion, getDetalleProduccion, actualizarProduccion,
+  asignarCarpintero, listCarpinteros,
+} from "@/lib/pos.functions";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Loader2, Hammer, AlertTriangle, CheckCircle2,
+  Pause, Clock, Eye, UserCheck, RefreshCw,
+} from "lucide-react";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import { format, isPast, isToday } from "date-fns";
+import { es } from "date-fns/locale";
+
+export const Route = createFileRoute("/_authenticated/produccion")({
+  head: () => ({ meta: [{ title: "Producción — G&M" }] }),
+  component: ProduccionPage,
+});
+
+// ── Configuración visual ─────────────────────────────────────
+const PROD_STATUS_CONFIG = {
+  pendiente:          { label: "Pendiente",         color: "#92400e", bg: "#fef3c7", icon: Clock },
+  en_proceso:         { label: "En proceso",        color: "#1e40af", bg: "#dbeafe", icon: Hammer },
+  pausado:            { label: "Pausado",            color: "#6b7280", bg: "#f3f4f6", icon: Pause },
+  terminado:          { label: "Terminado",          color: "#14532d", bg: "#dcfce7", icon: CheckCircle2 },
+  rechazado_calidad:  { label: "Rechazado calidad", color: "#7f1d1d", bg: "#fee2e2", icon: AlertTriangle },
+} as const;
+
+const PRIORIDAD_CONFIG = {
+  1: { label: "Urgente", color: "#dc2626", bg: "#fee2e2" },
+  2: { label: "Normal",  color: "#2563eb", bg: "#dbeafe" },
+  3: { label: "Baja",    color: "#6b7280", bg: "#f3f4f6" },
+} as const;
+
+type ProdStatus = keyof typeof PROD_STATUS_CONFIG;
+
+const fmt    = (n: number) => new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+const fmtDay = (d: string | null) => d ? format(new Date(d), "dd MMM yyyy", { locale: es }) : "—";
+
+// ── Determinar urgencia por fecha fin estimada ────────────────
+function getFechaUrgencia(fecha: string | null): "vencida" | "hoy" | "normal" | null {
+  if (!fecha) return null;
+  const d = new Date(fecha);
+  if (isPast(d) && !isToday(d)) return "vencida";
+  if (isToday(d)) return "hoy";
+  return "normal";
+}
+
+// ── Dialog detalle de orden de fabricación ───────────────────
+function OrdenDetalle({
+  orden,
+  onClose,
+}: {
+  orden: any;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [editObs, setEditObs] = useState(false);
+  const [obs, setObs] = useState(orden.observaciones ?? "");
+  const [asignarOpen, setAsignarOpen] = useState(false);
+  const [carpinteroId, setCarpinteroId] = useState(orden.asignado_a ?? "");
+
+  const { data: detalle, isLoading } = useQuery({
+    queryKey: ["produccion-detalle", orden.order_id],
+    queryFn: () => getDetalleProduccion({ order_id: orden.order_id }),
+  });
+
+  const { data: carpinterosData } = useQuery({
+    queryKey: ["carpinteros"],
+    queryFn: listCarpinteros,
+  });
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["produccion"] });
+    qc.invalidateQueries({ queryKey: ["produccion-detalle", orden.order_id] });
+  };
+
+  const statusMut = useMutation({
+    mutationFn: (status: string) =>
+      actualizarProduccion({ produccion_id: detalle!.produccion!.id, status }),
+    onSuccess: () => { toast.success("Estado actualizado"); refresh(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const obsMut = useMutation({
+    mutationFn: () =>
+      actualizarProduccion({ produccion_id: detalle!.produccion!.id, observaciones: obs }),
+    onSuccess: () => { toast.success("Observaciones guardadas"); setEditObs(false); refresh(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const asignarMut = useMutation({
+    mutationFn: () =>
+      asignarCarpintero({ produccion_id: detalle!.produccion!.id, carpintero_id: carpinteroId }),
+    onSuccess: () => {
+      toast.success("Carpintero asignado");
+      setAsignarOpen(false);
+      refresh();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const prod = detalle?.produccion;
+  const urgencia = getFechaUrgencia(prod?.fecha_fin_estimada ?? null);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg flex items-center gap-2">
+            <Hammer className="h-5 w-5" />
+            Orden {orden.order_number}
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading || !prod ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-5 mt-1">
+            {/* KPIs */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-muted/40 rounded-xl p-3">
+                <p className="text-xs text-muted-foreground mb-0.5">Cliente</p>
+                <p className="font-medium text-sm truncate">{orden.cliente}</p>
+                <p className="text-xs text-muted-foreground">{orden.telefono ?? ""}</p>
+              </div>
+              <div className="bg-muted/40 rounded-xl p-3">
+                <p className="text-xs text-muted-foreground mb-0.5">Fecha fin estimada</p>
+                <p className={`font-semibold text-sm ${
+                  urgencia === "vencida" ? "text-red-600" :
+                  urgencia === "hoy" ? "text-amber-600" : ""
+                }`}>
+                  {fmtDay(prod.fecha_fin_estimada)}
+                  {urgencia === "vencida" && " ⚠️"}
+                  {urgencia === "hoy" && " 🔔"}
+                </p>
+              </div>
+              <div className="bg-muted/40 rounded-xl p-3">
+                <p className="text-xs text-muted-foreground mb-0.5">Prioridad</p>
+                <span
+                  className="px-2 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    color: PRIORIDAD_CONFIG[prod.prioridad as 1 | 2 | 3].color,
+                    background: PRIORIDAD_CONFIG[prod.prioridad as 1 | 2 | 3].bg,
+                  }}
+                >
+                  {PRIORIDAD_CONFIG[prod.prioridad as 1 | 2 | 3].label}
+                </span>
+              </div>
+            </div>
+
+            {/* Estado interno + transiciones */}
+            <div className="border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Estado de fabricación</p>
+                  <span
+                    className="px-2.5 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1.5"
+                    style={{
+                      color: PROD_STATUS_CONFIG[prod.status as ProdStatus]?.color,
+                      background: PROD_STATUS_CONFIG[prod.status as ProdStatus]?.bg,
+                    }}
+                  >
+                    {prod.status === "en_proceso" && <Hammer className="h-3 w-3" />}
+                    {PROD_STATUS_CONFIG[prod.status as ProdStatus]?.label}
+                  </span>
+                </div>
+
+                {/* Asignar carpintero */}
+                <Button size="sm" variant="outline" onClick={() => setAsignarOpen(true)}>
+                  <UserCheck className="h-3.5 w-3.5 mr-1" />
+                  {orden.carpintero ? `Asignado: ${orden.carpintero}` : "Asignar carpintero"}
+                </Button>
+              </div>
+
+              {/* Cambios de estado rápidos */}
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  ["en_proceso",        "Iniciar"],
+                  ["pausado",           "Pausar"],
+                  ["terminado",         "Marcar terminado"],
+                  ["rechazado_calidad", "Rechazar calidad"],
+                ] as [string, string][]).map(([s, label]) =>
+                  s !== prod.status ? (
+                    <Button
+                      key={s} size="sm" variant="outline"
+                      disabled={statusMut.isPending}
+                      onClick={() => statusMut.mutate(s)}
+                    >
+                      {statusMut.isPending
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : null}
+                      {label}
+                    </Button>
+                  ) : null
+                )}
+              </div>
+            </div>
+
+            {/* Ítems del pedido */}
+            <section>
+              <h4 className="font-semibold text-sm mb-2">Muebles a fabricar</h4>
+              <div className="space-y-2">
+                {(detalle?.items ?? []).map((item: any) => (
+                  <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 text-sm">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.title}
+                        className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                        <Hammer className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{item.title}</p>
+                      {item.sku && <p className="text-xs text-muted-foreground font-mono">SKU: {item.sku}</p>}
+                      <p className="text-xs text-muted-foreground">Cantidad: {item.qty}</p>
+                    </div>
+                    <span className="font-semibold">{fmt(Number(item.total))}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Observaciones */}
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-sm">Observaciones internas</h4>
+                {!editObs
+                  ? <Button size="sm" variant="ghost" onClick={() => setEditObs(true)}>Editar</Button>
+                  : <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => setEditObs(false)}>Cancelar</Button>
+                      <Button size="sm" disabled={obsMut.isPending} onClick={() => obsMut.mutate()}>
+                        {obsMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                        Guardar
+                      </Button>
+                    </div>
+                }
+              </div>
+              {editObs ? (
+                <Textarea
+                  rows={3} value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                  placeholder="Notas de producción, materiales especiales, instrucciones..."
+                  className="text-sm"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground bg-muted/30 rounded-lg p-3 min-h-[60px]">
+                  {prod.observaciones ?? "Sin observaciones."}
+                </p>
+              )}
+            </section>
+
+            {/* Timeline */}
+            <section className="grid grid-cols-3 gap-3 text-sm">
+              {[
+                ["Inicio",      fmtDay(prod.fecha_inicio)],
+                ["Fin estimado", fmtDay(prod.fecha_fin_estimada)],
+                ["Fin real",    fmtDay(prod.fecha_fin_real ?? null)],
+              ].map(([label, value]) => (
+                <div key={label} className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+                  <p className="font-medium">{value}</p>
+                </div>
+              ))}
+            </section>
+          </div>
+        )}
+
+        {/* Dialog asignar carpintero */}
+        {asignarOpen && (
+          <Dialog open onOpenChange={setAsignarOpen}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Asignar carpintero</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div>
+                  <Label className="text-xs">Carpintero</Label>
+                  <Select value={carpinteroId} onValueChange={setCarpinteroId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                    <SelectContent>
+                      {(carpinterosData?.carpinteros ?? []).map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  className="w-full" disabled={!carpinteroId || asignarMut.isPending}
+                  onClick={() => asignarMut.mutate()}
+                >
+                  {asignarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Asignar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Página principal ─────────────────────────────────────────
+function ProduccionPage() {
+  const qc = useQueryClient();
+  const [selectedOrden, setSelectedOrden] = useState<any>(null);
+  const [statusFilter, setStatusFilter] = useState("todos");
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["produccion"],
+    queryFn: listProduccion,
+    refetchInterval: 60_000,
+  });
+
+  const ordenes = data?.ordenes ?? [];
+
+  const filtradas = useMemo(() => {
+    if (statusFilter === "todos") return ordenes;
+    return ordenes.filter((o: any) => o.prod_status === statusFilter);
+  }, [ordenes, statusFilter]);
+
+  const stats = useMemo(() => ({
+    total:     ordenes.length,
+    proceso:   ordenes.filter((o: any) => o.prod_status === "en_proceso").length,
+    pendiente: ordenes.filter((o: any) => o.prod_status === "pendiente").length,
+    vencidas:  ordenes.filter((o: any) => {
+      if (!o.fecha_fin_estimada) return false;
+      return isPast(new Date(o.fecha_fin_estimada)) && !isToday(new Date(o.fecha_fin_estimada));
+    }).length,
+  }), [ordenes]);
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-display font-semibold">Producción</h1>
+          <p className="text-muted-foreground mt-0.5">Órdenes de fabricación activas</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw className="h-4 w-4 mr-2" /> Actualizar
+        </Button>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Total activas",  value: stats.total },
+          { label: "En proceso",     value: stats.proceso },
+          { label: "Pendientes",     value: stats.pendiente },
+          { label: "Vencidas ⚠️",   value: stats.vencidas },
+        ].map(({ label, value }) => (
+          <div key={label} className={`border rounded-xl p-4 ${
+            label.includes("Vencidas") && value > 0
+              ? "bg-red-50 border-red-200"
+              : "bg-card border-border/50"
+          }`}>
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <p className="font-display text-2xl font-semibold">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros de estado */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { key: "todos",             label: "Todas" },
+          { key: "pendiente",         label: "Pendientes" },
+          { key: "en_proceso",        label: "En proceso" },
+          { key: "pausado",           label: "Pausadas" },
+          { key: "rechazado_calidad", label: "Rechazadas" },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
+              statusFilter === key
+                ? "bg-primary text-primary-foreground border-primary"
+                : "border-border/50 hover:border-border"
+            }`}
+          >
+            {label}
+            <span className="ml-1.5 text-xs opacity-70">
+              ({key === "todos" ? ordenes.length : ordenes.filter((o: any) => o.prod_status === key).length})
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tabla */}
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filtradas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+          <Hammer className="h-10 w-10" />
+          <p className="text-sm">No hay órdenes de fabricación activas</p>
+        </div>
+      ) : (
+        <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/50 bg-muted/40">
+                  {["Pedido", "Cliente", "Carpintero", "Prioridad", "Estado", "Fin estimado", ""].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-medium text-xs text-muted-foreground uppercase tracking-wide">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {filtradas.map((orden: any) => {
+                  const ps = PROD_STATUS_CONFIG[orden.prod_status as ProdStatus];
+                  const pr = PRIORIDAD_CONFIG[orden.prioridad as 1 | 2 | 3];
+                  const urgencia = getFechaUrgencia(orden.fecha_fin_estimada);
+                  const Icon = ps?.icon ?? Clock;
+
+                  return (
+                    <tr
+                      key={orden.produccion_id}
+                      className={`hover:bg-muted/20 transition-colors ${
+                        urgencia === "vencida" ? "bg-red-50/30" :
+                        urgencia === "hoy" ? "bg-amber-50/30" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-3 font-mono text-xs font-medium">{orden.order_number}</td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium truncate max-w-[130px]">{orden.cliente}</p>
+                        <p className="text-xs text-muted-foreground">{fmt(Number(orden.total))}</p>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {orden.carpintero ?? <span className="italic opacity-50">Sin asignar</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                          style={{ color: pr?.color, background: pr?.bg }}>
+                          {pr?.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                          style={{ color: ps?.color, background: ps?.bg }}>
+                          <Icon className="h-3 w-3" />
+                          {ps?.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={
+                          urgencia === "vencida" ? "text-red-600 font-semibold" :
+                          urgencia === "hoy"     ? "text-amber-600 font-semibold" :
+                          "text-muted-foreground"
+                        }>
+                          {fmtDay(orden.fecha_fin_estimada)}
+                          {urgencia === "vencida" && " ⚠️"}
+                          {urgencia === "hoy"     && " 🔔"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedOrden(orden)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {selectedOrden && (
+        <OrdenDetalle
+          orden={selectedOrden}
+          onClose={() => {
+            setSelectedOrden(null);
+            qc.invalidateQueries({ queryKey: ["produccion"] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## 4. Ruta `/mi-produccion` — Vista del carpintero
+
+Crea `src/routes/_authenticated/mi-produccion.tsx`:
+
+```tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { listMiProduccion, actualizarProduccion, getDetalleProduccion } from "@/lib/pos.functions";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Hammer, Clock, CheckCircle2, Pause, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+
+export const Route = createFileRoute("/_authenticated/mi-produccion")({
+  head: () => ({ meta: [{ title: "Mis órdenes — G&M" }] }),
+  component: MiProduccionPage,
+});
+
+const PROD_STATUS = {
+  pendiente:         { label: "Pendiente",         color: "#92400e", bg: "#fef3c7", icon: Clock },
+  en_proceso:        { label: "En proceso",         color: "#1e40af", bg: "#dbeafe", icon: Hammer },
+  pausado:           { label: "Pausado",             color: "#6b7280", bg: "#f3f4f6", icon: Pause },
+  terminado:         { label: "Terminado",           color: "#14532d", bg: "#dcfce7", icon: CheckCircle2 },
+  rechazado_calidad: { label: "Rechazado calidad",  color: "#7f1d1d", bg: "#fee2e2", icon: AlertTriangle },
+} as const;
+
+type ProdStatus = keyof typeof PROD_STATUS;
+
+const fmtDay = (d: string | null) => d ? format(new Date(d), "dd MMM yyyy", { locale: es }) : "—";
+const fmt    = (n: number) => new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+
+function OrdenCard({ orden }: { orden: any }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [obs, setObs] = useState(orden.observaciones ?? "");
+
+  const { data: detalle, isLoading } = useQuery({
+    queryKey: ["mi-produccion-detalle", orden.order_id],
+    queryFn: () => getDetalleProduccion({ order_id: orden.order_id }),
+    enabled: open,
+  });
+
+  const mut = useMutation({
+    mutationFn: (status: string) =>
+      actualizarProduccion({ produccion_id: orden.produccion_id, status }),
+    onSuccess: () => {
+      toast.success("Estado actualizado");
+      qc.invalidateQueries({ queryKey: ["mi-produccion"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const obsMut = useMutation({
+    mutationFn: () =>
+      actualizarProduccion({ produccion_id: orden.produccion_id, observaciones: obs }),
+    onSuccess: () => {
+      toast.success("Observaciones guardadas");
+      qc.invalidateQueries({ queryKey: ["mi-produccion"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const ps = PROD_STATUS[orden.prod_status as ProdStatus];
+  const Icon = ps?.icon ?? Clock;
+
+  return (
+    <>
+      <div className="bg-card border border-border/50 rounded-xl p-5 space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="font-mono text-xs text-muted-foreground">{orden.order_number}</p>
+            <p className="font-display font-semibold text-lg">{orden.cliente}</p>
+            <p className="text-sm text-muted-foreground">{orden.telefono ?? ""}</p>
+          </div>
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+            style={{ color: ps?.color, background: ps?.bg }}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {ps?.label}
+          </span>
+        </div>
+
+        {/* Fechas */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="bg-muted/40 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground mb-0.5">Inicio</p>
+            <p className="font-medium">{fmtDay(orden.fecha_inicio)}</p>
+          </div>
+          <div className="bg-muted/40 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground mb-0.5">Entrega estimada</p>
+            <p className="font-medium">{fmtDay(orden.fecha_fin_estimada)}</p>
+          </div>
+        </div>
+
+        {/* Acciones rápidas */}
+        <div className="flex gap-2 flex-wrap">
+          {orden.prod_status !== "en_proceso" && (
+            <Button size="sm" onClick={() => mut.mutate("en_proceso")} disabled={mut.isPending}>
+              <Hammer className="h-3.5 w-3.5 mr-1" /> Iniciar
+            </Button>
+          )}
+          {orden.prod_status === "en_proceso" && (
+            <Button size="sm" variant="outline" onClick={() => mut.mutate("pausado")} disabled={mut.isPending}>
+              <Pause className="h-3.5 w-3.5 mr-1" /> Pausar
+            </Button>
+          )}
+          {(orden.prod_status === "en_proceso" || orden.prod_status === "pausado") && (
+            <Button size="sm" variant="outline" onClick={() => mut.mutate("terminado")} disabled={mut.isPending}>
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Marcar terminado
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+            Ver detalle
+          </Button>
+        </div>
+      </div>
+
+      {/* Dialog detalle */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">{orden.order_number} — Detalle</DialogTitle>
+          </DialogHeader>
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-4 mt-2">
+              <section>
+                <h4 className="font-semibold text-sm mb-2">Muebles</h4>
+                <div className="space-y-2">
+                  {(detalle?.items ?? []).map((item: any) => (
+                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 text-sm">
+                      <div className="flex-1">
+                        <p className="font-medium">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">Cant: {item.qty} · {item.sku ?? ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <h4 className="font-semibold text-sm mb-2">Observaciones</h4>
+                <Textarea
+                  rows={3} value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                  placeholder="Notas de fabricación..."
+                  className="text-sm"
+                />
+                <Button size="sm" className="mt-2" onClick={() => obsMut.mutate()} disabled={obsMut.isPending}>
+                  {obsMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+                  Guardar observaciones
+                </Button>
+              </section>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function MiProduccionPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["mi-produccion"],
+    queryFn: listMiProduccion,
+    refetchInterval: 120_000,
+  });
+
+  const ordenes = data?.ordenes ?? [];
+
+  return (
+    <div className="space-y-6 max-w-3xl mx-auto">
+      <div>
+        <h1 className="text-3xl font-display font-semibold">Mis órdenes</h1>
+        <p className="text-muted-foreground mt-0.5">
+          {ordenes.length === 0
+            ? "No tienes órdenes asignadas"
+            : `${ordenes.length} orden${ordenes.length > 1 ? "es" : ""} asignada${ordenes.length > 1 ? "s" : ""}`}
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : ordenes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+          <Hammer className="h-10 w-10" />
+          <p className="text-sm">Sin órdenes asignadas por ahora</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {ordenes.map((orden: any) => (
+            <OrdenCard key={orden.produccion_id} orden={orden} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## 5. Actualizar `AppSidebar.tsx`
+
+```tsx
+// Importar nuevos íconos
+import { ..., Hammer, Boxes, Wrench } from "lucide-react";
+
+// Reemplazar el array items con este:
+const items = [
+  { title: "POS",            url: "/pos",            icon: ShoppingCart, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Dashboard",      url: "/dashboard",      icon: LayoutDashboard, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Pedidos",        url: "/pedidos",        icon: ShoppingBag,  roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Producción",     url: "/produccion",     icon: Hammer,       roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Mis órdenes",    url: "/mi-produccion",  icon: Wrench,       roles: ["carpintero"] as AppRole[] },
+  { title: "Ventas",         url: "/ventas",         icon: Receipt,      roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Clientes",       url: "/clientes",       icon: Users,        roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Insumos MRP",    url: "/insumos",        icon: Boxes,        roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Productos",      url: "/productos",      icon: Package,      roles: ["admin"] as AppRole[] },
+  { title: "Usuarios",       url: "/usuarios",       icon: UserCog,      roles: ["admin"] as AppRole[] },
+];
+```
+
+El filtro `visible = items.filter((i) => i.roles.some((r) => roles.includes(r)))` ya existe y funciona — un carpintero solo verá "Mis órdenes". Un admin verá todo excepto "Mis órdenes".
+
+---
+
+## 6. Actualizar `pedidos.tsx` — pasar modelo+talla al cambiar estado
+
+Al confirmar producción desde el panel de pedidos, hay que pasar el modelo y talla para que el descuento MRP funcione. Esto requiere un selector en el Dialog de detalle:
+
+```tsx
+// En PedidosPage, añadir estado para modelo/talla cuando se confirma producción
+const [mrpForm, setMrpForm] = useState({ modelo: "", talla: "" });
+
+// Reemplazar la llamada a cambiarEstado en el Dialog de detalle
+// Busca el botón que dispara "en_produccion" y reemplaza así:
+
+// Antes de los botones de cambio de estado, añadir el selector MRP solo cuando next incluye en_produccion:
+{selected.status === "pagado" && (
+  <div className="flex gap-2 items-end mb-2">
+    <div className="flex-1">
+      <Label className="text-xs mb-1 block">Modelo (para MRP)</Label>
+      <Select value={mrpForm.modelo} onValueChange={(v) => setMrpForm((f) => ({ ...f, modelo: v }))}>
+        <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+        <SelectContent>
+          {["Vintage", "Rex", "Lineal Punta", "London", "Garra"].map((m) => (
+            <SelectItem key={m} value={m}>{m}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+    <div className="w-36">
+      <Label className="text-xs mb-1 block">Talla</Label>
+      <Select value={mrpForm.talla} onValueChange={(v) => setMrpForm((f) => ({ ...f, talla: v }))}>
+        <SelectTrigger><SelectValue placeholder="Talla" /></SelectTrigger>
+        <SelectContent>
+          {["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"].map((t) => (
+            <SelectItem key={t} value={t}>{t}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+)}
+
+// Actualizar la mutation para usar cambiarEstadoPedido (la nueva función de pos.functions):
+const mutation = useMutation({
+  mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
+    cambiarEstadoPedido({
+      order_id: id,
+      nuevo_estado: status,
+      modelo: status === "en_produccion" ? mrpForm.modelo || undefined : undefined,
+      talla:  status === "en_produccion" ? mrpForm.talla  || undefined : undefined,
+    }),
+  ...
+});
+```
+
+---
+
+## 7. Lista de verificación
+
+### Base de datos
+- [ ] Ejecutar `20260606_produccion_mrp_integration.sql` (reemplaza `cambiar_estado_pedido`, añade `actualizar_produccion` y `asignar_carpintero`, crea `v_mi_produccion`)
+- [ ] Verificar que `bom_items` e `insumos` del módulo 4 existen antes de ejecutar la migración
+
+### Correcciones en código existente
+- [ ] `src/hooks/useAuth.ts` — añadir `"carpintero"` al tipo `AppRole`
+- [ ] `src/routes/_authenticated/pedidos.tsx` — corregir bug del Dialog: `open={!!selectedId}`
+- [ ] `src/routes/_authenticated/pedidos.tsx` — importar `cambiarEstadoPedido` de `pos.functions` y añadir selector modelo/talla para `en_produccion`
+
+### Archivos nuevos
+- [ ] Crear `src/routes/_authenticated/produccion.tsx`
+- [ ] Crear `src/routes/_authenticated/mi-produccion.tsx`
+- [ ] Actualizar `src/components/AppSidebar.tsx` con nuevos items y `Hammer`, `Wrench`, `Boxes`
+- [ ] Añadir `cambiarEstadoPedido`, `listProduccion`, `listMiProduccion`, `getDetalleProduccion`, `actualizarProduccion`, `asignarCarpintero`, `listCarpinteros` en `src/lib/pos.functions.ts`
+
+### Verificar que `date-fns` está instalado
+```bash
+grep "date-fns" package.json
+# Si no está: bun add date-fns
+```
+
+### Verificación funcional
+- [ ] Admin ve `/produccion` con tabla de órdenes activas
+- [ ] Click en ojo abre detalle con ítems del pedido
+- [ ] "Iniciar / Pausar / Terminado" actualizan el estado de producción correctamente
+- [ ] Asignar carpintero desde el detalle funciona
+- [ ] El carpintero ve solo `/mi-produccion` en el sidebar
+- [ ] El carpintero puede iniciar/pausar/terminar sus propias órdenes
+- [ ] Al cambiar un pedido a `en_produccion` con modelo+talla → los insumos se descuentan en `v_insumos_stock_bajo`
+- [ ] Órdenes con fecha vencida aparecen con fondo rojo
+
+---
+
+## 8. Notas
+
+**`date-fns` y `date-fns/locale`** son necesarios para el formateo de fechas en español (`fmtDay`). Si no está instalado, `bun add date-fns`.
+
+**`v_produccion_panel` excluye `terminado`** — ese es el comportamiento correcto. Los pedidos terminados ya no aparecen en el panel de producción pero siguen en `pedidos.tsx` con su estado `control_calidad` o `listo_despacho`.
+
+**La integración MRP es opcional por pedido.** Si no se selecciona modelo+talla al pasar a `en_produccion`, la función simplemente no descuenta insumos. El sistema no bloquea la transición si no hay BOM definido.
+
+**El selector de modelo en `pedidos.tsx` es temporal.** Cuando en el futuro el producto en `order_items` tenga un campo `modelo` y `talla` estructurado, puedes leer ese valor automáticamente del primer ítem y pasar al RPC sin intervención manual.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Módulo 6 — Fabricantes y Proveedores
+**G&M Mueblería** · Directorio + órdenes de compra + vinculación con insumos y productos
+
+---
+
+## Estado real del código
+
+Todo este módulo está **ausente** — ni en DB ni en frontend. Se construye completo desde cero.
+
+La única conexión existente es `insumos.proveedor` (campo de texto libre, sin FK), que este módulo convierte en una relación real.
+
+|
+ Pieza 
+|
+ Estado 
+|
+|
+---
+|
+---
+|
+|
+ Tabla 
+`proveedores`
+|
+ ❌ No existe 
+|
+|
+ Tabla 
+`ordenes_compra`
+|
+ ❌ No existe 
+|
+|
+ Tabla 
+`orden_compra_items`
+|
+ ❌ No existe 
+|
+|
+ FK 
+`insumos.proveedor_id`
+|
+ ❌ No existe (solo campo texto libre) 
+|
+|
+ FK 
+`products.proveedor_id`
+|
+ ❌ No existe 
+|
+|
+ Ruta 
+`/proveedores`
+|
+ ❌ No existe 
+|
+|
+ Funciones en 
+`pos.functions.ts`
+|
+ ❌ No existen 
+|
+
+---
+
+## Decisiones de diseño
+
+**Proveedor vs Fabricante:** en una mueblería el mismo tercero puede ser proveedor de insumos (tela, espuma) y/o fabricante de productos terminados. Se usa una única tabla `proveedores` con un campo `tipo` que permite múltiples valores (`insumo`, `producto`, `ambos`). No se crean dos tablas separadas porque comparten todos los campos de contacto.
+
+**Órdenes de compra:** capturan la intención de compra a un proveedor (qué se pide, cuánto, a qué precio). Al marcar una orden como `recibida`, el stock de insumos se actualiza automáticamente via la tabla `insumo_movimientos` del módulo 4. Para productos terminados (fabricante externo), actualiza `products.stock`.
+
+**Vinculación insumos:** la columna `insumos.proveedor` (texto libre) se migra a `insumos.proveedor_id` (FK). Se incluye un script de migración no destructivo que mantiene los datos existentes.
+
+---
+
+## 1. Migraciones
+
+Ejecutar en orden en Supabase SQL Editor.
+
+### Paso 1 — Tabla `proveedores`
+
+```sql
+-- migrations/20260607_proveedores.sql
+
+CREATE TYPE public.proveedor_tipo AS ENUM ('insumo', 'producto', 'ambos');
+
+CREATE TABLE public.proveedores (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre        TEXT NOT NULL,
+  ruc           TEXT UNIQUE,
+  tipo          public.proveedor_tipo NOT NULL DEFAULT 'insumo',
+
+  -- Contacto
+  contacto_nombre   TEXT,
+  telefono          TEXT,
+  email             TEXT,
+  whatsapp          TEXT,
+
+  -- Dirección
+  direccion         TEXT,
+  distrito          TEXT,
+  ciudad            TEXT DEFAULT 'Lima',
+
+  -- Condiciones comerciales
+  plazo_entrega_dias  SMALLINT DEFAULT 7,   -- días hábiles de entrega
+  credito_dias        SMALLINT DEFAULT 0,   -- días de crédito (0 = contado)
+  moneda              TEXT NOT NULL DEFAULT 'PEN',
+  notas               TEXT,
+
+  activo            BOOLEAN NOT NULL DEFAULT true,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.proveedores ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE ON public.proveedores TO authenticated;
+
+CREATE POLICY "Staff manage proveedores"
+  ON public.proveedores FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'));
+
+CREATE INDEX idx_proveedores_tipo   ON public.proveedores(tipo);
+CREATE INDEX idx_proveedores_activo ON public.proveedores(activo);
+
+CREATE TRIGGER proveedores_updated_at
+  BEFORE UPDATE ON public.proveedores
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+```
+
+### Paso 2 — Vincular insumos y productos con proveedores
+
+```sql
+-- Añadir FK proveedor_id a insumos (reemplaza el campo texto libre)
+ALTER TABLE public.insumos
+  ADD COLUMN IF NOT EXISTS proveedor_id UUID REFERENCES public.proveedores(id) ON DELETE SET NULL;
+
+-- Migrar datos del campo texto libre al nuevo FK
+-- (solo aplica si ya tienes filas con proveedor cargado a mano)
+-- UPDATE public.insumos SET proveedor_id = p.id
+-- FROM public.proveedores p WHERE p.nombre = insumos.proveedor;
+
+-- Mantener el campo texto como legacy por compatibilidad; puedes eliminarlo luego
+-- ALTER TABLE public.insumos DROP COLUMN proveedor; -- opcional, hazlo cuando estés listo
+
+-- Añadir FK proveedor_id a products (para productos de fabricante externo)
+ALTER TABLE public.products
+  ADD COLUMN IF NOT EXISTS proveedor_id UUID REFERENCES public.proveedores(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_insumos_proveedor   ON public.insumos(proveedor_id);
+CREATE INDEX IF NOT EXISTS idx_products_proveedor  ON public.products(proveedor_id);
+```
+
+### Paso 3 — Órdenes de compra
+
+```sql
+CREATE TYPE public.orden_compra_status AS ENUM (
+  'borrador', 'enviada', 'confirmada', 'parcial', 'recibida', 'cancelada'
+);
+
+CREATE TABLE public.ordenes_compra (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  numero          TEXT NOT NULL UNIQUE,         -- OC-0001, OC-0002...
+  proveedor_id    UUID NOT NULL REFERENCES public.proveedores(id) ON DELETE RESTRICT,
+  status          public.orden_compra_status NOT NULL DEFAULT 'borrador',
+
+  -- Fechas
+  fecha_emision   DATE NOT NULL DEFAULT CURRENT_DATE,
+  fecha_esperada  DATE,
+  fecha_recepcion DATE,
+
+  -- Totales
+  subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  igv             NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total           NUMERIC(12,2) NOT NULL DEFAULT 0,
+  moneda          TEXT NOT NULL DEFAULT 'PEN',
+
+  -- Referencias
+  notas           TEXT,
+  creado_por      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  recibido_por    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.ordenes_compra ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE ON public.ordenes_compra TO authenticated;
+
+CREATE POLICY "Staff manage ordenes_compra"
+  ON public.ordenes_compra FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'));
+
+CREATE INDEX idx_oc_proveedor ON public.ordenes_compra(proveedor_id);
+CREATE INDEX idx_oc_status    ON public.ordenes_compra(status);
+CREATE INDEX idx_oc_fecha     ON public.ordenes_compra(fecha_emision DESC);
+
+CREATE TRIGGER ordenes_compra_updated_at
+  BEFORE UPDATE ON public.ordenes_compra
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Secuencia para numerar órdenes de compra
+CREATE SEQUENCE IF NOT EXISTS public.seq_orden_compra START 1;
+```
+
+### Paso 4 — Ítems de la orden de compra
+
+```sql
+CREATE TABLE public.orden_compra_items (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  orden_id        UUID NOT NULL REFERENCES public.ordenes_compra(id) ON DELETE CASCADE,
+
+  -- Referencia al insumo o producto (uno de los dos, no ambos)
+  insumo_id       UUID REFERENCES public.insumos(id) ON DELETE RESTRICT,
+  product_id      UUID REFERENCES public.products(id) ON DELETE RESTRICT,
+  descripcion     TEXT NOT NULL,    -- nombre libre si no hay FK
+  unidad          TEXT NOT NULL,
+
+  cantidad        NUMERIC(12,3) NOT NULL CHECK (cantidad > 0),
+  precio_unit     NUMERIC(12,4) NOT NULL DEFAULT 0,
+  subtotal        NUMERIC(12,2) GENERATED ALWAYS AS (ROUND((cantidad * precio_unit)::NUMERIC, 2)) STORED,
+
+  -- Recepción parcial
+  cantidad_recibida NUMERIC(12,3) NOT NULL DEFAULT 0,
+
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT chk_oc_item_referencia CHECK (
+    (insumo_id IS NOT NULL AND product_id IS NULL) OR
+    (insumo_id IS NULL AND product_id IS NOT NULL) OR
+    (insumo_id IS NULL AND product_id IS NULL)  -- ítem libre sin FK
+  )
+);
+
+ALTER TABLE public.orden_compra_items ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.orden_compra_items TO authenticated;
+
+CREATE POLICY "Staff manage oc_items"
+  ON public.orden_compra_items FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'));
+
+CREATE INDEX idx_oc_items_orden   ON public.orden_compra_items(orden_id);
+CREATE INDEX idx_oc_items_insumo  ON public.orden_compra_items(insumo_id);
+CREATE INDEX idx_oc_items_product ON public.orden_compra_items(product_id);
+```
+
+### Paso 5 — Función para confirmar recepción
+
+Esta función es el núcleo de la integración con stock: al marcar una orden como `recibida`, descarga los insumos en `insumo_movimientos` y actualiza el stock de productos.
+
+```sql
+CREATE OR REPLACE FUNCTION public.recibir_orden_compra(
+  _orden_id UUID,
+  _notas    TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _user_id UUID := auth.uid();
+  _orden   public.ordenes_compra;
+  _item    RECORD;
+BEGIN
+  IF NOT (public.has_role(_user_id, 'admin') OR public.has_role(_user_id, 'vendedor')) THEN
+    RAISE EXCEPTION 'Sin permisos para recibir órdenes de compra';
+  END IF;
+
+  SELECT * INTO _orden FROM public.ordenes_compra WHERE id = _orden_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Orden de compra no encontrada'; END IF;
+
+  IF _orden.status IN ('recibida', 'cancelada') THEN
+    RAISE EXCEPTION 'La orden ya fue % — no se puede recibir nuevamente', _orden.status;
+  END IF;
+
+  -- Registrar entrada en insumo_movimientos por cada ítem de insumo
+  FOR _item IN
+    SELECT * FROM public.orden_compra_items WHERE orden_id = _orden_id AND insumo_id IS NOT NULL
+  LOOP
+    INSERT INTO public.insumo_movimientos
+      (insumo_id, tipo, cantidad, motivo, referencia, registrado_por)
+    VALUES (
+      _item.insumo_id,
+      'entrada',
+      _item.cantidad,
+      'Recepción orden de compra',
+      _orden.numero,
+      _user_id
+    );
+    -- Marcar como totalmente recibido
+    UPDATE public.orden_compra_items
+    SET cantidad_recibida = cantidad
+    WHERE id = _item.id;
+  END LOOP;
+
+  -- Actualizar stock de productos terminados
+  FOR _item IN
+    SELECT * FROM public.orden_compra_items WHERE orden_id = _orden_id AND product_id IS NOT NULL
+  LOOP
+    UPDATE public.products
+    SET stock = stock + _item.cantidad::INTEGER, updated_at = now()
+    WHERE id = _item.product_id;
+
+    UPDATE public.orden_compra_items
+    SET cantidad_recibida = cantidad
+    WHERE id = _item.id;
+  END LOOP;
+
+  -- Actualizar la orden
+  UPDATE public.ordenes_compra
+  SET
+    status          = 'recibida',
+    fecha_recepcion = CURRENT_DATE,
+    recibido_por    = _user_id,
+    notas           = COALESCE(_notas, notas),
+    updated_at      = now()
+  WHERE id = _orden_id;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'orden_id', _orden_id,
+    'numero', _orden.numero
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.recibir_orden_compra TO authenticated;
+
+-- Función para calcular totales de la orden automáticamente
+CREATE OR REPLACE FUNCTION public.recalcular_totales_oc()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _subtotal NUMERIC(12,2);
+BEGIN
+  SELECT COALESCE(SUM(subtotal), 0)
+  INTO _subtotal
+  FROM public.orden_compra_items
+  WHERE orden_id = COALESCE(NEW.orden_id, OLD.orden_id);
+
+  UPDATE public.ordenes_compra
+  SET
+    subtotal   = _subtotal,
+    igv        = ROUND(_subtotal * 0.18, 2),
+    total      = _subtotal + ROUND(_subtotal * 0.18, 2),
+    updated_at = now()
+  WHERE id = COALESCE(NEW.orden_id, OLD.orden_id);
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+CREATE TRIGGER trg_recalcular_totales_oc
+  AFTER INSERT OR UPDATE OR DELETE ON public.orden_compra_items
+  FOR EACH ROW EXECUTE FUNCTION public.recalcular_totales_oc();
+
+-- Función helper para generar número de OC
+CREATE OR REPLACE FUNCTION public.next_orden_compra_numero()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE _n BIGINT;
+BEGIN
+  SELECT nextval('public.seq_orden_compra') INTO _n;
+  RETURN 'OC-' || LPAD(_n::TEXT, 4, '0');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.next_orden_compra_numero() TO authenticated;
+```
+
+### Paso 6 — Vista de estado de stock por proveedor
+
+```sql
+CREATE OR REPLACE VIEW public.v_proveedores_resumen AS
+SELECT
+  p.id,
+  p.nombre,
+  p.tipo,
+  p.contacto_nombre,
+  p.telefono,
+  p.email,
+  p.plazo_entrega_dias,
+  p.activo,
+
+  COUNT(DISTINCT i.id)  AS total_insumos,
+  COUNT(DISTINCT pr.id) AS total_productos,
+
+  COUNT(DISTINCT oc.id) FILTER (WHERE oc.status = 'enviada')    AS oc_pendientes,
+  COUNT(DISTINCT oc.id) FILTER (WHERE oc.status = 'recibida')   AS oc_recibidas,
+  COALESCE(SUM(oc.total) FILTER (WHERE oc.status = 'recibida'), 0) AS total_comprado,
+  MAX(oc.fecha_emision)  AS ultima_compra
+
+FROM public.proveedores p
+LEFT JOIN public.insumos i     ON i.proveedor_id = p.id AND i.activo = true
+LEFT JOIN public.products pr   ON pr.proveedor_id = p.id AND pr.activo = true
+LEFT JOIN public.ordenes_compra oc ON oc.proveedor_id = p.id
+GROUP BY p.id;
+
+GRANT SELECT ON public.v_proveedores_resumen TO authenticated;
+```
+
+---
+
+## 2. Funciones en `pos.functions.ts`
+
+```ts
+// ── PROVEEDORES ──────────────────────────────────────────────
+
+export async function listProveedores(input?: { activo?: boolean }) {
+  const { supabase } = await getAuthenticatedClient();
+  let q = supabase
+    .from("v_proveedores_resumen")
+    .select("*")
+    .order("nombre");
+  if (input?.activo !== undefined) q = q.eq("activo", input.activo);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return { proveedores: data ?? [] };
+}
+
+export async function upsertProveedor(input: {
+  id?: string;
+  nombre: string;
+  ruc?: string | null;
+  tipo: "insumo" | "producto" | "ambos";
+  contacto_nombre?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  whatsapp?: string | null;
+  direccion?: string | null;
+  distrito?: string | null;
+  plazo_entrega_dias?: number;
+  credito_dias?: number;
+  notas?: string | null;
+}) {
+  const data = z.object({
+    id:                  z.string().uuid().optional(),
+    nombre:              z.string().min(1).max(200),
+    ruc:                 z.string().length(11).optional().nullable(),
+    tipo:                z.enum(["insumo", "producto", "ambos"]),
+    contacto_nombre:     z.string().max(150).optional().nullable(),
+    telefono:            z.string().max(30).optional().nullable(),
+    email:               z.string().email().optional().nullable().or(z.literal("")),
+    whatsapp:            z.string().max(30).optional().nullable(),
+    direccion:           z.string().max(500).optional().nullable(),
+    distrito:            z.string().max(100).optional().nullable(),
+    plazo_entrega_dias:  z.number().int().min(0).max(365).optional(),
+    credito_dias:        z.number().int().min(0).max(365).optional(),
+    notas:               z.string().max(2000).optional().nullable(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: row, error } = await supabase
+    .from("proveedores")
+    .upsert({ ...data, email: data.email || null, updated_at: new Date().toISOString() }, { onConflict: "id" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { proveedor: row };
+}
+
+export async function getProveedor(input: { id: string }) {
+  const { id } = z.object({ id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("proveedores")
+    .select("*, insumos(id, nombre, unidad, stock_actual), products(id, nombre, sku, precio)")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return { proveedor: data };
+}
+
+// ── ÓRDENES DE COMPRA ────────────────────────────────────────
+
+export async function listOrdenes(input?: { proveedor_id?: string; status?: string }) {
+  const { supabase } = await getAuthenticatedClient();
+  let q = supabase
+    .from("ordenes_compra")
+    .select("*, proveedores(id, nombre, telefono), orden_compra_items(id, descripcion, cantidad, precio_unit, subtotal, cantidad_recibida, insumo_id, product_id)")
+    .order("fecha_emision", { ascending: false })
+    .limit(200);
+  if (input?.proveedor_id) q = q.eq("proveedor_id", input.proveedor_id);
+  if (input?.status)       q = q.eq("status", input.status);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return { ordenes: data ?? [] };
+}
+
+export async function crearOrdenCompra(input: {
+  proveedor_id: string;
+  fecha_esperada?: string | null;
+  notas?: string | null;
+  items: Array;
+}) {
+  const data = z.object({
+    proveedor_id:   z.string().uuid(),
+    fecha_esperada: z.string().optional().nullable(),
+    notas:          z.string().max(1000).optional().nullable(),
+    items: z.array(z.object({
+      insumo_id:   z.string().uuid().optional().nullable(),
+      product_id:  z.string().uuid().optional().nullable(),
+      descripcion: z.string().min(1).max(300),
+      unidad:      z.string().min(1).max(30),
+      cantidad:    z.number().positive(),
+      precio_unit: z.number().min(0),
+    })).min(1).max(50),
+  }).parse(input);
+
+  const { supabase, userId } = await getAuthenticatedClient();
+
+  // Generar número de OC
+  const { data: numRow, error: numErr } = await supabase.rpc("next_orden_compra_numero");
+  if (numErr) throw new Error(numErr.message);
+
+  const { data: orden, error: ordenErr } = await supabase
+    .from("ordenes_compra")
+    .insert({
+      numero:         numRow,
+      proveedor_id:   data.proveedor_id,
+      fecha_esperada: data.fecha_esperada ?? null,
+      notas:          data.notas ?? null,
+      creado_por:     userId,
+    })
+    .select()
+    .single();
+  if (ordenErr) throw new Error(ordenErr.message);
+
+  const { error: itemsErr } = await supabase
+    .from("orden_compra_items")
+    .insert(data.items.map((item) => ({ ...item, orden_id: orden.id })));
+  if (itemsErr) throw new Error(itemsErr.message);
+
+  return { orden };
+}
+
+export async function actualizarStatusOrden(input: {
+  id: string;
+  status: "enviada" | "confirmada" | "cancelada";
+}) {
+  const { id, status } = z.object({
+    id:     z.string().uuid(),
+    status: z.enum(["enviada", "confirmada", "cancelada"]),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase
+    .from("ordenes_compra")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+export async function recibirOrdenCompra(input: { id: string; notas?: string }) {
+  const { id, notas } = z.object({
+    id:    z.string().uuid(),
+    notas: z.string().optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("recibir_orden_compra", {
+    _orden_id: id,
+    _notas:    notas ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+```
+
+---
+
+## 3. Ruta `/proveedores` — Panel completo
+
+Crea `src/routes/_authenticated/proveedores.tsx`:
+
+```tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  listProveedores, upsertProveedor, getProveedor,
+  listOrdenes, crearOrdenCompra, actualizarStatusOrden, recibirOrdenCompra,
+} from "@/lib/pos.functions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Loader2, Plus, Eye, Truck, ShoppingCart,
+  Phone, Mail, MessageCircle, Package, Building2,
+  CheckCircle2, XCircle, Send, RefreshCw, Trash2,
+} from "lucide-react";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+
+export const Route = createFileRoute("/_authenticated/proveedores")({
+  head: () => ({ meta: [{ title: "Proveedores — G&M" }] }),
+  component: ProveedoresPage,
+});
+
+// ── Config visual ────────────────────────────────────────────
+const TIPO_CONFIG = {
+  insumo:   { label: "Insumos",            color: "#1e40af", bg: "#dbeafe" },
+  producto: { label: "Productos",          color: "#065f46", bg: "#d1fae5" },
+  ambos:    { label: "Insumos + Productos", color: "#6d28d9", bg: "#ede9fe" },
+} as const;
+
+const OC_STATUS_CONFIG = {
+  borrador:   { label: "Borrador",    color: "#6b7280", bg: "#f3f4f6", icon: Package },
+  enviada:    { label: "Enviada",     color: "#92400e", bg: "#fef3c7", icon: Send },
+  confirmada: { label: "Confirmada",  color: "#1e40af", bg: "#dbeafe", icon: CheckCircle2 },
+  parcial:    { label: "Recepción parcial", color: "#5b21b6", bg: "#ede9fe", icon: Truck },
+  recibida:   { label: "Recibida",    color: "#14532d", bg: "#dcfce7", icon: CheckCircle2 },
+  cancelada:  { label: "Cancelada",   color: "#7f1d1d", bg: "#fee2e2", icon: XCircle },
+} as const;
+
+type OcStatus = keyof typeof OC_STATUS_CONFIG;
+type ProvTipo = keyof typeof TIPO_CONFIG;
+
+const fmt     = (n: number) => new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+const fmtDay  = (d: string | null) => d ? format(new Date(d), "dd MMM yyyy", { locale: es }) : "—";
+const UNIDADES = ["metros", "kg", "litros", "unidades", "planchas", "piezas", "paquetes", "palos", "pies", "bolsas"];
+
+// ── Form proveedor ───────────────────────────────────────────
+const EMPTY_PROV = () => ({
+  nombre: "", ruc: "", tipo: "insumo" as ProvTipo,
+  contacto_nombre: "", telefono: "", email: "", whatsapp: "",
+  direccion: "", distrito: "",
+  plazo_entrega_dias: 7, credito_dias: 0, notas: "",
+});
+
+function ProveedorForm({ initial, onClose }: { initial?: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState(initial ? {
+    ...EMPTY_PROV(), ...initial,
+    plazo_entrega_dias: initial.plazo_entrega_dias ?? 7,
+    credito_dias: initial.credito_dias ?? 0,
+  } : EMPTY_PROV());
+
+  const set = (k: string) => (e: React.ChangeEvent) =>
+    setForm((f: any) => ({ ...f, [k]: e.target.value }));
+
+  const mut = useMutation({
+    mutationFn: () => upsertProveedor({ ...form, id: initial?.id }),
+    onSuccess: () => {
+      toast.success(initial ? "Proveedor actualizado" : "Proveedor creado");
+      qc.invalidateQueries({ queryKey: ["proveedores"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    
+      
+        
+          
+            {initial ? "Editar proveedor" : "Nuevo proveedor"}
+          
+        
+        
+          
+            
+              Nombre *
+              <Input className="mt-1" value={form.nombre} onChange={set("nombre")} placeholder="Ej: Textiles Peruanos SAC" />
+            
+            
+              RUC
+              <Input className="mt-1" value={form.ruc} onChange={set("ruc")} placeholder="20XXXXXXXXX" maxLength={11} />
+            
+            
+              Tipo *
+              <Select value={form.tipo} onValueChange={(v) => setForm((f: any) => ({ ...f, tipo: v }))}>
+                
+                
+                  Proveedor de insumos
+                  Fabricante de productos
+                  Ambos
+                
+              
+            
+          
+
+          
+            Contacto
+            
+              {[
+                { k: "contacto_nombre", label: "Nombre contacto", placeholder: "Juan Pérez" },
+                { k: "telefono",        label: "Teléfono",        placeholder: "+51 999 999 999" },
+                { k: "email",           label: "Email",           placeholder: "ventas@proveedor.com" },
+                { k: "whatsapp",        label: "WhatsApp",        placeholder: "+51 999 999 999" },
+              ].map(({ k, label, placeholder }) => (
+                
+                  {label}
+                  
+                
+              ))}
+              
+                Dirección
+                <Input className="mt-1" value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123" />
+              
+              
+                Distrito
+                <Input className="mt-1" value={form.distrito} onChange={set("distrito")} placeholder="San Juan de Lurigancho" />
+              
+            
+          
+
+          
+            Condiciones
+            
+              
+                Plazo entrega (días)
+                <Input className="mt-1" type="number" min={0} value={form.plazo_entrega_dias}
+                  onChange={(e) => setForm((f: any) => ({ ...f, plazo_entrega_dias: Number(e.target.value) }))} />
+              
+              
+                Crédito (días, 0 = contado)
+                <Input className="mt-1" type="number" min={0} value={form.credito_dias}
+                  onChange={(e) => setForm((f: any) => ({ ...f, credito_dias: Number(e.target.value) }))} />
+              
+            
+          
+
+          
+            Notas internas
+            <Textarea className="mt-1 text-sm" rows={2} value={form.notas} onChange={set("notas")}
+              placeholder="Condiciones especiales, historial de relación, etc." />
+          
+
+          <Button className="w-full" disabled={!form.nombre || mut.isPending} onClick={() => mut.mutate()}>
+            {mut.isPending && }
+            {initial ? "Guardar cambios" : "Crear proveedor"}
+          
+        
+      
+    
+  );
+}
+
+// ── Detalle del proveedor con OC ─────────────────────────────
+function ProveedorDetalle({ proveedorId, onClose }: { proveedorId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [tab, setTab] = useState("info");
+  const [editOpen, setEditOpen] = useState(false);
+  const [ocOpen, setOcOpen] = useState(false);
+
+  const { data: provData, isLoading } = useQuery({
+    queryKey: ["proveedor", proveedorId],
+    queryFn: () => getProveedor({ id: proveedorId }),
+  });
+
+  const { data: ocData } = useQuery({
+    queryKey: ["ordenes", proveedorId],
+    queryFn: () => listOrdenes({ proveedor_id: proveedorId }),
+  });
+
+  const recibirMut = useMutation({
+    mutationFn: (id: string) => recibirOrdenCompra({ id }),
+    onSuccess: () => {
+      toast.success("Stock actualizado — insumos ingresados");
+      qc.invalidateQueries({ queryKey: ["ordenes", proveedorId] });
+      qc.invalidateQueries({ queryKey: ["insumos"] });
+      qc.invalidateQueries({ queryKey: ["insumos-alertas"] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const statusMut = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: any }) => actualizarStatusOrden({ id, status }),
+    onSuccess: () => {
+      toast.success("Estado actualizado");
+      qc.invalidateQueries({ queryKey: ["ordenes", proveedorId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const p = provData?.proveedor;
+  const ordenes = ocData?.ordenes ?? [];
+  const tipo = TIPO_CONFIG[p?.tipo as ProvTipo] ?? TIPO_CONFIG.insumo;
+
+  return (
+    <>
+      
+        
+          
+            
+              
+              {isLoading ? "Cargando..." : p?.nombre}
+            
+          
+
+          {isLoading || !p ? (
+            
+          ) : (
+            
+              {/* Header info */}
+              
+                
+                  {tipo.label}
+                  {p.ruc && RUC: {p.ruc}}
+                
+                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Editar
+              
+
+              
+                
+                  Información
+                  
+                    Órdenes de compra
+                    {ordenes.filter((o: any) => o.status === "enviada").length > 0 && (
+                      
+                        {ordenes.filter((o: any) => o.status === "enviada").length}
+                      
+                    )}
+                  
+                  Materiales
+                
+
+                {/* Tab: Información */}
+                
+                  
+                    {[
+                      ["Contacto",      p.contacto_nombre],
+                      ["Teléfono",      p.telefono],
+                      ["Email",         p.email],
+                      ["WhatsApp",      p.whatsapp],
+                      ["Dirección",     p.direccion],
+                      ["Distrito",      p.distrito],
+                      ["Plazo entrega", p.plazo_entrega_dias ? `${p.plazo_entrega_dias} días` : null],
+                      ["Crédito",       p.credito_dias ? `${p.credito_dias} días` : "Contado"],
+                    ].map(([label, value]) => value ? (
+                      
+                        {label}
+                        {value}
+                      
+                    ) : null)}
+                  
+
+                  {/* Acciones de contacto rápido */}
+                  
+                    {p.telefono && (
+                      
+                        
+                           Llamar
+                        
+                      
+                    )}
+                    {p.whatsapp && (
+                      
+                        
+                           WhatsApp
+                        
+                      
+                    )}
+                    {p.email && (
+                      
+                        
+                           Email
+                        
+                      
+                    )}
+                  
+
+                  {p.notas && (
+                    
+                      Notas
+                      {p.notas}
+                    
+                  )}
+                
+
+                {/* Tab: Órdenes de compra */}
+                
+                  
+                    <Button size="sm" onClick={() => setOcOpen(true)}>
+                       Nueva orden de compra
+                    
+                  
+
+                  {ordenes.length === 0 ? (
+                    Sin órdenes de compra
+                  ) : (
+                    
+                      {ordenes.map((oc: any) => {
+                        const st = OC_STATUS_CONFIG[oc.status as OcStatus];
+                        const Icon = st?.icon ?? Package;
+                        return (
+                          
+                            
+                              
+                                {oc.numero}
+                                
+                                  {fmtDay(oc.fecha_emision)}
+                                  {oc.fecha_esperada && ` · Esperada: ${fmtDay(oc.fecha_esperada)}`}
+                                
+                              
+                              
+                                {st?.label}
+                              
+                            
+
+                            {/* Ítems */}
+                            
+                              {(oc.orden_compra_items ?? []).map((item: any) => (
+                                
+                                  {item.descripcion} × {item.cantidad}
+                                  {fmt(Number(item.subtotal))}
+                                
+                              ))}
+                            
+
+                            
+                              {fmt(Number(oc.total))}
+                              
+                                {oc.status === "borrador" && (
+                                  <Button size="sm" variant="outline"
+                                    onClick={() => statusMut.mutate({ id: oc.id, status: "enviada" })}
+                                    disabled={statusMut.isPending}>
+                                     Enviar al proveedor
+                                  
+                                )}
+                                {(oc.status === "enviada" || oc.status === "confirmada") && (
+                                  <Button size="sm"
+                                    onClick={() => recibirMut.mutate(oc.id)}
+                                    disabled={recibirMut.isPending}>
+                                    {recibirMut.isPending
+                                      ? 
+                                      : }
+                                    Confirmar recepción
+                                  
+                                )}
+                                {oc.status === "borrador" && (
+                                  <Button size="sm" variant="ghost"
+                                    onClick={() => statusMut.mutate({ id: oc.id, status: "cancelada" })}>
+                                    
+                                  
+                                )}
+                              
+                            
+                          
+                        );
+                      })}
+                    
+                  )}
+                
+
+                {/* Tab: Materiales vinculados */}
+                
+                  {(p.insumos ?? []).length > 0 && (
+                    
+                      Insumos
+                      
+                        {p.insumos.map((i: any) => (
+                          
+                            {i.nombre}
+                            {i.stock_actual} {i.unidad}
+                          
+                        ))}
+                      
+                    
+                  )}
+                  {(p.products ?? []).length > 0 && (
+                    
+                      Productos
+                      
+                        {p.products.map((pr: any) => (
+                          
+                            {pr.nombre}
+                            {fmt(Number(pr.precio))}
+                          
+                        ))}
+                      
+                    
+                  )}
+                  {(p.insumos ?? []).length === 0 && (p.products ?? []).length === 0 && (
+                    
+                      Sin materiales vinculados. Vincula insumos o productos desde sus respectivos paneles.
+                    
+                  )}
+                
+              
+            
+          )}
+        
+      
+
+      {editOpen && p && (
+        <ProveedorForm initial={p} onClose={() => { setEditOpen(false); qc.invalidateQueries({ queryKey: ["proveedor", proveedorId] }); }} />
+      )}
+      {ocOpen && (
+        <NuevaOrdenDialog proveedorId={proveedorId} onClose={() => { setOcOpen(false); qc.invalidateQueries({ queryKey: ["ordenes", proveedorId] }); }} />
+      )}
+    </>
+  );
+}
+
+// ── Dialog nueva orden de compra ─────────────────────────────
+function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClose: () => void }) {
+  const [fechaEsperada, setFechaEsperada] = useState("");
+  const [notas, setNotas] = useState("");
+  const [items, setItems] = useState([
+    { descripcion: "", unidad: "unidades", cantidad: 1, precio_unit: 0 },
+  ]);
+
+  const addItem = () => setItems((it) => [...it, { descripcion: "", unidad: "unidades", cantidad: 1, precio_unit: 0 }]);
+  const removeItem = (i: number) => setItems((it) => it.filter((_, idx) => idx !== i));
+  const updateItem = (i: number, k: string, v: string | number) =>
+    setItems((it) => it.map((row, idx) => idx === i ? { ...row, [k]: v } : row));
+
+  const total = items.reduce((s, it) => s + it.cantidad * it.precio_unit, 0);
+
+  const mut = useMutation({
+    mutationFn: () => crearOrdenCompra({ proveedor_id: proveedorId, fecha_esperada: fechaEsperada || null, notas: notas || null, items }),
+    onSuccess: () => { toast.success("Orden de compra creada"); onClose(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    
+      
+        Nueva orden de compra
+        
+          
+            
+              Fecha esperada de entrega
+              <Input className="mt-1" type="date" value={fechaEsperada} onChange={(e) => setFechaEsperada(e.target.value)} />
+            
+            
+              Notas para el proveedor
+              <Input className="mt-1" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Instrucciones, referencias..." />
+            
+          
+
+          
+            
+              Ítems *
+               Añadir
+            
+            {items.map((item, i) => (
+              
+                
+                  {i === 0 && Descripción}
+                  <Input placeholder="Tela metro lineal..." value={item.descripcion}
+                    onChange={(e) => updateItem(i, "descripcion", e.target.value)} />
+                
+                
+                  {i === 0 && Unidad}
+                  <Select value={item.unidad} onValueChange={(v) => updateItem(i, "unidad", v)}>
+                    
+                    
+                      {UNIDADES.map((u) => {u})}
+                    
+                  
+                
+                
+                  {i === 0 && Cantidad}
+                  <Input type="number" min={0} value={item.cantidad}
+                    onChange={(e) => updateItem(i, "cantidad", Number(e.target.value))} />
+                
+                
+                  {i === 0 && P. Unit (S/)}
+                  <Input type="number" min={0} step="0.01" value={item.precio_unit}
+                    onChange={(e) => updateItem(i, "precio_unit", Number(e.target.value))} />
+                
+                
+                  {i === 0 && Sub.}
+                  
+                    {fmt(item.cantidad * item.precio_unit)}
+                  
+                
+                
+                  {items.length > 1 && (
+                    <Button size="sm" variant="ghost" onClick={() => removeItem(i)}>
+                      
+                    
+                  )}
+                
+              
+            ))}
+
+            
+              Total estimado: {fmt(total)} + IGV ({fmt(total * 0.18)}) = {fmt(total * 1.18)}
+            
+          
+
+          <Button className="w-full"
+            disabled={items.some((it) => !it.descripcion) || mut.isPending}
+            onClick={() => mut.mutate()}>
+            {mut.isPending && }
+            Crear orden de compra (borrador)
+          
+        
+      
+    
+  );
+}
+
+// ── Página principal ─────────────────────────────────────────
+function ProveedoresPage() {
+  const [busqueda, setBusqueda] = useState("");
+  const [tipoFilter, setTipoFilter] = useState("todos");
+  const [formOpen, setFormOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["proveedores"],
+    queryFn: () => listProveedores({ activo: true }),
+  });
+
+  const proveedores = data?.proveedores ?? [];
+
+  const filtrados = useMemo(() => {
+    return proveedores.filter((p: any) => {
+      const matchTipo = tipoFilter === "todos" || p.tipo === tipoFilter;
+      const q = busqueda.toLowerCase();
+      const matchQ = !q || p.nombre.toLowerCase().includes(q) ||
+        (p.ruc ?? "").includes(q) || (p.contacto_nombre ?? "").toLowerCase().includes(q);
+      return matchTipo && matchQ;
+    });
+  }, [proveedores, busqueda, tipoFilter]);
+
+  const stats = useMemo(() => ({
+    total:    proveedores.length,
+    insumo:   proveedores.filter((p: any) => p.tipo === "insumo" || p.tipo === "ambos").length,
+    producto: proveedores.filter((p: any) => p.tipo === "producto" || p.tipo === "ambos").length,
+    oc_pend:  proveedores.reduce((s: number, p: any) => s + (p.oc_pendientes ?? 0), 0),
+  }), [proveedores]);
+
+  return (
+    
+      
+        
+          Proveedores y Fabricantes
+          Directorio y órdenes de compra
+        
+        
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+             Actualizar
+          
+          <Button size="sm" onClick={() => setFormOpen(true)}>
+             Nuevo proveedor
+          
+        
+      
+
+      {/* KPIs */}
+      
+        {[
+          { label: "Total",          value: stats.total },
+          { label: "Proveen insumos", value: stats.insumo },
+          { label: "Fabricantes",    value: stats.producto },
+          { label: "OC pendientes",  value: stats.oc_pend },
+        ].map(({ label, value }) => (
+          <div key={label} className={`border rounded-xl p-4 ${label === "OC pendientes" && value > 0 ? "bg-amber-50 border-amber-200" : "bg-card border-border/50"}`}>
+            {label}
+            {value}
+          
+        ))}
+      
+
+      {/* Filtros */}
+      
+        
+          <Input placeholder="Buscar por nombre, RUC o contacto…"
+            value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+        
+        
+          
+          
+            Todos los tipos
+            Proveedores de insumos
+            Fabricantes
+            Ambos
+          
+        
+      
+
+      {/* Tabla */}
+      {isLoading ? (
+        
+      ) : filtrados.length === 0 ? (
+        
+          
+          No hay proveedores registrados
+          <Button size="sm" onClick={() => setFormOpen(true)}> Añadir el primero
+        
+      ) : (
+        
+          
+            
+              
+                
+                  {["Proveedor", "Tipo", "Contacto", "Plazo", "Insumos", "OC pendientes", "Total comprado", ""].map((h) => (
+                    {h}
+                  ))}
+                
+              
+              
+                {filtrados.map((p: any) => {
+                  const tipo = TIPO_CONFIG[p.tipo as ProvTipo];
+                  return (
+                    
+                      
+                        {p.nombre}
+                        {p.ruc && RUC {p.ruc}}
+                      
+                      
+                        {tipo?.label}
+                      
+                      
+                        {p.contacto_nombre && {p.contacto_nombre}}
+                        {p.telefono && {p.telefono}}
+                      
+                      
+                        {p.plazo_entrega_dias ? `${p.plazo_entrega_dias}d` : "—"}
+                      
+                      {p.total_insumos ?? 0}
+                      
+                        {(p.oc_pendientes ?? 0) > 0
+                          ? {p.oc_pendientes}
+                          : —}
+                      
+                      
+                        {Number(p.total_comprado) > 0 ? fmt(Number(p.total_comprado)) : "—"}
+                      
+                      
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedId(p.id)}>
+                          
+                        
+                      
+                    
+                  );
+                })}
+              
+            
+          
+        
+      )}
+
+      {formOpen && <ProveedorForm onClose={() => setFormOpen(false)} />}
+      {selectedId && <ProveedorDetalle proveedorId={selectedId} onClose={() => setSelectedId(null)} />}
+    
+  );
+}
+```
+
+---
+
+## 4. Vincular proveedor desde el panel de insumos
+
+En `src/routes/_authenticated/insumos.tsx`, amplía el `InsumoDialog` para incluir el selector de proveedor:
+
+```tsx
+// Añadir query de proveedores dentro del componente InsumoDialog
+const { data: provData } = useQuery({
+  queryKey: ["proveedores"],
+  queryFn: () => listProveedores({ activo: true }),
+});
+
+// Añadir campo proveedor_id al form inicial:
+const [form, setForm] = useState({
+  ...
+  proveedor_id: insumo?.proveedor_id ?? "",
+});
+
+// Añadir en el JSX del Dialog, antes del botón Guardar:
+
+  Proveedor
+  <Select
+    value={form.proveedor_id ?? ""}
+    onValueChange={(v) => setForm((f) => ({ ...f, proveedor_id: v || null }))}
+  >
+    
+      
+    
+    
+      Sin proveedor
+      {(provData?.proveedores ?? []).map((p: any) => (
+        {p.nombre}
+      ))}
+    
+  
+
+
+// Incluir proveedor_id en la llamada upsertInsumo:
+mutationFn: () => upsertInsumo({ ...form, proveedor_id: form.proveedor_id || null }),
+```
+
+---
+
+## 5. Actualizar `AppSidebar.tsx`
+
+```tsx
+import { ..., Truck } from "lucide-react";
+
+// Añadir en items, después de "Insumos MRP":
+{ title: "Proveedores", url: "/proveedores", icon: Truck, roles: ["admin", "vendedor"] as AppRole[] },
+```
+
+---
+
+## 6. Lista de verificación
+
+### Base de datos (en orden)
+- [ ] Paso 1 — Crear tabla `proveedores` con RLS
+- [ ] Paso 2 — Añadir `proveedor_id` a `insumos` y `products`
+- [ ] Paso 3 — Crear tabla `ordenes_compra` con secuencia `seq_orden_compra`
+- [ ] Paso 4 — Crear tabla `orden_compra_items` con columna generada `subtotal`
+- [ ] Paso 5 — Crear funciones `recibir_orden_compra`, `recalcular_totales_oc`, `next_orden_compra_numero`
+- [ ] Paso 6 — Crear vista `v_proveedores_resumen`
+
+### Código
+- [ ] Añadir 7 funciones en `pos.functions.ts`: `listProveedores`, `upsertProveedor`, `getProveedor`, `listOrdenes`, `crearOrdenCompra`, `actualizarStatusOrden`, `recibirOrdenCompra`
+- [ ] Crear `src/routes/_authenticated/proveedores.tsx`
+- [ ] Ampliar `InsumoDialog` en `insumos.tsx` con selector de proveedor
+- [ ] Añadir "Proveedores" en `AppSidebar.tsx` con ícono `Truck`
+
+### Verificación funcional
+- [ ] `/proveedores` carga la tabla de proveedores
+- [ ] Crear proveedor de tipo "insumo" funciona
+- [ ] Click en ojo abre el detalle con tabs (Info / Órdenes / Materiales)
+- [ ] Crear una orden de compra en borrador → aparece en la tab "Órdenes"
+- [ ] "Enviar al proveedor" cambia status a `enviada`
+- [ ] "Confirmar recepción" llama a `recibir_orden_compra` → `stock_actual` de los insumos aumenta
+- [ ] La alerta de stock bajo en `/insumos` desaparece si el stock recibido supera el mínimo
+- [ ] KPI "OC pendientes" en la tabla de proveedores muestra las enviadas sin recibir
+- [ ] Selector de proveedor en el form de insumo guarda `proveedor_id`
+
+---
+
+## 7. Notas importantes
+
+**La columna `subtotal` en `orden_compra_items` es GENERATED ALWAYS AS** — no se puede insertar ni actualizar directamente. El ORM de Supabase la omite si no la incluyes en el `select`, pero si la pides, viene calculada. No la incluyas en los payloads de insert/update.
+
+**`recalcular_totales_oc` usa un trigger AFTER INSERT OR UPDATE OR DELETE** — los totales de la OC se recalculan automáticamente cada vez que se modifica un ítem. No necesitas calcularlos en el frontend.
+
+**Las OC se crean siempre como `borrador`** — el flujo correcto es: borrador → enviada → (confirmada) → recibida. El paso "confirmada" es opcional (cuando el proveedor te confirma que aceptó el pedido). El botón "Confirmar recepción" salta de `enviada` o `confirmada` directamente a `recibida`.
+
+**Para vincular insumos existentes al proveedor correcto** sin perder los datos del campo texto `proveedor`, puedes ejecutar este UPDATE manual una vez después de cargar los proveedores:
+```sql
+UPDATE public.insumos SET proveedor_id = p.id
+FROM public.proveedores p
+WHERE p.nombre ILIKE '%' || insumos.proveedor || '%'
+  AND insumos.proveedor IS NOT NULL;

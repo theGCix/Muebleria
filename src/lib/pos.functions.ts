@@ -637,3 +637,170 @@ export async function listCarpinteros() {
   return { carpinteros: profiles ?? [] };
 }
 // EE- GR#09062026:09:21
+
+
+
+
+
+// ── PROVEEDORES ──────────────────────────────────────────────
+
+export async function listProveedores(input?: { activo?: boolean }) {
+  const { supabase } = await getAuthenticatedClient();
+  let q = supabase
+    .from("v_proveedores_resumen")
+    .select("*")
+    .order("nombre");
+  if (input?.activo !== undefined) q = q.eq("activo", input.activo);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return { proveedores: data ?? [] };
+}
+
+export async function upsertProveedor(input: {
+  id?: string;
+  nombre: string;
+  ruc?: string | null;
+  tipo: "insumo" | "producto" | "ambos";
+  contacto_nombre?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  whatsapp?: string | null;
+  direccion?: string | null;
+  distrito?: string | null;
+  plazo_entrega_dias?: number;
+  credito_dias?: number;
+  notas?: string | null;
+}) {
+  const data = z.object({
+    id:                  z.string().uuid().optional(),
+    nombre:              z.string().min(1).max(200),
+    ruc:                 z.string().length(11).optional().nullable(),
+    tipo:                z.enum(["insumo", "producto", "ambos"]),
+    contacto_nombre:     z.string().max(150).optional().nullable(),
+    telefono:            z.string().max(30).optional().nullable(),
+    email:               z.string().email().optional().nullable().or(z.literal("")),
+    whatsapp:            z.string().max(30).optional().nullable(),
+    direccion:           z.string().max(500).optional().nullable(),
+    distrito:            z.string().max(100).optional().nullable(),
+    plazo_entrega_dias:  z.number().int().min(0).max(365).optional(),
+    credito_dias:        z.number().int().min(0).max(365).optional(),
+    notas:               z.string().max(2000).optional().nullable(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: row, error } = await supabase
+    .from("proveedores")
+    .upsert({ ...data, email: data.email || null, updated_at: new Date().toISOString() }, { onConflict: "id" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { proveedor: row };
+}
+
+export async function getProveedor(input: { id: string }) {
+  const { id } = z.object({ id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("proveedores")
+    .select("*, insumos(id, nombre, unidad, stock_actual), products(id, nombre, sku, precio)")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return { proveedor: data };
+}
+
+// ── ÓRDENES DE COMPRA ────────────────────────────────────────
+
+export async function listOrdenes(input?: { proveedor_id?: string; status?: string }) {
+  const { supabase } = await getAuthenticatedClient();
+  let q = supabase
+    .from("ordenes_compra")
+    .select("*, proveedores(id, nombre, telefono), orden_compra_items(id, descripcion, cantidad, precio_unit, subtotal, cantidad_recibida, insumo_id, product_id)")
+    .order("fecha_emision", { ascending: false })
+    .limit(200);
+  if (input?.proveedor_id) q = q.eq("proveedor_id", input.proveedor_id);
+  if (input?.status)       q = q.eq("status", input.status);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return { ordenes: data ?? [] };
+}
+
+export async function crearOrdenCompra(input: {
+  proveedor_id: string;
+  fecha_esperada?: string | null;
+  notas?: string | null;
+  items: Array;
+}) {
+  const data = z.object({
+    proveedor_id:   z.string().uuid(),
+    fecha_esperada: z.string().optional().nullable(),
+    notas:          z.string().max(1000).optional().nullable(),
+    items: z.array(z.object({
+      insumo_id:   z.string().uuid().optional().nullable(),
+      product_id:  z.string().uuid().optional().nullable(),
+      descripcion: z.string().min(1).max(300),
+      unidad:      z.string().min(1).max(30),
+      cantidad:    z.number().positive(),
+      precio_unit: z.number().min(0),
+    })).min(1).max(50),
+  }).parse(input);
+
+  const { supabase, userId } = await getAuthenticatedClient();
+
+  // Generar número de OC
+  const { data: numRow, error: numErr } = await supabase.rpc("next_orden_compra_numero");
+  if (numErr) throw new Error(numErr.message);
+
+  const { data: orden, error: ordenErr } = await supabase
+    .from("ordenes_compra")
+    .insert({
+      numero:         numRow,
+      proveedor_id:   data.proveedor_id,
+      fecha_esperada: data.fecha_esperada ?? null,
+      notas:          data.notas ?? null,
+      creado_por:     userId,
+    })
+    .select()
+    .single();
+  if (ordenErr) throw new Error(ordenErr.message);
+
+  const { error: itemsErr } = await supabase
+    .from("orden_compra_items")
+    .insert(data.items.map((item) => ({ ...item, orden_id: orden.id })));
+  if (itemsErr) throw new Error(itemsErr.message);
+
+  return { orden };
+}
+
+export async function actualizarStatusOrden(input: {
+  id: string;
+  status: "enviada" | "confirmada" | "cancelada";
+}) {
+  const { id, status } = z.object({
+    id:     z.string().uuid(),
+    status: z.enum(["enviada", "confirmada", "cancelada"]),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase
+    .from("ordenes_compra")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+export async function recibirOrdenCompra(input: { id: string; notas?: string }) {
+  const { id, notas } = z.object({
+    id:    z.string().uuid(),
+    notas: z.string().optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("recibir_orden_compra", {
+    _orden_id: id,
+    _notas:    notas ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
