@@ -254,7 +254,7 @@ const { data: provData } = useQuery({
 });
 
   const mut = useMutation({
-    mutationFn: () => upsertInsumo({ ...form, proveedor_id: form.proveedor_id || null, precio_unit: form.precio_unit ? Number(form.precio_unit) : null }),
+    mutationFn: () => upsertInsumo({ ...form, precio_unit: form.precio_unit ? Number(form.precio_unit) : null }),
     onSuccess: () => {
       toast.success(insumo ? "Insumo actualizado" : "Insumo creado");
       setOpen(false); onDone();
