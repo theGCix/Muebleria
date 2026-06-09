@@ -312,3 +312,164 @@ export async function updateCustomerCrm(input: {
   return { customer: row };
 }
 //EE- GR#08062026
+
+
+
+
+
+
+
+
+//SE- GR#09062026
+export async function listInsumos() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("insumos")
+    .select("*")
+    .eq("activo", true)
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return { insumos: data ?? [] };
+}
+
+export async function upsertInsumo(input: {
+  id?: string;
+  nombre: string;
+  unidad: string;
+  stock_actual?: number;
+  stock_minimo?: number;
+  precio_unit?: number | null;
+  proveedor?: string | null;
+}) {
+  const data = z.object({
+    id:           z.string().uuid().optional(),
+    nombre:       z.string().min(1).max(100),
+    unidad:       z.string().min(1),
+    stock_actual: z.number().min(0).optional(),
+    stock_minimo: z.number().min(0).optional(),
+    precio_unit:  z.number().min(0).optional().nullable(),
+    proveedor:    z.string().max(200).optional().nullable(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: row, error } = await supabase
+    .from("insumos")
+    .upsert({ ...data, updated_at: new Date().toISOString() }, { onConflict: "id" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { insumo: row };
+}
+
+export async function registrarMovimiento(input: {
+  insumo_id: string;
+  tipo: "entrada" | "salida" | "ajuste";
+  cantidad: number;
+  motivo?: string;
+  referencia?: string;
+}) {
+  const data = z.object({
+    insumo_id:  z.string().uuid(),
+    tipo:       z.enum(["entrada", "salida", "ajuste"]),
+    cantidad:   z.number(),
+    motivo:     z.string().max(500).optional(),
+    referencia: z.string().max(100).optional(),
+  }).parse(input);
+
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { error } = await supabase
+    .from("insumo_movimientos")
+    .insert({ ...data, registrado_por: userId });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// BOM
+export async function getBom(input: { modelo: string; talla: string }) {
+  const { modelo, talla } = z.object({
+    modelo: z.string().min(1),
+    talla:  z.string().min(1),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("bom_items")
+    .select("*, insumos(id, nombre, unidad, stock_actual)")
+    .eq("modelo", modelo)
+    .eq("talla", talla)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return { items: data ?? [] };
+}
+
+// Calculadora MRP: ¿cuánto insumo necesito para N juegos?
+export async function calcularMrp(input: {
+  pedidos: Array<{ modelo: string; talla: string; cantidad: number }>;
+}) {
+  const { pedidos } = z.object({
+    pedidos: z.array(z.object({
+      modelo:   z.string().min(1),
+      talla:    z.string().min(1),
+      cantidad: z.number().int().positive(),
+    })).min(1),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+
+  // Obtener todos los BOM relevantes de una vez
+  const combinaciones = pedidos.map((p) => `(modelo.eq.${p.modelo},talla.eq.${p.talla})`);
+  const { data: boms, error } = await supabase
+    .from("bom_items")
+    .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)")
+    .or(combinaciones.join(","));
+  if (error) throw new Error(error.message);
+
+  // Agregar necesidad total por insumo
+  const necesidad: Record<string, {
+    nombre: string; unidad: string; stock_actual: number;
+    necesario: number; faltante: number;
+  }> = {};
+
+  for (const pedido of pedidos) {
+    const bomDelPedido = boms?.filter(
+      (b) => b.modelo === pedido.modelo && b.talla === pedido.talla
+    ) ?? [];
+
+    for (const item of bomDelPedido) {
+      const ins = item.insumos as any;
+      if (!ins) continue;
+      if (!necesidad[ins.id]) {
+        necesidad[ins.id] = {
+          nombre: ins.nombre,
+          unidad: ins.unidad,
+          stock_actual: Number(ins.stock_actual),
+          necesario: 0,
+          faltante: 0,
+        };
+      }
+      necesidad[ins.id].necesario += Number(item.cantidad) * pedido.cantidad;
+    }
+  }
+
+  // Calcular faltantes
+  for (const key of Object.keys(necesidad)) {
+    const n = necesidad[key];
+    n.faltante = Math.max(0, n.necesario - n.stock_actual);
+  }
+
+  return {
+    resultado: Object.values(necesidad).sort((a, b) => b.faltante - a.faltante),
+    hayFaltantes: Object.values(necesidad).some((n) => n.faltante > 0),
+  };
+}
+
+// Alertas de stock bajo
+export async function getStockBajo() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_insumos_stock_bajo")
+    .select("*");
+  if (error) throw new Error(error.message);
+  return { alertas: data ?? [] };
+}
+//EE- GR#09062026

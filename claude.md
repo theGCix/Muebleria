@@ -1,4 +1,4 @@
-# Módulo Ecommerce & Catálogo — Guía de Implementación
+# 1 Módulo Ecommerce & Catálogo — Guía de Implementación
 **G&M Mueblería** · Stack: React + TanStack Router + Supabase + Cloudinary + Zustand
 
 ---
@@ -472,7 +472,7 @@ Si no existe, agrégala.
 
 
 
-# Módulo Operaciones y Seguimiento de Pedidos — Guía de Implementación
+# 2 Módulo Operaciones y Seguimiento de Pedidos — Guía de Implementación
 **G&M Mueblería** · Rutas admin + pipeline de producción + vista cliente
 
 ---
@@ -1009,7 +1009,7 @@ open={!!selectedId}
 
 
 
-# Módulo Clientes y CRM — Guía de Implementación
+# 3 Módulo Clientes y CRM — Guía de Implementación
 **G&M Mueblería** · Estado real del código + lo que hay que construir
 
 ---
@@ -1781,3 +1781,1297 @@ Puedes llamarla manualmente desde el panel o programarla como cron de Supabase.
 **`createStaffUser` en `pos.functions.ts` usa `VITE_SUPABASE_SERVICE_KEY`** — una service key expuesta al browser es un riesgo de seguridad. Este patrón fue construido así en el proyecto original. Si quieres moverlo al servidor Express, la función de creación de usuarios debería ir en `server/index.js` usando la `SUPABASE_SECRET_KEY` del env del servidor (que no se expone al browser).
 
 **El primer usuario que se registra en Supabase recibe rol `admin` automáticamente** (trigger `handle_new_user`). Los siguientes reciben `vendedor` por defecto. Puedes cambiar esto en la migración `20260529080048`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 4  Módulo MRP — Insumos y Lista de Materiales (BOM)
+**G&M Mueblería** · Nuevo módulo completo, construir desde cero
+
+---
+
+## Lo que se construye
+
+| Funcionalidad | Ruta / Pieza |
+|---|---|
+| Catálogo de insumos con stock | `src/routes/_authenticated/insumos.tsx` |
+| BOM (lista de materiales por modelo+talla) | Tabla DB `bom_items` |
+| Calculadora MRP: ¿qué insumos necesito para N pedidos? | Dialog dentro de `insumos.tsx` |
+| Alerta de stock bajo | Badge en sidebar + query |
+| Link en sidebar | `AppSidebar.tsx` |
+
+---
+
+## Qué hay en el Excel y cómo interpretarlo
+
+El Excel define **5 modelos de juego de sala**, cada uno con **múltiples tallas** (2, 2.5, 3, 3.5, 4, 5, 6 pies) y los insumos necesarios para fabricar **1 juego completo**. La columna "Madera" lista las dimensiones de los cortes necesarios por talla; las demás columnas son insumos planos.
+
+### Insumos identificados
+
+| # | Insumo | Unidad de medida |
+|---|---|---|
+| 1 | Madera (pies/metros/palos) | pies / metros / palos |
+| 2 | Tela | metros (M) |
+| 3 | Algodón | kg |
+| 4 | Espuma | planchas × pgd |
+| 5 | Resorte | piezas |
+| 6 | Napa | kg |
+| 7 | Picadillo | kg |
+| 8 | Terocal | litros |
+| 9 | Clavo (resortes) | unidades |
+| 10 | Costales | unidades (ctd) |
+| 11 | Poliseda | metros (M) |
+| 12 | Patas de madera | unidades (ctd) |
+| 13 | Cojines | unidades × tamaño (pgd) |
+| 14 | Panqueque | metros (M) |
+| 15 | Grapa (casco) | paquetes / pgd |
+| 16 | Plato | unidades (ctd) |
+| 17 | Grapa (tela) | paquetes |
+| 18 | Cola | unidades (1/8) |
+| 19 | Hilos | unidades (ctd) |
+
+### Modelos y sus diferencias clave
+
+| Modelo | Tela 6 pies | Algodón 6 pies | Napa 6 pies | Notas |
+|---|---|---|---|---|
+| Vintage | 16 M | 5 kg | 1.5 kg | Cojines 50×50 y 50×55 |
+| Rex | 23 M | 2 kg | 15 kg | Cojines 60×50 y 50×50 |
+| Lineal Punta | 22 M | 2 kg | 15 kg | Similar a Rex, menos tela |
+| London | ~24 M (entero) | ~22.5 kg | 7.5 kg | Sin terocal, más picadillo (3kg) |
+| Garra | 21 M | 45 kg | 2 kg decorativo | Sin picadillo, mínimo terocal (10gr) |
+
+---
+
+## 1. Migraciones de base de datos
+
+Ejecutar en orden en el SQL Editor de Supabase.
+
+### Paso 1 — Catálogo de insumos
+
+```sql
+-- Unidades de medida disponibles
+CREATE TYPE public.unidad_insumo AS ENUM (
+  'metros', 'kg', 'litros', 'unidades', 'planchas', 'piezas',
+  'paquetes', 'palos', 'pies', 'bolsas'
+);
+
+-- Catálogo maestro de insumos
+CREATE TABLE public.insumos (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre        TEXT NOT NULL UNIQUE,
+  descripcion   TEXT,
+  unidad        public.unidad_insumo NOT NULL,
+  stock_actual  NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (stock_actual >= 0),
+  stock_minimo  NUMERIC(12,3) NOT NULL DEFAULT 0,
+  precio_unit   NUMERIC(10,2),               -- precio de compra por unidad
+  proveedor     TEXT,
+  activo        BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.insumos ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE ON public.insumos TO authenticated;
+
+CREATE POLICY "Staff manage insumos"
+  ON public.insumos FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'));
+
+CREATE INDEX idx_insumos_activo ON public.insumos(activo);
+```
+
+### Paso 2 — BOM (Bill of Materials)
+
+```sql
+-- Un BOM_ITEM = "para fabricar el modelo X en talla Y se necesita Z unidades del insumo I"
+CREATE TABLE public.bom_items (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  modelo       TEXT NOT NULL,          -- 'Vintage','Rex','Lineal Punta','London','Garra'
+  talla        TEXT NOT NULL,          -- '2 pies','2.5 pies','3 pies','3.5 pies','4 pies','5 pies','6 pies'
+  insumo_id    UUID NOT NULL REFERENCES public.insumos(id) ON DELETE CASCADE,
+  cantidad     NUMERIC(12,3) NOT NULL CHECK (cantidad > 0),
+  notas        TEXT,                   -- "sobra tiras", "mitad sobra", etc.
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (modelo, talla, insumo_id)
+);
+
+ALTER TABLE public.bom_items ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.bom_items TO authenticated;
+
+CREATE POLICY "Staff manage bom"
+  ON public.bom_items FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'));
+
+CREATE INDEX idx_bom_modelo_talla ON public.bom_items(modelo, talla);
+CREATE INDEX idx_bom_insumo ON public.bom_items(insumo_id);
+```
+
+### Paso 3 — Movimientos de stock (entradas/salidas)
+
+```sql
+CREATE TYPE public.movimiento_tipo AS ENUM ('entrada', 'salida', 'ajuste');
+
+CREATE TABLE public.insumo_movimientos (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  insumo_id    UUID NOT NULL REFERENCES public.insumos(id) ON DELETE CASCADE,
+  tipo         public.movimiento_tipo NOT NULL,
+  cantidad     NUMERIC(12,3) NOT NULL,
+  motivo       TEXT,                   -- "Compra proveedor", "Producción pedido #123", "Ajuste inventario"
+  referencia   TEXT,                   -- order_number o número de factura de compra
+  registrado_por UUID REFERENCES auth.users(id),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.insumo_movimientos ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT ON public.insumo_movimientos TO authenticated;
+
+CREATE POLICY "Staff manage movimientos"
+  ON public.insumo_movimientos FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'vendedor'));
+
+CREATE INDEX idx_mov_insumo ON public.insumo_movimientos(insumo_id, created_at DESC);
+
+-- Trigger: actualizar stock_actual automáticamente
+CREATE OR REPLACE FUNCTION public.actualizar_stock_insumo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.tipo = 'entrada' THEN
+    UPDATE public.insumos SET stock_actual = stock_actual + NEW.cantidad, updated_at = now()
+    WHERE id = NEW.insumo_id;
+  ELSIF NEW.tipo = 'salida' THEN
+    UPDATE public.insumos SET stock_actual = GREATEST(stock_actual - NEW.cantidad, 0), updated_at = now()
+    WHERE id = NEW.insumo_id;
+  ELSIF NEW.tipo = 'ajuste' THEN
+    -- cantidad puede ser negativa para ajuste a la baja
+    UPDATE public.insumos SET stock_actual = GREATEST(stock_actual + NEW.cantidad, 0), updated_at = now()
+    WHERE id = NEW.insumo_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_stock_insumo
+  AFTER INSERT ON public.insumo_movimientos
+  FOR EACH ROW EXECUTE FUNCTION public.actualizar_stock_insumo();
+```
+
+### Paso 4 — Vista de alertas de stock bajo
+
+```sql
+CREATE OR REPLACE VIEW public.v_insumos_stock_bajo AS
+SELECT
+  id, nombre, unidad, stock_actual, stock_minimo,
+  stock_minimo - stock_actual AS faltante,
+  proveedor
+FROM public.insumos
+WHERE activo = true
+  AND stock_actual < stock_minimo
+ORDER BY faltante DESC;
+
+GRANT SELECT ON public.v_insumos_stock_bajo TO authenticated;
+```
+
+---
+
+## 2. Seed data — Insumos y BOM del Excel
+
+Ejecuta este seed para cargar los datos del Excel. **Los nombres de modelos los puedes cambiar después con un simple `UPDATE public.bom_items SET modelo = 'NuevoNombre' WHERE modelo = 'NombreActual'`** — es solo texto.
+
+### 2.1 Insertar insumos
+
+```sql
+-- Insertar el catálogo base de insumos
+INSERT INTO public.insumos (nombre, unidad, stock_minimo) VALUES
+  ('Madera',           'pies',     50),
+  ('Tela',             'metros',   50),
+  ('Algodón',          'kg',       30),
+  ('Espuma',           'planchas',  5),
+  ('Resorte',          'piezas',   50),
+  ('Napa',             'kg',       20),
+  ('Picadillo',        'kg',       10),
+  ('Terocal',          'litros',    5),
+  ('Clavo resortes',   'unidades', 100),
+  ('Costales',         'unidades',  20),
+  ('Poliseda',         'metros',   10),
+  ('Patas de madera',  'unidades',  20),
+  ('Cojines',          'unidades',  10),
+  ('Panqueque',        'metros',   10),
+  ('Grapa casco',      'paquetes',  5),
+  ('Plato',            'unidades',  10),
+  ('Grapa tela',       'paquetes',  5),
+  ('Cola',             'unidades',  2),
+  ('Hilos',            'unidades',  5)
+ON CONFLICT (nombre) DO NOTHING;
+```
+
+### 2.2 Insertar BOM — Modelo Vintage
+
+```sql
+-- Vintage 6 pies (juego completo)
+WITH ids AS (SELECT nombre, id FROM public.insumos)
+INSERT INTO public.bom_items (modelo, talla, insumo_id, cantidad, notas)
+SELECT 'Vintage', '6 pies', id, cantidad, notas FROM (VALUES
+  ('Tela',           17,    '16M principal + 1M diseño'),
+--   ('Tela',            1,    '1M diseño'),
+  ('Algodón',         5,    NULL),
+  ('Espuma',          9,    '3 plan x 2pgd + 1 plan x 1pgd + 3 plan x 0.5pgd + retasería'),
+  ('Resorte',        12,    '11 dientes'),
+  ('Napa',            1.5,  NULL),
+  ('Picadillo',       1,    NULL),
+  ('Terocal',         1,    'litros'),
+  ('Clavo resortes', 48,    NULL),
+  ('Costales',       13,    NULL),
+  ('Poliseda',        2.5,  NULL),
+  ('Patas de madera',13,    NULL),
+  ('Panqueque',       5.5,  NULL),
+  ('Grapa casco',     2,    '2 pgd'),
+  ('Grapa tela',      1,    '1 paq 5k'),
+  ('Cola',            0.125,'1/8 de cola'),
+  ('Hilos',           2,    NULL)
+) AS v(nombre, cantidad, notas)
+JOIN ids USING (nombre)
+ON CONFLICT (modelo, talla, insumo_id) DO UPDATE
+  SET cantidad = EXCLUDED.cantidad, notas = EXCLUDED.notas;
+
+-- Vintage 3.5 pies
+WITH ids AS (SELECT nombre, id FROM public.insumos)
+INSERT INTO public.bom_items (modelo, talla, insumo_id, cantidad, notas)
+SELECT 'Vintage', '3.5 pies', id, cantidad, notas FROM (VALUES
+  ('Tela',    16,   'mismo que 6 pies, sin diseño'),
+  ('Algodón',  5,   NULL),
+  ('Resorte', 12,   '11 dientes'),
+  ('Terocal',  1,   NULL),
+  ('Clavo resortes', 48, NULL),
+  ('Costales', 13,  NULL),
+  ('Poliseda', 2.5, NULL),
+  ('Patas de madera', 13, NULL),
+  ('Panqueque', 5.5, NULL)
+) AS v(nombre, cantidad, notas)
+JOIN ids USING (nombre)
+ON CONFLICT (modelo, talla, insumo_id) DO UPDATE
+  SET cantidad = EXCLUDED.cantidad;
+```
+
+### 2.3 Insertar BOM — Modelo Rex (6 pies)
+
+```sql
+WITH ids AS (SELECT nombre, id FROM public.insumos)
+INSERT INTO public.bom_items (modelo, talla, insumo_id, cantidad, notas)
+SELECT 'Rex', '6 pies', id, cantidad, notas FROM (VALUES
+  ('Tela',           23,   '23M + 1M diseño'),
+  ('Algodón',         2,   NULL),
+  ('Espuma',          7,   '2 plan x 2pgd + 3 plan x 0.5pgd'),
+  ('Resorte',        12,   '11 dientes'),
+  ('Napa',           15,   NULL),
+  ('Picadillo',       1,   NULL),
+  ('Terocal',         1,   NULL),
+  ('Clavo resortes', 48,   NULL),
+  ('Costales',       15,   NULL),
+  ('Poliseda',        2.5, NULL),
+  ('Patas de madera',13,   NULL),
+  ('Panqueque',       8.5, NULL),
+  ('Grapa casco',     2,   '2 pgd')
+) AS v(nombre, cantidad, notas)
+JOIN ids USING (nombre)
+ON CONFLICT (modelo, talla, insumo_id) DO UPDATE
+  SET cantidad = EXCLUDED.cantidad, notas = EXCLUDED.notas;
+```
+
+### 2.4 Insertar BOM — Modelo Lineal Punta (6 pies)
+
+```sql
+WITH ids AS (SELECT nombre, id FROM public.insumos)
+INSERT INTO public.bom_items (modelo, talla, insumo_id, cantidad, notas)
+SELECT 'Lineal Punta', '6 pies', id, cantidad, notas FROM (VALUES
+  ('Tela',           22,   '22M + 1M diseño'),
+  ('Algodón',         2,   NULL),
+  ('Espuma',          7,   '1 plan x 2pgd sobra 30cm + 3 plan x 0.5pgd'),
+  ('Resorte',        12,   '11 dientes'),
+  ('Napa',           15,   NULL),
+  ('Picadillo',       1,   NULL),
+  ('Terocal',         1,   NULL),
+  ('Clavo resortes', 48,   NULL),
+  ('Costales',       15,   NULL),
+  ('Poliseda',        2.5, NULL),
+  ('Patas de madera',13,   NULL),
+  ('Panqueque',       8,   NULL),
+  ('Grapa casco',     2,   '2 pgd')
+) AS v(nombre, cantidad, notas)
+JOIN ids USING (nombre)
+ON CONFLICT (modelo, talla, insumo_id) DO UPDATE
+  SET cantidad = EXCLUDED.cantidad, notas = EXCLUDED.notas;
+```
+
+### 2.5 Insertar BOM — Modelo London (6 pies)
+
+```sql
+WITH ids AS (SELECT nombre, id FROM public.insumos)
+INSERT INTO public.bom_items (modelo, talla, insumo_id, cantidad, notas)
+SELECT 'London', '6 pies', id, cantidad, notas FROM (VALUES
+  ('Tela',           24,   'entero 23M + 1M'),
+  ('Algodón',        22.5, '3/4 de paquete de 30kg'),
+  ('Espuma',          2,   'menos de mitad, reuso'),
+  ('Resorte',        12,   '11 dientes'),
+  ('Napa',            7.5, NULL),
+  ('Picadillo',       3,   NULL),
+--   ('Terocal',         0,   'sin terocal'),
+  ('Clavo resortes', 48,   NULL),
+  ('Costales',       15,   NULL),
+  ('Poliseda',        2.5, NULL),
+  ('Patas de madera',13,   NULL),
+  ('Panqueque',       3,   'decorativo'),
+  ('Grapa casco',     2,   '2 pgd'),
+  ('Plato',           6,   NULL)
+) AS v(nombre, cantidad, notas)
+JOIN ids USING (nombre)
+ON CONFLICT (modelo, talla, insumo_id) DO UPDATE
+  SET cantidad = EXCLUDED.cantidad, notas = EXCLUDED.notas;
+```
+
+### 2.6 Insertar BOM — Modelo Garra (6 pies)
+
+```sql
+WITH ids AS (SELECT nombre, id FROM public.insumos)
+INSERT INTO public.bom_items (modelo, talla, insumo_id, cantidad, notas)
+SELECT 'Garra', '6 pies', id, cantidad, notas FROM (VALUES
+  ('Tela',           21,   '21M + 1M'),
+  ('Algodón',        45,   'bolsa y media ~45kg'),
+  ('Espuma',          4,   '4 plan x 0.5pgd'),
+  ('Resorte',        12,   '11 dientes'),
+  ('Napa',            2,   'decorativo'),
+  ('Terocal',         0.01,'10 gramos'),
+  ('Clavo resortes', 48,   NULL),
+  ('Costales',       15,   NULL),
+  ('Poliseda',        2.5, NULL),
+  ('Patas de madera',13,   NULL),
+  ('Panqueque',       2.5, NULL),
+  ('Grapa casco',     2,   '2 pgd'),
+  ('Plato',           6,   NULL)
+) AS v(nombre, cantidad, notas)
+JOIN ids USING (nombre)
+ON CONFLICT (modelo, talla, insumo_id) DO UPDATE
+  SET cantidad = EXCLUDED.cantidad, notas = EXCLUDED.notas;
+```
+
+> **Nota sobre tallas menores (2, 2.5, 3, 3.5, 4, 5 pies):** El Excel solo documenta las diferencias en madera (pies y palos) para las tallas menores — los demás insumos se reducen proporcionalmente. Cuando tengas la tabla de proporciones exactas, inserta los BOM de tallas menores con el mismo patrón. La estructura de DB ya lo soporta.
+
+---
+
+## 3. Funciones en `pos.functions.ts`
+
+Añade estas funciones al archivo existente:
+
+```ts
+// ── INSUMOS ──────────────────────────────────────────────────
+
+export async function listInsumos() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("insumos")
+    .select("*")
+    .eq("activo", true)
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return { insumos: data ?? [] };
+}
+
+export async function upsertInsumo(input: {
+  id?: string;
+  nombre: string;
+  unidad: string;
+  stock_actual?: number;
+  stock_minimo?: number;
+  precio_unit?: number | null;
+  proveedor?: string | null;
+}) {
+  const data = z.object({
+    id:           z.string().uuid().optional(),
+    nombre:       z.string().min(1).max(100),
+    unidad:       z.string().min(1),
+    stock_actual: z.number().min(0).optional(),
+    stock_minimo: z.number().min(0).optional(),
+    precio_unit:  z.number().min(0).optional().nullable(),
+    proveedor:    z.string().max(200).optional().nullable(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: row, error } = await supabase
+    .from("insumos")
+    .upsert({ ...data, updated_at: new Date().toISOString() }, { onConflict: "id" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { insumo: row };
+}
+
+export async function registrarMovimiento(input: {
+  insumo_id: string;
+  tipo: "entrada" | "salida" | "ajuste";
+  cantidad: number;
+  motivo?: string;
+  referencia?: string;
+}) {
+  const data = z.object({
+    insumo_id:  z.string().uuid(),
+    tipo:       z.enum(["entrada", "salida", "ajuste"]),
+    cantidad:   z.number(),
+    motivo:     z.string().max(500).optional(),
+    referencia: z.string().max(100).optional(),
+  }).parse(input);
+
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { error } = await supabase
+    .from("insumo_movimientos")
+    .insert({ ...data, registrado_por: userId });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// BOM
+export async function getBom(input: { modelo: string; talla: string }) {
+  const { modelo, talla } = z.object({
+    modelo: z.string().min(1),
+    talla:  z.string().min(1),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("bom_items")
+    .select("*, insumos(id, nombre, unidad, stock_actual)")
+    .eq("modelo", modelo)
+    .eq("talla", talla)
+    .order("created_at");
+  if (error) throw new Error(error.message);
+  return { items: data ?? [] };
+}
+
+// Calculadora MRP: ¿cuánto insumo necesito para N juegos?
+export async function calcularMrp(input: {
+  pedidos: Array<{ modelo: string; talla: string; cantidad: number }>;
+}) {
+  const { pedidos } = z.object({
+    pedidos: z.array(z.object({
+      modelo:   z.string().min(1),
+      talla:    z.string().min(1),
+      cantidad: z.number().int().positive(),
+    })).min(1),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+
+  // Obtener todos los BOM relevantes de una vez
+  const combinaciones = pedidos.map((p) => `(modelo.eq.${p.modelo},talla.eq.${p.talla})`);
+  const { data: boms, error } = await supabase
+    .from("bom_items")
+    .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)")
+    .or(combinaciones.join(","));
+  if (error) throw new Error(error.message);
+
+  // Agregar necesidad total por insumo
+  const necesidad: Record<string, {
+    nombre: string; unidad: string; stock_actual: number;
+    necesario: number; faltante: number;
+  }> = {};
+
+  for (const pedido of pedidos) {
+    const bomDelPedido = boms?.filter(
+      (b) => b.modelo === pedido.modelo && b.talla === pedido.talla
+    ) ?? [];
+
+    for (const item of bomDelPedido) {
+      const ins = item.insumos as any;
+      if (!ins) continue;
+      if (!necesidad[ins.id]) {
+        necesidad[ins.id] = {
+          nombre: ins.nombre,
+          unidad: ins.unidad,
+          stock_actual: Number(ins.stock_actual),
+          necesario: 0,
+          faltante: 0,
+        };
+      }
+      necesidad[ins.id].necesario += Number(item.cantidad) * pedido.cantidad;
+    }
+  }
+
+  // Calcular faltantes
+  for (const key of Object.keys(necesidad)) {
+    const n = necesidad[key];
+    n.faltante = Math.max(0, n.necesario - n.stock_actual);
+  }
+
+  return {
+    resultado: Object.values(necesidad).sort((a, b) => b.faltante - a.faltante),
+    hayFaltantes: Object.values(necesidad).some((n) => n.faltante > 0),
+  };
+}
+
+// Alertas de stock bajo
+export async function getStockBajo() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_insumos_stock_bajo")
+    .select("*");
+  if (error) throw new Error(error.message);
+  return { alertas: data ?? [] };
+}
+```
+
+---
+
+## 4. Ruta `/insumos` — Panel MRP completo
+
+Crea el archivo `src/routes/_authenticated/insumos.tsx`:
+
+```tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  listInsumos, upsertInsumo, registrarMovimiento,
+  getBom, calcularMrp, getStockBajo,
+} from "@/lib/pos.functions";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from "@/components/ui/tabs";
+import { Loader2, AlertTriangle, Plus, ArrowDown, ArrowUp, Calculator, Package } from "lucide-react";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/_authenticated/insumos")({
+  head: () => ({ meta: [{ title: "Insumos MRP — G&M" }] }),
+  component: InsumosPage,
+});
+
+const MODELOS = ["Vintage", "Rex", "Lineal Punta", "London", "Garra"] as const;
+const TALLAS  = ["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"] as const;
+const UNIDADES = ["metros", "kg", "litros", "unidades", "planchas", "piezas", "paquetes", "palos", "pies", "bolsas"];
+
+const fmt = (n: number, u: string) => `${n % 1 === 0 ? n : n.toFixed(2)} ${u}`;
+
+// ── Calculadora MRP ──────────────────────────────────────────
+function CalculadoraMrp() {
+  const [pedidos, setPedidos] = useState<Array<{ modelo: string; talla: string; cantidad: number }>>([
+    { modelo: "Vintage", talla: "6 pies", cantidad: 1 },
+  ]);
+  const [resultado, setResultado] = useState<Awaited<ReturnType<typeof calcularMrp>> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const addFila = () =>
+    setPedidos((p) => [...p, { modelo: "Vintage", talla: "6 pies", cantidad: 1 }]);
+
+  const removeFila = (i: number) =>
+    setPedidos((p) => p.filter((_, idx) => idx !== i));
+
+  const update = (i: number, field: string, value: string | number) =>
+    setPedidos((p) => p.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+
+  const calcular = async () => {
+    setLoading(true);
+    try {
+      const res = await calcularMrp({ pedidos });
+      setResultado(res);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        {pedidos.map((row, i) => (
+          <div key={i} className="flex gap-2 items-end">
+            <div className="flex-1">
+              <Label className="text-xs mb-1 block">Modelo</Label>
+              <Select value={row.modelo} onValueChange={(v) => update(i, "modelo", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MODELOS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-36">
+              <Label className="text-xs mb-1 block">Talla</Label>
+              <Select value={row.talla} onValueChange={(v) => update(i, "talla", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TALLAS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-20">
+              <Label className="text-xs mb-1 block">Cantidad</Label>
+              <Input
+                type="number" min={1} value={row.cantidad}
+                onChange={(e) => update(i, "cantidad", Number(e.target.value))}
+              />
+            </div>
+            {pedidos.length > 1 && (
+              <Button size="sm" variant="ghost" onClick={() => removeFila(i)}>✕</Button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={addFila}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Añadir modelo
+        </Button>
+        <Button onClick={calcular} disabled={loading}>
+          {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+          <Calculator className="h-4 w-4 mr-2" /> Calcular
+        </Button>
+      </div>
+
+      {resultado && (
+        <div className="mt-4 space-y-2">
+          {resultado.hayFaltantes && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              Hay insumos insuficientes para completar estos pedidos.
+            </div>
+          )}
+          {!resultado.hayFaltantes && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              ✓ Stock suficiente para todos los pedidos.
+            </div>
+          )}
+          <div className="border rounded-xl overflow-hidden mt-2">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground">Insumo</th>
+                  <th className="px-3 py-2 text-right font-medium text-xs text-muted-foreground">Necesario</th>
+                  <th className="px-3 py-2 text-right font-medium text-xs text-muted-foreground">En stock</th>
+                  <th className="px-3 py-2 text-right font-medium text-xs text-muted-foreground">Faltante</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {resultado.resultado.map((r) => (
+                  <tr key={r.nombre} className={r.faltante > 0 ? "bg-red-50/50" : ""}>
+                    <td className="px-3 py-2 font-medium">{r.nombre}</td>
+                    <td className="px-3 py-2 text-right text-muted-foreground">{fmt(r.necesario, r.unidad)}</td>
+                    <td className="px-3 py-2 text-right">{fmt(r.stock_actual, r.unidad)}</td>
+                    <td className="px-3 py-2 text-right font-semibold">
+                      {r.faltante > 0
+                        ? <span className="text-red-600">−{fmt(r.faltante, r.unidad)}</span>
+                        : <span className="text-green-600">OK</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Modal movimiento de stock ─────────────────────────────────
+function MovimientoDialog({ insumoId, insumoNombre, onDone }: {
+  insumoId: string; insumoNombre: string; onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tipo, setTipo] = useState<"entrada" | "salida" | "ajuste">("entrada");
+  const [cantidad, setCantidad] = useState("");
+  const [motivo, setMotivo] = useState("");
+
+  const mut = useMutation({
+    mutationFn: () => registrarMovimiento({
+      insumo_id: insumoId, tipo,
+      cantidad: tipo === "ajuste" ? Number(cantidad) : Math.abs(Number(cantidad)),
+      motivo: motivo || undefined,
+    }),
+    onSuccess: () => {
+      toast.success("Movimiento registrado");
+      setOpen(false); setCantidad(""); setMotivo("");
+      onDone();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <ArrowDown className="h-3.5 w-3.5 mr-1" /> Stock
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Registrar movimiento — {insumoNombre}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div>
+            <Label className="text-xs">Tipo</Label>
+            <Select value={tipo} onValueChange={(v) => setTipo(v as any)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entrada">Entrada (compra / recepción)</SelectItem>
+                <SelectItem value="salida">Salida (producción / merma)</SelectItem>
+                <SelectItem value="ajuste">Ajuste de inventario</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">
+              Cantidad {tipo === "ajuste" ? "(+ para sumar, − para restar)" : ""}
+            </Label>
+            <Input
+              className="mt-1" type="number"
+              placeholder={tipo === "ajuste" ? "−5 o +10" : "0"}
+              value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Motivo (opcional)</Label>
+            <Input
+              className="mt-1" placeholder="Compra proveedor, Pedido #123..."
+              value={motivo} onChange={(e) => setMotivo(e.target.value)}
+            />
+          </div>
+          <Button
+            className="w-full"
+            disabled={!cantidad || mut.isPending}
+            onClick={() => mut.mutate()}
+          >
+            {mut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Registrar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Modal editar / crear insumo ───────────────────────────────
+function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    id:           insumo?.id,
+    nombre:       insumo?.nombre ?? "",
+    unidad:       insumo?.unidad ?? "unidades",
+    stock_minimo: insumo?.stock_minimo ?? 0,
+    precio_unit:  insumo?.precio_unit ?? "",
+    proveedor:    insumo?.proveedor ?? "",
+  });
+
+  const mut = useMutation({
+    mutationFn: () => upsertInsumo({ ...form, precio_unit: form.precio_unit ? Number(form.precio_unit) : null }),
+    onSuccess: () => {
+      toast.success(insumo ? "Insumo actualizado" : "Insumo creado");
+      setOpen(false); onDone();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {insumo
+          ? <Button size="sm" variant="ghost">Editar</Button>
+          : <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nuevo insumo</Button>
+        }
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{insumo ? "Editar insumo" : "Nuevo insumo"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          {[
+            { label: "Nombre", key: "nombre", placeholder: "Ej: Tela" },
+            { label: "Stock mínimo", key: "stock_minimo", placeholder: "0", type: "number" },
+            { label: "Precio unit. (S/)", key: "precio_unit", placeholder: "0.00", type: "number" },
+            { label: "Proveedor", key: "proveedor", placeholder: "Nombre del proveedor" },
+          ].map(({ label, key, placeholder, type }) => (
+            <div key={key}>
+              <Label className="text-xs">{label}</Label>
+              <Input
+                className="mt-1" type={type ?? "text"}
+                placeholder={placeholder}
+                value={(form as any)[key]}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+              />
+            </div>
+          ))}
+          <div>
+            <Label className="text-xs">Unidad</Label>
+            <Select value={form.unidad} onValueChange={(v) => setForm((f) => ({ ...f, unidad: v }))}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {UNIDADES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            className="w-full"
+            disabled={!form.nombre || mut.isPending}
+            onClick={() => mut.mutate()}
+          >
+            {mut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {insumo ? "Guardar" : "Crear"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Página principal ──────────────────────────────────────────
+function InsumosPage() {
+  const qc = useQueryClient();
+  const [busqueda, setBusqueda] = useState("");
+  const [tab, setTab] = useState("stock");
+
+  const { data: insumosData, isLoading } = useQuery({
+    queryKey: ["insumos"],
+    queryFn: listInsumos,
+  });
+
+  const { data: alertasData } = useQuery({
+    queryKey: ["insumos-alertas"],
+    queryFn: getStockBajo,
+  });
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["insumos"] });
+    qc.invalidateQueries({ queryKey: ["insumos-alertas"] });
+  };
+
+  const filtrados = useMemo(() => {
+    const list = insumosData?.insumos ?? [];
+    if (!busqueda.trim()) return list;
+    return list.filter((i: any) =>
+      i.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    );
+  }, [insumosData, busqueda]);
+
+  const alertaCount = alertasData?.alertas?.length ?? 0;
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <div>
+        <h1 className="text-3xl font-display font-semibold">Insumos MRP</h1>
+        <p className="text-muted-foreground mt-0.5">Control de materiales y lista de insumos por modelo</p>
+      </div>
+
+      {alertaCount > 0 && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-500" />
+          <span>
+            <strong>{alertaCount} insumo{alertaCount > 1 ? "s" : ""}</strong> por debajo del stock mínimo:{" "}
+            {alertasData!.alertas.slice(0, 3).map((a: any) => a.nombre).join(", ")}
+            {alertaCount > 3 ? ` y ${alertaCount - 3} más.` : "."}
+          </span>
+        </div>
+      )}
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="stock" className="gap-1.5">
+            <Package className="h-4 w-4" /> Stock
+            {alertaCount > 0 && (
+              <span className="ml-1 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">
+                {alertaCount}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="mrp">
+            <Calculator className="h-4 w-4 mr-1.5" /> Calcular MRP
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Tab: Stock */}
+        <TabsContent value="stock" className="space-y-4 mt-4">
+          <div className="flex gap-3">
+            <Input
+              className="flex-1"
+              placeholder="Buscar insumo…"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+            <InsumoDialog onDone={refresh} />
+          </div>
+
+          <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
+            {isLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : filtrados.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">Sin insumos.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 border-b">
+                    <tr>
+                      {["Insumo", "Unidad", "Stock actual", "Stock mínimo", "Proveedor", ""].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left font-medium text-xs text-muted-foreground uppercase tracking-wide">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {filtrados.map((ins: any) => {
+                      const bajo = ins.stock_actual < ins.stock_minimo;
+                      return (
+                        <tr key={ins.id} className={bajo ? "bg-amber-50/40" : "hover:bg-muted/20"}>
+                          <td className="px-4 py-3 font-medium">
+                            {ins.nombre}
+                            {bajo && (
+                              <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500 ml-1.5" />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{ins.unidad}</td>
+                          <td className="px-4 py-3">
+                            <span className={`font-semibold ${bajo ? "text-amber-600" : "text-foreground"}`}>
+                              {ins.stock_actual} {ins.unidad}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {ins.stock_minimo} {ins.unidad}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">
+                            {ins.proveedor ?? "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-1.5">
+                              <MovimientoDialog
+                                insumoId={ins.id}
+                                insumoNombre={ins.nombre}
+                                onDone={refresh}
+                              />
+                              <InsumoDialog insumo={ins} onDone={refresh} />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Tab: Calculadora MRP */}
+        <TabsContent value="mrp" className="mt-4">
+          <div className="bg-card border border-border/50 rounded-xl p-5">
+            <h3 className="font-semibold mb-1">Calculadora de insumos</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Selecciona los modelos y cantidades a producir. El sistema calcula qué insumos necesitas
+              y si el stock actual es suficiente.
+            </p>
+            <CalculadoraMrp />
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+```
+
+---
+
+## 5. Añadir al sidebar
+
+Edita `src/components/AppSidebar.tsx`:
+
+```tsx
+// Importar el ícono apropiado
+import { ..., Boxes } from "lucide-react";
+
+// Añadir en el array de items, después de "Pedidos" o "CRM":
+{ title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ["admin", "vendedor"] as AppRole[] },
+```
+
+---
+
+## 6. Lista de verificación
+
+### Base de datos (en orden)
+- [ ] Crear tipo `unidad_insumo`
+- [ ] Crear tabla `insumos` con RLS
+- [ ] Crear tabla `bom_items` con RLS
+- [ ] Crear tabla `insumo_movimientos` con trigger `trg_stock_insumo`
+- [ ] Crear vista `v_insumos_stock_bajo`
+- [ ] Ejecutar seed de insumos (19 insumos base)
+- [ ] Ejecutar seed BOM: Vintage, Rex, Lineal Punta, London, Garra (talla 6 pies)
+
+### Código
+- [ ] Añadir 6 funciones en `pos.functions.ts`: `listInsumos`, `upsertInsumo`, `registrarMovimiento`, `getBom`, `calcularMrp`, `getStockBajo`
+- [ ] Crear `src/routes/_authenticated/insumos.tsx` con el código completo
+- [ ] Añadir item "Insumos MRP" en `AppSidebar.tsx`
+- [ ] Verificar que `Tabs`, `TabsContent`, `TabsList`, `TabsTrigger` existen en `src/components/ui/` (son shadcn/ui — si no están, instalar con `npx shadcn@latest add tabs`)
+
+### Verificación funcional
+- [ ] `/insumos` carga con los 19 insumos
+- [ ] Alerta amarilla aparece cuando `stock_actual < stock_minimo`
+- [ ] "Registrar movimiento → entrada" aumenta `stock_actual`
+- [ ] "Registrar movimiento → salida" reduce `stock_actual`
+- [ ] Calculadora MRP: seleccionar Vintage 6 pies × 2 → muestra necesidades correctas
+- [ ] Calculadora MRP marca en rojo los insumos con faltante
+- [ ] Crear nuevo insumo desde el panel funciona
+
+---
+
+## 7. Notas importantes
+
+**Renombrar modelos:** Cuando tengas los nombres definitivos, un solo UPDATE lo cambia todo:
+```sql
+UPDATE public.bom_items SET modelo = 'Nuevo Nombre' WHERE modelo = 'Vintage';
+UPDATE public.bom_items SET modelo = 'Otro Nombre'  WHERE modelo = 'Rex';
+```
+
+**Tallas menores:** El Excel solo documenta la madera para tallas <6 pies. Los demás insumos (tela, algodón, resortes, etc.) también varían. Cuando tengas esos datos, el insert de BOM es idéntico al de 6 pies cambiando el parámetro `talla` y los valores de cantidad.
+
+**`calcularMrp` y la limitación de `.or()`:** La función construye un OR dinámico para Supabase. Si en el futuro tienes más de ~10 combinaciones simultáneas, considera reemplazarlo por una función RPC en SQL para mejor rendimiento.
+
+**Integración con producción:** Cuando se cambia un pedido a `en_produccion` (módulo 2), puedes llamar automáticamente a `registrarMovimiento` con `tipo: "salida"` para cada insumo del BOM correspondiente. Eso mantiene el stock siempre actualizado sin entrada manual.
