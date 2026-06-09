@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { cambiarEstadoPedido } from "@/lib/pos.functions";
+
 
 export const Route = createFileRoute("/_authenticated/pedidos")({
   head: () => ({ meta: [{ title: "Pedidos online — G&M" }] }),
@@ -119,6 +121,7 @@ async function cambiarEstado(orderId: string, nuevoEstado: OrderStatus) {
 
 // ── Componente principal ─────────────────────────────────────
 function PedidosPage() {
+  const [mrpForm, setMrpForm] = useState({ modelo: "", talla: "" });
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
@@ -144,7 +147,12 @@ function PedidosPage() {
 
   const mutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
-      cambiarEstado(id, status),
+     cambiarEstadoPedido({
+      order_id: id,
+      nuevo_estado: status,
+      modelo: status === "en_produccion" ? mrpForm.modelo || undefined : undefined,
+      talla:  status === "en_produccion" ? mrpForm.talla  || undefined : undefined,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["order-historial", selectedId] });
@@ -401,6 +409,38 @@ function PedidosPage() {
                 </div>
               </div>
 
+
+
+
+              {/* SE - 09062026 09:31*/}
+                {selected.status === "pagado" && (
+                <div className="flex gap-2 items-end mb-2">
+                  <div className="flex-1">
+                    <Label className="text-xs mb-1 block">Modelo (para MRP)</Label>
+                    <Select value={mrpForm.modelo} onValueChange={(v) => setMrpForm((f) => ({ ...f, modelo: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                      <SelectContent>
+                        {["Vintage", "Rex", "Lineal Punta", "London", "Garra"].map((m) => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-36">
+                    <Label className="text-xs mb-1 block">Talla</Label>
+                    <Select value={mrpForm.talla} onValueChange={(v) => setMrpForm((f) => ({ ...f, talla: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Talla" /></SelectTrigger>
+                      <SelectContent>
+                        {["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"].map((t) => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+              {/* EE - 09062026 09:31*/}
+
               {/* Cambio de estado */}
               {STATUS_CONFIG[selected.status as OrderStatus]?.next.length > 0 && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
@@ -498,6 +538,10 @@ function PedidosPage() {
                   <span>Total</span><span>{fmt(Number(selected.total))}</span>
                 </div>
               </section>
+
+
+                
+              
 
               {/* Historial de estados */}
               {historial.length > 0 && (

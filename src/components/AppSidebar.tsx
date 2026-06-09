@@ -6,8 +6,8 @@ import {
 } from "@/components/ui/sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
-import { ShoppingBag } from "lucide-react"; // ya lo tienes importado
-import { Boxes } from "lucide-react";
+import { ShoppingBag, Boxes, Hammer, Wrench   } from "lucide-react"; // ya lo tienes importado
+// import { Boxes } from "lucide-react";
 
 
 const items = [
@@ -19,6 +19,8 @@ const items = [
   { title: "Productos", url: "/productos", icon: Package, roles: ["admin"] as AppRole[] },
   { title: "Usuarios", url: "/usuarios", icon: UserCog, roles: ["admin"] as AppRole[] },
   { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Mis órdenes",    url: "/mi-produccion",  icon: Wrench,       roles: ["carpintero"] as AppRole[] },
+  { title: "Producción",     url: "/produccion",     icon: Hammer,       roles: ["admin", "vendedor"] as AppRole[] },
 ];
 
 export function AppSidebar({ roles }: { roles: AppRole[] }) {

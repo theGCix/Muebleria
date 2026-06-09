@@ -473,3 +473,167 @@ export async function getStockBajo() {
   return { alertas: data ?? [] };
 }
 //EE- GR#09062026
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// SE- GR#09062026:09:21
+
+// ── PRODUCCIÓN ───────────────────────────────────────────────
+
+// Panel admin: todas las órdenes de fabricación activas
+export async function listProduccion() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_produccion_panel")
+    .select("*")
+    .order("prioridad", { ascending: true })
+    .order("fecha_fin_estimada", { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return { ordenes: data ?? [] };
+}
+
+// Vista del carpintero: sus propias órdenes
+export async function listMiProduccion() {
+  const { supabase, userId } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("v_mi_produccion")
+    .select("*")
+    .eq("asignado_a", userId)
+    .order("prioridad", { ascending: true });
+  if (error) throw new Error(error.message);
+  return { ordenes: data ?? [] };
+}
+
+// Detalle completo de una orden (items del pedido + insumos BOM)
+export async function getDetalleProduccion(input: { order_id: string }) {
+  const { order_id } = z.object({ order_id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+
+  const [itemsRes, produccionRes] = await Promise.all([
+    supabase
+      .from("order_items")
+      .select("id, sku, title, qty, unit_price, total, image_url")
+      .eq("order_id", order_id),
+    supabase
+      .from("produccion")
+      .select("*")
+      .eq("order_id", order_id)
+      .single(),
+  ]);
+
+  if (itemsRes.error) throw new Error(itemsRes.error.message);
+  return {
+    items: itemsRes.data ?? [],
+    produccion: produccionRes.data ?? null,
+  };
+}
+
+// Cambiar estado de orden incluyendo modelo+talla para descuento MRP
+export async function cambiarEstadoPedido(input: {
+  order_id: string;
+  nuevo_estado: string;
+  motivo?: string;
+  modelo?: string;
+  talla?: string;
+}) {
+  const data = z.object({
+    order_id:     z.string().uuid(),
+    nuevo_estado: z.string().min(1),
+    motivo:       z.string().optional(),
+    modelo:       z.string().optional(),
+    talla:        z.string().optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { data: result, error } = await supabase.rpc("cambiar_estado_pedido", {
+    _order_id:     data.order_id,
+    _nuevo_estado: data.nuevo_estado,
+    _motivo:       data.motivo ?? null,
+    _modelo:       data.modelo ?? null,
+    _talla:        data.talla ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return result;
+}
+
+// Actualizar estado interno de producción (carpintero o admin)
+export async function actualizarProduccion(input: {
+  produccion_id: string;
+  status?: string;
+  observaciones?: string;
+  prioridad?: number;
+  fecha_fin_real?: string;
+}) {
+  const data = z.object({
+    produccion_id: z.string().uuid(),
+    status:        z.string().optional(),
+    observaciones: z.string().max(2000).optional(),
+    prioridad:     z.number().int().min(1).max(3).optional(),
+    fecha_fin_real: z.string().optional(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase.rpc("actualizar_produccion", {
+    _produccion_id:  data.produccion_id,
+    _status:         data.status ?? null,
+    _observaciones:  data.observaciones ?? null,
+    _prioridad:      data.prioridad ?? null,
+    _fecha_fin_real: data.fecha_fin_real ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Asignar carpintero (solo admin/vendedor)
+export async function asignarCarpintero(input: {
+  produccion_id: string;
+  carpintero_id: string;
+}) {
+  const data = z.object({
+    produccion_id: z.string().uuid(),
+    carpintero_id: z.string().uuid(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase.rpc("asignar_carpintero", {
+    _produccion_id: data.produccion_id,
+    _carpintero_id: data.carpintero_id,
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// Listar carpinteros disponibles (para el selector de asignación)
+export async function listCarpinteros() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data: roles } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "carpintero");
+
+  if (!roles?.length) return { carpinteros: [] };
+
+  const ids = roles.map((r) => r.user_id);
+  const { data: profiles, error } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+  return { carpinteros: profiles ?? [] };
+}
+// EE- GR#09062026:09:21
