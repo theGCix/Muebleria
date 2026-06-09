@@ -109,7 +109,7 @@ function UsuariosPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["users"], queryFn: () => listUsers() });
   const m = useMutation({
-    mutationFn: (v: { user_id: string; role: "admin" | "vendedor" | "cliente"; action: "add" | "remove" }) =>
+    mutationFn: (v: { user_id: string; role: "admin" | "vendedor" | "carpintero" | "cliente"; action: "add" | "remove" }) =>
       setUserRole(v),
     onSuccess: () => { toast.success("Rol actualizado"); qc.invalidateQueries({ queryKey: ["users"] }); },
     onError: (e: any) => toast.error(e.message),
