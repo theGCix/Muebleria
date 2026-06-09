@@ -248,13 +248,19 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
   });
 
   // Añadir query de proveedores dentro del componente InsumoDialog
-const { data: provData } = useQuery({
-  queryKey: ["proveedores"],
-  queryFn: () => listProveedores({ activo: true }),
-});
+    const { data: provData } = useQuery({
+    queryKey: ["proveedores"],
+    queryFn: () => listProveedores({ activo: true }),
+    });
 
   const mut = useMutation({
-    mutationFn: () => upsertInsumo({ ...form, precio_unit: form.precio_unit ? Number(form.precio_unit) : null }),
+    mutationFn: () =>
+    upsertInsumo({
+        ...form,
+        precio_unit: form.precio_unit ? Number(form.precio_unit) : null,
+        proveedor_id: form.proveedor_id || null,
+    }),
+
     onSuccess: () => {
       toast.success(insumo ? "Insumo actualizado" : "Insumo creado");
       setOpen(false); onDone();
@@ -300,24 +306,40 @@ const { data: provData } = useQuery({
               </SelectContent>
             </Select>
           </div>
-           <Label className="text-xs">Proveedor</Label>
+          <div>
+            <Label className="text-xs">Proveedor</Label>
             <Select
                 value={form.proveedor_id ?? ""}
-                onValueChange={(v) => setForm((f) => ({ ...f, proveedor_id: v || null }))}
-            ></Select>
+                onValueChange={(v) =>
+                setForm((f) => ({ ...f, proveedor_id: v || null }))
+                }
+            >
+                <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Seleccionar proveedor" />
+                </SelectTrigger>
 
-          <Button
+                <SelectContent>
+                <SelectItem value="">Sin proveedor</SelectItem>
+
+                {(provData?.proveedores ?? []).map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                    {p.nombre}
+                    </SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+            </div>
+
+          
+            <Button
             className="w-full"
             disabled={!form.nombre || mut.isPending}
             onClick={() => mut.mutate()}
-          >
-             Sin proveedor
-      {(provData?.proveedores ?? []).map((p: any) => (
-        {p.nombre}
-      ))}
+            >
             {mut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             {insumo ? "Guardar" : "Crear"}
-          </Button>
+            </Button>
+
         </div>
       </DialogContent>
     </Dialog>

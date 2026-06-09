@@ -340,6 +340,7 @@ export async function upsertInsumo(input: {
   stock_minimo?: number;
   precio_unit?: number | null;
   proveedor?: string | null;
+  proveedor_id?: string | null;
 }) {
   const data = z.object({
     id:           z.string().uuid().optional(),
@@ -348,7 +349,8 @@ export async function upsertInsumo(input: {
     stock_actual: z.number().min(0).optional(),
     stock_minimo: z.number().min(0).optional(),
     precio_unit:  z.number().min(0).optional().nullable(),
-    proveedor:    z.string().max(200).optional().nullable(),
+    proveedor:    z.string().max(200).optional().nullable(),  
+    proveedor_id: z.string().uuid().optional().nullable(),
   }).parse(input);
 
   const { supabase } = await getAuthenticatedClient();
