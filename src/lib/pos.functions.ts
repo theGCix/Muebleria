@@ -187,6 +187,12 @@ export async function createStaffUser(input: {
       .eq("user_id", newUser.id);
   }
 
+   if (role !== "carpintero") {
+    await supabase.from("user_roles")
+      .update({ role })
+      .eq("user_id", newUser.id);
+  }
+
   return { ok: true, user: newUser };
 }
 
