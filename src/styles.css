@@ -158,3 +158,36 @@
     letter-spacing: -0.02em;
   }
 }
+
+
+/* ================================================================
+   G&M Mueblería — Variables de diseño para la página de producto
+   Agregar al FINAL de src/styles.css (o en tu index.css, dentro de :root)
+   ================================================================ */
+
+:root {
+  /* Paleta cálida */
+  --color-warm-white:   #FDFAF6;
+  --color-cream:        #F7F4EF;
+  --color-walnut:       #3B2B1F;
+  --color-walnut-mid:   #6B4C38;
+  --color-gold:         #C9A96E;
+  --color-gold-light:   #E8D5B0;
+  --color-blush:        #E8D5CC;
+
+  /* Tipografía display (Playfair Display) */
+  /* Asegúrate de tener esta fuente cargada.
+     Si usas Vite, agrégala en index.html o importa en main.tsx:
+     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap');
+  */
+  --font-display: "Playfair Display", Georgia, serif;
+}
+
+/* Clase utilitaria para títulos display */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Altura de botón extra (h-13) — si no la tienes en tu config de Tailwind */
+.h-13 { height: 3.25rem; }
+.w-13 { width:  3.25rem; }
