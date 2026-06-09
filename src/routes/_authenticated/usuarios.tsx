@@ -21,11 +21,11 @@ export const Route = createFileRoute("/_authenticated/usuarios")({
   component: UsuariosPage,
 });
 
-const ROLES: Array<"admin" | "vendedor" | "cliente"> = ["admin", "vendedor", "cliente"];
+const ROLES: Array<"admin" | "vendedor" | "carpintero" | "cliente"> = ["admin", "vendedor", "carpintero", "cliente"];
 
 function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", full_name: "", role: "cliente" as "admin" | "vendedor" | "cliente" });
+  const [form, setForm] = useState({ email: "", password: "", full_name: "", role: "cliente" as "admin" | "vendedor" | "carpintero" | "cliente" });
 
   const mut = useMutation({
     mutationFn: () => createStaffUser(form),
@@ -86,6 +86,7 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
               <SelectContent>
                 <SelectItem value="cliente">Cliente</SelectItem>
                 <SelectItem value="vendedor">Vendedor</SelectItem>
+                <SelectItem value="carpintero">Carpintero</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>

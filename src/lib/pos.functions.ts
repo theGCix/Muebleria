@@ -137,13 +137,13 @@ export async function createStaffUser(input: {
   email: string;
   password: string;
   full_name: string;
-  role: "admin" | "vendedor" | "cliente";
+  role: "admin" | "vendedor" | "carpintero" | "cliente";
 }) {
   const { email, password, full_name, role } = z.object({
     email: z.string().email(),
     password: z.string().min(6),
     full_name: z.string().min(1),
-    role: z.enum(["admin", "vendedor", "cliente"]),
+    role: z.enum(["admin", "vendedor", "carpintero",  "cliente"]),
   }).parse(input);
 
   // Verificar que el llamante es admin
@@ -200,12 +200,12 @@ export async function listUsers() {
 
 export async function setUserRole(input: {
   user_id: string;
-  role: "admin" | "vendedor" | "cliente";
+  role: "admin" | "vendedor" | "carpintero" | "cliente";
   action: "add" | "remove";
 }) {
   const data = z.object({
     user_id: z.string().uuid(),
-    role: z.enum(["admin", "vendedor", "cliente"]),
+    role: z.enum(["admin", "vendedor", "carpintero", "cliente"]),
     action: z.enum(["add", "remove"]),
   }).parse(input);
 
