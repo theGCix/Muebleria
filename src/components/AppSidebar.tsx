@@ -34,7 +34,7 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    navigate({ to: "/login" });
+    navigate({ to: "/" });
   };
 
   return (
