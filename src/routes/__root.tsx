@@ -7,6 +7,8 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
+import { useUtmCapture } from "@/hooks/useUtm";
+
 
 function NotFoundComponent() {
   return (
@@ -74,7 +76,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useCartSync();
-
+  
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />

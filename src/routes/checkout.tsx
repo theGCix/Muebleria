@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-
 import { useAuth } from "@/hooks/useAuth";
+import { getStoredUtm } from "@/hooks/useUtm";
+
+
 
 
 declare global {
@@ -52,6 +54,7 @@ interface ModalDatos {
 
 // const API = import.meta.env.VITE_API_URL ?? "";
 import { API_URL as API } from "@/config";
+import { trackEvent } from "@/hooks/useEventTracking";
 
 async function fetchNiubizSession(payload: {
   amount: number;
@@ -103,6 +106,16 @@ function CheckoutPage() {
   const envio      = subtotal > 500 ? 0 : 35;
   const totalFinal = subtotal + envio;
 
+
+  useEffect(() => {
+  if (items.length === 0) return;
+
+  trackEvent({
+    tipo: "checkout_iniciado",
+    valor: total(),
+  });
+}, []);
+
   // ── Pre-carga el JS de Niubiz ──────────────────────────────
   useEffect(() => {
     (async () => {
@@ -134,6 +147,7 @@ useEffect(() => {
   const allParams = Object.fromEntries(new URLSearchParams(window.location.search).entries());
   const purchaseNumber = allParams.purchaseNumber ?? orderIdRef.current;
 
+  const utmData = getStoredUtm();
   fetch(`${API}/api/orders`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -156,6 +170,12 @@ useEffect(() => {
         total:            saved.total ?? 0,
         sessionKey:       niubizRef.current?.sessionKey ?? "",
         transactionToken,
+        // UTM
+        utm_source: utmData.utm_source ?? null,
+        utm_medium: utmData.utm_medium ?? null,
+        utm_campaign: utmData.utm_campaign ?? null,
+        utm_content: utmData.utm_content ?? null,
+        referrer_url: utmData.referrer_url ?? null,
       },
       items: items.map((item) => ({
         product_id: item.id,
@@ -166,7 +186,19 @@ useEffect(() => {
         image:      item.image ?? null,
       })),
     }),
-  }).catch((err) => console.error("Error guardando pedido:", err));
+  })
+  .then(() => {     
+    // Evento de compra exitosa
+  trackEvent({
+    tipo: "orden_pagada",
+    order_id: purchaseNumber,
+    valor: saved.total ?? totalFinal,
+  });
+  })
+  .catch((err) => console.error("Error guardando pedido:", err));
+
+   
+
     clearCart();
     // Redirigir directo al perfil después de 1.5s para que vean el modal brevemente
     setModalDatos({

@@ -105,31 +105,90 @@ export async function getSale(input: { id: string }) {
   return { sale };
 }
 
-export async function getDashboard() {
-  const { supabase, userId } = await getAuthenticatedClient();
-  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const isAdmin = !!roles?.some((r) => r.role === "admin");
+// export async function getDashboard() {
+//   const { supabase, userId } = await getAuthenticatedClient();
+//   const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+//   const isAdmin = !!roles?.some((r) => r.role === "admin");
 
-  let salesQuery = supabase.from("sales").select("id, total, created_at, vendedor_id, customer_id");
-  if (!isAdmin) salesQuery = salesQuery.eq("vendedor_id", userId);
-  const { data: sales, error: salesErr } = await salesQuery;
-  if (salesErr) throw new Error(salesErr.message);
+//   let salesQuery = supabase.from("sales").select("id, total, created_at, vendedor_id, customer_id");
+//   if (!isAdmin) salesQuery = salesQuery.eq("vendedor_id", userId);
+//   const { data: sales, error: salesErr } = await salesQuery;
+//   if (salesErr) throw new Error(salesErr.message);
 
-  const { data: items } = await supabase
-    .from("sale_items")
-    .select("title, qty, total, sale_id, sales!inner(vendedor_id)")
-    .order("created_at", { ascending: false })
-    .limit(2000);
+//   const { data: items } = await supabase
+//     .from("sale_items")
+//     .select("title, qty, total, sale_id, sales!inner(vendedor_id)")
+//     .order("created_at", { ascending: false })
+//     .limit(2000);
 
-  const { data: customers } = await supabase.from("customers").select("id, nombre, doc_numero");
-  const { data: profiles } = await supabase.from("profiles").select("id, full_name");
+//   const { data: customers } = await supabase.from("customers").select("id, nombre, doc_numero");
+//   const { data: profiles } = await supabase.from("profiles").select("id, full_name");
 
-  return {
-    sales: sales ?? [],
-    items: items ?? [],
-    customers: customers ?? [],
-    profiles: profiles ?? [],
-    isAdmin,
+//   return {
+//     sales: sales ?? [],
+//     items: items ?? [],
+//     customers: customers ?? [],
+//     profiles: profiles ?? [],
+//     isAdmin,
+//   };
+// }
+
+// src/lib/pos.functions.ts — REEMPLAZAR getDashboard()
+
+export async function getDashboardKpis(input?: {
+  desde?: string;  // YYYY-MM-DD
+  hasta?: string;
+}) {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("get_dashboard_kpis", {
+    
+    _desde: input?.desde ?? null,
+    _hasta: input?.hasta ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    ingresos_totales:         number;
+    ingresos_mes_ant:         number;
+    ingresos_var_pct:         number | null;
+    ventas_pos:               number;
+    ventas_pos_count:         number;
+    ticket_promedio_pos:      number;
+    ventas_ecommerce:         number;
+    pedidos_ec_count:         number;
+    clientes_nuevos:          number;
+    clientes_total:           number;
+    prod_pendientes:          number;
+    prod_en_proceso:          number;
+    prod_vencidas:            number;
+    prod_terminadas:          number;
+    tiempo_prod_promedio_dias: number;
+    insumos_stock_bajo:       number;
+    oc_pendientes:            number;
+    oc_monto_pendiente:       number;
+    periodo_desde:            string;
+    periodo_hasta:            string;
+    is_admin:                 boolean;
+  };
+}
+
+export async function getDashboardSeries(input?: {
+  desde?: string;
+  hasta?: string;
+  agrupacion?: "dia" | "semana" | "mes";
+}) {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("get_dashboard_series", {
+    _desde:      input?.desde ?? null,
+    _hasta:      input?.hasta ?? null,
+    _agrupacion: input?.agrupacion ?? "dia",
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    ingresos_serie:     Array<{ fecha: string; pos: number; ec: number; total: number }>;
+    top_productos_pos:  Array<{ title: string; unidades: number; total: number }>;
+    top_productos_ec:   Array<{ title: string; unidades: number; total: number }>;
+    top_vendedores:     Array<{ vendedor_id: string; full_name: string; total: number; ventas: number }>;
+    metodos_pago:       Array<{ metodo: string; total: number; count: number }>;
   };
 }
 
@@ -811,4 +870,50 @@ export async function recibirOrdenCompra(input: { id: string; notas?: string }) 
   });
   if (error) throw new Error(error.message);
   return data;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// src/lib/pos.functions.ts
+
+export async function getMarketingAnalytics(input?: {
+  desde?: string;
+  hasta?: string;
+}) {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("get_marketing_analytics", {
+    _desde: input?.desde ?? null,
+    _hasta: input?.hasta ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    canales:       Array<{ canal: string; transacciones: number; ingresos: number; ticket_promedio: number }>;
+    utm_fuentes:   Array<{ fuente: string; pedidos: number; ingresos: number }> | null;
+    geo_distritos: Array<{ distrito: string; pedidos: number; ingresos: number }> | null;
+    categorias:    Array<{ categoria: string; pedidos: number; unidades: number; ingresos: number }> | null;
+    segmentos:     Array<{ segmento: string; clientes: number; ingresos_pos: number }> | null;
+    top_productos: Array<{ title: string; unidades: number; ingresos: number }> | null;
+    funnel:        { vistas: number; productos_vistos: number; carritos: number; checkouts: number; compras: number } | null;
+    retencion:     { clientes_recurrentes: number; clientes_periodo: number } | null;
+    serie_ec:      Array<{ fecha: string; pedidos: number; ingresos: number }> | null;
+    periodo_desde: string;
+    periodo_hasta: string;
+  };
 }

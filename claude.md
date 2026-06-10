@@ -6081,3 +6081,1790 @@ UPDATE public.insumos SET proveedor_id = p.id
 FROM public.proveedores p
 WHERE p.nombre ILIKE '%' || insumos.proveedor || '%'
   AND insumos.proveedor IS NOT NULL;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  # Módulo 7 — Métricas y Dashboard KPI
+**G&M Mueblería** · Reemplazo completo del dashboard existente
+
+---
+
+## Diagnóstico del dashboard actual
+
+El `dashboard.tsx` existente tiene estos problemas que justifican reescribirlo:
+
+| Problema | Impacto |
+|---|---|
+| Descarga todas las ventas a JavaScript y agrega en el cliente | Con 1000+ ventas, la página se vuelve lenta y consume ancho de banda innecesario |
+| Solo lee `sales` (POS) — ignora `orders` (ecommerce) | Los ingresos del canal web no aparecen en ningún KPI |
+| Sin selector de período | No se puede comparar mes actual vs anterior |
+| Sin métricas de producción | No se sabe cuántas órdenes están atrasadas |
+| Sin alertas de stock | El módulo MRP no tiene visibilidad en el dashboard |
+| Sin métricas de órdenes de compra | Las OC pendientes no son visibles globalmente |
+| `getDashboard()` hace 4 queries secuenciales en JS | Tiempo de carga alto |
+
+La solución: mover toda la agregación a **una función RPC de SQL** que devuelve un objeto JSON con todos los KPIs calculados en la DB. El frontend solo renderiza.
+
+---
+
+## 1. Migración — Función RPC `get_dashboard_kpis`
+
+```sql
+-- migrations/20260608_dashboard_kpis.sql
+
+CREATE OR REPLACE FUNCTION public.get_dashboard_kpis(
+  _desde  DATE DEFAULT (date_trunc('month', CURRENT_DATE))::DATE,
+  _hasta  DATE DEFAULT CURRENT_DATE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _user_id UUID := auth.uid();
+  _is_admin BOOLEAN;
+  _result  JSONB;
+
+  -- Ventas POS
+  _ventas_pos_periodo     NUMERIC(12,2);
+  _ventas_pos_mes_ant     NUMERIC(12,2);
+  _ventas_pos_count       BIGINT;
+  _ticket_promedio_pos    NUMERIC(12,2);
+
+  -- Ecommerce
+  _ventas_ec_periodo      NUMERIC(12,2);
+  _ventas_ec_mes_ant      NUMERIC(12,2);
+  _pedidos_ec_count       BIGINT;
+
+  -- Totales combinados
+  _ingresos_totales       NUMERIC(12,2);
+  _ingresos_mes_ant       NUMERIC(12,2);
+
+  -- Clientes
+  _clientes_nuevos        BIGINT;
+  _clientes_total         BIGINT;
+
+  -- Producción
+  _prod_pendientes        BIGINT;
+  _prod_en_proceso        BIGINT;
+  _prod_vencidas          BIGINT;
+  _prod_terminadas_periodo BIGINT;
+  _tiempo_prod_promedio   NUMERIC(5,1);
+
+  -- Stock / MRP
+  _insumos_stock_bajo     BIGINT;
+
+  -- Órdenes de compra
+  _oc_pendientes          BIGINT;
+  _oc_monto_pendiente     NUMERIC(12,2);
+
+  -- Periodo anterior (para comparativas)
+  _dias_periodo   INT;
+  _desde_ant      DATE;
+  _hasta_ant      DATE;
+BEGIN
+  IF NOT (public.has_role(_user_id, 'admin') OR public.has_role(_user_id, 'vendedor')) THEN
+    RAISE EXCEPTION 'Sin permisos para ver métricas';
+  END IF;
+
+  _is_admin := public.has_role(_user_id, 'admin');
+  _dias_periodo := _hasta - _desde + 1;
+  _hasta_ant    := _desde - 1;
+  _desde_ant    := _desde - _dias_periodo;
+
+  -- ── Ventas POS ─────────────────────────────────────────────
+  SELECT
+    COALESCE(SUM(total) FILTER (WHERE created_at::DATE BETWEEN _desde AND _hasta AND estado = 'completada'), 0),
+    COALESCE(SUM(total) FILTER (WHERE created_at::DATE BETWEEN _desde_ant AND _hasta_ant AND estado = 'completada'), 0),
+    COUNT(*) FILTER (WHERE created_at::DATE BETWEEN _desde AND _hasta AND estado = 'completada')
+  INTO _ventas_pos_periodo, _ventas_pos_mes_ant, _ventas_pos_count
+  FROM public.sales
+  WHERE (_is_admin OR vendedor_id = _user_id);
+
+  _ticket_promedio_pos := CASE WHEN _ventas_pos_count > 0
+    THEN ROUND(_ventas_pos_periodo / _ventas_pos_count, 2)
+    ELSE 0 END;
+
+  -- ── Ecommerce (solo pedidos pagados/completados) ────────────
+  SELECT
+    COALESCE(SUM(total) FILTER (WHERE created_at::DATE BETWEEN _desde AND _hasta), 0),
+    COALESCE(SUM(total) FILTER (WHERE created_at::DATE BETWEEN _desde_ant AND _hasta_ant), 0),
+    COUNT(*) FILTER (WHERE created_at::DATE BETWEEN _desde AND _hasta)
+  INTO _ventas_ec_periodo, _ventas_ec_mes_ant, _pedidos_ec_count
+  FROM public.orders
+  WHERE status NOT IN ('pendiente', 'cancelado');
+
+  -- ── Totales combinados ──────────────────────────────────────
+  _ingresos_totales := _ventas_pos_periodo + _ventas_ec_periodo;
+  _ingresos_mes_ant := _ventas_pos_mes_ant + _ventas_ec_mes_ant;
+
+  -- ── Clientes ───────────────────────────────────────────────
+  SELECT
+    COUNT(*) FILTER (WHERE created_at::DATE BETWEEN _desde AND _hasta),
+    COUNT(*)
+  INTO _clientes_nuevos, _clientes_total
+  FROM public.customers;
+
+  -- ── Producción ─────────────────────────────────────────────
+  SELECT
+    COUNT(*) FILTER (WHERE p.status = 'pendiente'),
+    COUNT(*) FILTER (WHERE p.status = 'en_proceso'),
+    COUNT(*) FILTER (WHERE p.status NOT IN ('terminado') AND p.fecha_fin_estimada < CURRENT_DATE),
+    COUNT(*) FILTER (WHERE p.status = 'terminado' AND p.updated_at::DATE BETWEEN _desde AND _hasta)
+  INTO _prod_pendientes, _prod_en_proceso, _prod_vencidas, _prod_terminadas_periodo
+  FROM public.produccion p;
+
+  SELECT COALESCE(AVG(fecha_fin_real - fecha_inicio), 0)
+  INTO _tiempo_prod_promedio
+  FROM public.produccion
+  WHERE status = 'terminado'
+    AND fecha_fin_real IS NOT NULL
+    AND fecha_inicio IS NOT NULL
+    AND updated_at::DATE BETWEEN _desde AND _hasta;
+
+  -- ── Stock MRP ──────────────────────────────────────────────
+  SELECT COUNT(*)
+  INTO _insumos_stock_bajo
+  FROM public.insumos
+  WHERE activo = true AND stock_actual < stock_minimo;
+
+  -- ── Órdenes de compra ──────────────────────────────────────
+  SELECT
+    COUNT(*) FILTER (WHERE status IN ('enviada', 'confirmada')),
+    COALESCE(SUM(total) FILTER (WHERE status IN ('enviada', 'confirmada')), 0)
+  INTO _oc_pendientes, _oc_monto_pendiente
+  FROM public.ordenes_compra;
+
+  -- ── Serie temporal: ingresos diarios del período ───────────
+  -- (para el gráfico de línea)
+  _result := jsonb_build_object(
+    -- KPIs principales
+    'ingresos_totales',       _ingresos_totales,
+    'ingresos_mes_ant',       _ingresos_mes_ant,
+    'ingresos_var_pct',       CASE WHEN _ingresos_mes_ant > 0
+                                THEN ROUND(((_ingresos_totales - _ingresos_mes_ant) / _ingresos_mes_ant * 100)::NUMERIC, 1)
+                                ELSE NULL END,
+
+    -- Canal POS
+    'ventas_pos',             _ventas_pos_periodo,
+    'ventas_pos_count',       _ventas_pos_count,
+    'ticket_promedio_pos',    _ticket_promedio_pos,
+
+    -- Canal ecommerce
+    'ventas_ecommerce',       _ventas_ec_periodo,
+    'pedidos_ec_count',       _pedidos_ec_count,
+
+    -- Clientes
+    'clientes_nuevos',        _clientes_nuevos,
+    'clientes_total',         _clientes_total,
+
+    -- Producción
+    'prod_pendientes',        _prod_pendientes,
+    'prod_en_proceso',        _prod_en_proceso,
+    'prod_vencidas',          _prod_vencidas,
+    'prod_terminadas',        _prod_terminadas_periodo,
+    'tiempo_prod_promedio_dias', _tiempo_prod_promedio,
+
+    -- Alertas operacionales
+    'insumos_stock_bajo',     _insumos_stock_bajo,
+    'oc_pendientes',          _oc_pendientes,
+    'oc_monto_pendiente',     _oc_monto_pendiente,
+
+    -- Metadata
+    'periodo_desde',          _desde,
+    'periodo_hasta',          _hasta,
+    'is_admin',               _is_admin
+  );
+
+  RETURN _result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_dashboard_kpis TO authenticated;
+
+-- ── Series para gráficos (función separada para no inflar el RPC principal) ──
+
+CREATE OR REPLACE FUNCTION public.get_dashboard_series(
+  _desde DATE DEFAULT (date_trunc('month', CURRENT_DATE))::DATE,
+  _hasta DATE DEFAULT CURRENT_DATE,
+  _agrupacion TEXT DEFAULT 'dia'   -- 'dia' | 'semana' | 'mes'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  _user_id  UUID := auth.uid();
+  _is_admin BOOLEAN;
+  _trunc    TEXT;
+BEGIN
+  IF NOT (public.has_role(_user_id, 'admin') OR public.has_role(_user_id, 'vendedor')) THEN
+    RAISE EXCEPTION 'Sin permisos';
+  END IF;
+  _is_admin := public.has_role(_user_id, 'admin');
+
+  _trunc := CASE _agrupacion
+    WHEN 'semana' THEN 'week'
+    WHEN 'mes'    THEN 'month'
+    ELSE               'day'
+  END;
+
+  -- Serie de ingresos combinados (POS + ecommerce)
+  RETURN (
+    WITH pos_series AS (
+      SELECT
+        date_trunc(_trunc, created_at)::DATE AS fecha,
+        COALESCE(SUM(total), 0) AS pos_total,
+        COUNT(*) AS pos_count
+      FROM public.sales
+      WHERE created_at::DATE BETWEEN _desde AND _hasta
+        AND estado = 'completada'
+        AND (_is_admin OR vendedor_id = _user_id)
+      GROUP BY 1
+    ),
+    ec_series AS (
+      SELECT
+        date_trunc(_trunc, created_at)::DATE AS fecha,
+        COALESCE(SUM(total), 0) AS ec_total,
+        COUNT(*) AS ec_count
+      FROM public.orders
+      WHERE created_at::DATE BETWEEN _desde AND _hasta
+        AND status NOT IN ('pendiente', 'cancelado')
+      GROUP BY 1
+    ),
+    -- Top 5 productos POS por período
+    top_productos AS (
+      SELECT
+        si.title,
+        SUM(si.qty)::INT   AS unidades,
+        SUM(si.total)      AS total
+      FROM public.sale_items si
+      JOIN public.sales s ON s.id = si.sale_id
+      WHERE s.created_at::DATE BETWEEN _desde AND _hasta
+        AND s.estado = 'completada'
+        AND (_is_admin OR s.vendedor_id = _user_id)
+      GROUP BY si.title
+      ORDER BY unidades DESC
+      LIMIT 5
+    ),
+    -- Top 5 por ecommerce
+    top_ec AS (
+      SELECT
+        oi.title,
+        SUM(oi.qty)::INT  AS unidades,
+        SUM(oi.total)     AS total
+      FROM public.order_items oi
+      JOIN public.orders o ON o.id = oi.order_id
+      WHERE o.created_at::DATE BETWEEN _desde AND _hasta
+        AND o.status NOT IN ('pendiente', 'cancelado')
+      GROUP BY oi.title
+      ORDER BY unidades DESC
+      LIMIT 5
+    ),
+    -- Top vendedores
+    top_vendedores AS (
+      SELECT
+        s.vendedor_id,
+        p.full_name,
+        SUM(s.total)  AS total,
+        COUNT(*)::INT AS ventas
+      FROM public.sales s
+      JOIN public.profiles p ON p.id = s.vendedor_id
+      WHERE s.created_at::DATE BETWEEN _desde AND _hasta
+        AND s.estado = 'completada'
+      GROUP BY s.vendedor_id, p.full_name
+      ORDER BY total DESC
+      LIMIT 5
+    ),
+    -- Métodos de pago
+    metodos AS (
+      SELECT
+        metodo_pago AS metodo,
+        SUM(total)  AS total,
+        COUNT(*)::INT AS count
+      FROM public.sales
+      WHERE created_at::DATE BETWEEN _desde AND _hasta
+        AND estado = 'completada'
+        AND (_is_admin OR vendedor_id = _user_id)
+      GROUP BY metodo_pago
+    )
+    SELECT jsonb_build_object(
+      'ingresos_serie', (
+        SELECT jsonb_agg(jsonb_build_object(
+          'fecha',   COALESCE(pos.fecha, ec.fecha),
+          'pos',     COALESCE(pos.pos_total, 0),
+          'ec',      COALESCE(ec.ec_total, 0),
+          'total',   COALESCE(pos.pos_total, 0) + COALESCE(ec.ec_total, 0)
+        ) ORDER BY COALESCE(pos.fecha, ec.fecha))
+        FROM pos_series pos FULL OUTER JOIN ec_series ec USING (fecha)
+      ),
+      'top_productos_pos', (SELECT jsonb_agg(row_to_json(tp)) FROM top_productos tp),
+      'top_productos_ec',  (SELECT jsonb_agg(row_to_json(te)) FROM top_ec te),
+      'top_vendedores',    (SELECT jsonb_agg(row_to_json(tv)) FROM top_vendedores tv),
+      'metodos_pago',      (SELECT jsonb_agg(row_to_json(m))  FROM metodos m)
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_dashboard_series TO authenticated;
+```
+
+---
+
+## 2. Actualizar `getDashboard` en `pos.functions.ts`
+
+Reemplaza la función completa con dos nuevas:
+
+```ts
+// src/lib/pos.functions.ts — REEMPLAZAR getDashboard()
+
+export async function getDashboardKpis(input?: {
+  desde?: string;  // YYYY-MM-DD
+  hasta?: string;
+}) {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("get_dashboard_kpis", {
+    _desde: input?.desde ?? null,
+    _hasta: input?.hasta ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    ingresos_totales:         number;
+    ingresos_mes_ant:         number;
+    ingresos_var_pct:         number | null;
+    ventas_pos:               number;
+    ventas_pos_count:         number;
+    ticket_promedio_pos:      number;
+    ventas_ecommerce:         number;
+    pedidos_ec_count:         number;
+    clientes_nuevos:          number;
+    clientes_total:           number;
+    prod_pendientes:          number;
+    prod_en_proceso:          number;
+    prod_vencidas:            number;
+    prod_terminadas:          number;
+    tiempo_prod_promedio_dias: number;
+    insumos_stock_bajo:       number;
+    oc_pendientes:            number;
+    oc_monto_pendiente:       number;
+    periodo_desde:            string;
+    periodo_hasta:            string;
+    is_admin:                 boolean;
+  };
+}
+
+export async function getDashboardSeries(input?: {
+  desde?: string;
+  hasta?: string;
+  agrupacion?: "dia" | "semana" | "mes";
+}) {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase.rpc("get_dashboard_series", {
+    _desde:      input?.desde ?? null,
+    _hasta:      input?.hasta ?? null,
+    _agrupacion: input?.agrupacion ?? "dia",
+  });
+  if (error) throw new Error(error.message);
+  return data as {
+    ingresos_serie:     Array<{ fecha: string; pos: number; ec: number; total: number }>;
+    top_productos_pos:  Array<{ title: string; unidades: number; total: number }>;
+    top_productos_ec:   Array<{ title: string; unidades: number; total: number }>;
+    top_vendedores:     Array<{ vendedor_id: string; full_name: string; total: number; ventas: number }>;
+    metodos_pago:       Array<{ metodo: string; total: number; count: number }>;
+  };
+}
+```
+
+---
+
+## 3. Reemplazar `dashboard.tsx`
+
+Reemplaza el contenido completo de `src/routes/_authenticated/dashboard.tsx`:
+
+```tsx
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { getDashboardKpis, getDashboardSeries } from "@/lib/pos.functions";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, Legend, PieChart, Pie, Cell,
+} from "recharts";
+import {
+  Loader2, TrendingUp, TrendingDown, ShoppingCart, Globe,
+  Users, Hammer, AlertTriangle, Truck, Package,
+  Calendar, ChevronDown, RefreshCw,
+} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { useState, useMemo } from "react";
+import { format, subDays, startOfMonth, startOfWeek, subMonths } from "date-fns";
+import { es } from "date-fns/locale";
+
+export const Route = createFileRoute("/_authenticated/dashboard")({
+  head: () => ({ meta: [{ title: "Dashboard — G&M" }] }),
+  component: DashboardPage,
+});
+
+// ── Helpers ──────────────────────────────────────────────────
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN", maximumFractionDigits: 0 }).format(n);
+
+const fmtShort = (n: number) =>
+  n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
+
+const PERIOD_OPTIONS = [
+  { key: "hoy",         label: "Hoy" },
+  { key: "7d",          label: "Últimos 7 días" },
+  { key: "mes",         label: "Este mes" },
+  { key: "mes_ant",     label: "Mes anterior" },
+  { key: "trimestre",   label: "Este trimestre" },
+  { key: "anio",        label: "Este año" },
+] as const;
+
+type PeriodKey = typeof PERIOD_OPTIONS[number]["key"];
+
+function getRange(key: PeriodKey): { desde: string; hasta: string; agrupacion: "dia" | "semana" | "mes" } {
+  const today = new Date();
+  const iso = (d: Date) => format(d, "yyyy-MM-dd");
+  switch (key) {
+    case "hoy":
+      return { desde: iso(today), hasta: iso(today), agrupacion: "dia" };
+    case "7d":
+      return { desde: iso(subDays(today, 6)), hasta: iso(today), agrupacion: "dia" };
+    case "mes":
+      return { desde: iso(startOfMonth(today)), hasta: iso(today), agrupacion: "dia" };
+    case "mes_ant": {
+      const ant = subMonths(today, 1);
+      return { desde: iso(startOfMonth(ant)), hasta: iso(new Date(ant.getFullYear(), ant.getMonth() + 1, 0)), agrupacion: "dia" };
+    }
+    case "trimestre":
+      return { desde: iso(new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1)), hasta: iso(today), agrupacion: "semana" };
+    case "anio":
+      return { desde: `${today.getFullYear()}-01-01`, hasta: iso(today), agrupacion: "mes" };
+  }
+}
+
+// ── KPI Card ─────────────────────────────────────────────────
+function KpiCard({
+  label, value, sub, icon: Icon, trend, alert, onClick,
+}: {
+  label: string; value: string; sub?: string;
+  icon: any; trend?: number | null;
+  alert?: boolean; onClick?: () => void;
+}) {
+  return (
+    <Card
+      className={`p-5 cursor-default ${alert ? "border-amber-300 bg-amber-50/60" : ""} ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+      onClick={onClick}
+    >
+      <div className="flex items-start justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+          <p className="text-2xl font-display font-semibold truncate">{value}</p>
+          {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+          {trend !== undefined && trend !== null && (
+            <div className={`flex items-center gap-0.5 text-xs mt-1 font-medium ${trend >= 0 ? "text-green-600" : "text-red-500"}`}>
+              {trend >= 0
+                ? <TrendingUp className="h-3 w-3" />
+                : <TrendingDown className="h-3 w-3" />}
+              {trend >= 0 ? "+" : ""}{trend}% vs período anterior
+            </div>
+          )}
+        </div>
+        <div className={`ml-3 p-2.5 rounded-xl flex-shrink-0 ${alert ? "bg-amber-100" : "bg-primary/8"}`}>
+          <Icon className={`h-5 w-5 ${alert ? "text-amber-600" : "text-primary/60"}`} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ── Tooltip customizado ───────────────────────────────────────
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-xl shadow-lg p-3 text-sm">
+      <p className="font-medium mb-1.5 text-xs text-muted-foreground">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: p.color }} />
+          <span>{p.name}:</span>
+          <span className="font-semibold">{fmtShort(p.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Página principal ──────────────────────────────────────────
+function DashboardPage() {
+  const navigate = useNavigate();
+  const [period, setPeriod] = useState<PeriodKey>("mes");
+  const range = useMemo(() => getRange(period), [period]);
+
+  const kpisQuery = useQuery({
+    queryKey: ["dashboard-kpis", range.desde, range.hasta],
+    queryFn: () => getDashboardKpis({ desde: range.desde, hasta: range.hasta }),
+    staleTime: 60_000,
+  });
+
+  const seriesQuery = useQuery({
+    queryKey: ["dashboard-series", range.desde, range.hasta, range.agrupacion],
+    queryFn: () => getDashboardSeries({ desde: range.desde, hasta: range.hasta, agrupacion: range.agrupacion }),
+    staleTime: 60_000,
+  });
+
+  const kpis = kpisQuery.data;
+  const series = seriesQuery.data;
+  const loading = kpisQuery.isLoading;
+
+  // Colores del design system usando CSS variables directamente
+  const COLOR_POS = "hsl(var(--primary))";
+  const COLOR_EC  = "hsl(var(--accent))";
+  const COLOR_PIE = ["hsl(var(--primary))", "hsl(var(--accent))", "#6d28d9", "#0e7490", "#78350f"];
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-display font-semibold">Dashboard</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {kpis
+              ? `${format(new Date(kpis.periodo_desde), "d MMM", { locale: es })} — ${format(new Date(kpis.periodo_hasta), "d MMM yyyy", { locale: es })}`
+              : "Cargando período..."}
+          </p>
+        </div>
+        <div className="flex gap-2 items-center">
+          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+            <SelectTrigger className="w-44">
+              <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIOD_OPTIONS.map(({ key, label }) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => { kpisQuery.refetch(); seriesQuery.refetch(); }}
+          >
+            <RefreshCw className={`h-4 w-4 ${kpisQuery.isFetching ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : kpis ? (
+        <>
+          {/* ── Alertas operacionales ── */}
+          {(kpis.prod_vencidas > 0 || kpis.insumos_stock_bajo > 0 || kpis.oc_pendientes > 0) && (
+            <div className="flex gap-3 flex-wrap">
+              {kpis.prod_vencidas > 0 && (
+                <button
+                  onClick={() => navigate({ to: "/produccion" })}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 hover:bg-red-100 transition-colors"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  <strong>{kpis.prod_vencidas}</strong> orden{kpis.prod_vencidas > 1 ? "es" : ""} de producción vencida{kpis.prod_vencidas > 1 ? "s" : ""}
+                </button>
+              )}
+              {kpis.insumos_stock_bajo > 0 && (
+                <button
+                  onClick={() => navigate({ to: "/insumos" })}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 hover:bg-amber-100 transition-colors"
+                >
+                  <Package className="h-4 w-4" />
+                  <strong>{kpis.insumos_stock_bajo}</strong> insumo{kpis.insumos_stock_bajo > 1 ? "s" : ""} bajo mínimo
+                </button>
+              )}
+              {kpis.oc_pendientes > 0 && (
+                <button
+                  onClick={() => navigate({ to: "/proveedores" })}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 hover:bg-blue-100 transition-colors"
+                >
+                  <Truck className="h-4 w-4" />
+                  <strong>{kpis.oc_pendientes}</strong> OC pendiente{kpis.oc_pendientes > 1 ? "s" : ""} — {fmt(kpis.oc_monto_pendiente)}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── KPIs principales ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+              label="Ingresos totales"
+              value={fmt(kpis.ingresos_totales)}
+              sub={`POS ${fmt(kpis.ventas_pos)} + Web ${fmt(kpis.ventas_ecommerce)}`}
+              icon={TrendingUp}
+              trend={kpis.ingresos_var_pct}
+            />
+            <KpiCard
+              label="Ventas POS"
+              value={fmt(kpis.ventas_pos)}
+              sub={`${kpis.ventas_pos_count} transacciones · ticket S/ ${kpis.ticket_promedio_pos}`}
+              icon={ShoppingCart}
+              onClick={() => navigate({ to: "/ventas" })}
+            />
+            <KpiCard
+              label="Pedidos online"
+              value={fmt(kpis.ventas_ecommerce)}
+              sub={`${kpis.pedidos_ec_count} pedidos pagados`}
+              icon={Globe}
+              onClick={() => navigate({ to: "/pedidos" })}
+            />
+            <KpiCard
+              label="Clientes nuevos"
+              value={String(kpis.clientes_nuevos)}
+              sub={`${kpis.clientes_total} clientes en total`}
+              icon={Users}
+              onClick={() => navigate({ to: "/clientes" })}
+            />
+          </div>
+
+          {/* ── KPIs operacionales ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+              label="En producción"
+              value={String(kpis.prod_en_proceso)}
+              sub={`${kpis.prod_pendientes} pendientes`}
+              icon={Hammer}
+              onClick={() => navigate({ to: "/produccion" })}
+            />
+            <KpiCard
+              label="Terminadas (período)"
+              value={String(kpis.prod_terminadas)}
+              sub={kpis.tiempo_prod_promedio_dias > 0 ? `Promedio ${kpis.tiempo_prod_promedio_dias} días` : undefined}
+              icon={Hammer}
+            />
+            <KpiCard
+              label="Insumos bajo mínimo"
+              value={String(kpis.insumos_stock_bajo)}
+              icon={Package}
+              alert={kpis.insumos_stock_bajo > 0}
+              onClick={() => navigate({ to: "/insumos" })}
+            />
+            <KpiCard
+              label="OC pendientes"
+              value={String(kpis.oc_pendientes)}
+              sub={kpis.oc_pendientes > 0 ? fmt(kpis.oc_monto_pendiente) : "Todo al día"}
+              icon={Truck}
+              alert={kpis.oc_pendientes > 0}
+              onClick={() => navigate({ to: "/proveedores" })}
+            />
+          </div>
+
+          {/* ── Gráfico de ingresos combinados ── */}
+          <Card className="p-6">
+            <h3 className="font-semibold mb-5">Ingresos por canal</h3>
+            {seriesQuery.isLoading ? (
+              <div className="flex justify-center h-64 items-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer>
+                  <AreaChart data={series?.ingresos_serie ?? []}>
+                    <defs>
+                      <linearGradient id="posGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={COLOR_POS} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={COLOR_POS} stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="ecGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={COLOR_EC} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={COLOR_EC} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="fecha"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      tickFormatter={(v) => {
+                        const d = new Date(v + "T12:00:00");
+                        return range.agrupacion === "mes"
+                          ? format(d, "MMM", { locale: es })
+                          : format(d, "d MMM", { locale: es });
+                      }}
+                    />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickFormatter={fmtShort} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend />
+                    <Area type="monotone" dataKey="pos" name="POS"
+                      stroke={COLOR_POS} fill="url(#posGrad)" strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="ec" name="Ecommerce"
+                      stroke={COLOR_EC} fill="url(#ecGrad)" strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+
+          {/* ── Fila de gráficos secundarios ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+            {/* Top productos POS */}
+            <Card className="p-5">
+              <h3 className="font-semibold mb-4 text-sm">Top productos POS</h3>
+              {seriesQuery.isLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin" /></div>
+              ) : (series?.top_productos_pos ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Sin ventas en el período</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {series!.top_productos_pos.map((p, i) => (
+                    <div key={p.title} className="flex items-center gap-2.5">
+                      <span className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate font-medium">{p.title}</p>
+                        <p className="text-xs text-muted-foreground">{p.unidades} u. · {fmt(p.total)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            {/* Métodos de pago */}
+            <Card className="p-5">
+              <h3 className="font-semibold mb-4 text-sm">Métodos de pago</h3>
+              {seriesQuery.isLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin" /></div>
+              ) : (series?.metodos_pago ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Sin datos</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="h-36">
+                    <ResponsiveContainer>
+                      <PieChart>
+                        <Pie
+                          data={series!.metodos_pago}
+                          dataKey="total"
+                          nameKey="metodo"
+                          cx="50%" cy="50%"
+                          outerRadius={60}
+                          innerRadius={30}
+                        >
+                          {series!.metodos_pago.map((_, i) => (
+                            <Cell key={i} fill={COLOR_PIE[i % COLOR_PIE.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: number) => fmt(v)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-1.5">
+                    {series!.metodos_pago.map((m, i) => (
+                      <div key={m.metodo} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLOR_PIE[i % COLOR_PIE.length] }} />
+                          <span className="capitalize">{m.metodo.replace("_", " ")}</span>
+                        </div>
+                        <span className="font-medium">{fmt(m.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Top vendedores */}
+            <Card className="p-5">
+              <h3 className="font-semibold mb-4 text-sm">Top vendedores</h3>
+              {seriesQuery.isLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin" /></div>
+              ) : (series?.top_vendedores ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Sin datos</p>
+              ) : (
+                <div className="h-52">
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={series!.top_vendedores}
+                      layout="vertical"
+                      margin={{ left: 8, right: 16 }}
+                    >
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category" dataKey="full_name"
+                        width={80} fontSize={11}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(v) => v.split(" ")[0]}
+                      />
+                      <Tooltip formatter={(v: number) => fmt(v)} />
+                      <Bar dataKey="total" fill={COLOR_POS} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* ── Canal web: top productos ecommerce ── */}
+          {(series?.top_productos_ec ?? []).length > 0 && (
+            <Card className="p-5">
+              <h3 className="font-semibold mb-4 text-sm">Top productos ecommerce</h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {series!.top_productos_ec.map((p, i) => (
+                  <div key={p.title} className="bg-muted/30 rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">#{i + 1}</p>
+                    <p className="font-medium text-sm truncate">{p.title}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{p.unidades} u.</p>
+                    <p className="font-semibold text-sm">{fmt(p.total)}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+```
+
+---
+
+## 4. Lista de verificación
+
+### Base de datos
+- [ ] Ejecutar migración `20260608_dashboard_kpis.sql` — crea `get_dashboard_kpis()` y `get_dashboard_series()`
+- [ ] Verificar que `ordenes_compra` del módulo 6 existe antes de ejecutar (la función la consulta)
+- [ ] Si el módulo 4 (insumos) aún no está en producción, comentar temporalmente las líneas de `insumos_stock_bajo` en la función hasta que la tabla exista
+
+### Código
+- [ ] Reemplazar `getDashboard()` por `getDashboardKpis()` y `getDashboardSeries()` en `pos.functions.ts`
+- [ ] Reemplazar el contenido completo de `dashboard.tsx`
+- [ ] Verificar que `useNavigate` de `@tanstack/react-router` está disponible (lo está desde la versión en `package.json`)
+
+### Verificación funcional
+- [ ] Dashboard carga con el período "Este mes" por defecto
+- [ ] Selector de período cambia las queries y actualiza todos los KPIs
+- [ ] Los KPIs de ingresos muestran POS + ecommerce por separado y combinados
+- [ ] El % de variación vs período anterior aparece en verde/rojo según corresponda
+- [ ] El gráfico de área muestra las dos series (POS y Ecommerce) apiladas
+- [ ] Las alertas de producción vencida / stock bajo / OC pendientes aparecen en la parte superior
+- [ ] Hacer click en una alerta navega a la ruta correspondiente
+- [ ] Top vendedores aparece (requiere que `profiles.full_name` esté cargado para los usuarios)
+- [ ] Métodos de pago muestra el pie chart correcto
+- [ ] Con el período "Año" el gráfico agrupa por mes en lugar de día
+
+---
+
+## 5. Notas importantes
+
+**`get_dashboard_kpis` usa `SECURITY DEFINER`** — se ejecuta con permisos del owner de la función. Esto es necesario porque el vendedor normalmente solo ve sus propias ventas (RLS), pero para los KPIs operacionales (producción, stock, OC) necesita leer tablas completas. La función maneja esto internamente con el flag `_is_admin`.
+
+**Si algún módulo anterior no está instalado**, la función fallará en la sección correspondiente. El orden de dependencias es:
+1. `public.sales` — módulo base ✅
+2. `public.orders` — módulo 1 ✅
+3. `public.produccion` — módulo 2 / 5 ✅
+4. `public.insumos` — módulo 4 ← necesario para `insumos_stock_bajo`
+5. `public.ordenes_compra` — módulo 6 ← necesario para `oc_pendientes`
+
+Si vas a desplegar el dashboard antes de tener los módulos 4 y 6, usa esta versión reducida de la función que comenta esas secciones y devuelve 0 para esos campos:
+
+```sql
+-- Versión reducida para despliegue parcial
+-- Reemplaza las líneas de insumos y OC por:
+SELECT 0 INTO _insumos_stock_bajo;
+SELECT 0, 0 INTO _oc_pendientes, _oc_monto_pendiente;
+```
+
+**El `getDashboard()` original sigue en `pos.functions.ts`** después de añadir las nuevas funciones. Puedes eliminarlo cuando confirmes que nada más lo importa (solo `dashboard.tsx` lo usaba).
+
+**`recharts` con `PieChart` + `innerRadius`** produce un donut chart que funciona mejor visualmente que un pie sólido cuando hay pocos segmentos (los 4-5 métodos de pago). Si prefieres barras horizontales, cambia el componente a `BarChart` con `layout="vertical"` igual que el de vendedores.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Módulo 8 — Dashboard Central de KPIs
+**G&M Mueblería** · Pantalla de misión de control, sin interacción, auto-refresh
+
+---
+
+## Concepto y diferencia con el módulo 7
+
+| Módulo 7 (`/dashboard`) | Módulo 8 (`/central`) |
+|---|---|
+| Dashboard operativo con selector de período | Pantalla fija de estado en tiempo real |
+| El usuario interactúa, filtra, navega | Sin interacción — pensado para TV/monitor |
+| Carga datos bajo demanda | Auto-refresh cada 90 segundos |
+| Análisis histórico | Foto actual del negocio |
+
+`/central` es la pantalla que el dueño deja abierta en su monitor o en una TV de la tienda. Muestra siempre el estado de hoy.
+
+---
+
+## Decisiones de diseño
+
+**Firma visual — el pipeline de producción como franja central.** Los 5 estados del pipeline (`pendiente → en proceso → control calidad → listo despacho → enviado`) se dibujan como nodos circulares conectados con una línea, con el conteo de órdenes en cada estado debajo. Esta franja es el elemento que no tiene equivalente en ningún dashboard genérico — codifica el flujo real de trabajo de la mueblería.
+
+**Tipografía:** Cormorant Garamond (ya cargada en el proyecto) para todos los números grandes. Inter para etiquetas y datos secundarios. Los números grandes en serif dan carácter sin necesitar decoración extra.
+
+**Sin fondo oscuro.** Se usa el `--background` cálido crema del sistema, no negro. El cliché de dashboard de TV en negro/verde fluorescente no corresponde a la identidad de G&M.
+
+**Reloj y countdown.** Un reloj en tiempo real en la esquina superior derecha y un contador regresivo de los 90 segundos hasta el próximo refresh dan sensación de "vivo" sin animaciones costosas. El punto verde se vuelve rojo en los últimos 10 segundos antes del refresh.
+
+---
+
+## 1. Ruta `/central` — código completo
+
+Crea `src/routes/_authenticated/central.tsx`:
+
+```tsx
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { getDashboardKpis, getDashboardSeries } from "@/lib/pos.functions";
+import { useEffect, useRef, useState } from "react";
+import { format, startOfMonth } from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Clock, Hammer, Package, CheckCircle2, Truck,
+  AlertTriangle, Box, ShoppingCart, Globe,
+} from "lucide-react";
+
+export const Route = createFileRoute("/_authenticated/central")({
+  head: () => ({ meta: [{ title: "G&M · Central KPIs" }] }),
+  component: CentralPage,
+});
+
+// ── Helpers ──────────────────────────────────────────────────
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-PE", {
+    style: "currency", currency: "PEN", maximumFractionDigits: 0,
+  }).format(n);
+
+const fmtShort = (n: number) =>
+  n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
+
+const hoy = () => format(new Date(), "yyyy-MM-dd");
+const inicioMes = () => format(startOfMonth(new Date()), "yyyy-MM-dd");
+
+// ── Pipeline node ─────────────────────────────────────────────
+function PipelineNode({
+  icon: Icon, label, count, color, bg, isLast, alert,
+}: {
+  icon: React.ElementType; label: string; count: number;
+  color: string; bg: string; isLast?: boolean; alert?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center flex-1 relative">
+      {/* línea conectora */}
+      {!isLast && (
+        <div className="absolute top-[21px] z-0"
+          style={{ left: "calc(50% + 21px)", right: "calc(-50% + 21px)", height: 1, background: "var(--border)" }} />
+      )}
+      <div
+        className="w-11 h-11 rounded-full flex items-center justify-center relative z-10 flex-shrink-0"
+        style={{ background: bg, color }}
+      >
+        <Icon className="h-4.5 w-4.5" />
+      </div>
+      <p className="font-display text-2xl font-semibold mt-1.5 leading-none" style={{ color: "var(--foreground)" }}>
+        {count}
+        {alert && <span className="text-sm ml-1" style={{ color: "#A32D2D" }}>⚠</span>}
+      </p>
+      <p className="text-[10px] uppercase tracking-wider text-center mt-1 max-w-[70px] leading-tight"
+        style={{ color: "var(--muted-foreground)" }}>
+        {label}
+      </p>
+    </div>
+  );
+}
+
+// ── Barra de ranking ──────────────────────────────────────────
+function RankRow({ pos, name, total, maxTotal, color }: {
+  pos: number; name: string; total: number; maxTotal: number; color: string;
+}) {
+  const pct = Math.round((total / maxTotal) * 100);
+  return (
+    <div className="flex items-center gap-2.5 py-1.5 border-b last:border-0"
+      style={{ borderColor: "var(--border)" }}>
+      <span className="text-[11px] w-4 text-right flex-shrink-0"
+        style={{ color: "var(--muted-foreground)" }}>{pos}</span>
+      <span className="text-xs flex-[0_0_82px] truncate" style={{ color: "var(--foreground)" }}>{name}</span>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden"
+        style={{ background: "var(--muted)" }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="text-xs font-medium flex-shrink-0 min-w-[52px] text-right"
+        style={{ color: "var(--foreground)" }}>
+        {fmtShort(total)}
+      </span>
+    </div>
+  );
+}
+
+// ── KPI Card grande ────────────────────────────────────────────
+function KpiCard({
+  label, value, sub, trend, alert,
+}: {
+  label: string; value: string; sub?: string;
+  trend?: { pct: number } | null; alert?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-xl p-4 border"
+      style={{
+        background: "var(--card)",
+        borderColor: alert ? "#FAC775" : "var(--border)",
+        backgroundColor: alert ? "oklch(0.985 0.025 80)" : undefined,
+      }}
+    >
+      <p className="text-[10px] uppercase tracking-widest mb-1"
+        style={{ color: "var(--muted-foreground)" }}>{label}</p>
+      <p className="font-display text-3xl font-semibold leading-none"
+        style={{ color: "var(--foreground)" }}>{value}</p>
+      {sub && <p className="text-xs mt-1.5" style={{ color: "var(--muted-foreground)" }}>{sub}</p>}
+      {trend && (
+        <span
+          className="inline-block mt-2 text-[11px] px-2 py-0.5 rounded-full"
+          style={trend.pct >= 0
+            ? { background: "#EAF3DE", color: "#3B6D11" }
+            : { background: "#FAECE7", color: "#993C1D" }
+          }
+        >
+          {trend.pct >= 0 ? "↑" : "↓"} {Math.abs(trend.pct)}% vs mes ant.
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Alert pill ────────────────────────────────────────────────
+function AlertPill({ icon: Icon, text, tipo }: {
+  icon: React.ElementType; text: string; tipo: "warn" | "info" | "danger";
+}) {
+  const styles = {
+    warn:   { bg: "#FAEEDA", color: "#854F0B" },
+    info:   { bg: "#E6F1FB", color: "#185FA5" },
+    danger: { bg: "#FCEBEB", color: "#A32D2D" },
+  }[tipo];
+  return (
+    <div className="flex items-center gap-2 py-1.5 border-b last:border-0"
+      style={{ borderColor: "var(--border)" }}>
+      <div className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+        style={{ background: styles.bg }}>
+        <Icon className="h-3.5 w-3.5" style={{ color: styles.color }} />
+      </div>
+      <span className="text-xs leading-tight" style={{ color: "var(--foreground)" }}>{text}</span>
+    </div>
+  );
+}
+
+// ── Reloj + countdown ─────────────────────────────────────────
+function LiveClock({ onRefresh }: { onRefresh: () => void }) {
+  const [time, setTime] = useState(new Date());
+  const [countdown, setCountdown] = useState(90);
+  const cdRef = useRef(90);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTime(new Date());
+      cdRef.current -= 1;
+      if (cdRef.current <= 0) {
+        cdRef.current = 90;
+        onRefresh();
+      }
+      setCountdown(cdRef.current);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [onRefresh]);
+
+  const urgent = countdown <= 10;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+        {format(time, "HH:mm:ss")}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          className="w-2 h-2 rounded-full"
+          style={{
+            background: urgent ? "#E24B4A" : "#3B6D11",
+            transition: "background 0.3s",
+          }}
+        />
+        <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          {urgent ? `Actualizando en ${countdown}s...` : `En vivo · ${countdown}s`}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// ── Página ────────────────────────────────────────────────────
+function CentralPage() {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const desde = inicioMes();
+  const hasta = hoy();
+
+  const kpisQ = useQuery({
+    queryKey: ["central-kpis", desde, hasta, refreshKey],
+    queryFn: () => getDashboardKpis({ desde, hasta }),
+    staleTime: 0,
+  });
+
+  const seriesQ = useQuery({
+    queryKey: ["central-series", desde, hasta, refreshKey],
+    queryFn: () => getDashboardSeries({ desde, hasta, agrupacion: "dia" }),
+    staleTime: 0,
+  });
+
+  const kpis = kpisQ.data;
+  const series = seriesQ.data;
+
+  // Alertas operacionales derivadas de los KPIs
+  const alertas = kpis ? [
+    kpis.prod_vencidas > 0 && {
+      icon: AlertTriangle,
+      text: `${kpis.prod_vencidas} orden${kpis.prod_vencidas > 1 ? "es" : ""} de producción vencida${kpis.prod_vencidas > 1 ? "s" : ""}`,
+      tipo: "danger" as const,
+    },
+    kpis.insumos_stock_bajo > 0 && {
+      icon: Box,
+      text: `${kpis.insumos_stock_bajo} insumo${kpis.insumos_stock_bajo > 1 ? "s" : ""} bajo stock mínimo`,
+      tipo: "warn" as const,
+    },
+    kpis.oc_pendientes > 0 && {
+      icon: Truck,
+      text: `${kpis.oc_pendientes} OC pendiente${kpis.oc_pendientes > 1 ? "s" : ""} — ${fmt(kpis.oc_monto_pendiente)}`,
+      tipo: "info" as const,
+    },
+  ].filter(Boolean) as Array<{ icon: React.ElementType; text: string; tipo: "warn" | "info" | "danger" }>
+  : [];
+
+  const topProductos = series?.top_productos_pos?.slice(0, 5) ?? [];
+  const topVendedores = series?.top_vendedores?.slice(0, 3) ?? [];
+  const maxProducto = Math.max(...topProductos.map((p) => p.total), 1);
+  const maxVendedor = Math.max(...topVendedores.map((v) => v.total), 1);
+
+  const PRODUCT_COLORS = ["#378ADD", "#185FA5", "#0C447C", "#1D9E75", "#0F6E56"];
+  const VENDOR_COLORS  = ["#378ADD", "#1D9E75", "#7F77DD"];
+
+  return (
+    <div className="space-y-3 max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex items-baseline justify-between pb-3 border-b" style={{ borderColor: "var(--border)" }}>
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-display text-xl font-semibold" style={{ color: "var(--foreground)" }}>
+            G&M Mueblería
+          </h1>
+          <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>Central de KPIs</span>
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            · {format(new Date(), "MMMM yyyy", { locale: es })}
+          </span>
+        </div>
+        <LiveClock onRefresh={() => setRefreshKey((k) => k + 1)} />
+      </div>
+
+      {/* Fila 1: KPIs financieros */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="col-span-2">
+          <KpiCard
+            label="Ingresos del mes"
+            value={kpis ? fmt(kpis.ingresos_totales) : "—"}
+            sub={kpis
+              ? `POS ${fmt(kpis.ventas_pos)} · Web ${fmt(kpis.ventas_ecommerce)}`
+              : undefined}
+            trend={kpis?.ingresos_var_pct != null ? { pct: kpis.ingresos_var_pct } : null}
+          />
+        </div>
+        <KpiCard
+          label="Ticket promedio POS"
+          value={kpis ? fmt(kpis.ticket_promedio_pos) : "—"}
+          sub={kpis ? `${kpis.ventas_pos_count} transacciones` : undefined}
+        />
+        <KpiCard
+          label="Pedidos online pagados"
+          value={kpis ? String(kpis.pedidos_ec_count) : "—"}
+          sub={kpis ? `${kpis.clientes_nuevos} clientes nuevos` : undefined}
+        />
+      </div>
+
+      {/* Fila 2: Pipeline de producción */}
+      <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="text-[10px] uppercase tracking-widest mb-4"
+          style={{ color: "var(--muted-foreground)" }}>
+          Pipeline de producción · órdenes activas
+        </p>
+        <div className="flex items-start px-4">
+          <PipelineNode icon={Clock}        label="Pendiente"    count={kpis?.prod_pendientes ?? 0}  color="#854F0B" bg="#FAEEDA" />
+          <PipelineNode icon={Hammer}       label="En proceso"   count={kpis?.prod_en_proceso ?? 0}  color="#185FA5" bg="#E6F1FB" />
+          <PipelineNode icon={CheckCircle2} label="Control calidad" count={0}                        color="#534AB7" bg="#EEEDFE" />
+          <PipelineNode icon={Package}      label="Listo despacho"  count={0}                        color="#0F6E56" bg="#E1F5EE" />
+          <PipelineNode icon={Truck}        label="Enviado"      count={0}                           color="#3B6D11" bg="#EAF3DE" isLast />
+        </div>
+        <div className="flex gap-4 mt-3 pt-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+          <span>Tiempo promedio: <strong style={{ color: "var(--foreground)" }}>
+            {kpis?.tiempo_prod_promedio_dias
+              ? `${kpis.tiempo_prod_promedio_dias} días`
+              : "—"}
+          </strong></span>
+          <span>Terminadas este mes: <strong style={{ color: "var(--foreground)" }}>
+            {kpis?.prod_terminadas ?? "—"}
+          </strong></span>
+          {(kpis?.prod_vencidas ?? 0) > 0 && (
+            <span style={{ color: "#A32D2D", background: "#FCEBEB" }}
+              className="px-2 rounded-full">
+              ⚠ {kpis!.prod_vencidas} vencida{kpis!.prod_vencidas > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Fila 3: Rankings + alertas */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] uppercase tracking-widest mb-3"
+            style={{ color: "var(--muted-foreground)" }}>Top productos (mes)</p>
+          {topProductos.length === 0 ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--muted-foreground)" }}>Sin ventas</p>
+          ) : topProductos.map((p, i) => (
+            <RankRow
+              key={p.title}
+              pos={i + 1}
+              name={p.title}
+              total={p.total}
+              maxTotal={maxProducto}
+              color={PRODUCT_COLORS[i % PRODUCT_COLORS.length]}
+            />
+          ))}
+        </div>
+
+        <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] uppercase tracking-widest mb-3"
+            style={{ color: "var(--muted-foreground)" }}>Top vendedores</p>
+          {topVendedores.length === 0 ? (
+            <p className="text-xs text-center py-4" style={{ color: "var(--muted-foreground)" }}>Sin datos</p>
+          ) : topVendedores.map((v, i) => (
+            <RankRow
+              key={v.vendedor_id}
+              pos={i + 1}
+              name={v.full_name}
+              total={v.total}
+              maxTotal={maxVendedor}
+              color={VENDOR_COLORS[i % VENDOR_COLORS.length]}
+            />
+          ))}
+        </div>
+
+        <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] uppercase tracking-widest mb-3"
+            style={{ color: "var(--muted-foreground)" }}>Alertas operacionales</p>
+          {alertas.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-4 gap-1.5">
+              <CheckCircle2 className="h-6 w-6" style={{ color: "#3B6D11" }} />
+              <p className="text-xs" style={{ color: "#3B6D11" }}>Todo en orden</p>
+            </div>
+          ) : alertas.map((a, i) => (
+            <AlertPill key={i} {...a} />
+          ))}
+        </div>
+      </div>
+
+      {/* Fila 4: KPIs operacionales */}
+      <div className="grid grid-cols-4 gap-3">
+        <KpiCard
+          label="Insumos bajo mínimo"
+          value={kpis ? String(kpis.insumos_stock_bajo) : "—"}
+          sub={kpis?.insumos_stock_bajo > 0 ? "Requiere reposición" : "Stock OK"}
+          alert={kpis ? kpis.insumos_stock_bajo > 0 : false}
+        />
+        <KpiCard
+          label="OC pendientes"
+          value={kpis ? String(kpis.oc_pendientes) : "—"}
+          sub={kpis?.oc_pendientes > 0 ? fmt(kpis.oc_monto_pendiente) + " comprometido" : "Al día"}
+        />
+        <KpiCard
+          label="Clientes totales"
+          value={kpis ? String(kpis.clientes_total) : "—"}
+          sub={kpis ? `${kpis.clientes_nuevos} nuevos este mes` : undefined}
+        />
+        <KpiCard
+          label="Órdenes terminadas"
+          value={kpis ? String(kpis.prod_terminadas) : "—"}
+          sub="este mes"
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## 2. Ajustes en `_authenticated.tsx` — layout sin padding para pantalla completa
+
+La ruta `/central` funciona mejor sin el sidebar ni el padding estándar. Añade soporte para un layout "fullscreen":
+
+```tsx
+// src/routes/_authenticated.tsx — en el <main>, condicionalmente quitar padding
+import { useRouterState } from "@tanstack/react-router";
+
+// Dentro de AuthLayout:
+const currentPath = useRouterState({ select: (r) => r.location.pathname });
+const isFullscreen = currentPath === "/central";
+
+// En el JSX:
+<main className={isFullscreen ? "flex-1 p-4 overflow-auto" : "flex-1 p-6 overflow-auto"}>
+  <Outlet />
+</main>
+```
+
+Para ocultarlo completamente del sidebar, puedes añadir un botón "Pantalla central" en el footer del sidebar:
+
+```tsx
+// AppSidebar.tsx — en SidebarFooter, encima del logout
+<SidebarMenuItem>
+  <SidebarMenuButton asChild>
+    <Link to="/central">
+      <LayoutGrid className="h-4 w-4" />
+      <span>Central KPIs</span>
+    </Link>
+  </SidebarMenuButton>
+</SidebarMenuItem>
+```
+
+La ruta `/central` **no aparece en el array `items`** del sidebar (eso que tiene los items de navegación principal), así que no se muestra como ítem de menú. Solo el botón especial en el footer la enlaza.
+
+---
+
+## 3. Lista de verificación
+
+### Requisitos previos
+- [ ] Módulo 7 implementado — `getDashboardKpis()` y `getDashboardSeries()` deben existir en `pos.functions.ts`
+- [ ] Funciones RPC `get_dashboard_kpis` y `get_dashboard_series` desplegadas en Supabase
+
+### Código
+- [ ] Crear `src/routes/_authenticated/central.tsx` con el código completo
+- [ ] Añadir enlace "Central KPIs" en el footer del sidebar (`AppSidebar.tsx`)
+- [ ] Importar `LayoutGrid` de `lucide-react` en `AppSidebar.tsx`
+
+### Verificación funcional
+- [ ] `/central` carga con los datos del mes actual
+- [ ] El reloj actualiza cada segundo
+- [ ] El countdown regresa desde 90s y reinicia las queries al llegar a 0
+- [ ] El punto se vuelve rojo en los últimos 10 segundos
+- [ ] El pipeline muestra los conteos reales de producción
+- [ ] Las alertas de producción/stock/OC aparecen cuando corresponde
+- [ ] El bloque de alertas muestra "Todo en orden" con check verde cuando no hay nada
+
+---
+
+## 4. Notas
+
+**Los estados `control_calidad` y `listo_despacho` en el pipeline** requieren que `get_dashboard_kpis` los desglose individualmente. En la función actual del módulo 7, `prod_en_proceso` agrupa todo lo que no es `pendiente` ni `terminado`. Para mostrar cada nodo por separado, amplía la función RPC:
+
+```sql
+-- Añadir a get_dashboard_kpis, dentro del bloque de producción:
+COUNT(*) FILTER (WHERE p.status = 'pendiente')          AS prod_pendientes,
+COUNT(*) FILTER (WHERE p.status = 'en_proceso')         AS prod_en_proceso,
+COUNT(*) FILTER (WHERE o.status = 'control_calidad')    AS prod_control_calidad,
+COUNT(*) FILTER (WHERE o.status = 'listo_despacho')     AS prod_listo_despacho,
+COUNT(*) FILTER (WHERE o.status = 'enviado')            AS prod_enviado,
+```
+
+Y añadir los campos al tipo de retorno en `pos.functions.ts`. Hasta que hagas esto, los nodos de control calidad, listo despacho y enviado siempre mostrarán 0 — que es el comportamiento actual en el preview.
+
+**Auto-refresh y React Query:** el `refreshKey` que incrementa en el callback del reloj fuerza una nueva query ignorando el cache (`staleTime: 0`). Si tienes muchos usuarios viendo esta pantalla simultáneamente en la oficina, considera aumentar el intervalo a 3-5 minutos para reducir carga en Supabase.

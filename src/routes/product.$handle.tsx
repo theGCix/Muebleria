@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect  } from "react";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useProduct, useProducts } from "@/hooks/useProducts";
 import { Header } from "@/components/Header";
@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Ha
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
+import { trackEvent } from "@/hooks/useTracking";
 
 export const Route = createFileRoute("/product/$handle")({
   head: ({ params }) => ({
@@ -231,6 +232,17 @@ function ProductPage() {
   const { handle } = Route.useParams();
   const { data: product, isLoading } = useProduct(handle);
   const addItem = useCartStore((s) => s.addItem);
+  useEffect(() => {
+  if (!product) return;
+
+  trackEvent({
+    tipo: "producto_visto",
+    path: window.location.pathname,
+    product_id: product.id,
+    valor: product.precio,
+  });
+}, [product?.id]);  
+
   const [wished, setWished] = useState(false);
   const [adding, setAdding] = useState(false);
   const [activeImg, setActiveImg] = useState(0);

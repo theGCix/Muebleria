@@ -4,6 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Loader2 } from "lucide-react";
+import { useRouterState } from "@tanstack/react-router";
+
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthLayout,
@@ -12,6 +14,9 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthLayout() {
   const { user, roles, loading } = useAuth();
   const navigate = useNavigate();
+
+  const currentPath = useRouterState({ select: (r) => r.location.pathname });
+const isFullscreen = currentPath === "/central";
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -35,7 +40,7 @@ function AuthLayout() {
             <div className="flex-1" />
             <div className="text-sm text-muted-foreground">{user.email}</div>
           </header>
-          <main className="flex-1 p-6 overflow-auto">
+          <main className={isFullscreen ? "flex-1 p-4 overflow-auto" : "flex-1 p-6 overflow-auto"}>
             <Outlet />
           </main>
         </div>

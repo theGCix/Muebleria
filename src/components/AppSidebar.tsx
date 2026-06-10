@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
-import { ShoppingBag, Boxes, Hammer, Wrench, Truck  } from "lucide-react"; // ya lo tienes importado
+import { ShoppingBag, Boxes, Hammer, Wrench, Truck, BarChart2 } from "lucide-react"; // ya lo tienes importado
 // import { Boxes } from "lucide-react";
 
 
@@ -22,6 +22,7 @@ const items = [
   { title: "Mis órdenes", url: "/mi-produccion",  icon: Wrench, roles: ["carpintero"] as AppRole[] },
   { title: "Producción", url: "/produccion",     icon: Hammer, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Proveedores", url: "/proveedores", icon: Truck, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Analytics", url: "/analytics", icon: BarChart2, roles: ["admin", "vendedor"] as AppRole[] },
 ];
 
 export function AppSidebar({ roles }: { roles: AppRole[] }) {
@@ -77,6 +78,14 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
               <Link to="/"><Home className="h-4 w-4" /><span>Ir a la tienda</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild>
+            <Link to="/central">
+              <LayoutGrid className="h-4 w-4" />
+              <span>Central KPIs</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={logout}>
               <LogOut className="h-4 w-4" /><span>Cerrar sesión</span>
