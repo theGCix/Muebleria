@@ -13,7 +13,6 @@ import { ShoppingBag, Minus, Plus, Trash2, LogIn } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
-import { trackEvent } from "@/hooks/useEventTracking";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -60,8 +59,7 @@ export const CartDrawer = () => {
           </SheetHeader>
           <div className="flex flex-col flex-1 pt-6 min-h-0">
             {items.length === 0 ? (
-              trackEvent({ tipo: "carrito_iniciado", valor: item.price });
-                <div className="flex-1 flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">Carrito vacío</p>
