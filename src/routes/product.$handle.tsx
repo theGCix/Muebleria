@@ -7,7 +7,7 @@ import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Ha
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
-import { trackEvent } from "@/hooks/useTracking";
+import { trackEvent } from "@/hooks/useEventTracking";
 
 export const Route = createFileRoute("/product/$handle")({
   head: ({ params }) => ({
