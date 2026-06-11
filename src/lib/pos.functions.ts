@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getAuthenticatedClient } from "@/integrations/supabase/auth-middleware";
+import { API_URL } from "@/config";
 
 const ItemSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
@@ -192,67 +193,89 @@ export async function getDashboardSeries(input?: {
   };
 }
 
+// export async function createStaffUser(input: {email: string;password: string;full_name: string;role: "admin" | "vendedor" | "carpintero" | "cliente";})
+//  {
+//   const { email, password, full_name, role } = z.object({
+//     email: z.string().email(),
+//     password: z.string().min(6),
+//     full_name: z.string().min(1),
+//     role: z.enum(["admin", "vendedor", "carpintero",  "cliente"]),
+//   }).parse(input);
+
+//   // Verificar que el llamante es admin
+//   const { supabase, userId } = await getAuthenticatedClient();
+//   const { data: adminCheck } = await supabase
+//     .from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle();
+//   if (!adminCheck) throw new Error("Solo administradores pueden crear usuarios");
+
+//   // Llamar a la Admin API de Supabase con la service role key
+//   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+//   const SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
+//   if (!SERVICE_KEY) throw new Error("VITE_SUPABASE_SERVICE_KEY no configurado");
+
+//   const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+//     method: "POST",
+//     headers: {
+//       "Content-Type": "application/json",
+//       "apikey": SERVICE_KEY,
+//       "Authorization": `Bearer ${SERVICE_KEY}`,
+//     },
+//     body: JSON.stringify({
+//       email,
+//       password,
+//       email_confirm: true,
+//       user_metadata: { full_name },
+//     }),
+//   });
+
+//   if (!res.ok) {
+//     const err = await res.json().catch(() => ({}));
+//     throw new Error(err?.msg ?? err?.message ?? "Error creando usuario");
+//   }
+
+//   const newUser = await res.json();
+
+//   // Asignar rol en user_roles (el trigger ya crea el profile y asigna 'cliente')
+//   // Si el rol deseado no es cliente, lo actualizamos
+//   if (role !== "cliente") {
+//     await supabase.from("user_roles")
+//       .update({ role })
+//       .eq("user_id", newUser.id);
+//   }
+
+//    if (role !== "carpintero") {
+//     await supabase.from("user_roles")
+//       .update({ role })
+//       .eq("user_id", newUser.id);
+//   }
+
+//   return { ok: true, user: newUser };
+// }
+
+
+
 export async function createStaffUser(input: {
-  email: string;
-  password: string;
-  full_name: string;
-  role: "admin" | "vendedor" | "carpintero" | "cliente";
+  email: string; password: string; fullName: string;
+  role: "admin" | "vendedor" | "carpintero";
 }) {
-  const { email, password, full_name, role } = z.object({
-    email: z.string().email(),
-    password: z.string().min(6),
-    full_name: z.string().min(1),
-    role: z.enum(["admin", "vendedor", "carpintero",  "cliente"]),
-  }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const session = await supabase.auth.getSession();
+  const token = session.data.session?.access_token;
+  if (!token) throw new Error("Sin sesión activa");
 
-  // Verificar que el llamante es admin
-  const { supabase, userId } = await getAuthenticatedClient();
-  const { data: adminCheck } = await supabase
-    .from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle();
-  if (!adminCheck) throw new Error("Solo administradores pueden crear usuarios");
-
-  // Llamar a la Admin API de Supabase con la service role key
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-  const SERVICE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
-  if (!SERVICE_KEY) throw new Error("VITE_SUPABASE_SERVICE_KEY no configurado");
-
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+  const res = await fetch(`${API_URL}/api/staff/create-user`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "apikey": SERVICE_KEY,
-      "Authorization": `Bearer ${SERVICE_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name },
-    }),
+    body: JSON.stringify(input),
   });
-
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.msg ?? err?.message ?? "Error creando usuario");
+    const err = await res.json();
+    throw new Error(err.error ?? "Error al crear usuario");
   }
-
-  const newUser = await res.json();
-
-  // Asignar rol en user_roles (el trigger ya crea el profile y asigna 'cliente')
-  // Si el rol deseado no es cliente, lo actualizamos
-  if (role !== "cliente") {
-    await supabase.from("user_roles")
-      .update({ role })
-      .eq("user_id", newUser.id);
-  }
-
-   if (role !== "carpintero") {
-    await supabase.from("user_roles")
-      .update({ role })
-      .eq("user_id", newUser.id);
-  }
-
-  return { ok: true, user: newUser };
+  return res.json();
 }
 
 export async function listUsers() {

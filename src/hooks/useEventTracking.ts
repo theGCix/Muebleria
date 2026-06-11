@@ -40,3 +40,18 @@ export async function trackEvent(params: EventParams) {
     // tracking nunca debe romper la UX
   }
 }
+
+
+if (typeof window.gtag === "function") {
+  if (params.tipo === "orden_pagada") {
+    window.gtag("event", "purchase", {
+      transaction_id: params.order_id,
+      value:          params.valor,
+      currency:       "PEN",
+    });
+  } else if (params.tipo === "carrito_iniciado") {
+    window.gtag("event", "begin_checkout", { value: params.valor, currency: "PEN" });
+  } else if (params.tipo === "producto_visto") {
+    window.gtag("event", "view_item", { currency: "PEN", value: params.valor });
+  }
+}

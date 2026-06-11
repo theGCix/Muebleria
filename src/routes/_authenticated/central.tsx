@@ -181,6 +181,21 @@ function LiveClock({ onRefresh }: { onRefresh: () => void }) {
 
 // ── Página ────────────────────────────────────────────────────
 function CentralPage() {
+    useEffect(() => {
+  const channel = supabase
+    .channel("central-live")
+    .on("postgres_changes",
+      { event: "INSERT", schema: "public", table: "orders" },
+      () => setRefreshKey((k) => k + 1)
+    )
+    .on("postgres_changes",
+      { event: "UPDATE", schema: "public", table: "produccion" },
+      () => setRefreshKey((k) => k + 1)
+    )
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
+}, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const desde = inicioMes();
   const hasta = hoy();

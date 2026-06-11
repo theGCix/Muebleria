@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { URLSearchParams } from "url";
+import rateLimit from "express-rate-limit";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -78,6 +79,42 @@ app.get("/api/niubiz/config", (_req, res) => {
   });
 });
 
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", ts: new Date().toISOString() });
+});
+
+app.get("/", (_req, res) => {
+  res.json({ service: "G&M Mueblería API", version: "1.0" });
+});
+
+// server/index.js o Supabase Edge Function
+async function sendWhatsApp(to, message) {
+  const res = await fetch(
+    `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: to.replace(/\D/g, ""),  // solo dígitos
+        type: "text",
+        text: { body: message },
+      }),
+    }
+  );
+  return res.json();
+}
+
+
+
+const niubizLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minuto
+  max: 10,              // máx 10 sesiones de pago por IP por minuto
+  message: { error: "Demasiadas solicitudes. Espera un momento." },
+});
 // ── POST /api/niubiz/session ──────────────────────────────────
 app.post("/api/niubiz/session", async (req, res) => {
   try {
@@ -216,4 +253,146 @@ app.listen(PORT, () => {
   console.log(`✅ Niubiz proxy en puerto ${PORT}`);
   console.log(`   Ambiente Niubiz: ${process.env.NIUBIZ_AMBIENTE ?? "integracion"}`);
   console.log(`   Frontend URL:    ${process.env.FRONTEND_URL ?? "http://localhost:5173"}`);
+});
+
+
+
+// POST /api/staff/create-user
+app.post("/api/staff/create-user", async (req, res) => {
+  // Verificar que quien llama es admin (via JWT de Supabase)
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Sin autorización" });
+  }
+  const token = authHeader.slice(7);
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: "Token inválido" });
+
+  // Verificar rol admin
+  const { data: roles } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (!roles) return res.status(403).json({ error: "Solo admins pueden crear usuarios" });
+
+  const { email, password, fullName, role } = req.body;
+  try {
+    const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
+      email, password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
+    if (error) throw error;
+
+    await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
+    await supabaseAdmin.from("profiles").upsert({ id: newUser.user.id, full_name: fullName });
+
+    res.json({ success: true, userId: newUser.user.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+// server/index.js — añadir función de verificación
+
+async function verificarTransaccionNiubiz(transactionToken, purchaseNumber) {
+  const token = await getSecurityToken();
+  const merchantId = process.env.NIUBIZ_MERCHANT_ID;
+
+  // URL de autorización/consulta de Niubiz
+  const baseUrl = process.env.NIUBIZ_AMBIENTE === "produccion"
+    ? "https://apiprod.vnforapps.com"
+    : "https://apitestenv.vnforapps.com";
+
+  const url = `${baseUrl}/api.authorization/v3/authorization/ecommerce/${merchantId}`;
+
+  const res = await fetch(url, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", Authorization: token },
+    body: JSON.stringify({
+      channel:           "web",
+      captureType:       "manual",
+      countable:         true,
+      order: {
+        purchaseNumber,
+        tokenId:  transactionToken,
+        currency: "PEN",
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Verificación Niubiz fallida: ${res.status} ${txt}`);
+  }
+
+  const data = await res.json();
+  // data.order.status: "Authorized" | "Denied" | etc.
+  // data.dataMap.ACTION_CODE: "000" = aprobado
+  return {
+    aprobado:       data.dataMap?.ACTION_CODE === "000",
+    actionCode:     data.dataMap?.ACTION_CODE,
+    actionDesc:     data.dataMap?.ACTION_DESCRIPTION,
+    authCode:       data.dataMap?.AUTHORIZATION_CODE,
+    amount:         data.order?.amount,
+    purchaseNumber: data.order?.purchaseNumber,
+  };
+}
+
+// ── Actualizar POST /api/orders para verificar antes de guardar ──
+app.post("/api/orders", async (req, res) => {
+  try {
+    const { order, items } = req.body;
+
+    // ✅ VERIFICAR con Niubiz antes de guardar
+    if (order.transactionToken) {
+      const verificacion = await verificarTransaccionNiubiz(
+        order.transactionToken,
+        order.orderNumber
+      );
+
+      if (!verificacion.aprobado) {
+        console.warn("⚠️  Transacción no aprobada:", verificacion.actionDesc);
+        // Guardar la orden como cancelada para trazabilidad
+        await supabaseAdmin.from("orders").insert({
+          order_number:  order.orderNumber ?? `GM-FAIL-${Date.now()}`,
+          nombre:        order.nombre || "—",
+          email:         order.email  || "—",
+          subtotal:      order.subtotal ?? 0,
+          envio:         order.envio ?? 0,
+          total:         order.total ?? 0,
+          currency:      "PEN",
+          niubiz_token:  order.transactionToken,
+          niubiz_auth_code: order.authCode ?? null,
+          status:        "cancelado",
+        });
+        return res.status(402).json({
+          error: "Pago no aprobado",
+          actionCode: verificacion.actionCode,
+          actionDesc: verificacion.actionDesc,
+        });
+      }
+
+      // Guardar el código de autorización
+      order.authCode = verificacion.authCode;
+    }
+
+    // ... resto del código de guardado (igual que antes) ...
+  } catch (err) {
+    console.error("Error guardando orden:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
