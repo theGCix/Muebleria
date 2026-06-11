@@ -5,7 +5,7 @@ import { ShoppingBag, Image } from "lucide-react";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import type { Product } from "@/hooks/useProducts";
-import { useEventTracking } from "@/hooks/useEventTracking";
+import { trackEvent } from "@/hooks/useEventTracking";
 
 
 interface Props { product: Product; }
@@ -19,13 +19,11 @@ export function ProductCard({ product: p }: Props) {
     ? cloudinaryUrl(p.imagen_public_id, { w: 400, h: 300 })
     : p.imagen_url;
 
-  const { trackEvent } = useEventTracking();
+  // const { trackEvent } = useEventTracking();
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (addItem.length === 0) { // o maneja la lógica de "primer item" aquí
     trackEvent({ tipo: "carrito_iniciado", valor: p.precio });
-  }
     addItem({
       id: p.id,
       title: p.nombre,
