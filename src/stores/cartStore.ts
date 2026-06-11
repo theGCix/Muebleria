@@ -28,12 +28,12 @@ export const useCartStore = create<CartState>()(
         set((state) => {
 
           // Primer producto agregado al carrito
-          if (state.items.length === 0) {
-            trackEvent({
-              tipo: "carrito_iniciado",
-              valor: item.price,
-            });
-          }
+          // if (state.items.length === 0) {
+          //   trackEvent({
+          //     tipo: "carrito_iniciado",
+          //     valor: item.price,
+          //   });
+          // }
 
           const existing = state.items.find((i) => i.id === item.id);
 

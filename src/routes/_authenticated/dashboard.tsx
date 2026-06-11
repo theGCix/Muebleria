@@ -180,18 +180,21 @@ function DashboardPage() {
       </div>
 
       {loading ? (
-        <Loader2 ... />
-          ) : hasError ? (
-            <div className="text-center py-20 text-destructive">
-              <p className="font-medium">Error al cargar el dashboard</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {kpisQuery.error?.message}
-              </p>
-              <Button className="mt-4" onClick={() => kpisQuery.refetch()}>
-                Reintentar
-              </Button>
-            </div>
-      ) : kpis ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ): hasError ? (
+          <div className="text-center py-20 text-destructive">
+            <p className="font-medium">Error al cargar el dashboard</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {kpisQuery.error?.message}
+            </p>
+            <Button className="mt-4" onClick={() => kpisQuery.refetch()}>
+              Reintentar
+            </Button>
+          </div>
+      )
+      : kpis ? (
         <>
           {/* ── Alertas operacionales ── */}
           {(kpis.prod_vencidas > 0 || kpis.insumos_stock_bajo > 0 || kpis.oc_pendientes > 0) && (
