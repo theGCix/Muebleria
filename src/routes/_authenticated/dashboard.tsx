@@ -19,6 +19,8 @@ import { useState, useMemo } from "react";
 import { format, subDays, startOfMonth, startOfWeek, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 
+
+
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — G&M" }] }),
   component: DashboardPage,
@@ -136,6 +138,8 @@ function DashboardPage() {
   const kpis = kpisQuery.data;
   const series = seriesQuery.data;
   const loading = kpisQuery.isLoading;
+  const hasError = kpisQuery.isError;
+
 
   // Colores del design system usando CSS variables directamente
   const COLOR_POS = "hsl(var(--primary))";
@@ -176,9 +180,17 @@ function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <Loader2 ... />
+          ) : hasError ? (
+            <div className="text-center py-20 text-destructive">
+              <p className="font-medium">Error al cargar el dashboard</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {kpisQuery.error?.message}
+              </p>
+              <Button className="mt-4" onClick={() => kpisQuery.refetch()}>
+                Reintentar
+              </Button>
+            </div>
       ) : kpis ? (
         <>
           {/* ── Alertas operacionales ── */}

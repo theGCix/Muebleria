@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { trackEvent } from "@/hooks/useEventTracking";
 
 export interface CartItem {
   id: string;
