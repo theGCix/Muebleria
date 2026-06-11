@@ -1,3 +1,4 @@
+// src/components/LoginModal.tsx
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,31 @@ import {
 import { toast } from "sonner";
 import { Loader2, Mail } from "lucide-react";
 
+type Role = "admin" | "vendedor" | "carpintero" | "cliente";
+
 interface LoginModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Callback opcional ejecutado tras un login exitoso con email/password.
+   * Recibe los roles del usuario para que el llamador decida qué hacer.
+   * Si no se provee, el comportamiento por defecto es redirigir según rol:
+   *   admin/vendedor → /dashboard
+   *   carpintero     → /mi-produccion
+   *   cliente        → permanece en la misma página
+   */
+  onSuccess?: (roles: Role[]) => void;
 }
 
-export function LoginModal({ open, onOpenChange }: LoginModalProps) {
+async function fetchRoles(userId: string): Promise<Role[]> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  return (data ?? []).map((r: any) => r.role as Role);
+}
+
+export function LoginModal({ open, onOpenChange, onSuccess }: LoginModalProps) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,6 +55,25 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
       setMode("login");
     }
   }, [open]);
+
+  const handlePostLogin = async (userId: string) => {
+    const roles = await fetchRoles(userId);
+
+    if (onSuccess) {
+      // El llamador controla qué pasa (ej. CartDrawer → ir a checkout)
+      onSuccess(roles);
+    } else {
+      // Comportamiento por defecto: redirigir según rol
+      if (roles.includes("admin") || roles.includes("vendedor")) {
+        window.location.href = "/dashboard";
+      } else if (roles.includes("carpintero")) {
+        window.location.href = "/mi-produccion";
+      }
+      // cliente → no redirige, queda en la tienda
+    }
+
+    onOpenChange(false);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,10 +92,14 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
         toast.success("Cuenta creada. Revisa tu correo para confirmar.");
         onOpenChange(false);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         toast.success("¡Bienvenido!");
-        onOpenChange(false);
+        if (data.session?.user) {
+          await handlePostLogin(data.session.user.id);
+        } else {
+          onOpenChange(false);
+        }
       }
     } catch (err: any) {
       toast.error(err.message || "Error de autenticación");
@@ -68,10 +111,11 @@ export function LoginModal({ open, onOpenChange }: LoginModalProps) {
   const loginWithOAuth = async (provider: "google" | "facebook") => {
     setOauthLoading(provider);
     try {
+      // OAuth siempre redirige a /auth/callback — el rol se maneja allí
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) throw error;

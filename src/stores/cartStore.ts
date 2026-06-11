@@ -26,17 +26,7 @@ export const useCartStore = create<CartState>()(
       items: [],
       addItem: (item) => {
         set((state) => {
-
-          // Primer producto agregado al carrito
-          // if (state.items.length === 0) {
-          //   trackEvent({
-          //     tipo: "carrito_iniciado",
-          //     valor: item.price,
-          //   });
-          // }
-
           const existing = state.items.find((i) => i.id === item.id);
-
           if (existing) {
             return {
               items: state.items.map((i) =>
@@ -44,7 +34,6 @@ export const useCartStore = create<CartState>()(
               ),
             };
           }
-
           return {
             items: [...state.items, { ...item, qty: 1 }],
           };

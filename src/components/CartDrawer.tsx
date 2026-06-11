@@ -158,7 +158,7 @@ export const CartDrawer = () => {
       </Sheet>
 
       {/* Login modal — triggered when user tries to checkout without being logged in */}
-      <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
+      <LoginModal open={loginOpen} onOpenChange={setLoginOpen} onSuccess={() => { setLoginOpen(false); window.location.href = "/checkout"; }} />
     </>
   );
 };

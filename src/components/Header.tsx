@@ -1,6 +1,8 @@
+// src/components/Header.tsx
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { CartDrawer } from "./CartDrawer";
+import { WishlistDrawer } from "./WishlistDrawer";
 import { LoginModal } from "./LoginModal";
 import { useState } from "react";
 import { Menu, X, LogIn, User } from "lucide-react";
@@ -86,11 +88,14 @@ export function Header() {
             <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full">
               <a href="#catalogo">Ver catálogo</a>
             </Button>
+            {/* Wishlist + Cart juntos */}
+            <WishlistDrawer />
             <CartDrawer />
           </div>
 
-          {/* Mobile: cart + hamburger */}
+          {/* Mobile: wishlist + cart + hamburger */}
           <div className="flex items-center gap-2 md:hidden">
+            <WishlistDrawer />
             <CartDrawer />
             <button
               onClick={() => setMobileOpen((v) => !v)}
@@ -162,7 +167,6 @@ export function Header() {
         )}
       </header>
 
-      {/* Login modal — stays on the same page */}
       <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
     </>
   );
