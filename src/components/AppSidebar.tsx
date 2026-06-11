@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShoppingCart, Receipt, Users, UserCog, Package, LogOut, Home } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Receipt, Users, UserCog, Package, LogOut, Home, LayoutGrid } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
