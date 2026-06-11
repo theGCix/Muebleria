@@ -8,6 +8,7 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useUtmCapture } from "@/hooks/useUtm";
+import { WishlistProvider } from "@/context/WishlistContext";
 
 
 function NotFoundComponent() {
@@ -76,11 +77,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useCartSync();
-  
+  useUtmCapture();
+
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster position="top-center" />
+      <WishlistProvider>
+        <Outlet />
+        <Toaster position="top-center" />
+      </WishlistProvider>
     </QueryClientProvider>
   );
 }

@@ -3,7 +3,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { CartDrawer } from "./CartDrawer";
 import { WishlistDrawer } from "./WishlistDrawer";
-import { WishlistProvider } from "@/context/WishlistContext";
 import { LoginModal } from "./LoginModal";
 import { useState } from "react";
 import { Menu, X, LogIn, User } from "lucide-react";
@@ -36,10 +35,7 @@ export function Header() {
   };
 
   return (
-    // WishlistProvider aquí garantiza que ProductCard y WishlistDrawer
-    // compartan exactamente el mismo estado de favoritos
-    <WishlistProvider>
-      <>
+    <>
         <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
           <div className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6">
             {/* Logo */}
@@ -189,7 +185,6 @@ export function Header() {
         </header>
 
         <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
-      </>
-    </WishlistProvider>
+    </>
   );
 }
