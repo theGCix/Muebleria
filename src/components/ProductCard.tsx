@@ -6,7 +6,7 @@ import { ShoppingBag, Image, Heart } from "lucide-react";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import type { Product } from "@/hooks/useProducts";
-import { useWishlist } from "@/hooks/useWishlist";
+import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { LoginModal } from "./LoginModal";
@@ -49,7 +49,9 @@ export function ProductCard({ product: p }: Props) {
     }
     setWishPending(true);
     const added = await toggleWishlist(p.id);
-    toast.success(added ? `"${p.nombre}" guardado en favoritos` : `"${p.nombre}" eliminado de favoritos`);
+    toast.success(
+      added ? `"${p.nombre}" guardado en favoritos` : `"${p.nombre}" eliminado de favoritos`
+    );
     setWishPending(false);
   };
 
@@ -71,18 +73,18 @@ export function ProductCard({ product: p }: Props) {
               </div>
             )}
 
-            {/* Botón de corazón sobre la imagen */}
+            {/* Botón corazón — refleja estado en tiempo real desde el contexto compartido */}
             <button
               onClick={handleWishlist}
               disabled={wishPending}
-              className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-background transition-colors"
+              className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-background transition-colors disabled:opacity-50"
               title={wishlisted ? "Quitar de favoritos" : "Guardar en favoritos"}
             >
               <Heart
-                className={`h-4 w-4 transition-colors ${
+                className={`h-4 w-4 transition-all duration-200 ${
                   wishlisted
-                    ? "fill-destructive text-destructive"
-                    : "text-muted-foreground group-hover:text-foreground"
+                    ? "fill-destructive text-destructive scale-110"
+                    : "text-muted-foreground"
                 }`}
               />
             </button>

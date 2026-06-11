@@ -11,8 +11,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Heart, Trash2, ShoppingBag, LogIn, Loader2 } from "lucide-react";
-import { useWishlist } from "@/hooks/useWishlist";
+import { Heart, Trash2, ShoppingBag, Loader2, CheckCircle2 } from "lucide-react";
+import { useWishlist } from "@/context/WishlistContext";
 import { useCartStore } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
@@ -28,6 +28,10 @@ export function WishlistDrawer() {
   const { user } = useAuth();
   const { items, loading, removeFromWishlist } = useWishlist();
   const addItem = useCartStore((s) => s.addItem);
+  const cartItems = useCartStore((s) => s.items);
+
+  const isInCart = (productId: string) =>
+    cartItems.some((i) => i.id === productId);
 
   const handleAddToCart = (item: typeof items[0]) => {
     const imgSrc = item.product.imagen_public_id
@@ -48,7 +52,6 @@ export function WishlistDrawer() {
     toast.success(`"${nombre}" eliminado de favoritos`);
   };
 
-  // Si no hay sesión, el botón abre el login
   const handleOpenDrawer = () => {
     if (!user) {
       setLoginOpen(true);
@@ -66,10 +69,9 @@ export function WishlistDrawer() {
             size="icon"
             className="relative rounded-full border-border/60"
             onClick={handleOpenDrawer}
-            // evita que el Sheet se abra directamente si no hay sesión
             onPointerDown={(e) => { if (!user) e.preventDefault(); }}
           >
-            <Heart className="h-5 w-5" />
+            <Heart className={`h-5 w-5 transition-colors ${user && items.length > 0 ? "fill-destructive text-destructive" : ""}`} />
             {user && items.length > 0 && (
               <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-destructive text-destructive-foreground">
                 {items.length}
@@ -115,6 +117,9 @@ export function WishlistDrawer() {
                     const imgSrc = item.product.imagen_public_id
                       ? cloudinaryUrl(item.product.imagen_public_id, { w: 200, h: 200 })
                       : item.product.imagen_url;
+                    const inCart = isInCart(item.product_id);
+                    const agotado = (item.product.stock ?? 1) <= 0;
+
                     return (
                       <div
                         key={item.id}
@@ -169,15 +174,33 @@ export function WishlistDrawer() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
+
+                          {/* Botón carrito: cambia según estado */}
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="rounded-full text-xs"
-                            disabled={(item.product.stock ?? 1) <= 0}
-                            onClick={() => handleAddToCart(item)}
+                            variant={inCart ? "default" : "outline"}
+                            className={`rounded-full text-xs transition-all ${
+                              inCart
+                                ? "bg-primary text-primary-foreground"
+                                : ""
+                            }`}
+                            disabled={agotado}
+                            onClick={() => !inCart && handleAddToCart(item)}
+                            title={inCart ? "Ya está en tu carrito" : "Agregar al carrito"}
                           >
-                            <ShoppingBag className="h-3 w-3 mr-1" />
-                            {(item.product.stock ?? 1) <= 0 ? "Agotado" : "Al carrito"}
+                            {agotado ? (
+                              "Agotado"
+                            ) : inCart ? (
+                              <>
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                En carrito
+                              </>
+                            ) : (
+                              <>
+                                <ShoppingBag className="h-3 w-3 mr-1" />
+                                Al carrito
+                              </>
+                            )}
                           </Button>
                         </div>
                       </div>
