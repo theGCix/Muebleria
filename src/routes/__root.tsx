@@ -9,6 +9,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useUtmCapture } from "@/hooks/useUtm";
 import { WishlistProvider } from "@/context/WishlistContext";
+import { AsistenteChat } from "@/components/AsistenteChat";
+
 
 
 function NotFoundComponent() {
@@ -83,6 +85,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <WishlistProvider>
         <Outlet />
+        <AsistenteChat />
         <Toaster position="top-center" />
       </WishlistProvider>
     </QueryClientProvider>

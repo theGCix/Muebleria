@@ -8,6 +8,8 @@ import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
+import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
+import { ModelViewer3D } from "@/components/ModelViewer3D";
 
 export const Route = createFileRoute("/product/$handle")({
   head: ({ params }) => ({
@@ -232,20 +234,21 @@ function ProductPage() {
   const { handle } = Route.useParams();
   const { data: product, isLoading } = useProduct(handle);
   const addItem = useCartStore((s) => s.addItem);
-  useEffect(() => {
-  if (!product) return;
 
-  trackEvent({
-    tipo: "producto_visto",
-    path: window.location.pathname,
-    product_id: product.id,
-    valor: product.precio,
-  });
-}, [product?.id]);  
+  useEffect(() => {
+    if (!product) return;
+    trackEvent({
+      tipo: "producto_visto",
+      path: window.location.pathname,
+      product_id: product.id,
+      valor: product.precio,
+    });
+  }, [product?.id]);
 
   const [wished, setWished] = useState(false);
   const [adding, setAdding] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
+  const [vista, setVista] = useState<"foto" | "3d">("foto");
 
   if (isLoading) {
     return (
@@ -264,7 +267,6 @@ function ProductPage() {
     ? cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })
     : product.imagen_url;
 
-  // Generar variantes de imagen con distintas transformaciones
   const thumbImgs = product.imagen_public_id
     ? [
         cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 }),
@@ -291,6 +293,7 @@ function ProductPage() {
   };
 
   const outOfStock = (product.stock ?? 1) <= 0;
+  const has3D = !!(product as any).modelo_3d_url;
 
   return (
     <>
@@ -369,6 +372,25 @@ function ProductPage() {
         }
         .gm-thumb.active { border-color:var(--gm-walnut); }
         .gm-thumb img { width:100%; height:100%; object-fit:cover; }
+
+        /* vista toggle */
+        .gm-vista-toggle {
+          display:flex; gap:0; margin-bottom:12px;
+          border:1px solid var(--gm-border); border-radius:4px;
+          overflow:hidden; width:fit-content;
+        }
+        .gm-vista-btn {
+          padding:7px 18px; font-size:12px; letter-spacing:.06em;
+          text-transform:uppercase; border:none; cursor:pointer;
+          background:transparent; color:var(--gm-muted);
+          transition:background .2s, color .2s;
+        }
+        .gm-vista-btn.active {
+          background:var(--gm-walnut); color:#fff;
+        }
+        .gm-vista-btn:not(.active):hover {
+          background:var(--gm-cream); color:var(--gm-walnut);
+        }
 
         /* info col */
         .gm-info-col { padding-left:16px; }
@@ -560,16 +582,47 @@ function ProductPage() {
 
           {/* gallery */}
           <div className="gm-gallery-col">
-            <div className="gm-main-img-wrap">
-              {displayImg
-                ? <img src={displayImg} alt={product.nombre} />
-                : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
-              }
-              {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
-              <div className="gm-badge-new">Nuevo</div>
-            </div>
 
-            {thumbImgs.length > 1 && (
+            {/* toggle foto / 3D — solo aparece si el producto tiene modelo 3D */}
+            {has3D && (
+              <div className="gm-vista-toggle">
+                <button
+                  className={`gm-vista-btn${vista === "foto" ? " active" : ""}`}
+                  onClick={() => setVista("foto")}
+                >
+                  Foto
+                </button>
+                <button
+                  className={`gm-vista-btn${vista === "3d" ? " active" : ""}`}
+                  onClick={() => setVista("3d")}
+                >
+                  Vista 3D
+                </button>
+              </div>
+            )}
+
+            {/* visor principal — foto o 3D según toggle */}
+            {vista === "3d" && has3D ? (
+              <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
+                <ModelViewer3D
+                  src={(product as any).modelo_3d_url}
+                  alt={product.nombre}
+                  poster={displayImg ?? undefined}
+                />
+              </div>
+            ) : (
+              <div className="gm-main-img-wrap">
+                {displayImg
+                  ? <img src={displayImg} alt={product.nombre} />
+                  : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
+                }
+                {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
+                <div className="gm-badge-new">Nuevo</div>
+              </div>
+            )}
+
+            {/* miniaturas — solo en vista foto */}
+            {vista === "foto" && thumbImgs.length > 1 && (
               <div className="gm-thumbs">
                 {thumbImgs.map((src, i) => (
                   <div key={i} className={`gm-thumb${activeImg === i ? " active" : ""}`} onClick={() => setActiveImg(i)}>
@@ -690,6 +743,11 @@ function ProductPage() {
                 Al ser un producto fabricado a medida, no se aceptan cambios una vez confirmado el pedido. En caso de defecto de fabricación, realizamos la reparación o reposición sin costo dentro del período de garantía.
               </AccordionItem>
             </div>
+          </div>
+
+          {/* recomendaciones — span full width dentro del grid */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <ProductRecomendaciones productId={product.id} />
           </div>
         </div>
 

@@ -50,3 +50,27 @@ export function cloudinaryUrl(
   const transforms = [`w_${w}`, `q_${q}`, "f_auto", h ? `h_${h}` : ""].filter(Boolean).join(",");
   return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${transforms}/${publicId}`;
 }
+
+
+
+
+
+// src/lib/cloudinary.ts — añadir función para subir modelos 3D
+export async function uploadModel3D(file: File, folder = "muebleria/modelos3d") {
+  const CLOUD  = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", PRESET);
+  formData.append("folder", folder);
+  formData.append("resource_type", "raw");  // necesario para .glb
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD}/raw/upload`,
+    { method: "POST", body: formData }
+  );
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return { url: data.secure_url, public_id: data.public_id };
+}
