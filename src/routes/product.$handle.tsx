@@ -1,4 +1,7 @@
-import { useState, useEffect  } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useWishlist } from "@/context/WishlistContext";
+import { LoginModal } from "@/components/LoginModal";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useProduct, useProducts } from "@/hooks/useProducts";
 import { Header } from "@/components/Header";
@@ -245,7 +248,10 @@ function ProductPage() {
     });
   }, [product?.id]);
 
-  const [wished, setWished] = useState(false);
+  const { user } = useAuth();
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [wishPending, setWishPending] = useState(false);
   const [adding, setAdding] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
   const [vista, setVista] = useState<"foto" | "3d">("foto");
@@ -496,7 +502,7 @@ function ProductPage() {
         /* tabs section */
         .gm-tabs-section { max-width:1300px; margin:0 auto; padding:48px 48px 80px; }
         @media(max-width:768px){ .gm-tabs-section{ padding:32px 20px 60px; } }
-        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; flex-wrap: wrap;}
+        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; }
         .gm-tab-btn {
           background:none; border:none; padding:14px 24px;
           font-size:13px; letter-spacing:.06em; text-transform:uppercase;
@@ -711,12 +717,24 @@ function ProductPage() {
                 {adding ? "¡Agregado!" : outOfStock ? "Agotado" : "Agregar al carrito"}
               </button>
               <button
-                className={`gm-btn-wish${wished ? " active" : ""}`}
-                onClick={() => setWished(!wished)}
-                title="Guardar en favoritos"
+                type="button"
+                className={`gm-btn-wish${product && isWishlisted(product.id) ? " active" : ""}`}
+                disabled={wishPending}
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!user) { setLoginOpen(true); return; }
+                  if (!product) return;
+                  setWishPending(true);
+                  const added = await toggleWishlist(product.id);
+                  toast.success(added ? `"${product.nombre}" guardado en favoritos` : `"${product.nombre}" eliminado de favoritos`);
+                  setWishPending(false);
+                }}
+                title={product && isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
               >
-                <Heart size={18} fill={wished ? "var(--gm-gold)" : "none"} />
+                <Heart size={18} fill={product && isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
               </button>
+              <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
             </div>
             <div className="gm-cta-row">
               <button className="gm-btn-quote">Solicitar cotización personalizada</button>
