@@ -31,6 +31,7 @@ export function ProductCard({ product: p }: Props) {
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     addItem({
       id: p.id,
       title: p.nombre,
@@ -43,6 +44,7 @@ export function ProductCard({ product: p }: Props) {
 
   const handleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!user) {
       setLoginOpen(true);
       return;
@@ -75,6 +77,7 @@ export function ProductCard({ product: p }: Props) {
 
             {/* Botón corazón — refleja estado en tiempo real desde el contexto compartido */}
             <button
+              type="button"
               onClick={handleWishlist}
               disabled={wishPending}
               className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-background transition-colors disabled:opacity-50"
