@@ -98,13 +98,13 @@ export function ProductCard({ product: p }: Props) {
             {p.descripcion && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.descripcion}</p>
             )}
-            <div className="mt-3 flex items-center justify-between gap-2">
+            <div className="mt-3 flex flex-col gap-2">
               <span className="font-bold text-lg">{fmt(p.precio)}</span>
               <Button
                 size="sm"
                 onClick={handleAdd}
                 disabled={(p.stock ?? 1) <= 0}
-                className="rounded-full"
+                className="rounded-full w-full"
               >
                 <ShoppingBag className="h-3.5 w-3.5 mr-1" />
                 {(p.stock ?? 1) <= 0 ? "Agotado" : "Agregar"}
