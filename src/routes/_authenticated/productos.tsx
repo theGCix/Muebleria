@@ -238,76 +238,79 @@ function ProductosPage() {
         {isLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr>
-                <th className="px-4 py-3">Imagen</th>
-                <th className="px-4 py-3">Producto</th>
-                <th className="px-4 py-3">SKU</th>
-                <th className="px-4 py-3">Categoría</th>
-                <th className="px-4 py-3 text-right">Precio</th>
-                <th className="px-4 py-3 text-right">Stock</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((p: any) => (
-                <tr key={p.id} className="border-t hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    {p.imagen_url ? (
-                      <img
-                        src={p.imagen_public_id
-                          ? cloudinaryUrl(p.imagen_public_id, { w: 48, h: 48 })
-                          : p.imagen_url}
-                        alt=""
-                        className="w-12 h-12 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded bg-muted flex items-center justify-center">
-                        <Image className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-medium">{p.nombre}</td>
-                  <td className="px-4 py-3 text-muted-foreground font-mono">{p.sku || "—"}</td>
-                  <td className="px-4 py-3">
-                    {p.categoria ? <Badge variant="outline">{p.categoria}</Badge> : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">{fmt(Number(p.precio))}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Badge variant={Number(p.stock) > 0 ? "default" : "destructive"}>
-                      {p.stock ?? 0}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => setEditItem({
-                        id: p.id, nombre: p.nombre, descripcion: p.descripcion ?? "",
-                        sku: p.sku ?? "", precio: String(p.precio), stock: String(p.stock ?? 0),
-                        categoria: p.categoria ?? "", imagen_url: p.imagen_url ?? "",
-                        imagen_public_id: p.imagen_public_id ?? "",
-                      })}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="sm" variant="ghost"
-                        onClick={() => { if (confirm("¿Eliminar producto?")) delMut.mutate(p.id); }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
+          {/* FIX: overflow-x-auto permite scroll horizontal en móvil */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px] text-sm">
+              <thead className="bg-muted/50 text-left">
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                    Sin productos. ¡Crea el primero!
-                  </td>
+                  <th className="px-4 py-3">Imagen</th>
+                  <th className="px-4 py-3">Producto</th>
+                  <th className="px-4 py-3">SKU</th>
+                  <th className="px-4 py-3">Categoría</th>
+                  <th className="px-4 py-3 text-right">Precio</th>
+                  <th className="px-4 py-3 text-right">Stock</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((p: any) => (
+                  <tr key={p.id} className="border-t hover:bg-muted/30">
+                    <td className="px-4 py-3">
+                      {p.imagen_url ? (
+                        <img
+                          src={p.imagen_public_id
+                            ? cloudinaryUrl(p.imagen_public_id, { w: 48, h: 48 })
+                            : p.imagen_url}
+                          alt=""
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded bg-muted flex items-center justify-center">
+                          <Image className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-medium">{p.nombre}</td>
+                    <td className="px-4 py-3 text-muted-foreground font-mono">{p.sku || "—"}</td>
+                    <td className="px-4 py-3">
+                      {p.categoria ? <Badge variant="outline">{p.categoria}</Badge> : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold">{fmt(Number(p.precio))}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Badge variant={Number(p.stock) > 0 ? "default" : "destructive"}>
+                        {p.stock ?? 0}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setEditItem({
+                          id: p.id, nombre: p.nombre, descripcion: p.descripcion ?? "",
+                          sku: p.sku ?? "", precio: String(p.precio), stock: String(p.stock ?? 0),
+                          categoria: p.categoria ?? "", imagen_url: p.imagen_url ?? "",
+                          imagen_public_id: p.imagen_public_id ?? "",
+                        })}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm" variant="ghost"
+                          onClick={() => { if (confirm("¿Eliminar producto?")) delMut.mutate(p.id); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                      Sin productos. ¡Crea el primero!
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
 
