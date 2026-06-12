@@ -1,6 +1,9 @@
 // src/components/ProductDetail.tsx
 // G&M Mueblería — Bloque principal de detalle de producto
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useWishlist } from "@/context/WishlistContext";
+import { LoginModal } from "./LoginModal";
 import { useCartStore } from "@/stores/cartStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -71,8 +74,13 @@ export function ProductDetail({ product }: { product: Product }) {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(
     product.variants?.[0] ?? null
   );
-  const [wishlist, setWishlist] = useState(false);
+  const { user } = useAuth();
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [wishPending, setWishPending] = useState(false);
   const { addItem } = useCartStore();
+
+  const wishlisted = isWishlisted(product.id);
 
   const price = selectedVariant?.price ?? product.price;
   const compareAt = product.compareAtPrice;
@@ -269,16 +277,27 @@ export function ProductDetail({ product }: { product: Product }) {
               Agregar al carrito
             </Button>
             <button
-              onClick={() => setWishlist((v) => !v)}
-              className={`w-13 h-13 border rounded-sm flex items-center justify-center transition-all ${
-                wishlist
+              type="button"
+              disabled={wishPending}
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!user) { setLoginOpen(true); return; }
+                setWishPending(true);
+                const added = await toggleWishlist(product.id);
+                toast.success(added ? `"${product.title}" guardado en favoritos` : `"${product.title}" eliminado de favoritos`);
+                setWishPending(false);
+              }}
+              className={`w-13 h-13 border rounded-sm flex items-center justify-center transition-all disabled:opacity-50 ${
+                wishlisted
                   ? "border-[var(--color-gold)] text-[var(--color-gold)]"
                   : "border-border/60 text-muted-foreground hover:border-[var(--color-gold)] hover:text-[var(--color-gold)]"
               }`}
-              title="Guardar en favoritos"
+              title={wishlisted ? "Quitar de favoritos" : "Guardar en favoritos"}
             >
-              <Heart className={`h-5 w-5 ${wishlist ? "fill-current" : ""}`} />
+              <Heart className={`h-5 w-5 ${wishlisted ? "fill-current" : ""}`} />
             </button>
+            <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
           </div>
           <Button
             variant="outline"
