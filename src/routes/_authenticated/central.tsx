@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardKpis, getDashboardSeries } from "@/lib/pos.functions";
 import { useEffect, useRef, useState } from "react";
@@ -8,6 +8,7 @@ import {
   Clock, Hammer, Package, CheckCircle2, Truck,
   AlertTriangle, Box, ShoppingCart, Globe,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/central")({
   head: () => ({ meta: [{ title: "G&M · Central KPIs" }] }),
@@ -35,7 +36,6 @@ function PipelineNode({
 }) {
   return (
     <div className="flex flex-col items-center flex-1 relative">
-      {/* línea conectora */}
       {!isLast && (
         <div className="absolute top-[21px] z-0"
           style={{ left: "calc(50% + 21px)", right: "calc(-50% + 21px)", height: 1, background: "var(--border)" }} />
@@ -181,24 +181,25 @@ function LiveClock({ onRefresh }: { onRefresh: () => void }) {
 
 // ── Página ────────────────────────────────────────────────────
 function CentralPage() {
-    useEffect(() => {
-  const channel = supabase
-    .channel("central-live")
-    .on("postgres_changes",
-      { event: "INSERT", schema: "public", table: "orders" },
-      () => setRefreshKey((k) => k + 1)
-    )
-    .on("postgres_changes",
-      { event: "UPDATE", schema: "public", table: "produccion" },
-      () => setRefreshKey((k) => k + 1)
-    )
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
-}, []);
   const [refreshKey, setRefreshKey] = useState(0);
   const desde = inicioMes();
   const hasta = hoy();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("central-live")
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders" },
+        () => setRefreshKey((k) => k + 1)
+      )
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "produccion" },
+        () => setRefreshKey((k) => k + 1)
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const kpisQ = useQuery({
     queryKey: ["central-kpis", desde, hasta, refreshKey],
@@ -215,7 +216,6 @@ function CentralPage() {
   const kpis = kpisQ.data;
   const series = seriesQ.data;
 
-  // Alertas operacionales derivadas de los KPIs
   const alertas = kpis ? [
     kpis.prod_vencidas > 0 && {
       icon: AlertTriangle,
@@ -290,11 +290,11 @@ function CentralPage() {
           Pipeline de producción · órdenes activas
         </p>
         <div className="flex items-start px-4">
-          <PipelineNode icon={Clock}        label="Pendiente"    count={kpis?.prod_pendientes ?? 0}  color="#854F0B" bg="#FAEEDA" />
-          <PipelineNode icon={Hammer}       label="En proceso"   count={kpis?.prod_en_proceso ?? 0}  color="#185FA5" bg="#E6F1FB" />
-          <PipelineNode icon={CheckCircle2} label="Control calidad" count={0}                        color="#534AB7" bg="#EEEDFE" />
-          <PipelineNode icon={Package}      label="Listo despacho"  count={0}                        color="#0F6E56" bg="#E1F5EE" />
-          <PipelineNode icon={Truck}        label="Enviado"      count={0}                           color="#3B6D11" bg="#EAF3DE" isLast />
+          <PipelineNode icon={Clock}        label="Pendiente"       count={kpis?.prod_pendientes ?? 0} color="#854F0B" bg="#FAEEDA" />
+          <PipelineNode icon={Hammer}       label="En proceso"      count={kpis?.prod_en_proceso ?? 0} color="#185FA5" bg="#E6F1FB" />
+          <PipelineNode icon={CheckCircle2} label="Control calidad" count={0}                          color="#534AB7" bg="#EEEDFE" />
+          <PipelineNode icon={Package}      label="Listo despacho"  count={0}                          color="#0F6E56" bg="#E1F5EE" />
+          <PipelineNode icon={Truck}        label="Enviado"         count={0}                          color="#3B6D11" bg="#EAF3DE" isLast />
         </div>
         <div className="flex gap-4 mt-3 pt-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
           <span>Tiempo promedio: <strong style={{ color: "var(--foreground)" }}>
