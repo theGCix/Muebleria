@@ -496,7 +496,7 @@ function ProductPage() {
         /* tabs section */
         .gm-tabs-section { max-width:1300px; margin:0 auto; padding:48px 48px 80px; }
         @media(max-width:768px){ .gm-tabs-section{ padding:32px 20px 60px; } }
-        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; }
+        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; flex-wrap: wrap;}
         .gm-tab-btn {
           background:none; border:none; padding:14px 24px;
           font-size:13px; letter-spacing:.06em; text-transform:uppercase;
