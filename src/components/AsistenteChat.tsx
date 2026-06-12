@@ -108,11 +108,12 @@ export function AsistenteChat() {
       {/* Panel de chat */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 w-80 rounded-2xl shadow-2xl border overflow-hidden flex flex-col"
+          className="fixed bottom-24 right-4 z-50 rounded-2xl shadow-2xl border overflow-hidden flex flex-col"
           style={{
             background: "var(--background)",
             borderColor: "var(--border)",
             maxHeight: "70vh",
+            width: "min(320px, calc(100vw - 2rem))",
           }}
         >
           {/* Header */}
