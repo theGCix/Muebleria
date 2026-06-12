@@ -238,8 +238,7 @@ function ProductosPage() {
         {isLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
-          {/* FIX: overflow-x-auto permite scroll horizontal en móvil */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-px">
             <table className="w-full min-w-[600px] text-sm">
               <thead className="bg-muted/50 text-left">
                 <tr>
