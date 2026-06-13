@@ -940,3 +940,89 @@ export async function getMarketingAnalytics(input?: {
     periodo_hasta: string;
   };
 }
+
+// ── ENVIAR A PRODUCCIÓN DESDE MRP ────────────────────────────
+// Crea una orden en producción y descuenta los insumos del stock
+export async function enviarAProduccion(input: {
+  // Descripción del pedido (se crea una orden interna sin order_id de ecommerce)
+  descripcion: string;
+  // Insumos a descontar: [{insumo_id, cantidad, nombre}]
+  insumos: Array<{ insumo_id: string; cantidad: number; nombre: string }>;
+  // Opcionales
+  carpintero_id?: string;
+  observaciones?: string;
+  fecha_fin_estimada?: string;
+  prioridad?: number;
+}) {
+  const data = z.object({
+    descripcion:         z.string().min(1),
+    insumos:             z.array(z.object({
+      insumo_id: z.string().uuid(),
+      cantidad:  z.number().positive(),
+      nombre:    z.string(),
+    })).min(1),
+    carpintero_id:       z.string().uuid().optional(),
+    observaciones:       z.string().max(2000).optional(),
+    fecha_fin_estimada:  z.string().optional(),
+    prioridad:           z.number().int().min(1).max(3).optional(),
+  }).parse(input);
+
+  const { supabase, userId } = await getAuthenticatedClient();
+
+  // 1. Crear una order interna de tipo "fabricacion_mrp"
+  const orderNumber = `GM-${Date.now()}`;
+  const { data: order, error: orderErr } = await supabase
+    .from("orders")
+    .insert({
+      order_number: orderNumber,
+      status:    "pendiente",
+      nombre:    "Producción interna",
+      email:     "produccion@interno",
+      subtotal:  0,
+      envio:     0,
+      total:     0,
+      notas:     `[MRP] ${data.descripcion}`,
+    })
+    .select("id, order_number")
+    .single();
+  if (orderErr) throw new Error(orderErr.message);
+
+  // 2. Crear registro en producción
+  const { data: prod, error: prodErr } = await supabase
+    .from("produccion")
+    .insert({
+      order_id:           order.id,
+      asignado_a:         data.carpintero_id ?? null,
+      observaciones:      data.observaciones ?? null,
+      fecha_fin_estimada: data.fecha_fin_estimada ?? null,
+      prioridad:          data.prioridad ?? 2,
+      status:             "pendiente",
+      fecha_inicio:       new Date().toISOString().split("T")[0],
+    })
+    .select("id")
+    .single();
+  if (prodErr) throw new Error(prodErr.message);
+
+  // 3. Descontar insumos del stock (salida por producción)
+  const motivo = `Fabricación MRP: ${data.descripcion}`;
+  const movimientos = data.insumos.map((ins) => ({
+    insumo_id:      ins.insumo_id,
+    tipo:           "salida" as const,
+    cantidad:       ins.cantidad,
+    motivo,
+    referencia:     order.order_number,
+    registrado_por: userId,
+  }));
+
+  const { error: movErr } = await supabase
+    .from("insumo_movimientos")
+    .insert(movimientos);
+  if (movErr) throw new Error(movErr.message);
+
+  return {
+    ok:           true,
+    order_id:     order.id,
+    order_number: order.order_number,
+    produccion_id: prod.id,
+  };
+}

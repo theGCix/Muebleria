@@ -1,15 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listInsumos, upsertInsumo, registrarMovimiento,
   getBom, calcularMrp, getStockBajo,
-  listProveedores,
+  listProveedores, enviarAProduccion, listCarpinteros,
 } from "@/lib/pos.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -19,7 +20,7 @@ import {
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
-import { Loader2, AlertTriangle, Plus, ArrowDown, ArrowUp, Calculator, Package } from "lucide-react";
+import { Loader2, AlertTriangle, Plus, ArrowDown, Calculator, Package, Hammer } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 
@@ -62,6 +63,196 @@ function expandirPedidos(filas: FilaPedido[]) {
     }
   }
   return result;
+}
+
+// ── Modal Fabricar ────────────────────────────────────────────
+function FabricarDialog({
+  insumos,
+  descripcion,
+  onClose,
+  onDone,
+}: {
+  insumos: Array<{ nombre: string; necesario: number; unidad: string; faltante: number; stock_actual: number }>;
+  descripcion: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [carpinteroId, setCarpinteroId] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const [prioridad, setPrioridad] = useState("2");
+
+  const { data: carpinterosData } = useQuery({
+    queryKey: ["carpinteros"],
+    queryFn: listCarpinteros,
+  });
+
+  const hayFaltantes = insumos.some((i) => i.faltante > 0);
+
+  // Necesitamos los insumo_id — los traemos del BOM calculado que ya tiene el resultado
+  // Pero calcularMrp no devuelve insumo_id, así que hacemos una query adicional
+  const { data: insumosData } = useQuery({
+    queryKey: ["insumos"],
+    queryFn: listInsumos,
+    staleTime: 30_000,
+  });
+
+  const fabricarMut = useMutation({
+    mutationFn: async () => {
+      // Mapear nombre → id
+      const insumosMap = new Map(
+        (insumosData?.insumos ?? []).map((i: any) => [i.nombre, i.id])
+      );
+      const insumosPayload = insumos
+        .filter((i) => i.necesario > 0)
+        .map((i) => ({
+          insumo_id: insumosMap.get(i.nombre) as string,
+          cantidad:  i.necesario,
+          nombre:    i.nombre,
+        }))
+        .filter((i) => i.insumo_id); // descartar si no se encontró ID
+
+      return enviarAProduccion({
+        descripcion,
+        insumos: insumosPayload,
+        carpintero_id:      carpinteroId || undefined,
+        observaciones:      observaciones || undefined,
+        fecha_fin_estimada: fechaFin || undefined,
+        prioridad:          Number(prioridad),
+      });
+    },
+    onSuccess: (res) => {
+      toast.success(`Orden ${res.order_number} enviada a producción`);
+      qc.invalidateQueries({ queryKey: ["insumos"] });
+      qc.invalidateQueries({ queryKey: ["insumos-alertas"] });
+      qc.invalidateQueries({ queryKey: ["produccion"] });
+      onDone();
+      navigate({ to: "/produccion" });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display">
+            <Hammer className="h-5 w-5" /> Enviar a producción
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 mt-1">
+          {/* Resumen */}
+          <div className="bg-muted/40 rounded-xl p-3 text-sm">
+            <p className="text-xs text-muted-foreground mb-1">Pedido a fabricar</p>
+            <p className="font-medium">{descripcion}</p>
+          </div>
+
+          {/* Alerta de faltantes */}
+          {hayFaltantes && (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>Hay insumos insuficientes. Se registrará la salida de lo disponible, pero puede quedar stock negativo. Asegúrate de reponer antes de fabricar.</span>
+            </div>
+          )}
+
+          {/* Tabla de insumos a descontar */}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Insumos a descontar</p>
+            <div className="border rounded-lg overflow-hidden text-sm">
+              <table className="w-full">
+                <thead className="bg-muted/30">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs text-muted-foreground">Insumo</th>
+                    <th className="px-3 py-2 text-right text-xs text-muted-foreground">Cantidad</th>
+                    <th className="px-3 py-2 text-right text-xs text-muted-foreground">Stock tras descuento</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {insumos.filter(i => i.necesario > 0).map((i) => {
+                    const stockTras = i.stock_actual - i.necesario;
+                    return (
+                      <tr key={i.nombre} className={i.faltante > 0 ? "bg-red-50/40" : ""}>
+                        <td className="px-3 py-2">{i.nombre}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">{fmt(i.necesario, i.unidad)}</td>
+                        <td className={`px-3 py-2 text-right font-semibold ${stockTras < 0 ? "text-red-600" : "text-green-700"}`}>
+                          {fmt(stockTras, i.unidad)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Opcionales */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Detalles de producción (opcional)</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs mb-1 block">Carpintero</Label>
+                <Select value={carpinteroId} onValueChange={setCarpinteroId}>
+                  <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Sin asignar</SelectItem>
+                    {(carpinterosData?.carpinteros ?? []).map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Prioridad</Label>
+                <Select value={prioridad} onValueChange={setPrioridad}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">🔴 Urgente</SelectItem>
+                    <SelectItem value="2">🔵 Normal</SelectItem>
+                    <SelectItem value="3">⚪ Baja</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs mb-1 block">Fecha fin estimada</Label>
+              <Input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+            </div>
+
+            <div>
+              <Label className="text-xs mb-1 block">Observaciones</Label>
+              <Textarea
+                rows={3}
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                placeholder="Instrucciones especiales, material, color, medidas..."
+                className="text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Acciones */}
+          <div className="flex gap-2 justify-end pt-1">
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button
+              className="bg-[#4a2c1a] hover:bg-[#3a200f] text-white gap-2"
+              disabled={fabricarMut.isPending || !insumosData}
+              onClick={() => fabricarMut.mutate()}
+            >
+              {fabricarMut.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Hammer className="h-4 w-4" />}
+              Confirmar y fabricar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ── Calculadora MRP ──────────────────────────────────────────
@@ -178,6 +369,7 @@ function CalculadoraMrp() {
   ]);
   const [resultado, setResultado] = useState<Awaited<ReturnType<typeof calcularMrp>> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fabricarOpen, setFabricarOpen] = useState(false);
 
   const addFila = () =>
     setFilas((f) => [...f, { tipo: "talla", modelo: "Vintage", talla: "6 pies", cantidad: 1 }]);
@@ -267,7 +459,40 @@ function CalculadoraMrp() {
               </tbody>
             </table>
           </div>
+
+          {/* Botón Fabricar */}
+          <div className="flex justify-end pt-2">
+            <Button
+              className="gap-2 bg-[#4a2c1a] hover:bg-[#3a200f] text-white"
+              onClick={() => setFabricarOpen(true)}
+            >
+              <Hammer className="h-4 w-4" />
+              Fabricar
+            </Button>
+          </div>
         </div>
+      )}
+
+      {/* Modal Fabricar */}
+      {fabricarOpen && resultado && (
+        <FabricarDialog
+          insumos={resultado.resultado}
+          descripcion={filas.map((f) => {
+            if (f.tipo === "piezas") {
+              const piezas = PIEZAS_LONDON
+                .filter(({ id }) => f.piezas[id] > 0)
+                .map(({ id, label }) => `${f.piezas[id]}× ${label}`)
+                .join(" + ");
+              return `${f.modelo} (${piezas})${f.cantidad > 1 ? ` ×${f.cantidad}` : ""}`;
+            }
+            return `${f.modelo} ${f.talla} ×${f.cantidad}`;
+          }).join(", ")}
+          onClose={() => setFabricarOpen(false)}
+          onDone={() => {
+            setFabricarOpen(false);
+            setResultado(null);
+          }}
+        />
       )}
     </div>
   );
