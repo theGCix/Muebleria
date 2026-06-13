@@ -195,10 +195,10 @@ function FabricarDialog({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs mb-1 block">Carpintero</Label>
-                <Select value={carpinteroId} onValueChange={setCarpinteroId}>
+                <Select value={carpinteroId} onValueChange={(v) => setCarpinteroId(v === "none" ? "" : v)}>
                   <SelectTrigger><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin asignar</SelectItem>
+                    <SelectItem value="none">Sin asignar</SelectItem>
                     {(carpinterosData?.carpinteros ?? []).map((c: any) => (
                       <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
                     ))}
