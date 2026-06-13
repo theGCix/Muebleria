@@ -506,12 +506,12 @@ export async function calcularMrp(input: {
 
   const { supabase } = await getAuthenticatedClient();
 
-  // Obtener todos los BOM relevantes de una vez
-  const combinaciones = pedidos.map((p) => `(modelo.eq.${p.modelo},talla.eq.${p.talla})`);
+  // Obtener BOM filtrando por modelos únicos (evita .or() con espacios que rompe Supabase)
+  const modelosUnicos = [...new Set(pedidos.map((p) => p.modelo))];
   const { data: boms, error } = await supabase
     .from("bom_items")
     .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)")
-    .or(combinaciones.join(","));
+    .in("modelo", modelosUnicos);
   if (error) throw new Error(error.message);
 
   // Agregar necesidad total por insumo
