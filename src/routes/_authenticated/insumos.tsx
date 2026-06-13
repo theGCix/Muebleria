@@ -652,9 +652,9 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
           <div>
             <Label className="text-xs">Proveedor</Label>
             <Select
-                value={form.proveedor_id ?? ""}
+                value={form.proveedor_id ?? "none"}
                 onValueChange={(v) =>
-                setForm((f) => ({ ...f, proveedor_id: v || null }))
+                setForm((f) => ({ ...f, proveedor_id: v === "none" ? null : v }))
                 }
             >
                 <SelectTrigger className="mt-1">
@@ -662,7 +662,7 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
                 </SelectTrigger>
 
                 <SelectContent>
-                <SelectItem value="">Sin proveedor</SelectItem>
+                <SelectItem value="none">Sin proveedor</SelectItem>
 
                 {(provData?.proveedores ?? []).map((p: any) => (
                     <SelectItem key={p.id} value={p.id}>
