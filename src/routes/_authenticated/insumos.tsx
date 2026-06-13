@@ -34,24 +34,169 @@ const UNIDADES = ["metros", "kg", "litros", "unidades", "planchas", "piezas", "p
 
 const fmt = (n: number, u: string) => `${n % 1 === 0 ? n : n.toFixed(2)} ${u}`;
 
+// Modelos que usan piezas en vez de talla
+const MODELOS_CON_PIEZAS = ["London"] as const;
+const PIEZAS_LONDON = [
+  { id: "1 cuerpo",  label: "Sofá 1 cuerpo" },
+  { id: "2 cuerpos", label: "Sofá 2 cuerpos" },
+  { id: "3 cuerpos", label: "Sofá 3 cuerpos" },
+] as const;
+
+type FilaPedido =
+  | { tipo: "talla";   modelo: string; talla: string; cantidad: number }
+  | { tipo: "piezas";  modelo: string; piezas: Record<string, number>; cantidad: number };
+
+/** Expande una FilaPedido a los pedidos simples que acepta calcularMrp */
+function expandirPedidos(filas: FilaPedido[]) {
+  const result: Array<{ modelo: string; talla: string; cantidad: number }> = [];
+  for (const fila of filas) {
+    if (fila.tipo === "talla") {
+      result.push({ modelo: fila.modelo, talla: fila.talla, cantidad: fila.cantidad });
+    } else {
+      for (const [pieza, qty] of Object.entries(fila.piezas)) {
+        if (qty > 0) {
+          // multiplicar por cantidad de juegos completos
+          result.push({ modelo: fila.modelo, talla: pieza, cantidad: qty * fila.cantidad });
+        }
+      }
+    }
+  }
+  return result;
+}
+
 // ── Calculadora MRP ──────────────────────────────────────────
+function FilaModelo({
+  fila, index, total,
+  onChange, onRemove,
+}: {
+  fila: FilaPedido; index: number; total: number;
+  onChange: (i: number, f: FilaPedido) => void;
+  onRemove: (i: number) => void;
+}) {
+  const usaPiezas = (MODELOS_CON_PIEZAS as readonly string[]).includes(fila.modelo);
+
+  const setModelo = (modelo: string) => {
+    if ((MODELOS_CON_PIEZAS as readonly string[]).includes(modelo)) {
+      onChange(index, { tipo: "piezas", modelo, piezas: { "1 cuerpo": 1, "2 cuerpos": 1, "3 cuerpos": 1 }, cantidad: 1 });
+    } else {
+      onChange(index, { tipo: "talla", modelo, talla: "6 pies", cantidad: 1 });
+    }
+  };
+
+  return (
+    <div className="border border-border/50 rounded-xl p-4 space-y-3 bg-card">
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <Label className="text-xs mb-1 block">Modelo</Label>
+          <Select value={fila.modelo} onValueChange={setModelo}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {MODELOS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-24">
+          <Label className="text-xs mb-1 block">
+            {usaPiezas ? "Juegos" : "Cantidad"}
+          </Label>
+          <Input
+            type="number" min={1} value={fila.cantidad}
+            onChange={(e) => onChange(index, { ...fila, cantidad: Math.max(1, Number(e.target.value)) })}
+          />
+        </div>
+        {total > 1 && (
+          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onRemove(index)}>✕</Button>
+        )}
+      </div>
+
+      {/* Talla (modelos normales) */}
+      {!usaPiezas && fila.tipo === "talla" && (
+        <div className="w-44">
+          <Label className="text-xs mb-1 block">Talla</Label>
+          <Select value={fila.talla} onValueChange={(v) => onChange(index, { ...fila, talla: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TALLAS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Piezas (London y futuros modelos por piezas) */}
+      {usaPiezas && fila.tipo === "piezas" && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Piezas por juego{fila.cantidad > 1 ? ` (×${fila.cantidad} juegos)` : ""}:
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {PIEZAS_LONDON.map(({ id, label }) => {
+              const qty = fila.piezas[id] ?? 0;
+              return (
+                <div key={id} className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">{label}</Label>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm" variant="outline" className="h-7 w-7 p-0"
+                      disabled={qty <= 0}
+                      onClick={() => onChange(index, {
+                        ...fila,
+                        piezas: { ...fila.piezas, [id]: Math.max(0, qty - 1) },
+                      })}
+                    >−</Button>
+                    <span className="w-6 text-center text-sm font-semibold">{qty}</span>
+                    <Button
+                      size="sm" variant="outline" className="h-7 w-7 p-0"
+                      disabled={qty >= 3}
+                      onClick={() => onChange(index, {
+                        ...fila,
+                        piezas: { ...fila.piezas, [id]: Math.min(3, qty + 1) },
+                      })}
+                    >+</Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {Object.values(fila.piezas).some(v => v > 0) && (
+            <p className="text-xs text-muted-foreground pt-1 border-t border-border/40">
+              {PIEZAS_LONDON
+                .filter(({ id }) => fila.piezas[id] > 0)
+                .map(({ id, label }) => `${fila.piezas[id]}× ${label}`)
+                .join(" + ")}
+              {fila.cantidad > 1 ? ` (×${fila.cantidad} juegos)` : ""}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CalculadoraMrp() {
-  const [pedidos, setPedidos] = useState<Array<{ modelo: string; talla: string; cantidad: number }>>([
-    { modelo: "Vintage", talla: "6 pies", cantidad: 1 },
+  const [filas, setFilas] = useState<FilaPedido[]>([
+    { tipo: "piezas", modelo: "London", piezas: { "1 cuerpo": 1, "2 cuerpos": 1, "3 cuerpos": 1 }, cantidad: 1 },
   ]);
   const [resultado, setResultado] = useState<Awaited<ReturnType<typeof calcularMrp>> | null>(null);
   const [loading, setLoading] = useState(false);
 
   const addFila = () =>
-    setPedidos((p) => [...p, { modelo: "Vintage", talla: "6 pies", cantidad: 1 }]);
+    setFilas((f) => [...f, { tipo: "talla", modelo: "Vintage", talla: "6 pies", cantidad: 1 }]);
 
-  const removeFila = (i: number) =>
-    setPedidos((p) => p.filter((_, idx) => idx !== i));
+  const removeFila = (i: number) => setFilas((f) => f.filter((_, idx) => idx !== i));
 
-  const update = (i: number, field: string, value: string | number) =>
-    setPedidos((p) => p.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  const updateFila = (i: number, fila: FilaPedido) =>
+    setFilas((f) => f.map((row, idx) => (idx === i ? fila : row)));
+
+  const puedeCalcular = filas.some((f) =>
+    f.tipo === "piezas" ? Object.values(f.piezas).some((v) => v > 0) : true
+  );
 
   const calcular = async () => {
+    const pedidos = expandirPedidos(filas);
+    if (pedidos.length === 0) {
+      toast.error("Selecciona al menos 1 pieza para producir");
+      return;
+    }
     setLoading(true);
     try {
       const res = await calcularMrp({ pedidos });
@@ -65,38 +210,12 @@ function CalculadoraMrp() {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        {pedidos.map((row, i) => (
-          <div key={i} className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Label className="text-xs mb-1 block">Modelo</Label>
-              <Select value={row.modelo} onValueChange={(v) => update(i, "modelo", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MODELOS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-36">
-              <Label className="text-xs mb-1 block">Talla</Label>
-              <Select value={row.talla} onValueChange={(v) => update(i, "talla", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TALLAS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-20">
-              <Label className="text-xs mb-1 block">Cantidad</Label>
-              <Input
-                type="number" min={1} value={row.cantidad}
-                onChange={(e) => update(i, "cantidad", Number(e.target.value))}
-              />
-            </div>
-            {pedidos.length > 1 && (
-              <Button size="sm" variant="ghost" onClick={() => removeFila(i)}>✕</Button>
-            )}
-          </div>
+      <div className="space-y-3">
+        {filas.map((fila, i) => (
+          <FilaModelo
+            key={i} fila={fila} index={i} total={filas.length}
+            onChange={updateFila} onRemove={removeFila}
+          />
         ))}
       </div>
 
@@ -104,7 +223,7 @@ function CalculadoraMrp() {
         <Button variant="outline" size="sm" onClick={addFila}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Añadir modelo
         </Button>
-        <Button onClick={calcular} disabled={loading}>
+        <Button onClick={calcular} disabled={loading || !puedeCalcular}>
           {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           <Calculator className="h-4 w-4 mr-2" /> Calcular
         </Button>
@@ -112,13 +231,12 @@ function CalculadoraMrp() {
 
       {resultado && (
         <div className="mt-4 space-y-2">
-          {resultado.hayFaltantes && (
+          {resultado.hayFaltantes ? (
             <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               Hay insumos insuficientes para completar estos pedidos.
             </div>
-          )}
-          {!resultado.hayFaltantes && (
+          ) : (
             <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
               ✓ Stock suficiente para todos los pedidos.
             </div>
