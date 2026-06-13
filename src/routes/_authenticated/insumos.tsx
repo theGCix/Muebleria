@@ -586,7 +586,7 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
     unidad:       insumo?.unidad ?? "unidades",
     stock_minimo: insumo?.stock_minimo ?? 0,
     precio_unit:  insumo?.precio_unit ?? "",
-    proveedor_id: insumo?.proveedor_id ?? "",
+    proveedor_id: insumo?.proveedor_id ?? null,
     proveedor:    insumo?.proveedor ?? ""
   });
 
@@ -645,8 +645,12 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
             <Select value={form.unidad} onValueChange={(v) => setForm((f) => ({ ...f, unidad: v }))}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {UNIDADES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-              </SelectContent>
+              {UNIDADES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+              {/* Mostrar la unidad actual si no está en la lista */}
+              {form.unidad && !UNIDADES.includes(form.unidad) && (
+                <SelectItem value={form.unidad}>{form.unidad} (actual)</SelectItem>
+              )}
+            </SelectContent>
             </Select>
           </div>
           <div>
