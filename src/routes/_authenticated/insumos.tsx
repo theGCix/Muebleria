@@ -587,7 +587,7 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
     stock_minimo: insumo?.stock_minimo ?? 0,
     precio_unit:  insumo?.precio_unit ?? "",
     proveedor_id: insumo?.proveedor_id ?? null,
-    proveedor:    insumo?.proveedor ?? ""
+    proveedor:    insumo?.proveedor ?? null
   });
 
   // Añadir query de proveedores dentro del componente InsumoDialog
