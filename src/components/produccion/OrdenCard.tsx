@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
 import { getDetalleProduccion, actualizarProduccion } from "@/lib/pos.functions";
-import { getMaterialesOrden } from "@/lib/pos.functions"; // función nueva
+import { getMaterialesOrden } from "@/lib/pos.functions.additions"; // función nueva
 import {
   type MiOrdenRow,
   type ProduccionStatus,
