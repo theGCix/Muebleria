@@ -1003,6 +1003,20 @@ export async function enviarAProduccion(input: {
     .single();
   if (prodErr) throw new Error(prodErr.message);
 
+  // 2.5 Insertar ítems en order_items para que el carpintero vea los muebles a fabricar
+  const orderItems = data.insumos.map((ins) => ({
+    order_id:   order.id,
+    sku:        ins.insumo_id,
+    title:      ins.nombre,
+    qty:        ins.cantidad,
+    unit_price: 0,
+    total:      0,
+  }));
+  const { error: itemsErr } = await supabase
+    .from("order_items")
+    .insert(orderItems);
+  if (itemsErr) throw new Error(itemsErr.message);
+
   // 3. Descontar insumos del stock (salida por producción)
   const motivo = `Fabricación MRP: ${data.descripcion}`;
   const movimientos = data.insumos.map((ins) => ({
