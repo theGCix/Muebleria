@@ -1003,18 +1003,18 @@ export async function enviarAProduccion(input: {
     .single();
   if (prodErr) throw new Error(prodErr.message);
 
-  // 2.5 Insertar ítems en order_items para que el carpintero vea los muebles a fabricar
-  const orderItems = data.insumos.map((ins) => ({
-    order_id:   order.id,
-    sku:        ins.insumo_id,
-    title:      ins.nombre,
-    qty:        ins.cantidad,
-    unit_price: 0,
-    total:      0,
-  }));
+  // 2.5 Insertar el mueble a fabricar en order_items (UNA fila = un mueble)
+  // Los materiales se obtienen del BOM dinámicamente en la vista del carpintero.
   const { error: itemsErr } = await supabase
     .from("order_items")
-    .insert(orderItems);
+    .insert([{
+      order_id:   order.id,
+      sku:        null,
+      title:      data.descripcion,   // nombre del mueble, ej: "Sofá London 3 cuerpos"
+      qty:        1,
+      unit_price: 0,
+      total:      0,
+    }]);
   if (itemsErr) throw new Error(itemsErr.message);
 
   // 3. Descontar insumos del stock (salida por producción)
