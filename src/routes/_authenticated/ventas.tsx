@@ -26,7 +26,7 @@ import {
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
-  head: () => ({ meta: [{ title: "Ventas y comprobantes — G&M" }] }),
+  head: () => ({ meta: [{ title: "Ventas Realizadas — G&M" }] }),
   component: VentasPage,
 });
 
@@ -266,7 +266,7 @@ function VentasPage() {
     <div className="max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Ventas</h1>
+          <h1 className="text-3xl font-display font-semibold">Ventas Realizadas</h1>
           <p className="text-muted-foreground">Boletas, facturas y guías de remisión</p>
         </div>
         {data?.sales && <DescargaPeriodo sales={data.sales} />}

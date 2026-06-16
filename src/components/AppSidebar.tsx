@@ -11,10 +11,10 @@ import { ShoppingBag, Boxes, Hammer, Wrench, Truck, BarChart2 } from "lucide-rea
 
 
 const items = [
-  { title: "POS", url: "/pos", icon: ShoppingCart, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Realizar Venta", url: "/pos", icon: ShoppingCart, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Pedidos",  url: "/pedidos",  icon: ShoppingBag,  roles: ["admin", "vendedor"] as AppRole[] },
-  { title: "Ventas", url: "/ventas", icon: Receipt, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Ventas Realizadas", url: "/ventas", icon: Receipt, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Clientes", url: "/clientes", icon: Users, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Productos", url: "/productos", icon: Package, roles: ["admin"] as AppRole[] },
   { title: "Usuarios", url: "/usuarios", icon: UserCog, roles: ["admin"] as AppRole[] },
