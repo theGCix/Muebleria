@@ -1221,8 +1221,8 @@ export async function getMaterialesOrden(input: {
 
     for (const talla of tallasDelModelo) {
       // Busca "N× ... <talla>" en el título para extraer cantidad
-      const escaped = talla.toLowerCase().replace(/[.*+?^${}()|[\]\]/g, "\$&");
-      const re = new RegExp(`(\d+)[\u00d7x]\s*[^(]+${escaped}`, "i");
+      const escaped = talla.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp("(\\d+)[\\u00d7x]\\s*[^(]+" + escaped, "i");
       const m = (item.title as string).match(re);
       porTitulo.push({ modelo: modeloMatch, talla, cantidad: m ? Number(m[1]) : Number(item.qty) });
     }
