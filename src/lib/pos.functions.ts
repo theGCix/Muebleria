@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getAuthenticatedClient } from "@/integrations/supabase/auth-middleware";
 import { API_URL } from "@/config";
+import type { MaterialNecesario } from "@/types/produccion";
 
 const ItemSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
@@ -92,6 +93,94 @@ export async function listSales() {
     .limit(200);
   if (error) throw new Error(error.message);
   return { sales: data ?? [] };
+}
+
+// ── VENTAS UNIFICADAS (POS local + Ecommerce online) ────────
+// Combina `sales` (POS) y `orders` (tienda online) en una sola
+// lista normalizada, con un campo `canal` para filtrar en UI.
+export type VentaUnificada = {
+  id: string;
+  canal: "local" | "online";
+  numero: string;
+  tipo: string;            // boleta | factura | nota  (online → "boleta" por defecto)
+  cliente_nombre: string;
+  cliente_doc: string | null;
+  total: number;
+  estado: string;
+  created_at: string;
+};
+
+export async function listVentasUnificadas(input?: {
+  canal?: "local" | "online" | "todos";
+  desde?: string; // ISO date
+  hasta?: string; // ISO date
+}) {
+  const { supabase } = await getAuthenticatedClient();
+  const canal = input?.canal ?? "todos";
+
+  const ventas: VentaUnificada[] = [];
+
+  // ── POS local (tabla `sales`) ───────────────────────────
+  if (canal === "todos" || canal === "local") {
+    let q = supabase
+      .from("sales")
+      .select("id, numero, tipo, total, estado, created_at, customers(nombre, doc_numero)")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (input?.desde) q = q.gte("created_at", input.desde);
+    if (input?.hasta) q = q.lte("created_at", input.hasta);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    for (const s of data ?? []) {
+      const cust = s.customers as { nombre: string; doc_numero: string } | null;
+      ventas.push({
+        id: s.id,
+        canal: "local",
+        numero: s.numero,
+        tipo: s.tipo,
+        cliente_nombre: cust?.nombre ?? "Consumidor final",
+        cliente_doc: cust?.doc_numero ?? null,
+        total: Number(s.total),
+        estado: s.estado,
+        created_at: s.created_at,
+      });
+    }
+  }
+
+  // ── Ecommerce online (tabla `orders`) ───────────────────
+  if (canal === "todos" || canal === "online") {
+    let q = supabase
+      .from("orders")
+      .select("id, order_number, nombre, dni, total, status, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (input?.desde) q = q.gte("created_at", input.desde);
+    if (input?.hasta) q = q.lte("created_at", input.hasta);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    for (const o of data ?? []) {
+      ventas.push({
+        id: o.id,
+        canal: "online",
+        numero: o.order_number,
+        tipo: "boleta",
+        cliente_nombre: o.nombre,
+        cliente_doc: o.dni ?? null,
+        total: Number(o.total),
+        estado: o.status,
+        created_at: o.created_at,
+      });
+    }
+  }
+
+  // Orden final por fecha desc
+  ventas.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return { ventas };
 }
 
 export async function getSale(input: { id: string }) {
@@ -1039,4 +1128,140 @@ export async function enviarAProduccion(input: {
     order_number: order.order_number,
     produccion_id: prod.id,
   };
+}
+
+// ── MATERIALES NECESARIOS PARA UNA ORDEN ────────────────────
+// Estrategia en cascada:
+// 1. insumo_movimientos (referencia = order_number) — órdenes nuevas
+// 2. BOM por SKU estructurado "MOD-TALLA-XXX"
+// 3. BOM por título del mueble (ej: "London (1× Sofá 3 cuerpos)")
+export async function getMaterialesOrden(input: {
+  order_id: string;
+}): Promise<{ materiales: MaterialNecesario[] }> {
+  const { order_id } = z.object({ order_id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+
+  // 1. Obtener order_number
+  const { data: order } = await supabase
+    .from("orders")
+    .select("order_number")
+    .eq("id", order_id)
+    .single();
+
+  if (!order) return { materiales: [] };
+
+  // 2. Buscar movimientos de salida (órdenes creadas con el flujo MRP nuevo)
+  const { data: movs } = await supabase
+    .from("insumo_movimientos")
+    .select("cantidad, insumos(id, nombre, unidad, stock_actual)")
+    .eq("referencia", order.order_number)
+    .eq("tipo", "salida");
+
+  if (movs && movs.length > 0) {
+    const mapa = new Map<string, { nombre: string; unidad: string; necesario: number; stock_actual: number }>();
+    for (const mov of movs) {
+      const ins = mov.insumos as { id: string; nombre: string; unidad: string; stock_actual: number } | null;
+      if (!ins) continue;
+      const prev = mapa.get(ins.id);
+      if (prev) {
+        prev.necesario += Number(mov.cantidad);
+      } else {
+        mapa.set(ins.id, { nombre: ins.nombre, unidad: ins.unidad, necesario: Number(mov.cantidad), stock_actual: Number(ins.stock_actual) });
+      }
+    }
+    if (mapa.size > 0) return { materiales: _mapaToMateriales(mapa) };
+  }
+
+  // 3. Obtener items de la orden
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("sku, title, qty")
+    .eq("order_id", order_id);
+
+  if (!items?.length) return { materiales: [] };
+
+  // 4. Fallback A: BOM por SKU "MOD-TALLA-XXX"
+  type PedidoBom = { modelo: string; talla: string; cantidad: number };
+  const porSku: PedidoBom[] = [];
+  for (const item of items) {
+    if (item.sku) {
+      const parts = (item.sku as string).split("-");
+      if (parts.length >= 3 && parts[1] && parts[2]) {
+        porSku.push({ modelo: parts[1], talla: parts[2], cantidad: Number(item.qty) });
+      }
+    }
+  }
+  if (porSku.length > 0) {
+    const { data: boms } = await supabase
+      .from("bom_items")
+      .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)")
+      .or(porSku.map((p) => `and(modelo.eq.${p.modelo},talla.eq.${p.talla})`).join(","));
+    const mapa = _buildMapa(boms ?? [], porSku);
+    if (mapa.size > 0) return { materiales: _mapaToMateriales(mapa) };
+  }
+
+  // 5. Fallback B: BOM por título del mueble
+  const { data: todosLosBoms } = await supabase
+    .from("bom_items")
+    .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)");
+
+  if (!todosLosBoms?.length) return { materiales: [] };
+
+  const modelos = [...new Set(todosLosBoms.map((b) => b.modelo as string))];
+  const porTitulo: PedidoBom[] = [];
+
+  for (const item of items) {
+    const tituloLower = (item.title as string).toLowerCase();
+    const modeloMatch = modelos.find((m) => tituloLower.includes(m.toLowerCase()));
+    if (!modeloMatch) continue;
+
+    const tallasDelModelo = [...new Set(
+      todosLosBoms.filter((b) => b.modelo === modeloMatch).map((b) => b.talla as string)
+    )];
+
+    for (const talla of tallasDelModelo) {
+      // Busca "N× ... <talla>" en el título para extraer cantidad
+      const escaped = talla.toLowerCase().replace(/[.*+?^${}()|[\]\]/g, "\$&");
+      const re = new RegExp(`(\d+)[\u00d7x]\s*[^(]+${escaped}`, "i");
+      const m = (item.title as string).match(re);
+      porTitulo.push({ modelo: modeloMatch, talla, cantidad: m ? Number(m[1]) : Number(item.qty) });
+    }
+  }
+
+  if (!porTitulo.length) return { materiales: [] };
+  const mapa = _buildMapa(todosLosBoms, porTitulo);
+  return { materiales: _mapaToMateriales(mapa) };
+}
+
+// ── helpers privados ────────────────────────────────────────
+type _BomRow = { modelo: unknown; talla: unknown; cantidad: unknown; insumos: unknown };
+type _MapaVal = { nombre: string; unidad: string; necesario: number; stock_actual: number };
+
+function _buildMapa(boms: _BomRow[], pedidos: Array<{ modelo: string; talla: string; cantidad: number }>): Map<string, _MapaVal> {
+  const mapa = new Map<string, _MapaVal>();
+  for (const pedido of pedidos) {
+    const match = boms.filter((b) => b.modelo === pedido.modelo && b.talla === pedido.talla);
+    for (const bom of match) {
+      const ins = bom.insumos as { id: string; nombre: string; unidad: string; stock_actual: number } | null;
+      if (!ins) continue;
+      const prev = mapa.get(ins.id);
+      if (prev) {
+        prev.necesario += Number(bom.cantidad) * pedido.cantidad;
+      } else {
+        mapa.set(ins.id, { nombre: ins.nombre, unidad: ins.unidad, necesario: Number(bom.cantidad) * pedido.cantidad, stock_actual: Number(ins.stock_actual) });
+      }
+    }
+  }
+  return mapa;
+}
+
+function _mapaToMateriales(mapa: Map<string, _MapaVal>): MaterialNecesario[] {
+  return Array.from(mapa.entries()).map(([insumo_id, v]) => ({
+    insumo_id,
+    nombre: v.nombre,
+    unidad: v.unidad,
+    necesario: v.necesario,
+    stock_actual: v.stock_actual,
+    stockOk: v.stock_actual >= v.necesario,
+  }));
 }
