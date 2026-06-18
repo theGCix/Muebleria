@@ -84,6 +84,138 @@ export async function searchCustomers(input: { data: { q: string; limit?: number
 }
 
 
+// ── CLIENTES UNIFICADOS (POS + Ecommerce) ─────────────────────
+// Combina la tabla `customers` (POS local) con compradores únicos
+// de `orders` (tienda online). Si un email coincide entre ambas
+// fuentes, el registro POS tiene precedencia.
+export type ClienteUnificado = {
+  id: string;
+  fuente: "pos" | "online" | "ambos";
+  nombre: string;
+  doc_tipo: string | null;
+  doc_numero: string | null;
+  email: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  segmento: string;
+  notas: string | null;
+  created_at: string;
+  ultima_actividad: string | null;
+  total_compras_pos: number;
+  total_pedidos_online: number;
+  valor_total: number;
+};
+
+export async function listClientesUnificados(input?: { q?: string }): Promise<{ clientes: ClienteUnificado[] }> {
+  const { supabase } = await getAuthenticatedClient();
+  const q = input?.q?.trim() ?? "";
+
+  // 1. Clientes POS
+  let posQuery = supabase
+    .from("customers")
+    .select("id, nombre, doc_tipo, doc_numero, email, telefono, direccion, segmento, notas, created_at, ultima_actividad, total_compras_pos, total_pedidos_online, valor_total_cliente")
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (q) {
+    posQuery = posQuery.or(
+      `nombre.ilike.%${q}%,doc_numero.ilike.%${q}%,email.ilike.%${q}%,telefono.ilike.%${q}%`
+    );
+  }
+  const { data: posRows, error: posErr } = await posQuery;
+  if (posErr) throw new Error(posErr.message);
+
+  // 2. Compradores online únicos (agrupados por email)
+  const { data: ordersRows, error: ordErr } = await supabase
+    .from("orders")
+    .select("id, nombre, email, telefono, dni, direccion, ciudad, total, created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (ordErr) throw new Error(ordErr.message);
+
+  // Índice de clientes POS por email (para deduplicar)
+  const posEmailSet = new Set(
+    (posRows ?? []).map((c: any) => c.email?.toLowerCase()).filter(Boolean)
+  );
+
+  // Agrupar pedidos online por email
+  const onlineMap = new Map<string, any>();
+  for (const o of ordersRows ?? []) {
+    const key = o.email?.toLowerCase() ?? `no-email-${o.id}`;
+    if (!onlineMap.has(key)) {
+      onlineMap.set(key, { ...o, pedidosCount: 1, valorTotal: Number(o.total) });
+    } else {
+      const prev = onlineMap.get(key)!;
+      prev.pedidosCount += 1;
+      prev.valorTotal += Number(o.total);
+      // Mantener el registro más reciente
+      if (new Date(o.created_at) > new Date(prev.created_at)) {
+        onlineMap.set(key, { ...o, pedidosCount: prev.pedidosCount, valorTotal: prev.valorTotal });
+      }
+    }
+  }
+
+  // Construir lista final
+  const clientes: ClienteUnificado[] = [];
+
+  // a) Clientes POS (marcar si también tienen pedidos online)
+  for (const c of posRows ?? []) {
+    const emailKey = c.email?.toLowerCase();
+    const onlineData = emailKey ? onlineMap.get(emailKey) : null;
+    clientes.push({
+      id: c.id,
+      fuente: onlineData ? "ambos" : "pos",
+      nombre: c.nombre,
+      doc_tipo: c.doc_tipo,
+      doc_numero: c.doc_numero,
+      email: c.email,
+      telefono: c.telefono,
+      direccion: c.direccion,
+      segmento: c.segmento ?? "nuevo",
+      notas: c.notas,
+      created_at: c.created_at,
+      ultima_actividad: c.ultima_actividad,
+      total_compras_pos: c.total_compras_pos ?? 0,
+      total_pedidos_online: onlineData ? onlineData.pedidosCount : (c.total_pedidos_online ?? 0),
+      valor_total: Number(c.valor_total_cliente ?? 0) + (onlineData?.valorTotal ?? 0),
+    });
+  }
+
+  // b) Compradores online puros (no están en customers POS)
+  for (const [key, o] of onlineMap.entries()) {
+    if (posEmailSet.has(key)) continue; // ya incluido arriba
+    if (q) {
+      const hayMatch =
+        o.nombre?.toLowerCase().includes(q.toLowerCase()) ||
+        o.email?.toLowerCase().includes(q.toLowerCase()) ||
+        o.telefono?.includes(q) ||
+        o.dni?.includes(q);
+      if (!hayMatch) continue;
+    }
+    clientes.push({
+      id: o.id, // id del primer pedido
+      fuente: "online",
+      nombre: o.nombre,
+      doc_tipo: o.dni ? "DNI" : null,
+      doc_numero: o.dni ?? null,
+      email: o.email,
+      telefono: o.telefono ?? null,
+      direccion: [o.direccion, o.ciudad].filter(Boolean).join(", ") || null,
+      segmento: "nuevo",
+      notas: null,
+      created_at: o.created_at,
+      ultima_actividad: o.created_at,
+      total_compras_pos: 0,
+      total_pedidos_online: o.pedidosCount,
+      valor_total: o.valorTotal,
+    });
+  }
+
+  // Ordenar por fecha desc
+  clientes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return { clientes };
+}
+
 export async function listSales() {
   const { supabase } = await getAuthenticatedClient();
   const { data, error } = await supabase
