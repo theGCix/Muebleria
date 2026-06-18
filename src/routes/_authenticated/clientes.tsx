@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listClientesUnificados, getCustomerValor, getCustomerSales,
-  getCustomerOrders, updateCustomerCrm,
+  getCustomerOrders, updateCustomerCrm,searchCustomers
 } from "@/lib/pos.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
