@@ -474,6 +474,135 @@ function VentasPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Dialog para pedidos ONLINE ── */}
+      <Dialog open={!!openOrderId} onOpenChange={(v) => !v && setOpenOrderId(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pedido Online</DialogTitle>
+            <DialogDescription>
+              Detalle del pedido y opciones de comprobante
+            </DialogDescription>
+          </DialogHeader>
+          {loadingOrderDetail ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : orderDetail?.order ? (
+            <div className="space-y-4">
+              {/* Info del pedido */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Número:</span> <strong>{orderDetail.order.order_number}</strong></div>
+                <div><span className="text-muted-foreground">Estado:</span>
+                  <Badge className="ml-2" variant={orderDetail.order.status === "cancelado" ? "destructive" : "default"}>
+                    {orderDetail.order.status}
+                  </Badge>
+                </div>
+                <div><span className="text-muted-foreground">Fecha:</span> {format(new Date(orderDetail.order.created_at), "dd/MM/yyyy HH:mm")}</div>
+                <div><span className="text-muted-foreground">Total:</span> <strong>{fmt(Number(orderDetail.order.total))}</strong></div>
+                {orderDetail.order.paid_at && (
+                  <div><span className="text-muted-foreground">Pagado:</span> {format(new Date(orderDetail.order.paid_at), "dd/MM/yyyy HH:mm")}</div>
+                )}
+              </div>
+
+              {/* Cliente */}
+              <div className="bg-muted/30 rounded p-3 text-sm">
+                <p className="font-medium mb-1">Cliente</p>
+                <p>{orderDetail.order.nombre}</p>
+                {orderDetail.order.dni && (
+                  <p className="text-muted-foreground">DNI: {orderDetail.order.dni}</p>
+                )}
+                {orderDetail.order.email && (
+                  <p className="text-muted-foreground">{orderDetail.order.email}</p>
+                )}
+                {orderDetail.order.telefono && (
+                  <p className="text-muted-foreground">Tel: {orderDetail.order.telefono}</p>
+                )}
+                {orderDetail.order.direccion && (
+                  <p className="text-muted-foreground">
+                    {orderDetail.order.direccion}{orderDetail.order.distrito ? `, ${orderDetail.order.distrito}` : ""}{orderDetail.order.ciudad ? `, ${orderDetail.order.ciudad}` : ""}
+                  </p>
+                )}
+              </div>
+
+              {/* Ítems */}
+              <div>
+                <p className="font-medium text-sm mb-2">Ítems</p>
+                <div className="border rounded overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Producto</th>
+                        <th className="px-3 py-2 text-right">Cant.</th>
+                        <th className="px-3 py-2 text-right">P. Unit.</th>
+                        <th className="px-3 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(orderDetail.order.order_items ?? []).map((it: any) => (
+                        <tr key={it.id} className="border-t">
+                          <td className="px-3 py-2">{it.title}</td>
+                          <td className="px-3 py-2 text-right">{it.qty}</td>
+                          <td className="px-3 py-2 text-right">{fmt(Number(it.unit_price))}</td>
+                          <td className="px-3 py-2 text-right">{fmt(Number(it.total))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-muted/30">
+                      {Number(orderDetail.order.envio) > 0 && (
+                        <tr className="border-t">
+                          <td colSpan={3} className="px-3 py-2 text-right text-muted-foreground">Envío</td>
+                          <td className="px-3 py-2 text-right">{fmt(Number(orderDetail.order.envio))}</td>
+                        </tr>
+                      )}
+                      <tr className="border-t font-semibold">
+                        <td colSpan={3} className="px-3 py-2 text-right">Total</td>
+                        <td className="px-3 py-2 text-right">{fmt(Number(orderDetail.order.total))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Acciones de comprobante */}
+              <ComprobanteActions sale={orderToSale(orderDetail.order)} />
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No se pudo cargar el pedido.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+// ── Adapta un order online al shape que espera ComprobanteActions/saleToComprobanteData ──
+function orderToSale(order: any) {
+  return {
+    id: order.id,
+    numero: order.order_number,
+    tipo: "boleta" as const,
+    created_at: order.created_at,
+    estado: order.status === "cancelado" ? "anulada" : order.status,
+    subtotal: Number(order.subtotal),
+    igv: Math.round(Number(order.subtotal) * 0.18 * 100) / 100,
+    total: Number(order.total),
+    notas: order.notas,
+    customers: {
+      nombre: order.nombre,
+      doc_tipo: "DNI",
+      doc_numero: order.dni ?? "00000000",
+      email: order.email,
+      telefono: order.telefono,
+      direccion: [order.direccion, order.distrito, order.ciudad].filter(Boolean).join(", "),
+    },
+    sale_items: (order.order_items ?? []).map((it: any) => ({
+      id: it.id,
+      sku: it.sku,
+      title: it.title,
+      qty: it.qty,
+      unit_price: it.unit_price,
+      total: it.total,
+    })),
+  };
 }
