@@ -3,8 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listClientesUnificados, getCustomerValor, getCustomerSales,
-  getCustomerOrders, updateCustomerCrm,searchCustomers
+  getCustomerOrders, updateCustomerCrm,
 } from "@/lib/pos.functions";
+
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -309,22 +310,22 @@ function ClientesPage() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [segmentoFilter, setSegmentoFilter] = useState("todos");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["customers-list", q],
-    queryFn: () => searchCustomers({ data: { q, limit: 100 } }),
+    queryFn: () => listClientesUnificados({ q }),
   });
 
   const filtered = useMemo(() => {
-    const list = data?.customers ?? [];
+    const list = data?.clientes ?? [];
     if (segmentoFilter === "todos") return list;
     return list.filter((c: any) => c.segmento === segmentoFilter);
   }, [data, segmentoFilter]);
 
   // KPIs
   const stats = useMemo(() => {
-    const all = data?.customers ?? [];
+    const all = data?.clientes ?? [];
     return {
       total: all.length,
       vip: all.filter((c: any) => c.segmento === "vip").length,
@@ -396,7 +397,7 @@ function ClientesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/40">
-                  {["Nombre", "Documento", "Contacto", "Segmento", "Cliente desde", ""].map((h) => (
+                  {["Nombre", "Documento", "Contacto", "Canal", "Segmento", "Cliente desde", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-medium text-muted-foreground text-xs uppercase tracking-wide">
                       {h}
                     </th>
@@ -417,6 +418,9 @@ function ClientesPage() {
                         {c.telefono && <p className="text-xs text-muted-foreground">{c.telefono}</p>}
                       </td>
                       <td className="px-4 py-3">
+                        <CanalBadge fuente={c.fuente} />
+                      </td>
+                      <td className="px-4 py-3">
                         <span
                           className="px-2 py-0.5 rounded-full text-xs font-medium"
                           style={{ color: seg.color, background: seg.bg }}
@@ -431,7 +435,7 @@ function ClientesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setSelectedId(c.id)}
+                          onClick={() => setSelectedCliente(c)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -446,10 +450,10 @@ function ClientesPage() {
       </div>
 
       {/* Detalle modal */}
-      {selectedId && (
+      {selectedCliente && (
         <ClienteDetalle
-          ClienteUnificado={selectedId}
-          onClose={() => setSelectedId(null)}
+          cliente={selectedCliente}
+          onClose={() => setSelectedCliente(null)}
         />
       )}
     </div>
