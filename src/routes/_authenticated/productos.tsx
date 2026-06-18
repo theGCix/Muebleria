@@ -95,15 +95,29 @@ function ProductFormModal({
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const MAX_IMAGES = 7;
+
   // Sube una o varias imágenes secuencialmente
   const handleMultiUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     // Reset input para permitir seleccionar el mismo archivo de nuevo
     e.target.value = "";
+
+    // Calcular cuántos slots quedan
+    const available = MAX_IMAGES - form.imagenes.length;
+    if (available <= 0) {
+      toast.error(`Máximo ${MAX_IMAGES} imágenes permitidas`);
+      return;
+    }
+    const filesToUpload = files.slice(0, available);
+    if (files.length > available) {
+      toast.warning(`Solo se subirán ${available} imagen(es) — límite de ${MAX_IMAGES}`);
+    }
+
     setUploading(true);
     try {
-      for (const file of files) {
+      for (const file of filesToUpload) {
         const result = await uploadImage(file, "muebleria/productos");
         setForm((f) => {
           const updated = [...f.imagenes, { url: result.secure_url, public_id: result.public_id }];
@@ -116,7 +130,7 @@ function ProductFormModal({
           };
         });
       }
-      toast.success(files.length > 1 ? `${files.length} imágenes subidas` : "Imagen subida correctamente");
+      toast.success(filesToUpload.length > 1 ? `${filesToUpload.length} imágenes subidas` : "Imagen subida correctamente");
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -214,18 +228,20 @@ function ProductFormModal({
               </div>
             ))}
 
-            {/* Botón agregar más fotos */}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="w-20 h-20 rounded border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
-            >
-              {uploading
-                ? <Loader2 className="h-5 w-5 animate-spin" />
-                : <Plus className="h-5 w-5" />}
-              <span className="text-[10px] mt-1">{uploading ? "Subiendo…" : "Agregar"}</span>
-            </button>
+            {/* Botón agregar más fotos — oculto al llegar al límite */}
+            {form.imagenes.length < MAX_IMAGES && (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="w-20 h-20 rounded border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+              >
+                {uploading
+                  ? <Loader2 className="h-5 w-5 animate-spin" />
+                  : <Plus className="h-5 w-5" />}
+                <span className="text-[10px] mt-1">{uploading ? "Subiendo…" : "Agregar"}</span>
+              </button>
+            )}
 
             <input
               ref={fileRef}
@@ -237,7 +253,10 @@ function ProductFormModal({
             />
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            JPG, PNG, WEBP · Clic en una foto para hacerla principal · Hover para eliminar
+            JPG, PNG, WEBP · Máx. {MAX_IMAGES} imágenes · Clic para hacer principal · Hover para eliminar
+            {form.imagenes.length >= MAX_IMAGES && (
+              <span className="text-amber-600 font-medium"> · Límite alcanzado</span>
+            )}
           </p>
         </div>
 
