@@ -269,21 +269,27 @@ function ProductPage() {
 
   if (!product) return <ProductNotFound />;
 
-  const mainImg = product.imagen_public_id
-    ? cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })
-    : product.imagen_url;
+  // Construir lista de imágenes desde el array `imagenes` (galería multi-foto)
+  // con fallback al campo legacy imagen_url/imagen_public_id
+  const allImgs: string[] = (() => {
+    const gallery = (product as any).imagenes;
+    if (Array.isArray(gallery) && gallery.length > 0) {
+      return gallery.map((img: { url: string; public_id?: string }) =>
+        img.public_id
+          ? cloudinaryUrl(img.public_id, { w: 900, h: 900 })
+          : img.url
+      );
+    }
+    if (product.imagen_public_id) {
+      return [cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })];
+    }
+    if (product.imagen_url) return [product.imagen_url];
+    return [];
+  })();
 
-  const thumbImgs = product.imagen_public_id
-    ? [
-        cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 }),
-        cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900, q: 75 }),
-        cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 }),
-      ]
-    : product.imagen_url
-    ? [product.imagen_url]
-    : [];
-
-  const displayImg = thumbImgs[activeImg] ?? mainImg;
+  const mainImg = allImgs[0] ?? null;
+  const thumbImgs = allImgs;
+  const displayImg = allImgs[activeImg] ?? mainImg;
 
   const handleAdd = () => {
     setAdding(true);
