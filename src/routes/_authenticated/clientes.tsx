@@ -448,7 +448,7 @@ function ClientesPage() {
       {/* Detalle modal */}
       {selectedId && (
         <ClienteDetalle
-          customerId={selectedId}
+          ClienteUnificado={selectedId}
           onClose={() => setSelectedId(null)}
         />
       )}
