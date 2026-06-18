@@ -110,10 +110,10 @@ export async function listClientesUnificados(input?: { q?: string }): Promise<{ 
   const { supabase } = await getAuthenticatedClient();
   const q = input?.q?.trim() ?? "";
 
-  // 1. Clientes POS
+  // 1. Clientes POS — solo columnas que existen en la BD
   let posQuery = supabase
     .from("customers")
-    .select("id, nombre, doc_tipo, doc_numero, email, telefono, direccion, segmento, notas, created_at, ultima_actividad, total_compras_pos, total_pedidos_online, valor_total_cliente")
+    .select("id, nombre, doc_tipo, doc_numero, email, telefono, direccion, segmento, notas, created_at, ultima_actividad")
     .order("created_at", { ascending: false })
     .limit(300);
   if (q) {
@@ -124,7 +124,25 @@ export async function listClientesUnificados(input?: { q?: string }): Promise<{ 
   const { data: posRows, error: posErr } = await posQuery;
   if (posErr) throw new Error(posErr.message);
 
-  // 2. Compradores online únicos (agrupados por email)
+  // 2. Totales de ventas POS por customer_id
+  const posIds = (posRows ?? []).map((c: any) => c.id);
+  let salesTotals: Record<string, { count: number; total: number }> = {};
+  if (posIds.length > 0) {
+    const { data: salesRows, error: salesErr } = await supabase
+      .from("sales")
+      .select("customer_id, total")
+      .in("customer_id", posIds);
+    if (!salesErr) {
+      for (const s of salesRows ?? []) {
+        if (!s.customer_id) continue;
+        if (!salesTotals[s.customer_id]) salesTotals[s.customer_id] = { count: 0, total: 0 };
+        salesTotals[s.customer_id].count += 1;
+        salesTotals[s.customer_id].total += Number(s.total);
+      }
+    }
+  }
+
+  // 3. Compradores online únicos (agrupados por email)
   const { data: ordersRows, error: ordErr } = await supabase
     .from("orders")
     .select("id, nombre, email, telefono, dni, direccion, ciudad, total, created_at")
@@ -147,7 +165,6 @@ export async function listClientesUnificados(input?: { q?: string }): Promise<{ 
       const prev = onlineMap.get(key)!;
       prev.pedidosCount += 1;
       prev.valorTotal += Number(o.total);
-      // Mantener el registro más reciente
       if (new Date(o.created_at) > new Date(prev.created_at)) {
         onlineMap.set(key, { ...o, pedidosCount: prev.pedidosCount, valorTotal: prev.valorTotal });
       }
@@ -161,6 +178,7 @@ export async function listClientesUnificados(input?: { q?: string }): Promise<{ 
   for (const c of posRows ?? []) {
     const emailKey = c.email?.toLowerCase();
     const onlineData = emailKey ? onlineMap.get(emailKey) : null;
+    const posTotals = salesTotals[c.id] ?? { count: 0, total: 0 };
     clientes.push({
       id: c.id,
       fuente: onlineData ? "ambos" : "pos",
@@ -174,9 +192,9 @@ export async function listClientesUnificados(input?: { q?: string }): Promise<{ 
       notas: c.notas,
       created_at: c.created_at,
       ultima_actividad: c.ultima_actividad,
-      total_compras_pos: c.total_compras_pos ?? 0,
-      total_pedidos_online: onlineData ? onlineData.pedidosCount : (c.total_pedidos_online ?? 0),
-      valor_total: Number(c.valor_total_cliente ?? 0) + (onlineData?.valorTotal ?? 0),
+      total_compras_pos: posTotals.count,
+      total_pedidos_online: onlineData ? onlineData.pedidosCount : 0,
+      valor_total: posTotals.total + (onlineData?.valorTotal ?? 0),
     });
   }
 
@@ -192,7 +210,7 @@ export async function listClientesUnificados(input?: { q?: string }): Promise<{ 
       if (!hayMatch) continue;
     }
     clientes.push({
-      id: o.id, // id del primer pedido
+      id: o.id,
       fuente: "online",
       nombre: o.nombre,
       doc_tipo: o.dni ? "DNI" : null,
