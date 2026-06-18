@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listSales, getSale, anularVenta } from "@/lib/pos.functions";
+import { listSales, getSale, anularVenta, listVentasUnificadas, getOrderDetalle } from "@/lib/pos.functions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import {
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
-  head: () => ({ meta: [{ title: "Ventas Realizadas — G&M" }] }),
+  head: () => ({ meta: [{ title: "Ventas y comprobantes — G&M" }] }),
   component: VentasPage,
 });
 
@@ -238,9 +238,15 @@ function VentasPage() {
     queryKey: ["sales"],
     queryFn: () => listSales(),
   });
+  const { data: dataUnificada, isLoading: isLoadingUnificada } = useQuery({
+    queryKey: ["ventas-unificadas"],
+    queryFn: () => listVentasUnificadas(),
+  });
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
+  const [filtroCanal, setFiltroCanal] = useState<string>("todos");
   const [busqueda, setBusqueda] = useState("");
 
   const { data: saleDetail, isLoading: loadingDetail } = useQuery({
@@ -249,24 +255,31 @@ function VentasPage() {
     enabled: !!openId,
   });
 
-  const sales = useMemo(() => {
-    const all = data?.sales ?? [];
-    return all.filter((s: any) => {
-      const matchTipo = filtroTipo === "todos" || s.tipo === filtroTipo;
-      const matchEstado = filtroEstado === "todos" || s.estado === filtroEstado;
+  const { data: orderDetail, isLoading: loadingOrderDetail } = useQuery({
+    queryKey: ["order-detalle", openOrderId],
+    queryFn: () => (openOrderId ? getOrderDetalle({ id: openOrderId }) : null),
+    enabled: !!openOrderId,
+  });
+
+  const ventas = useMemo(() => {
+    const all = dataUnificada?.ventas ?? [];
+    return all.filter((v) => {
+      const matchTipo = filtroTipo === "todos" || v.tipo === filtroTipo;
+      const matchEstado = filtroEstado === "todos" || v.estado === filtroEstado;
+      const matchCanal = filtroCanal === "todos" || v.canal === filtroCanal;
       const matchSearch =
         !busqueda ||
-        s.numero?.toLowerCase().includes(busqueda.toLowerCase()) ||
-        s.customers?.nombre?.toLowerCase().includes(busqueda.toLowerCase());
-      return matchTipo && matchEstado && matchSearch;
+        v.numero?.toLowerCase().includes(busqueda.toLowerCase()) ||
+        v.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase());
+      return matchTipo && matchEstado && matchCanal && matchSearch;
     });
-  }, [data, filtroTipo, filtroEstado, busqueda]);
+  }, [dataUnificada, filtroTipo, filtroEstado, filtroCanal, busqueda]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Ventas Realizadas</h1>
+          <h1 className="text-3xl font-display font-semibold">Ventas</h1>
           <p className="text-muted-foreground">Boletas, facturas y guías de remisión</p>
         </div>
         {data?.sales && <DescargaPeriodo sales={data.sales} />}
@@ -301,6 +314,16 @@ function VentasPage() {
             <SelectItem value="anulada">Anulada</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filtroCanal} onValueChange={setFiltroCanal}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Canal" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los canales</SelectItem>
+            <SelectItem value="local">🏪 Local</SelectItem>
+            <SelectItem value="online">🌐 Online</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card className="overflow-hidden">
@@ -314,6 +337,7 @@ function VentasPage() {
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3">Comprobante</th>
+                  <th className="px-4 py-3">Canal</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3 text-right">Total</th>
@@ -322,45 +346,56 @@ function VentasPage() {
                 </tr>
               </thead>
               <tbody>
-                {sales.map((s: any) => (
-                  <tr key={s.id} className="border-t hover:bg-muted/30">
+                {ventas.map((v) => (
+                  <tr key={`${v.canal}-${v.id}`} className="border-t hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <Badge variant={tipoColor[s.tipo] ?? "outline"} className="mb-1">
-                        {tipoLabel[s.tipo] ?? s.tipo}
+                      <Badge variant={tipoColor[v.tipo] ?? "outline"} className="mb-1">
+                        {tipoLabel[v.tipo] ?? v.tipo}
                       </Badge>
-                      <div className="font-mono text-xs">{s.numero}</div>
+                      <div className="font-mono text-xs">{v.numero}</div>
                     </td>
                     <td className="px-4 py-3">
-                      {s.customers?.nombre ?? (
+                      <Badge variant="outline">
+                        {v.canal === "online" ? "🌐 Online" : "🏪 Local"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      {v.cliente_nombre || (
                         <span className="text-muted-foreground">Sin cliente</span>
                       )}
-                      {s.customers && (
+                      {v.cliente_doc && (
                         <div className="text-xs text-muted-foreground">
-                          {s.customers.doc_tipo} {s.customers.doc_numero}
+                          DNI {v.cliente_doc}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {format(new Date(s.created_at), "dd/MM/yyyy HH:mm")}
+                      {format(new Date(v.created_at), "dd/MM/yyyy HH:mm")}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold">
-                      {fmt(Number(s.total))}
+                      {fmt(Number(v.total))}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={s.estado === "anulada" ? "destructive" : "default"}>
-                        {s.estado}
+                      <Badge variant={v.estado === "anulada" ? "destructive" : "default"}>
+                        {v.estado}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <Button size="sm" variant="ghost" onClick={() => setOpenId(s.id)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          v.canal === "online" ? setOpenOrderId(v.id) : setOpenId(v.id)
+                        }
+                      >
                         <FileText className="h-4 w-4" />
                       </Button>
                     </td>
                   </tr>
                 ))}
-                {sales.length === 0 && (
+                {ventas.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <td colSpan={7} className="text-center py-10 text-muted-foreground">
                       No se encontraron comprobantes.
                     </td>
                   </tr>

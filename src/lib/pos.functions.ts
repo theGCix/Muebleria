@@ -1135,6 +1135,19 @@ export async function enviarAProduccion(input: {
 // 1. insumo_movimientos (referencia = order_number) — órdenes nuevas
 // 2. BOM por SKU estructurado "MOD-TALLA-XXX"
 // 3. BOM por título del mueble (ej: "London (1× Sofá 3 cuerpos)")
+// ── Detalle de una orden online (para modal en Ventas Realizadas) ──
+export async function getOrderDetalle(input: { id: string }) {
+  const { id } = z.object({ id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("*, order_items(*)")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return { order };
+}
+
 export async function getMaterialesOrden(input: {
   order_id: string;
 }): Promise<{ materiales: MaterialNecesario[] }> {
