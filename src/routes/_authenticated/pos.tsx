@@ -56,6 +56,73 @@ function CustomerDialog({ onSelect }: { onSelect: (c: any) => void }) {
   const [newForm, setNewForm] = useState({
     doc_tipo: "DNI", doc_numero: "", nombre: "", email: "", telefono: "", direccion: "",
   });
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // ── Auto-lookup por DNI (8 dígitos) o RUC (11 dígitos) ──────────────────
+  const handleDocNumeroChange = async (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    setNewForm((f) => ({ ...f, doc_numero: digits }));
+    setLookupError(null);
+
+    const isDNI = digits.length === 8 && newForm.doc_tipo === "DNI";
+    const isRUC = digits.length === 11 && newForm.doc_tipo === "RUC";
+
+    if (!isDNI && !isRUC) return;
+
+    setLookupLoading(true);
+    try {
+      if (isRUC) {
+        // API pública SUNAT vía apis.net.pe (sin token para RUC)
+        const res = await fetch(`https://api.apis.net.pe/v2/sunat/ruc?numero=${digits}`, {
+          headers: { Referer: "https://apis.net.pe" },
+        });
+        if (!res.ok) throw new Error("No se encontró el RUC");
+        const data = await res.json();
+        setNewForm((f) => ({
+          ...f,
+          doc_numero: digits,
+          doc_tipo: "RUC",
+          nombre: data.razonSocial ?? f.nombre,
+          direccion: data.direccion ?? f.direccion,
+        }));
+        toast.success("Datos del RUC cargados automáticamente");
+      } else {
+        // DNI requiere token — usar apis.net.pe con token si está configurado
+        const token = import.meta.env.VITE_APIS_NET_PE_TOKEN;
+        if (!token) {
+          setLookupError("Configura VITE_APIS_NET_PE_TOKEN para consultar DNI");
+          return;
+        }
+        const res = await fetch(`https://api.apis.net.pe/v2/reniec/dni?numero=${digits}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error("No se encontró el DNI");
+        const data = await res.json();
+        const nombre = [data.nombres, data.apellidoPaterno, data.apellidoMaterno]
+          .filter(Boolean).join(" ");
+        setNewForm((f) => ({ ...f, doc_numero: digits, doc_tipo: "DNI", nombre }));
+        toast.success("Datos del DNI cargados automáticamente");
+      }
+    } catch (err: any) {
+      setLookupError(err.message ?? "Error al consultar");
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  // También auto-detectar tipo doc al cambiar
+  const handleDocTipoChange = (tipo: string) => {
+    setNewForm((f) => ({ ...f, doc_tipo: tipo }));
+    setLookupError(null);
+    // Re-trigger lookup si el número ya tiene la longitud correcta
+    if (
+      (tipo === "DNI" && newForm.doc_numero.length === 8) ||
+      (tipo === "RUC" && newForm.doc_numero.length === 11)
+    ) {
+      handleDocNumeroChange(newForm.doc_numero);
+    }
+  };
 
   const { data: cData } = useQuery({
     queryKey: ["customers", q],
@@ -141,7 +208,7 @@ function CustomerDialog({ onSelect }: { onSelect: (c: any) => void }) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs mb-1 block">Tipo doc.</Label>
-                  <Select value={newForm.doc_tipo} onValueChange={(v) => setNewForm((f) => ({ ...f, doc_tipo: v }))}>
+                  <Select value={newForm.doc_tipo} onValueChange={handleDocTipoChange}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="DNI">DNI</SelectItem>
@@ -152,12 +219,30 @@ function CustomerDialog({ onSelect }: { onSelect: (c: any) => void }) {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs mb-1 block">Número *</Label>
-                  <Input
-                    className="h-9 text-sm"
-                    value={newForm.doc_numero}
-                    onChange={(e) => setNewForm((f) => ({ ...f, doc_numero: e.target.value }))}
-                  />
+                  <Label className="text-xs mb-1 block">
+                    Número *
+                    {lookupLoading && (
+                      <span className="ml-1 text-muted-foreground">consultando…</span>
+                    )}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      className="h-9 text-sm pr-7"
+                      value={newForm.doc_numero}
+                      onChange={(e) => handleDocNumeroChange(e.target.value)}
+                      maxLength={newForm.doc_tipo === "RUC" ? 11 : newForm.doc_tipo === "DNI" ? 8 : 20}
+                      inputMode="numeric"
+                    />
+                    {lookupLoading && (
+                      <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    )}
+                    {!lookupLoading && newForm.nombre && newForm.doc_numero.length >= 8 && (
+                      <Check className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-green-500" />
+                    )}
+                  </div>
+                  {lookupError && (
+                    <p className="text-xs text-destructive mt-1">{lookupError}</p>
+                  )}
                 </div>
               </div>
               <div>
@@ -201,6 +286,7 @@ function CustomerDialog({ onSelect }: { onSelect: (c: any) => void }) {
       </Dialog>
     </>
   );
+}
 }
 
 // ── Cart Line with inline name edit ────────────────────────────────────────
