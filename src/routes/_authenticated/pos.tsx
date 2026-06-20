@@ -287,7 +287,7 @@ function CustomerDialog({ onSelect }: { onSelect: (c: any) => void }) {
     </>
   );
 }
-}
+
 
 // ── Cart Line with inline name edit ────────────────────────────────────────
 function CartLineItem({
