@@ -247,6 +247,268 @@ app.post("/api/orders", async (req, res) => {
   }
 });
 
+
+
+
+
+
+
+// ════════════════════════════════════════════════════════════════
+// NUBEFACT — Rutas Express para server/index.js
+// Pega este bloque al final de server/index.js, antes del app.listen()
+// ════════════════════════════════════════════════════════════════
+
+// ── URLs Nubefact según ambiente ─────────────────────────────────
+function getNubefactBase() {
+  const amb = process.env.NUBEFACT_AMBIENTE ?? "demo";
+  return amb === "produccion"
+    ? "https://api.nubefact.com/api/v1"
+    : "https://demo-api.nubefact.com/api/v1";
+}
+
+// ── Middleware: verificar sesión Supabase ─────────────────────────
+async function requireAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Sin token" });
+  const token = auth.slice(7);
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: "Token inválido" });
+  req.user = user;
+  next();
+}
+
+// ── POST /api/nubefact/emitir ─────────────────────────────────────
+// Body: { sale_id: string }
+// El servidor lee la venta de Supabase, construye el payload y llama a Nubefact
+app.post("/api/nubefact/emitir", requireAuth, async (req, res) => {
+  const { sale_id } = req.body;
+  if (!sale_id) return res.status(400).json({ error: "sale_id requerido" });
+
+  // 1. Leer la venta + items + cliente desde Supabase
+  const { data: sale, error: saleErr } = await supabaseAdmin
+    .from("sales")
+    .select(`
+      id, numero, tipo, subtotal, igv, total, notas, created_at,
+      customers ( doc_tipo, doc_numero, nombre, email, direccion ),
+      sale_items ( sku, title, qty, unit_price, total )
+    `)
+    .eq("id", sale_id)
+    .single();
+
+  if (saleErr || !sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (sale.nubefact_estado === "aceptado") {
+    return res.status(409).json({ error: "Comprobante ya fue emitido a SUNAT" });
+  }
+
+  const cliente = sale.customers;
+
+  // 2. Mapear tipo_doc al código numérico que usa Nubefact
+  const tipoDocMap = { DNI: 1, RUC: 6, CE: 4, PASAPORTE: 7 };
+  const tipoDocNum = tipoDocMap[cliente?.doc_tipo] ?? 1;
+
+  // 3. Extraer serie y correlativo del numero (ej: "B001-00000042")
+  const [serie, corrStr] = sale.numero.split("-");
+  const correlativo = parseInt(corrStr, 10);
+  const tipoCpe = sale.tipo === "factura" ? 1 : 2;
+
+  // 4. Construir ítems
+  const items = (sale.sale_items ?? []).map((it) => {
+    const valorUnit = parseFloat((it.unit_price / 1.18).toFixed(6));
+    const subtotal  = parseFloat((valorUnit * it.qty).toFixed(2));
+    const igvLinea  = parseFloat((subtotal * 0.18).toFixed(2));
+    const total     = parseFloat((subtotal + igvLinea).toFixed(2));
+    return {
+      unidad_de_medida: "NIU",
+      codigo: it.sku ?? "PROD",
+      descripcion: it.title,
+      cantidad: it.qty,
+      valor_unitario: valorUnit,
+      precio_unitario: parseFloat(it.unit_price.toFixed(6)),
+      descuento: 0,
+      subtotal,
+      tipo_de_igv: 1,
+      igv: igvLinea,
+      total,
+      anticipo_regularizacion: false,
+      anticipo_documento_serie: "",
+      anticipo_documento_numero: 0,
+    };
+  });
+
+  // 5. Formatear fecha dd-mm-yyyy
+  const d = new Date(sale.created_at);
+  const fecha = `${String(d.getDate()).padStart(2,"0")}-${String(d.getMonth()+1).padStart(2,"0")}-${d.getFullYear()}`;
+
+  // 6. Payload Nubefact
+  const payload = {
+    operacion:                         "generar_comprobante",
+    tipo_de_comprobante:               tipoCpe,
+    serie,
+    numero:                            correlativo,
+    sunat_transaction:                 1,
+    cliente_tipo_de_documento:         tipoDocNum,
+    cliente_numero_de_documento:       cliente?.doc_numero ?? "00000000",
+    cliente_denominacion:              cliente?.nombre ?? "Cliente varios",
+    cliente_direccion:                 cliente?.direccion ?? "",
+    cliente_email:                     cliente?.email ?? "",
+    fecha_de_emision:                  fecha,
+    moneda:                            1,  // PEN
+    tipo_de_cambio:                    0,
+    porcentaje_de_igv:                 18,
+    descuento_global:                  0,
+    total_descuento:                   0,
+    total_anticipo:                    0,
+    total_gravada:                     parseFloat(sale.subtotal),
+    total_inafecta:                    0,
+    total_exonerada:                   0,
+    total_igv:                         parseFloat(sale.igv),
+    total_gratuita:                    0,
+    total_otros_cargos:                0,
+    total:                             parseFloat(sale.total),
+    observaciones:                     sale.notas ?? "",
+    enviar_automaticamente_a_la_sunat: true,
+    enviar_automaticamente_al_cliente: !!(cliente?.email),
+    items,
+  };
+
+  // 7. Llamar a Nubefact
+  let nubefactResp;
+  try {
+    const nfRes = await fetch(
+      `${getNubefactBase()}/${process.env.NUBEFACT_RUC}/comprobantes/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Token ${process.env.NUBEFACT_TOKEN}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    nubefactResp = await nfRes.json();
+
+    if (!nfRes.ok) {
+      const msg = nubefactResp.errors
+        ? Object.entries(nubefactResp.errors).map(([k,v]) => `${k}: ${v.join(", ")}`).join(" | ")
+        : `HTTP ${nfRes.status}`;
+      // Guardar error en Supabase
+      await supabaseAdmin.from("sales").update({
+        nubefact_estado: "error",
+        nubefact_error:  msg,
+      }).eq("id", sale_id);
+      return res.status(502).json({ error: msg });
+    }
+  } catch (err) {
+    await supabaseAdmin.from("sales").update({
+      nubefact_estado: "error",
+      nubefact_error:  err.message,
+    }).eq("id", sale_id);
+    return res.status(502).json({ error: err.message });
+  }
+
+  // 8. Guardar resultado en Supabase
+  await supabaseAdmin.from("sales").update({
+    nubefact_estado: nubefactResp.aceptado_por_sunat ? "aceptado" : "rechazado",
+    nubefact_enlace: nubefactResp.enlace_del_pdf,
+    nubefact_xml:    nubefactResp.enlace_del_xml,
+    nubefact_cdr:    nubefactResp.enlace_del_cdr,
+    nubefact_hash:   nubefactResp.codigo_hash,
+    nubefact_error:  nubefactResp.aceptado_por_sunat ? null : nubefactResp.sunat_description,
+  }).eq("id", sale_id);
+
+  return res.json({
+    aceptado:   nubefactResp.aceptado_por_sunat,
+    enlace_pdf: nubefactResp.enlace_del_pdf,
+    enlace_xml: nubefactResp.enlace_del_xml,
+    hash:       nubefactResp.codigo_hash,
+    descripcion: nubefactResp.sunat_description,
+  });
+});
+
+// ── POST /api/nubefact/anular ────────────────────────────────────
+// Body: { sale_id: string, motivo: string }
+app.post("/api/nubefact/anular", requireAuth, async (req, res) => {
+  const { sale_id, motivo } = req.body;
+  if (!sale_id || !motivo) return res.status(400).json({ error: "sale_id y motivo requeridos" });
+
+  const { data: sale } = await supabaseAdmin
+    .from("sales")
+    .select("numero, tipo, nubefact_estado")
+    .eq("id", sale_id)
+    .single();
+
+  if (!sale) return res.status(404).json({ error: "Venta no encontrada" });
+  if (sale.nubefact_estado !== "aceptado") {
+    return res.status(409).json({ error: "Solo se pueden anular comprobantes aceptados por SUNAT" });
+  }
+
+  const [serie, corrStr] = sale.numero.split("-");
+  const tipoCpe = sale.tipo === "factura" ? 1 : 2;
+
+  const payload = {
+    operacion: "generar_anulacion",
+    tipo_de_comprobante: tipoCpe,
+    serie,
+    numero: parseInt(corrStr, 10),
+    motivo,
+  };
+
+  const nfRes = await fetch(
+    `${getNubefactBase()}/${process.env.NUBEFACT_RUC}/comprobantes/`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Token ${process.env.NUBEFACT_TOKEN}`,
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+  const json = await nfRes.json();
+
+  if (!nfRes.ok) return res.status(502).json({ error: JSON.stringify(json) });
+
+  await supabaseAdmin.from("sales")
+    .update({ nubefact_estado: "anulado", estado: "anulada" })
+    .eq("id", sale_id);
+
+  return res.json({ aceptado: json.aceptado_por_sunat, descripcion: json.sunat_description });
+});
+
+// ── GET /api/nubefact/pdf/:sale_id ───────────────────────────────
+// Devuelve el enlace del PDF (para el botón "Ver comprobante")
+app.get("/api/nubefact/pdf/:sale_id", requireAuth, async (req, res) => {
+  const { data: sale } = await supabaseAdmin
+    .from("sales")
+    .select("nubefact_enlace, nubefact_estado")
+    .eq("id", req.params.sale_id)
+    .single();
+
+  if (!sale?.nubefact_enlace) {
+    return res.status(404).json({ error: "Comprobante aún no emitido a SUNAT" });
+  }
+  return res.json({ enlace_pdf: sale.nubefact_enlace, estado: sale.nubefact_estado });
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ── Iniciar servidor ──────────────────────────────────────────
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => {

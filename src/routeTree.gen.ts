@@ -16,15 +16,22 @@ import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductHandleRouteImport } from './routes/product.$handle'
+import { Route as CategoriaSlugRouteImport } from './routes/categoria.$slug'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
 import { Route as AuthenticatedVentasRouteImport } from './routes/_authenticated/ventas'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
+import { Route as AuthenticatedProveedoresRouteImport } from './routes/_authenticated/proveedores'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
+import { Route as AuthenticatedProduccionRouteImport } from './routes/_authenticated/produccion'
 import { Route as AuthenticatedPosRouteImport } from './routes/_authenticated/pos'
 import { Route as AuthenticatedPedidosRouteImport } from './routes/_authenticated/pedidos'
+import { Route as AuthenticatedMiProduccionRouteImport } from './routes/_authenticated/mi-produccion'
+import { Route as AuthenticatedInsumosRouteImport } from './routes/_authenticated/insumos'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCrmRouteImport } from './routes/_authenticated/crm'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
+import { Route as AuthenticatedCentralRouteImport } from './routes/_authenticated/central'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -60,6 +67,11 @@ const ProductHandleRoute = ProductHandleRouteImport.update({
   path: '/product/$handle',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CategoriaSlugRoute = CategoriaSlugRouteImport.update({
+  id: '/categoria/$slug',
+  path: '/categoria/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
   id: '/admin/orders',
   path: '/admin/orders',
@@ -75,9 +87,20 @@ const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedProveedoresRoute =
+  AuthenticatedProveedoresRouteImport.update({
+    id: '/proveedores',
+    path: '/proveedores',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProductosRoute = AuthenticatedProductosRouteImport.update({
   id: '/productos',
   path: '/productos',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedProduccionRoute = AuthenticatedProduccionRouteImport.update({
+  id: '/produccion',
+  path: '/produccion',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedPosRoute = AuthenticatedPosRouteImport.update({
@@ -88,6 +111,17 @@ const AuthenticatedPosRoute = AuthenticatedPosRouteImport.update({
 const AuthenticatedPedidosRoute = AuthenticatedPedidosRouteImport.update({
   id: '/pedidos',
   path: '/pedidos',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMiProduccionRoute =
+  AuthenticatedMiProduccionRouteImport.update({
+    id: '/mi-produccion',
+    path: '/mi-produccion',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInsumosRoute = AuthenticatedInsumosRouteImport.update({
+  id: '/insumos',
+  path: '/insumos',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -105,6 +139,16 @@ const AuthenticatedClientesRoute = AuthenticatedClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedCentralRoute = AuthenticatedCentralRouteImport.update({
+  id: '/central',
+  path: '/central',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -112,15 +156,22 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/perfil': typeof PerfilRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/central': typeof AuthenticatedCentralRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/crm': typeof AuthenticatedCrmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/insumos': typeof AuthenticatedInsumosRoute
+  '/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/pos': typeof AuthenticatedPosRoute
+  '/produccion': typeof AuthenticatedProduccionRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/proveedores': typeof AuthenticatedProveedoresRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/ventas': typeof AuthenticatedVentasRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/categoria/$slug': typeof CategoriaSlugRoute
   '/product/$handle': typeof ProductHandleRoute
 }
 export interface FileRoutesByTo {
@@ -129,15 +180,22 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/perfil': typeof PerfilRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/central': typeof AuthenticatedCentralRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/crm': typeof AuthenticatedCrmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/insumos': typeof AuthenticatedInsumosRoute
+  '/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/pos': typeof AuthenticatedPosRoute
+  '/produccion': typeof AuthenticatedProduccionRoute
   '/productos': typeof AuthenticatedProductosRoute
+  '/proveedores': typeof AuthenticatedProveedoresRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/ventas': typeof AuthenticatedVentasRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/categoria/$slug': typeof CategoriaSlugRoute
   '/product/$handle': typeof ProductHandleRoute
 }
 export interface FileRoutesById {
@@ -148,15 +206,22 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/perfil': typeof PerfilRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
+  '/_authenticated/central': typeof AuthenticatedCentralRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/crm': typeof AuthenticatedCrmRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/insumos': typeof AuthenticatedInsumosRoute
+  '/_authenticated/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/_authenticated/pedidos': typeof AuthenticatedPedidosRoute
   '/_authenticated/pos': typeof AuthenticatedPosRoute
+  '/_authenticated/produccion': typeof AuthenticatedProduccionRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
+  '/_authenticated/proveedores': typeof AuthenticatedProveedoresRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
   '/_authenticated/ventas': typeof AuthenticatedVentasRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/categoria/$slug': typeof CategoriaSlugRoute
   '/product/$handle': typeof ProductHandleRoute
 }
 export interface FileRouteTypes {
@@ -167,15 +232,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/perfil'
     | '/sitemap.xml'
+    | '/analytics'
+    | '/central'
     | '/clientes'
     | '/crm'
     | '/dashboard'
+    | '/insumos'
+    | '/mi-produccion'
     | '/pedidos'
     | '/pos'
+    | '/produccion'
     | '/productos'
+    | '/proveedores'
     | '/usuarios'
     | '/ventas'
     | '/admin/orders'
+    | '/categoria/$slug'
     | '/product/$handle'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -184,15 +256,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/perfil'
     | '/sitemap.xml'
+    | '/analytics'
+    | '/central'
     | '/clientes'
     | '/crm'
     | '/dashboard'
+    | '/insumos'
+    | '/mi-produccion'
     | '/pedidos'
     | '/pos'
+    | '/produccion'
     | '/productos'
+    | '/proveedores'
     | '/usuarios'
     | '/ventas'
     | '/admin/orders'
+    | '/categoria/$slug'
     | '/product/$handle'
   id:
     | '__root__'
@@ -202,15 +281,22 @@ export interface FileRouteTypes {
     | '/login'
     | '/perfil'
     | '/sitemap.xml'
+    | '/_authenticated/analytics'
+    | '/_authenticated/central'
     | '/_authenticated/clientes'
     | '/_authenticated/crm'
     | '/_authenticated/dashboard'
+    | '/_authenticated/insumos'
+    | '/_authenticated/mi-produccion'
     | '/_authenticated/pedidos'
     | '/_authenticated/pos'
+    | '/_authenticated/produccion'
     | '/_authenticated/productos'
+    | '/_authenticated/proveedores'
     | '/_authenticated/usuarios'
     | '/_authenticated/ventas'
     | '/admin/orders'
+    | '/categoria/$slug'
     | '/product/$handle'
   fileRoutesById: FileRoutesById
 }
@@ -222,6 +308,7 @@ export interface RootRouteChildren {
   PerfilRoute: typeof PerfilRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
+  CategoriaSlugRoute: typeof CategoriaSlugRoute
   ProductHandleRoute: typeof ProductHandleRoute
 }
 
@@ -276,6 +363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductHandleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/categoria/$slug': {
+      id: '/categoria/$slug'
+      path: '/categoria/$slug'
+      fullPath: '/categoria/$slug'
+      preLoaderRoute: typeof CategoriaSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/orders': {
       id: '/admin/orders'
       path: '/admin/orders'
@@ -297,11 +391,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/proveedores': {
+      id: '/_authenticated/proveedores'
+      path: '/proveedores'
+      fullPath: '/proveedores'
+      preLoaderRoute: typeof AuthenticatedProveedoresRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/productos': {
       id: '/_authenticated/productos'
       path: '/productos'
       fullPath: '/productos'
       preLoaderRoute: typeof AuthenticatedProductosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/produccion': {
+      id: '/_authenticated/produccion'
+      path: '/produccion'
+      fullPath: '/produccion'
+      preLoaderRoute: typeof AuthenticatedProduccionRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/pos': {
@@ -316,6 +424,20 @@ declare module '@tanstack/react-router' {
       path: '/pedidos'
       fullPath: '/pedidos'
       preLoaderRoute: typeof AuthenticatedPedidosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/mi-produccion': {
+      id: '/_authenticated/mi-produccion'
+      path: '/mi-produccion'
+      fullPath: '/mi-produccion'
+      preLoaderRoute: typeof AuthenticatedMiProduccionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/insumos': {
+      id: '/_authenticated/insumos'
+      path: '/insumos'
+      fullPath: '/insumos'
+      preLoaderRoute: typeof AuthenticatedInsumosRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -339,27 +461,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/central': {
+      id: '/_authenticated/central'
+      path: '/central'
+      fullPath: '/central'
+      preLoaderRoute: typeof AuthenticatedCentralRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
+  AuthenticatedCentralRoute: typeof AuthenticatedCentralRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
   AuthenticatedCrmRoute: typeof AuthenticatedCrmRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedInsumosRoute: typeof AuthenticatedInsumosRoute
+  AuthenticatedMiProduccionRoute: typeof AuthenticatedMiProduccionRoute
   AuthenticatedPedidosRoute: typeof AuthenticatedPedidosRoute
   AuthenticatedPosRoute: typeof AuthenticatedPosRoute
+  AuthenticatedProduccionRoute: typeof AuthenticatedProduccionRoute
   AuthenticatedProductosRoute: typeof AuthenticatedProductosRoute
+  AuthenticatedProveedoresRoute: typeof AuthenticatedProveedoresRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
   AuthenticatedVentasRoute: typeof AuthenticatedVentasRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
+  AuthenticatedCentralRoute: AuthenticatedCentralRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
   AuthenticatedCrmRoute: AuthenticatedCrmRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedInsumosRoute: AuthenticatedInsumosRoute,
+  AuthenticatedMiProduccionRoute: AuthenticatedMiProduccionRoute,
   AuthenticatedPedidosRoute: AuthenticatedPedidosRoute,
   AuthenticatedPosRoute: AuthenticatedPosRoute,
+  AuthenticatedProduccionRoute: AuthenticatedProduccionRoute,
   AuthenticatedProductosRoute: AuthenticatedProductosRoute,
+  AuthenticatedProveedoresRoute: AuthenticatedProveedoresRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
   AuthenticatedVentasRoute: AuthenticatedVentasRoute,
 }
@@ -376,6 +524,7 @@ const rootRouteChildren: RootRouteChildren = {
   PerfilRoute: PerfilRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminOrdersRoute: AdminOrdersRoute,
+  CategoriaSlugRoute: CategoriaSlugRoute,
   ProductHandleRoute: ProductHandleRoute,
 }
 export const routeTree = rootRouteImport

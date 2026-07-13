@@ -5,10 +5,11 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, FileText, Download, Mail, MessageCircle, XCircle, FileX, FileDown } from "lucide-react";
+import { Loader2, FileText, Download, Mail, MessageCircle, XCircle, FileX, FileDown, Send, CheckCircle2, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
 import {
@@ -24,6 +25,7 @@ import {
   whatsappShare, emailShare, type ComprobanteParaPDF,
 } from "@/lib/comprobante-pdf";
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
+import { useNubefact } from "@/hooks/useNubefact";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
   head: () => ({ meta: [{ title: "Ventas y comprobantes — G&M" }] }),
@@ -119,65 +121,169 @@ function saleToXmlData(sale: any): ComprobanteData {
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// ── Badge de estado Nubefact ──────────────────────────────────
+function NubefactBadge({ sale }: { sale: any }) {
+  const estado = sale.nubefact_estado as string | undefined;
+  if (!estado) return null;
+
+  const map: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+    aceptado:  { label: "✅ SUNAT",   variant: "default" },
+    rechazado: { label: "⚠️ Rechazado", variant: "destructive" },
+    error:     { label: "❌ Error",    variant: "destructive" },
+    anulado:   { label: "🚫 Anulado", variant: "outline" },
+  };
+  const cfg = map[estado] ?? { label: estado, variant: "outline" as const };
+  return <Badge variant={cfg.variant} className="text-xs">{cfg.label}</Badge>;
+}
+
 // ── Componente de acciones del comprobante ───────────────────
-function ComprobanteActions({ sale }: { sale: any }) {
+function ComprobanteActions({ sale, onNubefactSuccess }: { sale: any; onNubefactSuccess?: () => void }) {
   const qc = useQueryClient();
   const [confirmAnular, setConfirmAnular] = useState(false);
+  const [confirmAnularSunat, setConfirmAnularSunat] = useState(false);
+  const [motivoAnulacion, setMotivoAnulacion] = useState("");
+  const { emitir, anular, loading: nubefactLoading } = useNubefact();
+
   const anularMut = useMutation({
     mutationFn: () => anularVenta({ data: { id: sale.id } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["ventas-unificadas"] });
       toast.success("Comprobante anulado");
       setConfirmAnular(false);
     },
     onError: (e: any) => toast.error(e.message),
   });
 
+  const handleEmitirSunat = async () => {
+    const result = await emitir(sale.id);
+    if (result) {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["sale", sale.id] });
+      qc.invalidateQueries({ queryKey: ["ventas-unificadas"] });
+      onNubefactSuccess?.();
+    }
+  };
+
+  const handleAnularSunat = async () => {
+    if (!motivoAnulacion.trim()) {
+      toast.error("Ingresa el motivo de anulación");
+      return;
+    }
+    const ok = await anular(sale.id, motivoAnulacion);
+    if (ok) {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["sale", sale.id] });
+      qc.invalidateQueries({ queryKey: ["ventas-unificadas"] });
+      setConfirmAnularSunat(false);
+      setMotivoAnulacion("");
+    }
+  };
+
   const data = saleToComprobanteData(sale);
   const xmlData = saleToXmlData(sale);
+  const nubefactEstado = sale.nubefact_estado as string | undefined;
+  const yaEnSunat = nubefactEstado === "aceptado";
+  const anulado = sale.estado === "anulada" || nubefactEstado === "anulado";
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant="outline" onClick={() => printComprobante(data)}>
-        <FileText className="h-3.5 w-3.5 mr-1" /> Ver / Imprimir
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => downloadComprobanteHtml(data)}>
-        <Download className="h-3.5 w-3.5 mr-1" /> PDF
-      </Button>
-      <Button
-        size="sm" variant="outline"
-        onClick={() => downloadComprobanteXml(buildInvoiceXml(xmlData), sale.numero)}
-      >
-        <FileDown className="h-3.5 w-3.5 mr-1" /> XML
-      </Button>
-      {sale.customers?.telefono && (
-        <Button
-          size="sm" variant="outline"
-          onClick={() => whatsappShare(sale.customers.telefono, sale.numero, Number(sale.total), window.location.origin)}
-        >
-          <MessageCircle className="h-3.5 w-3.5 mr-1" /> WhatsApp
-        </Button>
-      )}
-      {sale.customers?.email && (
-        <Button
-          size="sm" variant="outline"
-          onClick={() => emailShare(sale.customers.email, sale.numero, "G&M Mueblería", Number(sale.total))}
-        >
-          <Mail className="h-3.5 w-3.5 mr-1" /> Correo
-        </Button>
-      )}
-      {sale.estado !== "anulada" && (
-        <Button size="sm" variant="destructive" onClick={() => setConfirmAnular(true)}>
-          <XCircle className="h-3.5 w-3.5 mr-1" /> Anular
-        </Button>
+    <div className="space-y-3">
+      {/* Estado Nubefact + enlace PDF */}
+      {nubefactEstado && (
+        <div className="flex items-center gap-2 p-2 rounded bg-muted/40 text-sm">
+          <NubefactBadge sale={sale} />
+          {yaEnSunat && sale.nubefact_enlace && (
+            <a
+              href={sale.nubefact_enlace}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline text-xs ml-1"
+            >
+              Ver en Nubefact →
+            </a>
+          )}
+          {nubefactEstado === "error" && sale.nubefact_error && (
+            <span className="text-destructive text-xs ml-1">{sale.nubefact_error}</span>
+          )}
+        </div>
       )}
 
+      <div className="flex flex-wrap gap-2">
+        {/* Acciones locales */}
+        <Button size="sm" variant="outline" onClick={() => printComprobante(data)}>
+          <FileText className="h-3.5 w-3.5 mr-1" /> Ver / Imprimir
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => downloadComprobanteHtml(data)}>
+          <Download className="h-3.5 w-3.5 mr-1" /> PDF
+        </Button>
+        <Button
+          size="sm" variant="outline"
+          onClick={() => downloadComprobanteXml(buildInvoiceXml(xmlData), sale.numero)}
+        >
+          <FileDown className="h-3.5 w-3.5 mr-1" /> XML
+        </Button>
+        {sale.customers?.telefono && (
+          <Button
+            size="sm" variant="outline"
+            onClick={() => whatsappShare(sale.customers.telefono, sale.numero, Number(sale.total), window.location.origin)}
+          >
+            <MessageCircle className="h-3.5 w-3.5 mr-1" /> WhatsApp
+          </Button>
+        )}
+        {sale.customers?.email && (
+          <Button
+            size="sm" variant="outline"
+            onClick={() => emailShare(sale.customers.email, sale.numero, "G&M Mueblería", Number(sale.total))}
+          >
+            <Mail className="h-3.5 w-3.5 mr-1" /> Correo
+          </Button>
+        )}
+
+        {/* Enviar a SUNAT vía Nubefact */}
+        {!anulado && (
+          yaEnSunat ? (
+            <Button size="sm" variant="outline" disabled className="text-green-600 border-green-200">
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Aceptado por SUNAT
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleEmitirSunat}
+              disabled={nubefactLoading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {nubefactLoading
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                : <Send className="h-3.5 w-3.5 mr-1" />
+              }
+              {nubefactEstado === "error" ? "Reintentar SUNAT" : "Enviar a SUNAT"}
+            </Button>
+          )
+        )}
+
+        {/* Anulación en SUNAT (solo si ya fue aceptado) */}
+        {yaEnSunat && !anulado && (
+          <Button size="sm" variant="destructive" onClick={() => setConfirmAnularSunat(true)}>
+            <AlertCircle className="h-3.5 w-3.5 mr-1" /> Anular en SUNAT
+          </Button>
+        )}
+
+        {/* Anulación local (solo si NO está en SUNAT) */}
+        {!yaEnSunat && !anulado && (
+          <Button size="sm" variant="destructive" onClick={() => setConfirmAnular(true)}>
+            <XCircle className="h-3.5 w-3.5 mr-1" /> Anular
+          </Button>
+        )}
+      </div>
+
+      {/* Confirm: anular localmente */}
       <AlertDialog open={confirmAnular} onOpenChange={setConfirmAnular}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Anular comprobante?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se anulará el comprobante <strong>{sale.numero}</strong>. Esta acción no se puede deshacer.
+              Se anulará el comprobante <strong>{sale.numero}</strong> localmente. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -189,6 +295,36 @@ function ComprobanteActions({ sale }: { sale: any }) {
             >
               {anularMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               Sí, anular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm: anular en SUNAT */}
+      <AlertDialog open={confirmAnularSunat} onOpenChange={setConfirmAnularSunat}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Anular ante SUNAT?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se enviará una comunicación de baja para <strong>{sale.numero}</strong>. Ingresa el motivo:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-6">
+            <Input
+              placeholder="Ej: Error en datos del cliente"
+              value={motivoAnulacion}
+              onChange={(e) => setMotivoAnulacion(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setMotivoAnulacion("")}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={handleAnularSunat}
+              disabled={nubefactLoading || !motivoAnulacion.trim()}
+            >
+              {nubefactLoading && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Confirmar anulación
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -207,8 +343,6 @@ function DescargaPeriodo({ sales }: { sales: any[] }) {
     );
     if (!filtered.length) { toast.error("No hay comprobantes en ese período"); return; }
 
-    // Genera un ZIP conceptual: descarga cada XML como archivo individual
-    // Para un ZIP real se necesitaría la librería jszip (se puede agregar)
     filtered.forEach((s) => {
       const xmlData = saleToXmlData(s);
       downloadComprobanteXml(buildInvoiceXml(xmlData), s.numero);
@@ -342,6 +476,7 @@ function VentasPage() {
                   <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">SUNAT</th>
                   <th className="px-4 py-3">Acciones</th>
                 </tr>
               </thead>
@@ -381,6 +516,9 @@ function VentasPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
+                      <NubefactBadge sale={v} />
+                    </td>
+                    <td className="px-4 py-3">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -395,7 +533,7 @@ function VentasPage() {
                 ))}
                 {ventas.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                    <td colSpan={8} className="text-center py-10 text-muted-foreground">
                       No se encontraron comprobantes.
                     </td>
                   </tr>
@@ -406,7 +544,7 @@ function VentasPage() {
         )}
       </Card>
 
-      {/* Detalle / Acciones */}
+      {/* Detalle / Acciones — ventas POS */}
       <Dialog open={!!openId} onOpenChange={(v) => !v && setOpenId(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -426,7 +564,8 @@ function VentasPage() {
                 <div><span className="text-muted-foreground">Tipo:</span> {tipoLabel[saleDetail.sale.tipo]}</div>
                 <div><span className="text-muted-foreground">Fecha:</span> {format(new Date(saleDetail.sale.created_at), "dd/MM/yyyy HH:mm")}</div>
                 <div><span className="text-muted-foreground">Total:</span> <strong>{fmt(Number(saleDetail.sale.total))}</strong></div>
-                <div><span className="text-muted-foreground">Estado:</span>
+                <div>
+                  <span className="text-muted-foreground">Estado:</span>
                   <Badge className="ml-2" variant={saleDetail.sale.estado === "anulada" ? "destructive" : "default"}>
                     {saleDetail.sale.estado}
                   </Badge>
@@ -475,7 +614,7 @@ function VentasPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog para pedidos ONLINE ── */}
+      {/* Dialog para pedidos ONLINE */}
       <Dialog open={!!openOrderId} onOpenChange={(v) => !v && setOpenOrderId(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -490,7 +629,6 @@ function VentasPage() {
             </div>
           ) : orderDetail?.order ? (
             <div className="space-y-4">
-              {/* Info del pedido */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Número:</span> <strong>{orderDetail.order.order_number}</strong></div>
                 <div><span className="text-muted-foreground">Estado:</span>
@@ -505,7 +643,6 @@ function VentasPage() {
                 )}
               </div>
 
-              {/* Cliente */}
               <div className="bg-muted/30 rounded p-3 text-sm">
                 <p className="font-medium mb-1">Cliente</p>
                 <p>{orderDetail.order.nombre}</p>
@@ -525,7 +662,6 @@ function VentasPage() {
                 )}
               </div>
 
-              {/* Ítems */}
               <div>
                 <p className="font-medium text-sm mb-2">Ítems</p>
                 <div className="border rounded overflow-hidden">
@@ -564,7 +700,6 @@ function VentasPage() {
                 </div>
               </div>
 
-              {/* Acciones de comprobante */}
               <ComprobanteActions sale={orderToSale(orderDetail.order)} />
             </div>
           ) : (
@@ -576,7 +711,7 @@ function VentasPage() {
   );
 }
 
-// ── Adapta un order online al shape que espera ComprobanteActions/saleToComprobanteData ──
+// ── Adapta un order online al shape que espera ComprobanteActions ──
 function orderToSale(order: any) {
   return {
     id: order.id,
@@ -588,6 +723,9 @@ function orderToSale(order: any) {
     igv: Math.round(Number(order.subtotal) * 0.18 * 100) / 100,
     total: Number(order.total),
     notas: order.notas,
+    nubefact_estado: order.nubefact_estado,
+    nubefact_enlace: order.nubefact_enlace,
+    nubefact_error:  order.nubefact_error,
     customers: {
       nombre: order.nombre,
       doc_tipo: "DNI",

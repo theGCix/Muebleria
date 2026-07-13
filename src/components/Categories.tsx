@@ -1,27 +1,6 @@
-import { Sofa, UtensilsCrossed, BedDouble, Briefcase } from "lucide-react";
-
-const categories = [
-  {
-    icon: Sofa,
-    title: "Sala",
-    description: "Sofás, mesas de centro y butacas para acoger a los tuyos.",
-  },
-  {
-    icon: UtensilsCrossed,
-    title: "Comedor",
-    description: "Mesas y sillas para reunir a la familia alrededor de cada plato.",
-  },
-  {
-    icon: BedDouble,
-    title: "Recámara",
-    description: "Camas, cabeceras y cómodas para un descanso reparador.",
-  },
-  {
-    icon: Briefcase,
-    title: "Oficina",
-    description: "Escritorios y libreros que inspiran a trabajar con estilo.",
-  },
-];
+import { Link } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
+import { CATEGORIAS } from "@/lib/categories";
 
 export function Categories() {
   return (
@@ -35,17 +14,22 @@ export function Categories() {
         </h2>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {categories.map((cat) => (
-          <div
-            key={cat.title}
-            className="group p-8 rounded-xl bg-card border border-border/60 hover:shadow-[var(--shadow-soft)] hover:-translate-y-1 transition-all duration-300"
+        {CATEGORIAS.map((cat) => (
+          <Link
+            key={cat.slug}
+            to="/categoria/$slug"
+            params={{ slug: cat.slug }}
+            className="group p-8 rounded-xl bg-card border border-border/60 hover:shadow-[var(--shadow-soft)] hover:-translate-y-1 transition-all duration-300 text-left"
           >
             <div className="h-12 w-12 rounded-lg bg-secondary flex items-center justify-center mb-6 group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
               <cat.icon className="h-6 w-6" />
             </div>
-            <h3 className="font-display text-2xl font-semibold mb-2 text-foreground">{cat.title}</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">{cat.description}</p>
-          </div>
+            <h3 className="font-display text-2xl font-semibold mb-2 text-foreground">{cat.nombre}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">{cat.descripcion}</p>
+            <span className="inline-flex items-center gap-1 text-sm font-medium text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+              Ver colección <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </Link>
         ))}
       </div>
     </section>

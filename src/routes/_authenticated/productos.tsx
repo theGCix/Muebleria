@@ -11,9 +11,13 @@ import { Loader2, Plus, Pencil, Trash2, Image } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
+import { CATEGORIAS, getCategoria } from "@/lib/categories";
 
 export const Route = createFileRoute("/_authenticated/productos")({
   head: () => ({ meta: [{ title: "Productos — G&M POS" }] }),
@@ -38,6 +42,8 @@ type ProductForm = {
   precio: string;
   stock: string;
   categoria: string;
+  subcategoria: string;
+  material_base: string;
   // Campos legacy (se mantienen sincronizados con imagenes[0])
   imagen_url: string;
   imagen_public_id: string;
@@ -47,7 +53,7 @@ type ProductForm = {
 
 const emptyForm = (): ProductForm => ({
   nombre: "", descripcion: "", sku: "", precio: "",
-  stock: "", categoria: "",
+  stock: "", categoria: "", subcategoria: "", material_base: "",
   imagen_url: "", imagen_public_id: "",
   imagenes: [],
 });
@@ -173,6 +179,8 @@ function ProductFormModal({
         ...form,
         precio: parseFloat(form.precio),
         stock: parseInt(form.stock, 10),
+        subcategoria: form.subcategoria || null,
+        material_base: form.material_base || null,
         imagenes: form.imagenes,
         ...(form.id ? { id: form.id } : {}),
       }),
@@ -276,9 +284,69 @@ function ProductFormModal({
           </div>
           <div>
             <Label htmlFor="categoria">Categoría</Label>
-            <Input id="categoria" value={form.categoria} onChange={set("categoria")} />
+            <Select
+              value={form.categoria || undefined}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, categoria: v, subcategoria: "", material_base: "" }))
+              }
+            >
+              <SelectTrigger id="categoria">
+                <SelectValue placeholder="Selecciona…" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIAS.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>{c.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
+
+        {/* Subcategoría y tipo de base — dependen de la categoría elegida */}
+        {(() => {
+          const catCfg = getCategoria(form.categoria);
+          if (!catCfg || (catCfg.subcategorias.length === 0 && !catCfg.filtroExtra)) return null;
+          return (
+            <div className="grid grid-cols-2 gap-3">
+              {catCfg.subcategorias.length > 0 && (
+                <div>
+                  <Label htmlFor="subcategoria">Subcategoría</Label>
+                  <Select
+                    value={form.subcategoria || undefined}
+                    onValueChange={(v) => setForm((f) => ({ ...f, subcategoria: v }))}
+                  >
+                    <SelectTrigger id="subcategoria">
+                      <SelectValue placeholder="Selecciona…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catCfg.subcategorias.map((s) => (
+                        <SelectItem key={s.slug} value={s.slug}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {catCfg.filtroExtra && (
+                <div>
+                  <Label htmlFor="material_base">{catCfg.filtroExtra.label}</Label>
+                  <Select
+                    value={form.material_base || undefined}
+                    onValueChange={(v) => setForm((f) => ({ ...f, material_base: v }))}
+                  >
+                    <SelectTrigger id="material_base">
+                      <SelectValue placeholder="Selecciona…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catCfg.filtroExtra.opciones.map((o) => (
+                        <SelectItem key={o.slug} value={o.slug}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="precio">Precio (S/) *</Label>
@@ -402,7 +470,13 @@ function ProductosPage() {
                       <td className="px-4 py-3 font-medium">{p.nombre}</td>
                       <td className="px-4 py-3 text-muted-foreground font-mono">{p.sku || "—"}</td>
                       <td className="px-4 py-3">
-                        {p.categoria ? <Badge variant="outline">{p.categoria}</Badge> : "—"}
+                        {p.categoria ? (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline">{getCategoria(p.categoria)?.nombre ?? p.categoria}</Badge>
+                            {p.subcategoria && <Badge variant="secondary">{p.subcategoria}</Badge>}
+                            {p.material_base && <Badge variant="secondary">{p.material_base}</Badge>}
+                          </div>
+                        ) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">{fmt(Number(p.precio))}</td>
                       <td className="px-4 py-3 text-right">
@@ -423,6 +497,8 @@ function ProductosPage() {
                               precio: String(p.precio),
                               stock: String(p.stock ?? 0),
                               categoria: p.categoria ?? "",
+                              subcategoria: p.subcategoria ?? "",
+                              material_base: p.material_base ?? "",
                               imagen_url: p.imagen_url ?? "",
                               imagen_public_id: p.imagen_public_id ?? "",
                               imagenes: parseImagenes(p),
