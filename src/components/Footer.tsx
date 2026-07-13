@@ -7,7 +7,7 @@ export function Footer() {
         <div className="grid md:grid-cols-4 gap-10">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-9 w-9 rounded-md bg-[var(--gradient-warm)] flex items-center justify-center text-primary-foreground font-display font-bold">
+              <div className="h-9 w-9 rounded-md bg-[image:var(--gradient-warm)] flex items-center justify-center text-primary-foreground font-display font-bold">
                 G
               </div>
               <span className="font-display text-xl font-semibold">G&amp;M Mueblería</span>

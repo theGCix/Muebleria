@@ -57,7 +57,7 @@ export function Hero() {
           </div>
 
           <div className="relative">
-            <div className="absolute -inset-4 bg-[var(--gradient-warm)] opacity-20 blur-3xl rounded-full" />
+            <div className="absolute -inset-4 bg-[image:var(--gradient-warm)] opacity-20 blur-3xl rounded-full" />
             <div className="relative rounded-2xl overflow-hidden shadow-[var(--shadow-elegant)] border border-border/40">
               <img
                 src={heroImg}

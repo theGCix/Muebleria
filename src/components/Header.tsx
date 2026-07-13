@@ -74,7 +74,7 @@ export function Header() {
           <div className="container mx-auto flex h-20 items-center gap-4 px-4 md:px-6">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-              <div className="h-9 w-9 rounded-md bg-[var(--gradient-warm)] flex items-center justify-center text-primary-foreground font-display font-bold">
+              <div className="h-9 w-9 rounded-md bg-[image:var(--gradient-warm)] flex items-center justify-center text-primary-foreground font-display font-bold">
                 G
               </div>
               <div className="hidden sm:flex flex-col leading-none">
