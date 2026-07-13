@@ -21,6 +21,7 @@ const navLinks = [
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState("");
   const { user, roles } = useAuth();
@@ -53,6 +54,7 @@ export function Header() {
   const handleMobileSearch = (e: React.FormEvent) => {
     e.preventDefault();
     goToCatalogo(mobileSearch);
+    setMobileSearchOpen(false);
     setMobileOpen(false);
   };
 
@@ -73,14 +75,9 @@ export function Header() {
         <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
           <div className="container mx-auto flex h-20 items-center gap-4 px-4 md:px-6">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-              <div className="h-9 w-9 rounded-md bg-[image:var(--gradient-warm)] flex items-center justify-center text-primary-foreground font-display font-bold">
-                G
-              </div>
-              <div className="hidden sm:flex flex-col leading-none">
-                <span className="font-display text-lg font-semibold tracking-tight">G&amp;M</span>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Mueblería</span>
-              </div>
+            <Link to="/" className="flex flex-col leading-none flex-shrink-0">
+              <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
+              <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
             </Link>
 
             {/* Desktop nav */}
@@ -148,13 +145,20 @@ export function Header() {
               <CartDrawer />
             </div>
 
-            {/* Mobile: wishlist + cart + hamburger */}
+            {/* Mobile: buscar + wishlist + cart + hamburger */}
             <div className="flex items-center gap-2 md:hidden ml-auto">
+              <button
+                onClick={() => { setMobileSearchOpen((v) => !v); setMobileOpen(false); }}
+                className={`p-2 rounded-md transition-colors ${mobileSearchOpen ? "text-accent bg-accent/10" : "text-foreground/70 hover:text-foreground hover:bg-accent/10"}`}
+                aria-label="Buscar"
+              >
+                <Search className="h-5 w-5" />
+              </button>
               <WishlistDrawer />
               <CartDrawer />
               <button
-                onClick={() => setMobileOpen((v) => !v)}
-                className="p-2 rounded-md text-foreground/70 hover:text-foreground hover:bg-accent"
+                onClick={() => { setMobileOpen((v) => !v); setMobileSearchOpen(false); }}
+                className="p-2 rounded-md text-foreground/70 hover:text-foreground hover:bg-accent/10"
                 aria-label="Menú"
               >
                 {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -162,20 +166,25 @@ export function Header() {
             </div>
           </div>
 
-          {/* Mobile dropdown */}
-          {mobileOpen && (
-            <div className="md:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Buscador mobile */}
+          {/* Barra de búsqueda mobile (toggle independiente del menú) */}
+          {mobileSearchOpen && (
+            <div className="md:hidden border-t border-border/40 bg-background px-4 py-3">
               <form onSubmit={handleMobileSearch} className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  autoFocus
                   value={mobileSearch}
                   onChange={(e) => setMobileSearch(e.target.value)}
-                  placeholder="Buscar productos…"
+                  placeholder="Buscar sofás, comedores, camas…"
                   className="pl-9 rounded-full bg-secondary/40 border-border/50"
                 />
               </form>
+            </div>
+          )}
 
+          {/* Mobile dropdown */}
+          {mobileOpen && (
+            <div className="md:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
               {/* Categorías (acordeón) */}
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1 px-1">
