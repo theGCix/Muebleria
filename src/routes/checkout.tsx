@@ -296,9 +296,9 @@ useEffect(() => {
 
         <h1 className="font-display text-4xl font-semibold mb-10">Finalizar compra</h1>
 
-        <div className="grid lg:grid-cols-[1fr_420px] gap-10">
+        <div className="grid lg:grid-cols-[1fr_420px] gap-10 min-w-0">
           {/* ── Formulario ── */}
-          <form onSubmit={handlePagar} className="space-y-8">
+          <form onSubmit={handlePagar} className="space-y-8 min-w-0">
 
             <section className="bg-card border border-border/50 rounded-xl p-6 space-y-4">
               <h2 className="font-display text-xl font-semibold">Datos de contacto</h2>
@@ -378,7 +378,7 @@ useEffect(() => {
           </form>
 
           {/* ── Resumen ── */}
-          <aside>
+          <aside className="min-w-0">
             <div className="bg-card border border-border/50 rounded-xl p-6 sticky top-6">
               <h2 className="font-display text-xl font-semibold mb-4">Resumen del pedido</h2>
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
