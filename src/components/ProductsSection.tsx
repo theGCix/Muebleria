@@ -1,12 +1,20 @@
 import { useProducts } from "@/hooks/useProducts";
 import { ProductCard } from "./ProductCard";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { useSearchStore } from "@/stores/searchStore";
 
 export function ProductsSection() {
-  const [search, setSearch] = useState("");
+  const storeQuery = useSearchStore((s) => s.query);
+  const setStoreQuery = useSearchStore((s) => s.setQuery);
+  const [search, setSearch] = useState(storeQuery);
   const { data = [], isLoading } = useProducts(24, search || undefined);
+
+  // Si la búsqueda se dispara desde el navbar, refleja el término aquí.
+  useEffect(() => {
+    setSearch(storeQuery);
+  }, [storeQuery]);
 
   return (
     <section id="catalogo" className="py-16 px-4">
@@ -19,7 +27,10 @@ export function ProductsSection() {
           <Input
             placeholder="Buscar productos…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setStoreQuery(e.target.value);
+            }}
             className="max-w-xs"
           />
         </div>
