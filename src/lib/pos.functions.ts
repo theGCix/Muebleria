@@ -696,13 +696,15 @@ export async function registrarMovimiento(input: {
   cantidad: number;
   motivo?: string;
   referencia?: string;
+  ubicacion_id?: string;
 }) {
   const data = z.object({
-    insumo_id:  z.string().uuid(),
-    tipo:       z.enum(["entrada", "salida", "ajuste"]),
-    cantidad:   z.number(),
-    motivo:     z.string().max(500).optional(),
-    referencia: z.string().max(100).optional(),
+    insumo_id:    z.string().uuid(),
+    tipo:         z.enum(["entrada", "salida", "ajuste"]),
+    cantidad:     z.number(),
+    motivo:       z.string().max(500).optional(),
+    referencia:   z.string().max(100).optional(),
+    ubicacion_id: z.string().uuid().optional(),
   }).parse(input);
 
   const { supabase, userId } = await getAuthenticatedClient();
@@ -947,6 +949,37 @@ export async function asignarCarpintero(input: {
   return { ok: true };
 }
 
+// Listar ubicaciones activas (talleres / almacenes / tienda)
+export async function listUbicaciones() {
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("ubicaciones")
+    .select("id, nombre, tipo, distrito")
+    .eq("activo", true)
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return { ubicaciones: data ?? [] };
+}
+
+// Asignar un taller/ubicación a una orden de producción
+export async function asignarUbicacionProduccion(input: {
+  produccion_id: string;
+  ubicacion_id: string;
+}) {
+  const data = z.object({
+    produccion_id: z.string().uuid(),
+    ubicacion_id:  z.string().uuid(),
+  }).parse(input);
+
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase
+    .from("produccion")
+    .update({ ubicacion_id: data.ubicacion_id, updated_at: new Date().toISOString() })
+    .eq("id", data.produccion_id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
 // Listar carpinteros disponibles (para el selector de asignación)
 export async function listCarpinteros() {
   const { supabase } = await getAuthenticatedClient();
@@ -1058,12 +1091,14 @@ export async function crearOrdenCompra(input: {
   proveedor_id: string;
   fecha_esperada?: string | null;
   notas?: string | null;
+  destino_ubicacion_id?: string | null;
   items: Array;
 }) {
   const data = z.object({
-    proveedor_id:   z.string().uuid(),
-    fecha_esperada: z.string().optional().nullable(),
-    notas:          z.string().max(1000).optional().nullable(),
+    proveedor_id:          z.string().uuid(),
+    fecha_esperada:        z.string().optional().nullable(),
+    notas:                 z.string().max(1000).optional().nullable(),
+    destino_ubicacion_id:  z.string().uuid().optional().nullable(),
     items: z.array(z.object({
       insumo_id:   z.string().uuid().optional().nullable(),
       product_id:  z.string().uuid().optional().nullable(),
@@ -1083,11 +1118,12 @@ export async function crearOrdenCompra(input: {
   const { data: orden, error: ordenErr } = await supabase
     .from("ordenes_compra")
     .insert({
-      numero:         numRow,
-      proveedor_id:   data.proveedor_id,
-      fecha_esperada: data.fecha_esperada ?? null,
-      notas:          data.notas ?? null,
-      creado_por:     userId,
+      numero:                numRow,
+      proveedor_id:          data.proveedor_id,
+      fecha_esperada:        data.fecha_esperada ?? null,
+      notas:                 data.notas ?? null,
+      destino_ubicacion_id:  data.destino_ubicacion_id ?? null,
+      creado_por:            userId,
     })
     .select()
     .single();

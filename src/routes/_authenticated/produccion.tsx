@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listProduccion, getDetalleProduccion, actualizarProduccion,
   asignarCarpintero, listCarpinteros,
+  asignarUbicacionProduccion, listUbicaciones,
 } from "@/lib/pos.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ function OrdenDetalle({
   const [obs, setObs] = useState(orden.observaciones ?? "");
   const [asignarOpen, setAsignarOpen] = useState(false);
   const [carpinteroId, setCarpinteroId] = useState(orden.asignado_a ?? "");
+  const [ubicacionId, setUbicacionId] = useState(orden.ubicacion_id ?? "");
 
   const { data: detalle, isLoading } = useQuery({
     queryKey: ["produccion-detalle", orden.order_id],
@@ -81,6 +83,11 @@ function OrdenDetalle({
   const { data: carpinterosData } = useQuery({
     queryKey: ["carpinteros"],
     queryFn: listCarpinteros,
+  });
+
+  const { data: ubicData } = useQuery({
+    queryKey: ["ubicaciones"],
+    queryFn: listUbicaciones,
   });
 
   const refresh = () => {
@@ -108,6 +115,16 @@ function OrdenDetalle({
     onSuccess: () => {
       toast.success("Carpintero asignado");
       setAsignarOpen(false);
+      refresh();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const ubicacionMut = useMutation({
+    mutationFn: () =>
+      asignarUbicacionProduccion({ produccion_id: detalle!.produccion!.id, ubicacion_id: ubicacionId }),
+    onSuccess: () => {
+      toast.success("Taller asignado");
       refresh();
     },
     onError: (e: any) => toast.error(e.message),
@@ -287,7 +304,7 @@ function OrdenDetalle({
           <Dialog open onOpenChange={setAsignarOpen}>
             <DialogContent className="max-w-sm">
               <DialogHeader>
-                <DialogTitle>Asignar carpintero</DialogTitle>
+                <DialogTitle>Asignar carpintero y taller</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div>
@@ -306,7 +323,26 @@ function OrdenDetalle({
                   onClick={() => asignarMut.mutate()}
                 >
                   {asignarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Asignar
+                  Asignar carpintero
+                </Button>
+
+                <div className="border-t pt-4">
+                  <Label className="text-xs">Taller / ubicación</Label>
+                  <Select value={ubicacionId} onValueChange={setUbicacionId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                    <SelectContent>
+                      {(ubicData?.ubicaciones ?? []).map((u: any) => (
+                        <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  className="w-full" variant="outline" disabled={!ubicacionId || ubicacionMut.isPending}
+                  onClick={() => ubicacionMut.mutate()}
+                >
+                  {ubicacionMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Asignar taller
                 </Button>
               </div>
             </DialogContent>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listProveedores, upsertProveedor, getProveedor,
   listOrdenes, crearOrdenCompra, actualizarStatusOrden, recibirOrdenCompra,
+  listUbicaciones,
 } from "@/lib/pos.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -436,9 +437,15 @@ function ProveedorDetalle({ proveedorId, onClose }: { proveedorId: string; onClo
 function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClose: () => void }) {
   const [fechaEsperada, setFechaEsperada] = useState("");
   const [notas, setNotas] = useState("");
+  const [destinoId, setDestinoId] = useState("");
   const [items, setItems] = useState([
     { descripcion: "", unidad: "unidades", cantidad: 1, precio_unit: 0 },
   ]);
+
+  const { data: ubicData } = useQuery({
+    queryKey: ["ubicaciones"],
+    queryFn: listUbicaciones,
+  });
 
   const addItem = () => setItems((it) => [...it, { descripcion: "", unidad: "unidades", cantidad: 1, precio_unit: 0 }]);
   const removeItem = (i: number) => setItems((it) => it.filter((_, idx) => idx !== i));
@@ -448,7 +455,13 @@ function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClo
   const total = items.reduce((s, it) => s + it.cantidad * it.precio_unit, 0);
 
   const mut = useMutation({
-    mutationFn: () => crearOrdenCompra({ proveedor_id: proveedorId, fecha_esperada: fechaEsperada || null, notas: notas || null, items }),
+    mutationFn: () => crearOrdenCompra({
+      proveedor_id: proveedorId,
+      fecha_esperada: fechaEsperada || null,
+      notas: notas || null,
+      destino_ubicacion_id: destinoId || null,
+      items,
+    }),
     onSuccess: () => { toast.success("Orden de compra creada"); onClose(); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -464,9 +477,20 @@ function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClo
               <Input className="mt-1" type="date" value={fechaEsperada} onChange={(e) => setFechaEsperada(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">Notas para el proveedor</Label>
-              <Input className="mt-1" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Instrucciones, referencias..." />
+              <Label className="text-xs">Destino (taller / almacén)</Label>
+              <Select value={destinoId} onValueChange={setDestinoId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Almacén Central (por defecto)" /></SelectTrigger>
+                <SelectContent>
+                  {(ubicData?.ubicaciones ?? []).map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+          <div>
+            <Label className="text-xs">Notas para el proveedor</Label>
+            <Input className="mt-1" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Instrucciones, referencias..." />
           </div>
 
           <div className="space-y-2">

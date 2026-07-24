@@ -4,6 +4,7 @@ import {
   listInsumos, upsertInsumo, registrarMovimiento,
   getBom, calcularMrp, getStockBajo,
   listProveedores, enviarAProduccion, listCarpinteros,
+  listUbicaciones,
 } from "@/lib/pos.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -506,12 +507,19 @@ function MovimientoDialog({ insumoId, insumoNombre, onDone }: {
   const [tipo, setTipo] = useState<"entrada" | "salida" | "ajuste">("entrada");
   const [cantidad, setCantidad] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [ubicacionId, setUbicacionId] = useState("");
+
+  const { data: ubicData } = useQuery({
+    queryKey: ["ubicaciones"],
+    queryFn: listUbicaciones,
+  });
 
   const mut = useMutation({
     mutationFn: () => registrarMovimiento({
       insumo_id: insumoId, tipo,
       cantidad: tipo === "ajuste" ? Number(cantidad) : Math.abs(Number(cantidad)),
       motivo: motivo || undefined,
+      ubicacion_id: ubicacionId || undefined,
     }),
     onSuccess: () => {
       toast.success("Movimiento registrado");
@@ -555,6 +563,17 @@ function MovimientoDialog({ insumoId, insumoNombre, onDone }: {
               placeholder={tipo === "ajuste" ? "−5 o +10" : "0"}
               value={cantidad} onChange={(e) => setCantidad(e.target.value)}
             />
+          </div>
+          <div>
+            <Label className="text-xs">Ubicación</Label>
+            <Select value={ubicacionId} onValueChange={setUbicacionId}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Almacén Central (por defecto)" /></SelectTrigger>
+              <SelectContent>
+                {(ubicData?.ubicaciones ?? []).map((u: any) => (
+                  <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-xs">Motivo (opcional)</Label>
