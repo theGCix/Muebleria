@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { getStoredUtm } from "@/hooks/useUtm";
+import { supabase } from "@/integrations/supabase/client";
 
 
 
@@ -36,6 +37,10 @@ export const Route = createFileRoute("/checkout")({
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+
+// Cargo fijo por el segundo viaje cuando el cliente elige "entrega parcial"
+// en un pedido mixto (parte disponible ya, parte por conseguir). Ajustable.
+const CARGO_ENVIO_PARCIAL = 25;
 
 function generateOrderId() {
   
@@ -98,13 +103,38 @@ function CheckoutPage() {
     direccion: "", distrito: "", ciudad: "Lima", notas: "",
   });
 
+  // ── Disponibilidad / modo de entrega (pedidos mixtos) ─────
+  const [disponibilidad, setDisponibilidad] = useState<{
+    requiere_eleccion_modo_entrega: boolean;
+    fecha_entrega_disponible: string;
+    fecha_entrega_backorder: string;
+  } | null>(null);
+  const [modoEntrega, setModoEntrega] = useState<"unificada" | "parcial">("unificada");
+  const [checkingDisponibilidad, setCheckingDisponibilidad] = useState(false);
+
+  useEffect(() => {
+    if (items.length === 0) { setDisponibilidad(null); return; }
+    setCheckingDisponibilidad(true);
+    supabase
+      .rpc("verificar_disponibilidad_carrito", {
+        _items: items.map((it) => ({ product_id: it.id, qty: it.qty })),
+      })
+      .then(({ data, error }) => {
+        if (error) { console.error("Error verificando disponibilidad:", error.message); return; }
+        setDisponibilidad(data as any);
+      })
+      .finally(() => setCheckingDisponibilidad(false));
+  }, [items]);
+
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const subtotal   = total();
-  const envio      = subtotal > 500 ? 0 : 35;
-  const totalFinal = subtotal + envio;
+  const subtotal        = total();
+  const requiereEleccion = disponibilidad?.requiere_eleccion_modo_entrega ?? false;
+  const cargoParcial     = (requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
+  const envio            = (subtotal > 500 ? 0 : 35) + cargoParcial;
+  const totalFinal       = subtotal + envio;
 
 
   useEffect(() => {
@@ -168,6 +198,7 @@ useEffect(() => {
         subtotal:         saved.subtotal ?? 0,
         envio:            saved.envio ?? 0,
         total:            saved.total ?? 0,
+        modo_entrega:     saved.modoEntrega ?? null,
         sessionKey:       niubizRef.current?.sessionKey ?? "",
         transactionToken,
         // UTM
@@ -261,6 +292,7 @@ useEffect(() => {
         subtotal,
         envio,
         total: totalFinal,
+        modoEntrega: requiereEleccion ? modoEntrega : null,
       }));
 
       window.VisanetCheckout.open();
@@ -398,6 +430,51 @@ useEffect(() => {
                   </div>
                 ))}
               </div>
+
+              {requiereEleccion && (
+                <div className="mt-4 pt-4 border-t border-border space-y-2">
+                  <p className="text-sm font-medium">Tu pedido tiene productos con distinta disponibilidad</p>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Parte de tu pedido lo tenemos en almacén, y parte lo conseguimos especialmente para ti. Elige cómo prefieres recibirlo:
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => setModoEntrega("unificada")}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      modoEntrega === "unificada" ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-medium">Recibir todo junto</p>
+                        <p className="text-xs text-muted-foreground">
+                          Entrega estimada: {disponibilidad?.fecha_entrega_backorder}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold text-green-600">Sin costo extra</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setModoEntrega("parcial")}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      modoEntrega === "parcial" ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-medium">Recibir en dos envíos</p>
+                        <p className="text-xs text-muted-foreground">
+                          Lo disponible: {disponibilidad?.fecha_entrega_disponible} · Resto: {disponibilidad?.fecha_entrega_backorder}
+                        </p>
+                      </div>
+                      <span className="text-xs font-semibold">+{fmt(CARGO_ENVIO_PARCIAL)}</span>
+                    </div>
+                  </button>
+                </div>
+              )}
 
               <div className="mt-4 pt-4 border-t border-border space-y-2 text-sm">
                 <div className="flex justify-between text-muted-foreground">

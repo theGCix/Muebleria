@@ -195,6 +195,7 @@ app.post("/api/orders", async (req, res) => {
         subtotal:           order.subtotal  ?? 0,
         envio:              order.envio     ?? 0,
         total:              order.total     ?? 0,
+        modo_entrega:       order.modo_entrega ?? null,
         currency:           "PEN",
         niubiz_session_key: order.sessionKey       ?? null,
         niubiz_token:       order.transactionToken ?? null,
