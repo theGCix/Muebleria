@@ -223,20 +223,16 @@ app.post("/api/orders", async (req, res) => {
         .insert(orderItems);
       if (itemsError) throw new Error(itemsError.message);
 
-      // Reducir stock
-      for (const item of orderItems) {
-        if (!item.product_id) continue;
-        const { data: product } = await supabaseAdmin
-          .from("products")
-          .select("stock")
-          .eq("id", item.product_id)
-          .single();
-        if (product) {
-          await supabaseAdmin
-            .from("products")
-            .update({ stock: Math.max(0, (product.stock ?? 0) - item.qty) })
-            .eq("id", item.product_id);
-        }
+      // Procesar stock del pedido recién pagado:
+      // - Ítems retail: descuenta de stock_ubicacion/products si hay stock,
+      //   o marca "pendiente_reposicion" + empuja estimated_delivery +5 días hábiles.
+      // - Ítems manufactura: no se tocan aquí (se resuelven al pasar a producción).
+      const { error: procesarErr } = await supabaseAdmin.rpc(
+        "procesar_pago_pedido",
+        { _order_id: newOrder.id }
+      );
+      if (procesarErr) {
+        console.error("⚠️ Error procesando stock del pedido:", procesarErr.message);
       }
     }
 
