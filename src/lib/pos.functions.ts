@@ -881,6 +881,7 @@ export async function cambiarEstadoPedido(input: {
   motivo?: string;
   modelo?: string;
   talla?: string;
+  items?: Array<{ order_item_id: string; modelo?: string; talla?: string }>;
 }) {
   const data = z.object({
     order_id:     z.string().uuid(),
@@ -888,6 +889,11 @@ export async function cambiarEstadoPedido(input: {
     motivo:       z.string().optional(),
     modelo:       z.string().optional(),
     talla:        z.string().optional(),
+    items: z.array(z.object({
+      order_item_id: z.string().uuid(),
+      modelo:         z.string().optional(),
+      talla:          z.string().optional(),
+    })).optional(),
   }).parse(input);
 
   const { supabase } = await getAuthenticatedClient();
@@ -897,6 +903,7 @@ export async function cambiarEstadoPedido(input: {
     _motivo:       data.motivo ?? null,
     _modelo:       data.modelo ?? null,
     _talla:        data.talla ?? null,
+    _items:        data.items ?? null,
   });
   if (error) throw new Error(error.message);
   return result;

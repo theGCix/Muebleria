@@ -95,7 +95,7 @@ async function fetchOrders() {
 async function fetchOrderItems(orderId: string) {
   const { data, error } = await supabase
     .from("order_items")
-    .select("id, sku, title, qty, unit_price, total, image_url")
+    .select("id, sku, title, qty, unit_price, total, image_url, product_id, fulfillment_status, products(tipo_gestion)")
     .eq("order_id", orderId);
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -122,7 +122,7 @@ async function cambiarEstado(orderId: string, nuevoEstado: OrderStatus) {
 
 // ── Componente principal ─────────────────────────────────────
 function PedidosPage() {
-  const [mrpForm, setMrpForm] = useState({ modelo: "", talla: "" });
+  const [itemAsignaciones, setItemAsignaciones] = useState<Record<string, { modelo: string; talla: string }>>({});
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
@@ -147,16 +147,22 @@ function PedidosPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
-     cambiarEstadoPedido({
-      order_id: id,
-      nuevo_estado: status,
-      modelo: status === "en_produccion" ? mrpForm.modelo || undefined : undefined,
-      talla:  status === "en_produccion" ? mrpForm.talla  || undefined : undefined,
-    }),
+    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) => {
+      const items = status === "en_produccion"
+        ? Object.entries(itemAsignaciones)
+            .filter(([, v]) => v.modelo && v.talla)
+            .map(([order_item_id, v]) => ({ order_item_id, modelo: v.modelo, talla: v.talla }))
+        : undefined;
+      return cambiarEstadoPedido({
+        order_id: id,
+        nuevo_estado: status,
+        items: items && items.length > 0 ? items : undefined,
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["order-historial", selectedId] });
+      qc.invalidateQueries({ queryKey: ["order-items", selectedId] });
       toast.success("Estado actualizado");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -415,30 +421,10 @@ function PedidosPage() {
 
               {/* SE - 09062026 09:31*/}
                 {selected.status === "pagado" && (
-                <div className="flex gap-2 items-end mb-2">
-                  <div className="flex-1">
-                    <Label className="text-xs mb-1 block">Modelo (para MRP)</Label>
-                    <Select value={mrpForm.modelo} onValueChange={(v) => setMrpForm((f) => ({ ...f, modelo: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                      <SelectContent>
-                        {["Vintage", "Rex", "Lineal Punta", "London", "Garra"].map((m) => (
-                          <SelectItem key={m} value={m}>{m}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-36">
-                    <Label className="text-xs mb-1 block">Talla</Label>
-                    <Select value={mrpForm.talla} onValueChange={(v) => setMrpForm((f) => ({ ...f, talla: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Talla" /></SelectTrigger>
-                      <SelectContent>
-                        {["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"].map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Antes de pasar a producción, asigna modelo y talla a cada mueble a medida
+                  en la sección "Productos" de abajo.
+                </p>
               )}
               {/* EE - 09062026 09:31*/}
 
@@ -500,28 +486,78 @@ function PedidosPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {orderItems.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url} alt={item.title}
-                            className="w-12 h-12 rounded-md object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
-                            <ShoppingBag className="h-5 w-5 text-muted-foreground" />
+                    {orderItems.map((item: any) => {
+                      const tipoGestion = item.products?.tipo_gestion ?? "manufactura";
+                      const esManufactura = tipoGestion === "manufactura";
+                      const asignado = itemAsignaciones[item.id] ?? { modelo: "", talla: "" };
+                      return (
+                      <div key={item.id} className="p-3 rounded-lg bg-muted/30 space-y-2">
+                        <div className="flex items-center gap-3">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url} alt={item.title}
+                              className="w-12 h-12 rounded-md object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                              <ShoppingBag className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{item.title}</p>
+                            {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
+                            <p className="text-xs text-muted-foreground">
+                              {fmt(Number(item.unit_price))} × {item.qty}
+                            </p>
+                          </div>
+                          <span className="font-semibold">{fmt(Number(item.total))}</span>
+                        </div>
+
+                        {!esManufactura && item.fulfillment_status === "pendiente_reposicion" && (
+                          <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">
+                            Pendiente de reposición
+                          </Badge>
+                        )}
+                        {!esManufactura && item.fulfillment_status === "disponible" && (
+                          <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50">
+                            Stock reservado
+                          </Badge>
+                        )}
+
+                        {esManufactura && selected.status === "pagado" && (
+                          <div className="flex gap-2 items-end pt-1 border-t">
+                            <div className="flex-1">
+                              <Label className="text-xs mb-1 block">Modelo</Label>
+                              <Select
+                                value={asignado.modelo}
+                                onValueChange={(v) => setItemAsignaciones((f) => ({ ...f, [item.id]: { ...asignado, modelo: v } }))}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent>
+                                  {["Vintage", "Rex", "Lineal Punta", "London", "Garra"].map((m) => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="w-36">
+                              <Label className="text-xs mb-1 block">Talla</Label>
+                              <Select
+                                value={asignado.talla}
+                                onValueChange={(v) => setItemAsignaciones((f) => ({ ...f, [item.id]: { ...asignado, talla: v } }))}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Talla" /></SelectTrigger>
+                                <SelectContent>
+                                  {["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"].map((t) => (
+                                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                         )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{item.title}</p>
-                          {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
-                          <p className="text-xs text-muted-foreground">
-                            {fmt(Number(item.unit_price))} × {item.qty}
-                          </p>
-                        </div>
-                        <span className="font-semibold">{fmt(Number(item.total))}</span>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
               </section>
