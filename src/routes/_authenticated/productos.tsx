@@ -18,6 +18,7 @@ import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
+import { listProveedores } from "@/lib/pos.functions";
 
 export const Route = createFileRoute("/_authenticated/productos")({
   head: () => ({ meta: [{ title: "Productos — G&M POS" }] }),
@@ -44,6 +45,8 @@ type ProductForm = {
   categoria: string;
   subcategoria: string;
   material_base: string;
+  tipo_gestion: "manufactura" | "retail";
+  proveedor_id: string;
   // Campos legacy (se mantienen sincronizados con imagenes[0])
   imagen_url: string;
   imagen_public_id: string;
@@ -54,6 +57,8 @@ type ProductForm = {
 const emptyForm = (): ProductForm => ({
   nombre: "", descripcion: "", sku: "", precio: "",
   stock: "", categoria: "", subcategoria: "", material_base: "",
+  tipo_gestion: "manufactura",
+  proveedor_id: "",
   imagen_url: "", imagen_public_id: "",
   imagenes: [],
 });
@@ -96,6 +101,11 @@ function ProductFormModal({
   const [form, setForm] = useState<ProductForm>(initial ?? emptyForm());
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const { data: proveedoresData } = useQuery({
+    queryKey: ["proveedores"],
+    queryFn: listProveedores,
+  });
 
   const set = (k: keyof ProductForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -181,6 +191,7 @@ function ProductFormModal({
         stock: parseInt(form.stock, 10),
         subcategoria: form.subcategoria || null,
         material_base: form.material_base || null,
+        proveedor_id: form.tipo_gestion === "retail" ? (form.proveedor_id || null) : null,
         imagenes: form.imagenes,
         ...(form.id ? { id: form.id } : {}),
       }),
@@ -269,6 +280,52 @@ function ProductFormModal({
         </div>
 
         {/* ── Campos del producto ── */}
+        <div>
+          <Label>¿Cómo se gestiona este producto? *</Label>
+          <div className="grid grid-cols-2 gap-3 mt-1">
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, tipo_gestion: "manufactura" }))}
+              className={`text-left p-3 rounded-lg border transition-colors ${
+                form.tipo_gestion === "manufactura" ? "border-primary bg-primary/5" : "border-border"
+              }`}
+            >
+              <p className="text-sm font-medium">Manufactura</p>
+              <p className="text-xs text-muted-foreground">Se fabrica bajo pedido (BOM, insumos, taller)</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, tipo_gestion: "retail" }))}
+              className={`text-left p-3 rounded-lg border transition-colors ${
+                form.tipo_gestion === "retail" ? "border-primary bg-primary/5" : "border-border"
+              }`}
+            >
+              <p className="text-sm font-medium">Retail</p>
+              <p className="text-xs text-muted-foreground">Se compra ya hecho, para reventa</p>
+            </button>
+          </div>
+        </div>
+        {form.tipo_gestion === "retail" && (
+          <div>
+            <Label htmlFor="proveedor_id">Proveedor</Label>
+            <Select
+              value={form.proveedor_id || undefined}
+              onValueChange={(v) => setForm((f) => ({ ...f, proveedor_id: v }))}
+            >
+              <SelectTrigger id="proveedor_id">
+                <SelectValue placeholder="Selecciona…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(proveedoresData?.proveedores ?? []).map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Necesario para generar automáticamente una orden de compra si este producto se queda sin stock.
+            </p>
+          </div>
+        )}
         <div>
           <Label htmlFor="nombre">Nombre *</Label>
           <Input id="nombre" required value={form.nombre} onChange={set("nombre")} />
@@ -470,13 +527,18 @@ function ProductosPage() {
                       <td className="px-4 py-3 font-medium">{p.nombre}</td>
                       <td className="px-4 py-3 text-muted-foreground font-mono">{p.sku || "—"}</td>
                       <td className="px-4 py-3">
-                        {p.categoria ? (
-                          <div className="flex flex-wrap gap-1">
-                            <Badge variant="outline">{getCategoria(p.categoria)?.nombre ?? p.categoria}</Badge>
-                            {p.subcategoria && <Badge variant="secondary">{p.subcategoria}</Badge>}
-                            {p.material_base && <Badge variant="secondary">{p.material_base}</Badge>}
-                          </div>
-                        ) : "—"}
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={p.tipo_gestion === "retail" ? "secondary" : "outline"}>
+                            {p.tipo_gestion === "retail" ? "Retail" : "Manufactura"}
+                          </Badge>
+                          {p.categoria && (
+                            <>
+                              <Badge variant="outline">{getCategoria(p.categoria)?.nombre ?? p.categoria}</Badge>
+                              {p.subcategoria && <Badge variant="secondary">{p.subcategoria}</Badge>}
+                              {p.material_base && <Badge variant="secondary">{p.material_base}</Badge>}
+                            </>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">{fmt(Number(p.precio))}</td>
                       <td className="px-4 py-3 text-right">
@@ -499,6 +561,8 @@ function ProductosPage() {
                               categoria: p.categoria ?? "",
                               subcategoria: p.subcategoria ?? "",
                               material_base: p.material_base ?? "",
+                              tipo_gestion: p.tipo_gestion ?? "manufactura",
+                              proveedor_id: p.proveedor_id ?? "",
                               imagen_url: p.imagen_url ?? "",
                               imagen_public_id: p.imagen_public_id ?? "",
                               imagenes: parseImagenes(p),
