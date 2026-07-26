@@ -7,6 +7,9 @@ import { LoginModal } from "@/components/LoginModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useCartStore } from "@/stores/cartStore";
 import {
   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
@@ -17,6 +20,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { getStoredUtm } from "@/hooks/useUtm";
 import { supabase } from "@/integrations/supabase/client";
+import { DISTRITOS_ENVIO, getPrecioEnvio } from "@/lib/envios";
 
 
 
@@ -133,8 +137,10 @@ function CheckoutPage() {
   const subtotal        = total();
   const requiereEleccion = disponibilidad?.requiere_eleccion_modo_entrega ?? false;
   const cargoParcial     = (requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
-  const envio            = (subtotal > 500 ? 0 : 35) + cargoParcial;
+  const envioBase        = getPrecioEnvio(form.distrito);
+  const envio            = (envioBase ?? 0) + cargoParcial;
   const totalFinal       = subtotal + envio;
+  const distritoSinCobertura = form.distrito !== "" && envioBase === null;
 
 
   useEffect(() => {
@@ -248,6 +254,8 @@ useEffect(() => {
   const handlePagar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) { toast.error("Tu carrito está vacío"); return; }
+    if (!form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
+    if (distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
     setLoading(true);
 
     try {
@@ -363,7 +371,21 @@ useEffect(() => {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="distrito">Distrito</Label>
-                  <Input id="distrito" required value={form.distrito} onChange={set("distrito")} placeholder="Miraflores" />
+                  <Select
+                    value={form.distrito || undefined}
+                    onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
+                  >
+                    <SelectTrigger id="distrito">
+                      <SelectValue placeholder="Selecciona tu distrito…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DISTRITOS_ENVIO.map((d) => (
+                        <SelectItem key={d.destino} value={d.destino}>
+                          {d.destino} — {fmt(d.precio)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ciudad">Ciudad</Label>
@@ -404,7 +426,10 @@ useEffect(() => {
               ))}
             </div>
 
-            <Button type="submit" size="lg" className="w-full rounded-full h-12 text-base" disabled={loading}>
+            <Button
+              type="submit" size="lg" className="w-full rounded-full h-12 text-base"
+              disabled={loading || !form.distrito || distritoSinCobertura}
+            >
               {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
             </Button>
           </form>
@@ -481,10 +506,17 @@ useEffect(() => {
                   <span>Subtotal</span><span>{fmt(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Envío</span>
-                  <span>{envio === 0 ? <span className="text-green-600">Gratis</span> : fmt(envio)}</span>
+                  <span>Envío{form.distrito ? ` (${form.distrito})` : ""}</span>
+                  <span>{form.distrito ? fmt(envio) : "—"}</span>
                 </div>
-                {envio > 0 && <p className="text-xs text-muted-foreground">Envío gratis en compras mayores a {fmt(500)}</p>}
+                {!form.distrito && (
+                  <p className="text-xs text-muted-foreground">Selecciona tu distrito para calcular el envío</p>
+                )}
+                {distritoSinCobertura && (
+                  <p className="text-xs text-destructive">
+                    No tenemos tarifa registrada para este distrito — te contactaremos para coordinar el envío.
+                  </p>
+                )}
                 <div className="flex justify-between font-semibold text-base pt-2 border-t border-border">
                   <span>Total</span>
                   <span className="font-display text-lg">{fmt(totalFinal)}</span>
