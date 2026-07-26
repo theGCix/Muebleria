@@ -1,6 +1,6 @@
 // src/routes/perfil.tsx
 // G&M Mueblería — Layout de "Mi cuenta" con menú lateral
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, redirect ,Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,10 @@ import {
   ShoppingBag, MapPin, FileText, Heart, ShieldCheck, User, LogOut,
 } from "lucide-react";
 
-export const Route = createFileRoute("/perfil")({
-  head: () => ({ meta: [{ title: "Mi cuenta — G&M Mueblería" }] }),
-  component: PerfilLayout,
+export const Route = createFileRoute("/perfil/")({
+  beforeLoad: () => {
+    throw redirect({ to: "/perfil/pedidos" });
+  },
 });
 
 const NAV_ITEMS = [
