@@ -14,11 +14,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
-import { listProveedores } from "@/lib/pos.functions";
+import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 
 export const Route = createFileRoute("/_authenticated/productos")({
   head: () => ({ meta: [{ title: "Productos — G&M POS" }] }),
@@ -101,11 +101,45 @@ function ProductFormModal({
   const [form, setForm] = useState<ProductForm>(initial ?? emptyForm());
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ubicacionId, setUbicacionId] = useState<string>("");
+  const [cantidadUbicacion, setCantidadUbicacion] = useState<string>("0");
 
   const { data: proveedoresData } = useQuery({
     queryKey: ["proveedores"],
     queryFn: listProveedores,
   });
+
+  const { data: ubicacionesData } = useQuery({
+    queryKey: ["ubicaciones"],
+    queryFn: listUbicaciones,
+  });
+
+  const { data: stockUbicRows } = useQuery({
+    queryKey: ["stock-ubicacion", form.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("stock_ubicacion")
+        .select("ubicacion_id, cantidad")
+        .eq("product_id", form.id);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    enabled: !!form.id,
+  });
+
+  // Preseleccionar Almacén Central (o la primera ubicación disponible) al cargar
+  useEffect(() => {
+    if (ubicacionId || !ubicacionesData?.ubicaciones?.length) return;
+    const almacen = ubicacionesData.ubicaciones.find((u: any) => u.nombre === "Almacén Central");
+    setUbicacionId(almacen?.id ?? ubicacionesData.ubicaciones[0].id);
+  }, [ubicacionesData, ubicacionId]);
+
+  // Al cambiar de ubicación (o cargar el stock existente), reflejar la cantidad real ahí
+  useEffect(() => {
+    if (!ubicacionId) return;
+    const row = stockUbicRows?.find((r: any) => r.ubicacion_id === ubicacionId);
+    setCantidadUbicacion(row ? String(row.cantidad) : "0");
+  }, [ubicacionId, stockUbicRows]);
 
   const set = (k: keyof ProductForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -184,17 +218,31 @@ function ProductFormModal({
   };
 
   const saveMut = useMutation({
-    mutationFn: () =>
-      upsertProduct({
+    mutationFn: async () => {
+      const savedProduct = await upsertProduct({
         ...form,
         precio: parseFloat(form.precio),
-        stock: parseInt(form.stock, 10),
+        // Para retail, el stock ya no se edita directo: lo calcula el trigger
+        // a partir de stock_ubicacion. Para manufactura, se mantiene manual.
+        stock: form.tipo_gestion === "retail" ? undefined : parseInt(form.stock, 10),
         subcategoria: form.subcategoria || null,
         material_base: form.material_base || null,
         proveedor_id: form.tipo_gestion === "retail" ? (form.proveedor_id || null) : null,
         imagenes: form.imagenes,
         ...(form.id ? { id: form.id } : {}),
-      }),
+      });
+
+      if (form.tipo_gestion === "retail" && ubicacionId) {
+        const { error } = await supabase.rpc("set_stock_ubicacion", {
+          _ubicacion_id: ubicacionId,
+          _product_id: savedProduct.id,
+          _cantidad: parseInt(cantidadUbicacion, 10) || 0,
+        });
+        if (error) throw new Error(error.message);
+      }
+
+      return savedProduct;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });
       toast.success(form.id ? "Producto actualizado" : "Producto creado");
@@ -409,11 +457,48 @@ function ProductFormModal({
             <Label htmlFor="precio">Precio (S/) *</Label>
             <Input id="precio" type="number" step="0.01" min="0" required value={form.precio} onChange={set("precio")} />
           </div>
-          <div>
-            <Label htmlFor="stock">Stock</Label>
-            <Input id="stock" type="number" min="0" value={form.stock} onChange={set("stock")} />
-          </div>
+          {form.tipo_gestion === "manufactura" ? (
+            <div>
+              <Label htmlFor="stock">Stock</Label>
+              <Input id="stock" type="number" min="0" value={form.stock} onChange={set("stock")} />
+            </div>
+          ) : (
+            <div>
+              <Label htmlFor="stock">Stock total</Label>
+              <Input id="stock" type="number" value={form.stock || 0} disabled className="bg-muted" />
+              <p className="text-[11px] text-muted-foreground mt-1">Suma de todas las ubicaciones</p>
+            </div>
+          )}
         </div>
+
+        {form.tipo_gestion === "retail" && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="ubicacion_stock">Ubicación</Label>
+              <Select value={ubicacionId || undefined} onValueChange={setUbicacionId}>
+                <SelectTrigger id="ubicacion_stock"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                <SelectContent>
+                  {(ubicacionesData?.ubicaciones ?? []).map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="cantidad_ubicacion">Cantidad en esa ubicación</Label>
+              <Input
+                id="cantidad_ubicacion" type="number" min="0"
+                value={cantidadUbicacion}
+                onChange={(e) => setCantidadUbicacion(e.target.value)}
+              />
+            </div>
+            {stockUbicRows && stockUbicRows.length > 1 && (
+              <p className="text-xs text-muted-foreground col-span-2">
+                Este producto también tiene stock en otras ubicaciones — solo estás editando la seleccionada arriba.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
