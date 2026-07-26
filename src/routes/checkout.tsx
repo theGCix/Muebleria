@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { getStoredUtm } from "@/hooks/useUtm";
 import { supabase } from "@/integrations/supabase/client";
-import { DISTRITOS_ENVIO, getPrecioEnvio } from "@/lib/envios";
+import { DISTRITOS_ENVIO, getPrecioEnvio, ORIGEN_ENVIO } from "@/lib/envios";
 
 
 
@@ -115,6 +115,7 @@ function CheckoutPage() {
   } | null>(null);
   const [modoEntrega, setModoEntrega] = useState<"unificada" | "parcial">("unificada");
   const [checkingDisponibilidad, setCheckingDisponibilidad] = useState(false);
+  const [metodoEntrega, setMetodoEntrega] = useState<"domicilio" | "recojo_tienda">("domicilio");
 
   useEffect(() => {
     if (items.length === 0) { setDisponibilidad(null); return; }
@@ -136,11 +137,11 @@ function CheckoutPage() {
 
   const subtotal        = total();
   const requiereEleccion = disponibilidad?.requiere_eleccion_modo_entrega ?? false;
-  const cargoParcial     = (requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
-  const envioBase        = getPrecioEnvio(form.distrito);
+  const cargoParcial     = (metodoEntrega === "domicilio" && requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
+  const envioBase        = metodoEntrega === "recojo_tienda" ? 0 : getPrecioEnvio(form.distrito);
   const envio            = (envioBase ?? 0) + cargoParcial;
   const totalFinal       = subtotal + envio;
-  const distritoSinCobertura = form.distrito !== "" && envioBase === null;
+  const distritoSinCobertura = metodoEntrega === "domicilio" && form.distrito !== "" && envioBase === null;
 
 
   useEffect(() => {
@@ -205,6 +206,7 @@ useEffect(() => {
         envio:            saved.envio ?? 0,
         total:            saved.total ?? 0,
         modo_entrega:     saved.modoEntrega ?? null,
+        metodo_entrega:   saved.metodoEntrega ?? "domicilio",
         sessionKey:       niubizRef.current?.sessionKey ?? "",
         transactionToken,
         // UTM
@@ -254,8 +256,8 @@ useEffect(() => {
   const handlePagar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) { toast.error("Tu carrito está vacío"); return; }
-    if (!form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
-    if (distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
+    if (metodoEntrega === "domicilio" && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
+    if (metodoEntrega === "domicilio" && distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
     setLoading(true);
 
     try {
@@ -301,6 +303,7 @@ useEffect(() => {
         envio,
         total: totalFinal,
         modoEntrega: requiereEleccion ? modoEntrega : null,
+        metodoEntrega,
       }));
 
       window.VisanetCheckout.open();
@@ -363,39 +366,80 @@ useEffect(() => {
             </section>
 
             <section className="bg-card border border-border/50 rounded-xl p-6 space-y-4">
-              <h2 className="font-display text-xl font-semibold">Dirección de entrega</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="direccion">Dirección</Label>
-                  <Input id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="distrito">Distrito</Label>
-                  <Select
-                    value={form.distrito || undefined}
-                    onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
-                  >
-                    <SelectTrigger id="distrito">
-                      <SelectValue placeholder="Selecciona tu distrito…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DISTRITOS_ENVIO.map((d) => (
-                        <SelectItem key={d.destino} value={d.destino}>
-                          {d.destino} — {fmt(d.precio)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="ciudad">Ciudad</Label>
-                  <Input id="ciudad" required value={form.ciudad} onChange={set("ciudad")} placeholder="Lima" />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="notas">Notas adicionales (opcional)</Label>
-                  <Input id="notas" value={form.notas} onChange={set("notas")} placeholder="Referencias, horario preferido de entrega..." />
-                </div>
+              <h2 className="font-display text-xl font-semibold">
+                {metodoEntrega === "domicilio" ? "Dirección de entrega" : "Recojo en tienda"}
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMetodoEntrega("domicilio")}
+                  className={`p-3 rounded-lg border text-left transition-colors ${
+                    metodoEntrega === "domicilio" ? "border-primary bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <p className="text-sm font-medium">Envío a domicilio</p>
+                  <p className="text-xs text-muted-foreground">Según tarifa por distrito</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetodoEntrega("recojo_tienda")}
+                  className={`p-3 rounded-lg border text-left transition-colors ${
+                    metodoEntrega === "recojo_tienda" ? "border-primary bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <p className="text-sm font-medium">Recojo en tienda</p>
+                  <p className="text-xs font-semibold text-green-600">Sin costo de envío</p>
+                </button>
               </div>
+
+              {metodoEntrega === "domicilio" ? (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="direccion">Dirección</Label>
+                    <Input id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="distrito">Distrito</Label>
+                    <Select
+                      value={form.distrito || undefined}
+                      onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
+                    >
+                      <SelectTrigger id="distrito">
+                        <SelectValue placeholder="Selecciona tu distrito…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DISTRITOS_ENVIO.map((d) => (
+                          <SelectItem key={d.destino} value={d.destino}>
+                            {d.destino} — {fmt(d.precio)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ciudad">Ciudad</Label>
+                    <Input id="ciudad" required value={form.ciudad} onChange={set("ciudad")} placeholder="Lima" />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="notas">Notas adicionales (opcional)</Label>
+                    <Input id="notas" value={form.notas} onChange={set("notas")} placeholder="Referencias, horario preferido de entrega..." />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg bg-muted/40 text-sm">
+                    <p className="font-medium">Tienda G&amp;M Mueblería — {ORIGEN_ENVIO}</p>
+                    <p className="text-muted-foreground text-xs mt-1">
+                      Te avisaremos por email/WhatsApp en cuanto tu pedido esté listo para recoger.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="notas">Notas adicionales (opcional)</Label>
+                    <Input id="notas" value={form.notas} onChange={set("notas")} placeholder="Horario en que pasarás a recoger, etc." />
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="bg-card border border-border/50 rounded-xl p-6 space-y-3">
@@ -428,7 +472,7 @@ useEffect(() => {
 
             <Button
               type="submit" size="lg" className="w-full rounded-full h-12 text-base"
-              disabled={loading || !form.distrito || distritoSinCobertura}
+              disabled={loading || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura))}
             >
               {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
             </Button>
@@ -532,10 +576,18 @@ useEffect(() => {
                   <span>Subtotal</span><span>{fmt(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Envío{form.distrito ? ` (${form.distrito})` : ""}</span>
-                  <span>{form.distrito ? fmt(envio) : "—"}</span>
+                  <span>
+                    {metodoEntrega === "recojo_tienda"
+                      ? "Recojo en tienda"
+                      : `Envío${form.distrito ? ` (${form.distrito})` : ""}`}
+                  </span>
+                  <span>
+                    {metodoEntrega === "recojo_tienda"
+                      ? <span className="text-green-600">Sin costo</span>
+                      : (form.distrito ? fmt(envio) : "—")}
+                  </span>
                 </div>
-                {!form.distrito && (
+                {metodoEntrega === "domicilio" && !form.distrito && (
                   <p className="text-xs text-muted-foreground">Selecciona tu distrito para calcular el envío</p>
                 )}
                 {distritoSinCobertura && (
