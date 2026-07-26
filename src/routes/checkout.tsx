@@ -13,7 +13,7 @@ import {
 import { useCartStore } from "@/stores/cartStore";
 import {
   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
-  CheckCircle2, XCircle, LogIn,
+  CheckCircle2, XCircle, LogIn, Minus, Plus, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -88,7 +88,7 @@ async function fetchNiubizSession(payload: {
 }
 
 function CheckoutPage() {
-  const { items, total, clearCart } = useCartStore();
+  const { items, total, clearCart, updateQty, removeItem } = useCartStore();
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -448,8 +448,34 @@ useEffect(() => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">x{item.qty}</p>
                       {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => updateQty(item.id, item.qty - 1)}
+                          className="w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+                          aria-label="Restar"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                        <span className="text-xs font-medium w-5 text-center">{item.qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateQty(item.id, item.qty + 1)}
+                          className="w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+                          aria-label="Sumar"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          className="ml-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                          aria-label="Quitar producto"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <span className="text-sm font-semibold flex-shrink-0">{fmt(item.price * item.qty)}</span>
                   </div>
