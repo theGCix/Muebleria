@@ -45,10 +45,6 @@ export function ProductCard({ product: p }: Props) {
   const handleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!user) {
-      setLoginOpen(true);
-      return;
-    }
     setWishPending(true);
     const added = await toggleWishlist(p.id);
     toast.success(

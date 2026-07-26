@@ -282,7 +282,6 @@ export function ProductDetail({ product }: { product: Product }) {
               onClick={async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (!user) { setLoginOpen(true); return; }
                 setWishPending(true);
                 const added = await toggleWishlist(product.id);
                 toast.success(added ? `"${product.title}" guardado en favoritos` : `"${product.title}" eliminado de favoritos`);

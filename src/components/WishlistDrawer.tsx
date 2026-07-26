@@ -53,11 +53,7 @@ export function WishlistDrawer() {
   };
 
   const handleOpenDrawer = () => {
-    if (!user) {
-      setLoginOpen(true);
-    } else {
-      setIsOpen(true);
-    }
+    setIsOpen(true);
   };
 
   return (
@@ -69,10 +65,9 @@ export function WishlistDrawer() {
             size="icon"
             className="relative rounded-full border-border/60"
             onClick={handleOpenDrawer}
-            onPointerDown={(e) => { if (!user) e.preventDefault(); }}
           >
-            <Heart className={`h-5 w-5 transition-colors ${user && items.length > 0 ? "fill-destructive text-destructive" : ""}`} />
-            {user && items.length > 0 && (
+            <Heart className={`h-5 w-5 transition-colors ${items.length > 0 ? "fill-destructive text-destructive" : ""}`} />
+            {items.length > 0 && (
               <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-destructive text-destructive-foreground">
                 {items.length}
               </Badge>
