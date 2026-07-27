@@ -15,10 +15,13 @@ interface Props { product: Product; }
 
 export function ProductCard({ product: p }: Props) {
   const addItem = useCartStore((s) => s.addItem);
+  const items = useCartStore((s) => s.items);
   const { user } = useAuth();
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [loginOpen, setLoginOpen] = useState(false);
   const [wishPending, setWishPending] = useState(false);
+
+  const enCarrito = items.some((i) => i.id === p.id);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
