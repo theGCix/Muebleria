@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useWishlist } from "@/context/WishlistContext";
 import { LoginModal } from "@/components/LoginModal";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useProduct, useProducts } from "@/hooks/useProducts";
+import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Hammer, Star } from "lucide-react";
@@ -178,13 +180,29 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
   );
 }
 
-/* ─── recommended products ────────────────────────── */
-function Recommended({ currentId }: { currentId: string }) {
-  const { data: products } = useProducts(8);
+/* ─── recommended products (complementarios, otra categoría) ─── */
+async function fetchComplementarios(currentId: string, categoria: string | null) {
+  let query = supabase
+    .from("products")
+    .select("*")
+    .eq("activo", true)
+    .neq("id", currentId)
+    .limit(4);
+  if (categoria) query = query.neq("categoria", categoria);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+function Recommended({ currentId, categoria }: { currentId: string; categoria?: string | null }) {
+  const { data: others } = useQuery({
+    queryKey: ["complementarios", currentId, categoria],
+    queryFn: () => fetchComplementarios(currentId, categoria ?? null),
+    staleTime: 300_000,
+  });
   const addItem = useCartStore((s) => s.addItem);
 
-  const others = (products ?? []).filter(p => p.id !== currentId).slice(0, 4);
-  if (!others.length) return null;
+  if (!others?.length) return null;
 
   return (
     <section className="gm-recommended">
@@ -771,7 +789,7 @@ function ProductPage() {
 
           {/* recomendaciones — span full width dentro del grid */}
           <div style={{ gridColumn: "1 / -1" }}>
-            <ProductRecomendaciones productId={product.id} />
+            <ProductRecomendaciones productId={product.id} categoria={product.categoria} />
           </div>
         </div>
 
@@ -779,7 +797,7 @@ function ProductPage() {
         <Tabs product={product} />
 
         {/* ── recommended ── */}
-        <Recommended currentId={product.id} />
+        <Recommended currentId={product.id} categoria={product.categoria} />
 
         <Footer />
       </div>

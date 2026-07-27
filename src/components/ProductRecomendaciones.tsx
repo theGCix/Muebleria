@@ -1,22 +1,29 @@
 // src/components/ProductRecomendaciones.tsx
+// "También te puede gustar" — productos de la MISMA categoría
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ProductCard } from "./ProductCard";
-import { Loader2 } from "lucide-react";
 
-async function fetchRecomendaciones(productId: string) {
-  const { data, error } = await supabase.rpc("get_recomendaciones", {
-    _product_id: productId,
-    _limit: 4,
-  });
+async function fetchMismaCategoria(productId: string, categoria: string | null) {
+  if (!categoria) return [];
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("categoria", categoria)
+    .eq("activo", true)
+    .neq("id", productId)
+    .limit(4);
   if (error) throw new Error(error.message);
-  return (data ?? []) as any[];
+  return data ?? [];
 }
 
-export function ProductRecomendaciones({ productId }: { productId: string }) {
+export function ProductRecomendaciones({
+  productId, categoria,
+}: { productId: string; categoria?: string | null }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["recomendaciones", productId],
-    queryFn: () => fetchRecomendaciones(productId),
+    queryKey: ["recomendaciones-categoria", productId, categoria],
+    queryFn: () => fetchMismaCategoria(productId, categoria ?? null),
+    enabled: !!categoria,
     staleTime: 300_000,
   });
 
