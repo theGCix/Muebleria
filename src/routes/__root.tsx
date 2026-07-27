@@ -86,7 +86,7 @@ function RootComponent() {
       <WishlistProvider>
         <Outlet />
         <AsistenteChat />
-        <Toaster position="top-center" />
+        <Toaster position="top-center" closeButton />
       </WishlistProvider>
     </QueryClientProvider>
   );
