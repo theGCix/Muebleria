@@ -4,7 +4,7 @@
 // archivo que necesitas tocar: Categories.tsx, la página /categoria/$slug
 // y el formulario admin de productos leen de aquí.
 
-import { Sofa, UtensilsCrossed, BedDouble, Columns3, type LucideIcon } from "lucide-react";
+import { Sofa, UtensilsCrossed, BedDouble, Columns3, Lamp, type LucideIcon } from "lucide-react";
 
 export interface Subcategoria {
   slug: string;
@@ -81,6 +81,20 @@ export const CATEGORIAS: CategoriaConfig[] = [
     heroDescripcion: "Divisiones y biombos que ordenan y visten cada espacio.",
     icon: Columns3,
     subcategorias: [],
+  },
+  {
+    slug: "accesorios",
+    nombre: "Accesorios",
+    descripcion: "Mesas de centro, mesas laterales y detalles para completar tu ambiente.",
+    heroDescripcion:
+      "Piezas para complementar tus muebles: mesas de centro, mesas laterales, puffs y decoración que le dan el toque final a cada espacio.",
+    icon: Lamp,
+    subcategorias: [
+      { slug: "mesas-centro", label: "Mesas de centro" },
+      { slug: "mesas-laterales", label: "Mesas laterales" },
+      { slug: "puffs-bancos", label: "Puffs y bancos" },
+      { slug: "decoracion", label: "Decoración" },
+    ],
   },
 ];
 
