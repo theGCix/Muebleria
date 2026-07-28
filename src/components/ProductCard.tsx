@@ -105,7 +105,7 @@ export function ProductCard({ product: p }: Props) {
               <Button
                 size="sm"
                 onClick={handleAdd}
-                disabled={(p.stock ?? 1) <= 0}
+                disabled={(p.stock ?? 1) <= 0 || enCarrito}
                 variant={enCarrito ? "secondary" : "default"}
                 className="rounded-full w-full"
               >
