@@ -91,35 +91,37 @@ const STEPS = ["Carrito", "Datos y entrega", "Pago"];
 
 function CheckoutStepper({ current }: { current: number }) {
   return (
-    <div className="flex items-center mb-10">
-      {STEPS.map((label, i) => {
-        const step = i + 1;
-        const done = step < current;
-        const active = step === current;
-        return (
-          <div key={label} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center gap-1.5">
-              <div
-                className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
-                  done
-                    ? "bg-accent border-accent text-accent-foreground"
-                    : active
-                    ? "border-accent text-accent bg-accent/10"
-                    : "border-border text-muted-foreground"
-                }`}
-              >
-                {done ? <Check className="h-4 w-4" /> : step}
+    <div className="bg-card border border-border/50 rounded-xl px-6 py-5 mb-8">
+      <div className="flex items-center">
+        {STEPS.map((label, i) => {
+          const step = i + 1;
+          const done = step < current;
+          const active = step === current;
+          return (
+            <div key={label} className="flex items-center flex-1 last:flex-none">
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+                    done
+                      ? "bg-accent border-accent text-accent-foreground"
+                      : active
+                      ? "border-accent text-accent bg-accent/10"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {done ? <Check className="h-4 w-4" /> : step}
+                </div>
+                <span className={`text-xs whitespace-nowrap ${active || done ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                  {label}
+                </span>
               </div>
-              <span className={`text-xs whitespace-nowrap ${active || done ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                {label}
-              </span>
+              {step < STEPS.length && (
+                <div className={`flex-1 h-0.5 mx-3 mb-5 transition-colors ${done ? "bg-accent" : "bg-border"}`} />
+              )}
             </div>
-            {step < STEPS.length && (
-              <div className={`flex-1 h-0.5 mx-2 mb-5 transition-colors ${done ? "bg-accent" : "bg-border"}`} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
