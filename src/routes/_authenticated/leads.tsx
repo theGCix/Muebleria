@@ -1,10 +1,11 @@
 // src/routes/_authenticated/leads.tsx
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listLeads, updateLead, listAsesores,
   LEAD_ESTADOS, type Lead, type LeadEstado,
 } from "@/lib/leads.functions";
+import { ConvertLeadDialog } from "@/components/ConvertLeadDialog";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Search, Phone, Mail, Package, RefreshCw } from "lucide-react";
+import { Loader2, Search, Phone, Mail, Package, RefreshCw, UserCheck } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -52,6 +53,7 @@ function LeadDetail({ lead, asesores, onClose }: {
 }) {
   const qc = useQueryClient();
   const [notas, setNotas] = useState(lead.notas ?? "");
+  const [convertOpen, setConvertOpen] = useState(false);
 
   const mut = useMutation({
     mutationFn: (patch: Parameters<typeof updateLead>[0]) => updateLead(patch),
@@ -153,7 +155,35 @@ function LeadDetail({ lead, asesores, onClose }: {
               Guardar notas
             </Button>
           </div>
+
+          <div className="border-t border-border/50 pt-4">
+            {lead.customer_id ? (
+              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-green-700 text-sm">
+                  <UserCheck className="h-4 w-4" />
+                  Vinculado a un cliente
+                </div>
+                <Link to="/clientes" className="text-xs underline text-green-700">
+                  Ver clientes
+                </Link>
+              </div>
+            ) : (
+              <Button variant="secondary" className="w-full" onClick={() => setConvertOpen(true)}>
+                <UserCheck className="h-4 w-4 mr-2" />
+                Convertir en cliente
+              </Button>
+            )}
+          </div>
         </div>
+
+        {convertOpen && (
+          <ConvertLeadDialog
+            lead={lead}
+            open={convertOpen}
+            onOpenChange={setConvertOpen}
+            onConverted={() => { setConvertOpen(false); onClose(); }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
