@@ -1,51 +1,27 @@
 // src/components/AsistenteChat.tsx
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageCircle, X, Send, Loader2, Sparkles } from "lucide-react";
+import { API_URL as API } from "@/config";
+import { useCartStore } from "@/stores/cartStore";
+import { toast } from "sonner";
 
 type Message = { role: "user" | "assistant"; content: string };
+type CartAction = {
+  id: string; title: string; price: number;
+  image?: string; sku?: string; cantidad: number;
+};
 
-async function fetchCatalogo() {
-  const { data } = await supabase
-    .from("products")
-    .select("nombre, precio, descripcion, categoria, sku")
-    .eq("activo", true)
-    .order("nombre");
-  return data ?? [];
-}
-
-async function chatWithAssistant(
-  messages: Message[],
-  catalogo: any[]
-): Promise<string> {
-  const catalogoTexto = catalogo
-    .map((p) => `- ${p.nombre} (${p.categoria ?? "General"}): S/ ${p.precio}${p.descripcion ? ` — ${p.descripcion.slice(0, 80)}` : ""}`)
-    .join("\n");
-
-  const systemPrompt = `Eres el asistente de G&M Mueblería, una empresa peruana que fabrica muebles artesanales en madera natural. Tu rol es ayudar a los clientes a elegir el mueble perfecto para su hogar.
-
-Catálogo actual:
-${catalogoTexto}
-
-Responde siempre en español, de forma cálida y concisa (máximo 3 oraciones). Si el cliente describe su espacio o necesidad, recomienda productos específicos del catálogo. Si preguntan por precios, modelos o disponibilidad, usa solo la información del catálogo. Cuando menciones un producto, incluye su precio en Soles.`;
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+async function chatWithAssistant(messages: Message[]): Promise<{ reply: string; cartActions: CartAction[] }> {
+  const res = await fetch(`${API}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-    }),
+    body: JSON.stringify({ messages }),
   });
-
   if (!res.ok) throw new Error("Error al conectar con el asistente");
   const data = await res.json();
-  return data.content?.[0]?.text ?? "Lo siento, no pude procesar tu consulta.";
+  return { reply: data.reply ?? "Lo siento, no pude procesar tu consulta.", cartActions: data.cartActions ?? [] };
 }
 
 export function AsistenteChat() {
@@ -55,21 +31,29 @@ export function AsistenteChat() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "¡Hola! Soy el asistente de G&M Mueblería. ¿Qué tipo de mueble estás buscando para tu hogar?",
+      content: "¡Hola! Soy el asistente de G&M Mueblería. Puedo ayudarte a encontrar el mueble ideal, revisar precios y stock, agregar productos a tu carrito, o consultar el estado de un pedido. ¿En qué te ayudo?",
     },
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  const { data: catalogo = [] } = useQuery({
-    queryKey: ["catalogo-asistente"],
-    queryFn: fetchCatalogo,
-    staleTime: 600_000,
-    enabled: open,
-  });
+  const addItem = useCartStore((s) => s.addItem);
+  const updateQty = useCartStore((s) => s.updateQty);
+  const items = useCartStore((s) => s.items);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const aplicarAccionesCarrito = (acciones: CartAction[]) => {
+    for (const a of acciones) {
+      addItem({ id: a.id, title: a.title, price: a.price, image: a.image, sku: a.sku });
+      const cantidad = a.cantidad ?? 1;
+      if (cantidad > 1) {
+        const previa = items.find((i) => i.id === a.id)?.qty ?? 0;
+        updateQty(a.id, previa + cantidad);
+      }
+      toast.success(`"${a.title}" agregado al carrito desde el asistente`);
+    }
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -81,8 +65,9 @@ export function AsistenteChat() {
     setLoading(true);
 
     try {
-      const reply = await chatWithAssistant(newMessages, catalogo);
+      const { reply, cartActions } = await chatWithAssistant(newMessages);
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
+      if (cartActions.length > 0) aplicarAccionesCarrito(cartActions);
     } catch {
       setMessages((m) => [
         ...m,
@@ -113,7 +98,7 @@ export function AsistenteChat() {
             background: "var(--background)",
             borderColor: "var(--border)",
             maxHeight: "70vh",
-            width: "min(320px, calc(100vw - 2rem))",
+            width: "min(340px, calc(100vw - 2rem))",
           }}
         >
           {/* Header */}
@@ -124,7 +109,7 @@ export function AsistenteChat() {
             <Sparkles className="h-4 w-4 flex-shrink-0" />
             <div>
               <p className="text-sm font-semibold leading-none">Asistente G&M</p>
-              <p className="text-xs opacity-80 mt-0.5">IA · Catálogo actualizado</p>
+              <p className="text-xs opacity-80 mt-0.5">IA · Catálogo y pedidos en vivo</p>
             </div>
           </div>
 
@@ -136,7 +121,7 @@ export function AsistenteChat() {
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className="max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed"
+                  className="max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed whitespace-pre-wrap"
                   style={
                     m.role === "user"
                       ? { background: "var(--primary)", color: "var(--primary-foreground)" }

@@ -658,32 +658,210 @@ app.post("/api/orders", async (req, res) => {
 });
 
 
-// server/index.js — añadir
-app.post("/api/chat", async (req, res) => {
-  const { messages, catalogo } = req.body;
+// ── Chatbot G&M: tools disponibles para Claude ─────────────────
+const CHAT_TOOLS = [
+  {
+    name: "buscar_productos",
+    description: "Busca productos en el catálogo de la mueblería por nombre, categoría o características. Úsalo siempre antes de dar precio, stock o disponibilidad — nunca inventes esos datos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Texto de búsqueda, ej. 'sofá', 'comedor 6 sillas', 'mesa de centro madera'" },
+        categoria: { type: "string", description: "Filtrar por categoría exacta si el cliente la menciona: muebles, comedores, recamaras, separadores, accesorios" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "consultar_pedido",
+    description: "Consulta el estado de un pedido ya realizado. Requiere el número de pedido Y el correo con el que se compró (por seguridad, nunca reveles datos de un pedido sin ambos datos).",
+    input_schema: {
+      type: "object",
+      properties: {
+        order_number: { type: "string", description: "Número de pedido, ej. GM-1234" },
+        email: { type: "string", description: "Correo electrónico usado en la compra" },
+      },
+      required: ["order_number", "email"],
+    },
+  },
+  {
+    name: "agregar_al_carrito",
+    description: "Agrega un producto al carrito de compras del cliente. Úsalo solo cuando el cliente confirme explícitamente que quiere agregarlo (no lo hagas solo porque preguntó por el producto).",
+    input_schema: {
+      type: "object",
+      properties: {
+        product_id: { type: "string", description: "id (uuid) del producto, obtenido previamente con buscar_productos" },
+        cantidad: { type: "integer", description: "Cantidad a agregar", default: 1 },
+      },
+      required: ["product_id"],
+    },
+  },
+];
 
-  const catalogoTexto = (catalogo ?? [])
-    .map((p) => `- ${p.nombre}: S/ ${p.precio}`)
-    .join("\n");
+const CHAT_SYSTEM_PROMPT = `Eres el asistente virtual de G&M Mueblería, una tienda peruana de muebles (Lima).
+
+Tu tono es cercano, profesional y breve — respuestas de máximo 3-4 oraciones salvo que el cliente pida detalle.
+
+Información de la tienda:
+- Envío a domicilio en Lima y Callao según distrito (usa la herramienta o indica que se calcula en el checkout según el distrito).
+- Recojo en tienda disponible sin costo.
+- Garantía de 2 años en estructura.
+- Pago con tarjeta de crédito/débito (Visa, Mastercard, Amex) vía Niubiz, 100% seguro.
+- Los productos de fabricación (muebles a medida) se elaboran bajo pedido; los productos de reventa se despachan de stock.
+
+Reglas importantes:
+1. NUNCA inventes precios, stock o disponibilidad — usa siempre buscar_productos primero.
+2. Para consultar un pedido, pide el número de pedido Y el correo antes de usar la herramienta.
+3. Solo agrega productos al carrito cuando el cliente lo pida o confirme explícitamente.
+4. Si no encuentras algo en el catálogo, dilo con honestidad y sugiere alternativas similares si las hay.
+5. Responde siempre en español.`;
+
+async function callClaude(messages) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 1024,
+      system: CHAT_SYSTEM_PROMPT,
+      tools: CHAT_TOOLS,
+      messages,
+    }),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic API error: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
+
+async function ejecutarHerramientaChat(name, input) {
+  if (name === "buscar_productos") {
+    let q = supabaseAdmin
+      .from("products")
+      .select("id, nombre, categoria, subcategoria, precio, stock, tipo_gestion, sku, descripcion")
+      .eq("activo", true)
+      .limit(5);
+    if (input.categoria) q = q.eq("categoria", input.categoria);
+    if (input.query) q = q.ilike("nombre", `%${input.query}%`);
+    const { data, error } = await q;
+    if (error) return { error: error.message };
+    if (!data?.length && input.query) {
+      // fallback: buscar también en descripción si no hubo match por nombre
+      const { data: data2 } = await supabaseAdmin
+        .from("products")
+        .select("id, nombre, categoria, subcategoria, precio, stock, tipo_gestion, sku, descripcion")
+        .eq("activo", true)
+        .ilike("descripcion", `%${input.query}%`)
+        .limit(5);
+      return { resultados: data2 ?? [] };
+    }
+    return { resultados: data ?? [] };
+  }
+
+  if (name === "consultar_pedido") {
+    const { data: order, error } = await supabaseAdmin
+      .from("orders")
+      .select("id, order_number, status, estimated_delivery, metodo_entrega, total, created_at, email")
+      .ilike("order_number", input.order_number)
+      .ilike("email", input.email)
+      .maybeSingle();
+    if (error) return { error: error.message };
+    if (!order) return { encontrado: false, mensaje: "No encontramos un pedido con ese número y correo." };
+
+    const { data: items } = await supabaseAdmin
+      .from("order_items")
+      .select("title, qty, fulfillment_status")
+      .eq("order_id", order.id);
+
+    return {
+      encontrado: true,
+      numero: order.order_number,
+      estado: order.status,
+      entrega_estimada: order.estimated_delivery,
+      metodo_entrega: order.metodo_entrega,
+      total: order.total,
+      items: items ?? [],
+    };
+  }
+
+  if (name === "agregar_al_carrito") {
+    const { data: product, error } = await supabaseAdmin
+      .from("products")
+      .select("id, nombre, precio, stock, tipo_gestion, activo, imagen_url, sku")
+      .eq("id", input.product_id)
+      .maybeSingle();
+    if (error || !product || !product.activo) {
+      return { ok: false, mensaje: "No encontré ese producto." };
+    }
+    if (product.tipo_gestion === "retail" && (product.stock ?? 0) <= 0) {
+      return { ok: false, mensaje: `"${product.nombre}" no tiene stock disponible ahora mismo.` };
+    }
+    return {
+      ok: true,
+      mensaje: `Se agregó "${product.nombre}" al carrito.`,
+      _cartAction: {
+        id: product.id, title: product.nombre, price: product.precio,
+        image: product.imagen_url, sku: product.sku,
+        cantidad: input.cantidad ?? 1,
+      },
+    };
+  }
+
+  return { error: `Herramienta desconocida: ${name}` };
+}
+
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minuto
+  max: 20,               // máx 20 mensajes por IP por minuto
+  message: { error: "Estás enviando mensajes muy rápido. Espera un momento." },
+});
+
+app.post("/api/chat", chatLimiter, async (req, res) => {
+  const { messages } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "Falta 'messages'" });
+  }
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "x-api-key":     process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model:      "claude-haiku-4-5-20251001",  // haiku es más barato para chat
-        max_tokens: 500,
-        system: `Eres asistente de G&M Mueblería. Catálogo:\n${catalogoTexto}\nResponde en español, máx 3 oraciones.`,
-        messages,
-      }),
-    });
-    const data = await response.json();
-    res.json({ reply: data.content?.[0]?.text ?? "" });
+    let conversation = [...messages];
+    const cartActions = [];
+    let finalText = "";
+
+    for (let turno = 0; turno < 5; turno++) {
+      const data = await callClaude(conversation);
+
+      if (data.stop_reason !== "tool_use") {
+        finalText = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+        break;
+      }
+
+      conversation.push({ role: "assistant", content: data.content });
+
+      const toolResults = [];
+      for (const block of data.content) {
+        if (block.type !== "tool_use") continue;
+        const resultado = await ejecutarHerramientaChat(block.name, block.input);
+        if (resultado._cartAction) {
+          cartActions.push(resultado._cartAction);
+          delete resultado._cartAction;
+        }
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(resultado),
+        });
+      }
+      conversation.push({ role: "user", content: toolResults });
+    }
+
+    res.json({ reply: finalText, cartActions });
   } catch (err) {
+    console.error("Error en /api/chat:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
