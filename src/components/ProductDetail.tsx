@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWishlist } from "@/context/WishlistContext";
 import { LoginModal } from "./LoginModal";
 import { useCartStore } from "@/stores/cartStore";
+import { LeadFormDialog } from "./LeadFormDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -78,6 +79,7 @@ export function ProductDetail({ product }: { product: Product }) {
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [loginOpen, setLoginOpen] = useState(false);
   const [wishPending, setWishPending] = useState(false);
+  const [leadOpen, setLeadOpen] = useState(false);
   const { addItem } = useCartStore();
 
   const wishlisted = isWishlisted(product.id);
@@ -301,9 +303,16 @@ export function ProductDetail({ product }: { product: Product }) {
           <Button
             variant="outline"
             className="w-full rounded-sm border-[var(--color-walnut)] text-[var(--color-walnut)] hover:bg-[var(--color-cream)] tracking-wide text-sm"
+            onClick={() => setLeadOpen(true)}
           >
             Solicitar cotización personalizada
           </Button>
+          <LeadFormDialog
+            open={leadOpen}
+            onOpenChange={setLeadOpen}
+            productoId={product.id}
+            productoNombre={product.title}
+          />
 
           {/* Trust strip */}
           <div className="grid grid-cols-3 divide-x divide-border/40 border border-border/40 rounded-sm overflow-hidden">

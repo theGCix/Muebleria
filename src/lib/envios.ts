@@ -64,4 +64,4 @@ export function getPrecioEnvio(distrito: string): number | null {
     (d) => d.destino.localeCompare(distrito, "es", { sensitivity: "base" }) === 0
   );
   return match ? match.precio : null;
-}
+} 

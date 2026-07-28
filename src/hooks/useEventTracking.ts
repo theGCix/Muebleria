@@ -4,7 +4,7 @@ import { getStoredUtm } from "./useUtm";
 
 const SESSION_KEY = "gm_session_id";
 
-function getSessionId(): string {
+export function getSessionId(): string {
   let id = sessionStorage.getItem(SESSION_KEY);
   if (!id) {
     id = crypto.randomUUID();
