@@ -2,7 +2,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCartStore } from "@/stores/cartStore";
 import { Button } from "@/components/ui/button";
-import { ShoppingBag, Image, Heart } from "lucide-react";
+import { ShoppingBag, Image, Heart, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import type { Product } from "@/hooks/useProducts";
@@ -106,10 +106,16 @@ export function ProductCard({ product: p }: Props) {
                 size="sm"
                 onClick={handleAdd}
                 disabled={(p.stock ?? 1) <= 0}
+                variant={enCarrito ? "secondary" : "default"}
                 className="rounded-full w-full"
               >
-                <ShoppingBag className="h-3.5 w-3.5 mr-1" />
-                {(p.stock ?? 1) <= 0 ? "Agotado" : "Agregar"}
+                {(p.stock ?? 1) <= 0 ? (
+                  "Agotado"
+                ) : enCarrito ? (
+                  <><Check className="h-3.5 w-3.5 mr-1" /> En el carrito</>
+                ) : (
+                  <><ShoppingBag className="h-3.5 w-3.5 mr-1" /> Agregar</>
+                )}
               </Button>
             </div>
           </div>
