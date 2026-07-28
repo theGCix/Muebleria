@@ -13,7 +13,7 @@ import {
 import { useCartStore } from "@/stores/cartStore";
 import {
   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
-  CheckCircle2, XCircle, LogIn, Minus, Plus, X,
+  CheckCircle2, XCircle, LogIn, Minus, Plus, X, Check,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -87,6 +87,43 @@ async function fetchNiubizSession(payload: {
   }>;
 }
 
+const STEPS = ["Carrito", "Datos y entrega", "Pago"];
+
+function CheckoutStepper({ current }: { current: number }) {
+  return (
+    <div className="flex items-center mb-10">
+      {STEPS.map((label, i) => {
+        const step = i + 1;
+        const done = step < current;
+        const active = step === current;
+        return (
+          <div key={label} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+                  done
+                    ? "bg-accent border-accent text-accent-foreground"
+                    : active
+                    ? "border-accent text-accent bg-accent/10"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {done ? <Check className="h-4 w-4" /> : step}
+              </div>
+              <span className={`text-xs whitespace-nowrap ${active || done ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                {label}
+              </span>
+            </div>
+            {step < STEPS.length && (
+              <div className={`flex-1 h-0.5 mx-2 mb-5 transition-colors ${done ? "bg-accent" : "bg-border"}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CheckoutPage() {
   const { items, total, clearCart, updateQty, removeItem } = useCartStore();
   const [loading, setLoading] = useState(false);
@@ -142,6 +179,16 @@ function CheckoutPage() {
   const envio            = (envioBase ?? 0) + cargoParcial;
   const totalFinal       = subtotal + envio;
   const distritoSinCobertura = metodoEntrega === "domicilio" && form.distrito !== "" && envioBase === null;
+
+  const datosCompletos =
+    form.nombre.trim() !== "" &&
+    form.email.trim() !== "" &&
+    form.telefono.trim() !== "" &&
+    form.dni.trim() !== "" &&
+    (metodoEntrega === "recojo_tienda" ||
+      (form.direccion.trim() !== "" && !!form.distrito && form.ciudad.trim() !== ""));
+
+  const currentStep = loading ? 3 : datosCompletos ? 2 : 1;
 
 
   useEffect(() => {
@@ -337,7 +384,9 @@ useEffect(() => {
           <ArrowLeft className="h-4 w-4" /> Seguir comprando
         </Link>
 
-        <h1 className="font-display text-4xl font-semibold mb-10">Finalizar compra</h1>
+        <h1 className="font-display text-4xl font-semibold mb-6">Finalizar compra</h1>
+
+        <CheckoutStepper current={currentStep} />
 
         <div className="grid lg:grid-cols-[1fr_420px] gap-10 min-w-0">
           {/* ── Formulario ── */}
