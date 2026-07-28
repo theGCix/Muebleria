@@ -36,6 +36,11 @@ const PREGUNTAS_RAPIDAS: { label: string; pregunta: string; respuesta: string }[
     pregunta: "Quiero consultar el estado de mi pedido",
     respuesta: null, // este sí necesita la IA (requiere número + correo)
   },
+  {
+    label: "💬 Tengo otra pregunta",
+    pregunta: "",
+    respuesta: null, // traspaso directo a la IA, sin pregunta fija
+  },
 ];
 
 async function chatWithAssistant(messages: Message[]): Promise<{ reply: string; cartActions: CartAction[] }> {
@@ -89,9 +94,15 @@ export function AsistenteChat() {
         { role: "user", content: item.pregunta },
         { role: "assistant", content: item.respuesta! },
       ]);
-    } else {
+    } else if (item.pregunta) {
       // Necesita datos reales (ej. consultar pedido): va por la IA
       setInput(item.pregunta);
+    } else {
+      // Traspaso libre: le avisamos al cliente que pasa a la IA, sin asumir la pregunta
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: "Claro, cuéntame qué necesitas y te ayudo con eso." },
+      ]);
     }
   };
 
@@ -183,7 +194,7 @@ export function AsistenteChat() {
                 </div>
               </div>
             )}
-            {messages.length === 1 && !loading && (
+            {messages.length > 0 && messages[messages.length - 1].role === "assistant" && !loading && (
               <div className="flex flex-col gap-1.5 pt-1">
                 {PREGUNTAS_RAPIDAS.map((p) => (
                   <button
