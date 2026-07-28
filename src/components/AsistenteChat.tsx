@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageCircle, X, Send, Loader2, Sparkles } from "lucide-react";
 import { API_URL as API } from "@/config";
+import { ORIGEN_ENVIO } from "@/lib/envios";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 
@@ -12,6 +13,30 @@ type CartAction = {
   id: string; title: string; price: number;
   image?: string; sku?: string; cantidad: number;
 };
+
+// ── Preguntas frecuentes: respuesta instantánea, sin costo de IA ──
+const PREGUNTAS_RAPIDAS: { label: string; pregunta: string; respuesta: string }[] = [
+  {
+    label: "🚚 ¿Cómo es el envío?",
+    pregunta: "¿Cómo es el envío?",
+    respuesta: `Hacemos envío a domicilio en Lima y Callao — el costo depende de tu distrito y se calcula automáticamente en el checkout. También puedes elegir "Recojo en tienda" sin costo, en nuestra tienda de ${ORIGEN_ENVIO}. Si un producto no está en stock, te avisamos la fecha estimada antes de pagar, así que nunca hay sorpresas.`,
+  },
+  {
+    label: "🛡️ ¿Qué garantía tienen?",
+    pregunta: "¿Qué garantía tienen?",
+    respuesta: "Todos nuestros muebles tienen 2 años de garantía en estructura. Si notas algún defecto de fabricación dentro de ese periodo, lo reparamos o reponemos sin costo.",
+  },
+  {
+    label: "💳 ¿Cómo puedo pagar?",
+    pregunta: "¿Cómo puedo pagar?",
+    respuesta: "Aceptamos tarjetas de crédito y débito (Visa, Mastercard, Amex) mediante Niubiz, con pago 100% seguro y encriptado. Aún no manejamos pago contraentrega ni transferencia directa.",
+  },
+  {
+    label: "📦 Consultar mi pedido",
+    pregunta: "Quiero consultar el estado de mi pedido",
+    respuesta: null, // este sí necesita la IA (requiere número + correo)
+  },
+];
 
 async function chatWithAssistant(messages: Message[]): Promise<{ reply: string; cartActions: CartAction[] }> {
   const res = await fetch(`${API}/api/chat`, {
@@ -52,6 +77,21 @@ export function AsistenteChat() {
         updateQty(a.id, previa + cantidad);
       }
       toast.success(`"${a.title}" agregado al carrito desde el asistente`);
+    }
+  };
+
+  const enviarPreguntaRapida = (item: typeof PREGUNTAS_RAPIDAS[number]) => {
+    if (loading) return;
+    if (item.respuesta) {
+      // Respuesta fija: no gasta tokens de IA, aparece al toque
+      setMessages((m) => [
+        ...m,
+        { role: "user", content: item.pregunta },
+        { role: "assistant", content: item.respuesta! },
+      ]);
+    } else {
+      // Necesita datos reales (ej. consultar pedido): va por la IA
+      setInput(item.pregunta);
     }
   };
 
@@ -141,6 +181,20 @@ export function AsistenteChat() {
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">Pensando...</span>
                 </div>
+              </div>
+            )}
+            {messages.length === 1 && !loading && (
+              <div className="flex flex-col gap-1.5 pt-1">
+                {PREGUNTAS_RAPIDAS.map((p) => (
+                  <button
+                    key={p.label}
+                    onClick={() => enviarPreguntaRapida(p)}
+                    className="text-left text-xs px-3 py-2 rounded-xl border transition-colors hover:bg-muted"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
               </div>
             )}
             <div ref={bottomRef} />
