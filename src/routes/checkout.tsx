@@ -13,7 +13,7 @@ import {
 import { useCartStore } from "@/stores/cartStore";
 import {
   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
-  CheckCircle2, XCircle, LogIn, Minus, Plus, X, Check,
+  CheckCircle2, XCircle, LogIn, Minus, Plus, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -63,7 +63,8 @@ interface ModalDatos {
 
 // const API = import.meta.env.VITE_API_URL ?? "";
 import { API_URL as API } from "@/config";
-import { trackEvent } from "@/hooks/useEventTracking";
+import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
+import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 
 async function fetchNiubizSession(payload: {
   amount: number;
@@ -85,45 +86,6 @@ async function fetchNiubizSession(payload: {
     jsUrl: string;
     currency: string;
   }>;
-}
-
-const STEPS = ["Carrito", "Datos y entrega", "Pago"];
-
-function CheckoutStepper({ current }: { current: number }) {
-  return (
-    <div className="bg-card border border-border/50 rounded-xl px-6 py-5 mb-8">
-      <div className="flex items-center">
-        {STEPS.map((label, i) => {
-          const step = i + 1;
-          const done = step < current;
-          const active = step === current;
-          return (
-            <div key={label} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center gap-1.5">
-                <div
-                  className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
-                    done
-                      ? "bg-accent border-accent text-accent-foreground"
-                      : active
-                      ? "border-accent text-accent bg-accent/10"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {done ? <Check className="h-4 w-4" /> : step}
-                </div>
-                <span className={`text-xs whitespace-nowrap ${active || done ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                  {label}
-                </span>
-              </div>
-              {step < STEPS.length && (
-                <div className={`flex-1 h-0.5 mx-3 mb-5 transition-colors ${done ? "bg-accent" : "bg-border"}`} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function CheckoutPage() {
@@ -181,16 +143,6 @@ function CheckoutPage() {
   const envio            = (envioBase ?? 0) + cargoParcial;
   const totalFinal       = subtotal + envio;
   const distritoSinCobertura = metodoEntrega === "domicilio" && form.distrito !== "" && envioBase === null;
-
-  const datosCompletos =
-    form.nombre.trim() !== "" &&
-    form.email.trim() !== "" &&
-    form.telefono.trim() !== "" &&
-    form.dni.trim() !== "" &&
-    (metodoEntrega === "recojo_tienda" ||
-      (form.direccion.trim() !== "" && !!form.distrito && form.ciudad.trim() !== ""));
-
-  const currentStep = loading ? 3 : datosCompletos ? 2 : 1;
 
 
   useEffect(() => {
@@ -275,13 +227,17 @@ useEffect(() => {
       })),
     }),
   })
-  .then(() => {     
+  .then((res) => res.json())
+  .then((data) => {
     // Evento de compra exitosa
   trackEvent({
     tipo: "orden_pagada",
     order_id: purchaseNumber,
     valor: saved.total ?? totalFinal,
   });
+  if (data?.orderId) {
+    markCartRecovered({ session_id: getSessionId(), order_id: data.orderId });
+  }
   })
   .catch((err) => console.error("Error guardando pedido:", err));
 
@@ -308,6 +264,19 @@ useEffect(() => {
     if (metodoEntrega === "domicilio" && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
     if (metodoEntrega === "domicilio" && distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
     setLoading(true);
+
+    // Guarda nombre/teléfono/email en el snapshot del carrito: si abandona
+    // justo aquí (o en la pasarela de pago), igual queda con quién contactar.
+    syncCartSnapshot({
+      session_id: getSessionId(),
+      items: items.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty, image: i.image, sku: i.sku })),
+      subtotal,
+      nombre: form.nombre,
+      email: form.email,
+      telefono: form.telefono,
+      distrito: form.distrito,
+      user_id: user?.id ?? null,
+    });
 
     try {
       const orderId = generateOrderId();
@@ -386,9 +355,7 @@ useEffect(() => {
           <ArrowLeft className="h-4 w-4" /> Seguir comprando
         </Link>
 
-        <h1 className="font-display text-4xl font-semibold mb-6">Finalizar compra</h1>
-
-        <CheckoutStepper current={currentStep} />
+        <h1 className="font-display text-4xl font-semibold mb-10">Finalizar compra</h1>
 
         <div className="grid lg:grid-cols-[1fr_420px] gap-10 min-w-0">
           {/* ── Formulario ── */}
