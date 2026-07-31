@@ -1,5 +1,6 @@
 // src/components/ComboCard.tsx
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Image as ImageIcon, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,9 @@ export function ComboCard({ combo }: Props) {
       : it.products.imagen_url
   );
 
-  const handleAdd = () => {
+  const handleAdd = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setAdding(true);
     // Reparte el precio del combo entre los productos, proporcional al
     // precio individual de cada uno, para que cada línea del carrito
@@ -54,7 +57,11 @@ export function ComboCard({ combo }: Props) {
   };
 
   return (
-    <div className="bg-card rounded-xl border-2 border-accent/30 overflow-hidden hover:shadow-lg transition-all duration-300 relative">
+    <Link
+      to="/combo/$id"
+      params={{ id: combo.id }}
+      className="bg-card rounded-xl border-2 border-accent/30 overflow-hidden hover:shadow-lg transition-all duration-300 relative block group"
+    >
       <span className="absolute top-3 left-3 z-10 rounded-full bg-accent text-accent-foreground text-xs font-bold px-2.5 py-1 shadow-sm flex items-center gap-1">
         <PackageCheck className="h-3 w-3" /> Combo
       </span>
@@ -64,7 +71,7 @@ export function ComboCard({ combo }: Props) {
           thumbs.map((src, i) => (
             <div key={i} className="flex-1 overflow-hidden border-r border-background last:border-r-0">
               {src ? (
-                <img src={src} alt="" className="w-full h-full object-cover" />
+                <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                   <ImageIcon className="h-8 w-8" />
@@ -110,6 +117,6 @@ export function ComboCard({ combo }: Props) {
           )}
         </Button>
       </div>
-    </div>
+    </Link>
   );
 }
