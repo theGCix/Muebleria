@@ -41,6 +41,7 @@ type ProductForm = {
   descripcion: string;
   sku: string;
   precio: string;
+  descuento_porcentaje: string;
   stock: string;
   categoria: string;
   subcategoria: string;
@@ -56,6 +57,7 @@ type ProductForm = {
 
 const emptyForm = (): ProductForm => ({
   nombre: "", descripcion: "", sku: "", precio: "",
+  descuento_porcentaje: "",
   stock: "", categoria: "", subcategoria: "", material_base: "",
   tipo_gestion: "manufactura",
   proveedor_id: "",
@@ -222,6 +224,9 @@ function ProductFormModal({
       const savedProduct = await upsertProduct({
         ...form,
         precio: parseFloat(form.precio),
+        descuento_porcentaje: form.descuento_porcentaje
+          ? parseInt(form.descuento_porcentaje, 10)
+          : null,
         // Para retail, el stock ya no se edita directo: lo calcula el trigger
         // a partir de stock_ubicacion. Para manufactura, se mantiene manual.
         stock: form.tipo_gestion === "retail" ? undefined : parseInt(form.stock, 10),
@@ -457,6 +462,34 @@ function ProductFormModal({
             <Label htmlFor="precio">Precio (S/) *</Label>
             <Input id="precio" type="number" step="0.01" min="0" required value={form.precio} onChange={set("precio")} />
           </div>
+          <div>
+            <Label htmlFor="descuento_porcentaje">Descuento (%)</Label>
+            <Input
+              id="descuento_porcentaje"
+              type="number"
+              min="0"
+              max="90"
+              placeholder="Sin oferta"
+              value={form.descuento_porcentaje}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // Clamp entre 0 y 90 para que coincida con el constraint de la BD
+                const clamped = raw === "" ? "" : String(Math.max(0, Math.min(90, Number(raw))));
+                setForm((f) => ({ ...f, descuento_porcentaje: clamped }));
+              }}
+            />
+          </div>
+        </div>
+        {!!form.precio && !!form.descuento_porcentaje && Number(form.descuento_porcentaje) > 0 && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground line-through">{fmt(Number(form.precio))}</span>
+            <span className="font-semibold text-destructive">
+              {fmt(Number(form.precio) - (Number(form.precio) * Number(form.descuento_porcentaje)) / 100)}
+            </span>
+            <span className="text-xs text-muted-foreground ml-auto">precio final con -{form.descuento_porcentaje}%</span>
+          </div>
+        )}
+        <div>
           {form.tipo_gestion === "manufactura" ? (
             <div>
               <Label htmlFor="stock">Stock</Label>
@@ -574,6 +607,7 @@ function ProductosPage() {
                   <th className="px-4 py-3">SKU</th>
                   <th className="px-4 py-3">Categoría</th>
                   <th className="px-4 py-3 text-right">Precio</th>
+                  <th className="px-4 py-3 text-center">Descuento</th>
                   <th className="px-4 py-3 text-right">Stock</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -625,7 +659,27 @@ function ProductosPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold">{fmt(Number(p.precio))}</td>
+                      <td className="px-4 py-3 text-right font-semibold">
+                        {p.descuento_porcentaje ? (
+                          <div className="flex flex-col items-end leading-tight">
+                            <span className="text-muted-foreground line-through text-xs font-normal">{fmt(Number(p.precio))}</span>
+                            <span className="text-destructive">
+                              {fmt(Number(p.precio) - (Number(p.precio) * p.descuento_porcentaje) / 100)}
+                            </span>
+                          </div>
+                        ) : (
+                          fmt(Number(p.precio))
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {p.descuento_porcentaje ? (
+                          <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">
+                            -{p.descuento_porcentaje}%
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <Badge variant={Number(p.stock) > 0 ? "default" : "destructive"}>
                           {p.stock ?? 0}
@@ -642,6 +696,7 @@ function ProductosPage() {
                               descripcion: p.descripcion ?? "",
                               sku: p.sku ?? "",
                               precio: String(p.precio),
+                              descuento_porcentaje: p.descuento_porcentaje != null ? String(p.descuento_porcentaje) : "",
                               stock: String(p.stock ?? 0),
                               categoria: p.categoria ?? "",
                               subcategoria: p.subcategoria ?? "",
@@ -669,7 +724,7 @@ function ProductosPage() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-muted-foreground">
+                    <td colSpan={8} className="text-center py-10 text-muted-foreground">
                       Sin productos. ¡Crea el primero!
                     </td>
                   </tr>

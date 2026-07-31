@@ -398,6 +398,13 @@ function ProductPage() {
           letter-spacing:.1em; text-transform:uppercase;
           color:#fff; padding:5px 12px; border-radius:20px;
         }
+        .gm-badge-discount {
+          position:absolute; top:20px; right:20px;
+          background:#c0392b; font-size:13px; font-weight:700;
+          letter-spacing:.02em;
+          color:#fff; padding:6px 14px; border-radius:20px;
+          box-shadow: 0 4px 12px rgba(192,57,43,.35);
+        }
         .gm-thumbs { display:flex; gap:10px; margin-top:12px; }
         .gm-thumb {
           width:72px; height:72px; border-radius:2px; overflow:hidden;
@@ -651,7 +658,11 @@ function ProductPage() {
                   : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
                 }
                 {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
-                <div className="gm-badge-new">Nuevo</div>
+                {enOferta ? (
+                  <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
+                ) : (
+                  <div className="gm-badge-new">Nuevo</div>
+                )}
               </div>
             )}
 
