@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
+import { ofertaInfo } from "@/lib/pricing";
 
 export const Route = createFileRoute("/_authenticated/productos")({
   head: () => ({ meta: [{ title: "Productos — G&M POS" }] }),
@@ -27,6 +28,15 @@ export const Route = createFileRoute("/_authenticated/productos")({
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+
+// Convierte un ISO string (UTC) al formato que espera <input type="datetime-local">
+// respetando la hora local del navegador, para precargar el campo al editar.
+const isoToLocalInput = (iso: string | null | undefined): string => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -42,6 +52,7 @@ type ProductForm = {
   sku: string;
   precio: string;
   descuento_porcentaje: string;
+  oferta_vence_el: string; // formato datetime-local ("" = sin vencimiento)
   stock: string;
   categoria: string;
   subcategoria: string;
@@ -57,7 +68,7 @@ type ProductForm = {
 
 const emptyForm = (): ProductForm => ({
   nombre: "", descripcion: "", sku: "", precio: "",
-  descuento_porcentaje: "",
+  descuento_porcentaje: "", oferta_vence_el: "",
   stock: "", categoria: "", subcategoria: "", material_base: "",
   tipo_gestion: "manufactura",
   proveedor_id: "",
@@ -226,6 +237,9 @@ function ProductFormModal({
         precio: parseFloat(form.precio),
         descuento_porcentaje: form.descuento_porcentaje
           ? parseInt(form.descuento_porcentaje, 10)
+          : null,
+        oferta_vence_el: form.oferta_vence_el
+          ? new Date(form.oferta_vence_el).toISOString()
           : null,
         // Para retail, el stock ya no se edita directo: lo calcula el trigger
         // a partir de stock_ubicacion. Para manufactura, se mantiene manual.
@@ -480,13 +494,31 @@ function ProductFormModal({
             />
           </div>
         </div>
+        {!!form.descuento_porcentaje && Number(form.descuento_porcentaje) > 0 && (
+          <div>
+            <Label htmlFor="oferta_vence_el">La oferta vence el (opcional)</Label>
+            <Input
+              id="oferta_vence_el"
+              type="datetime-local"
+              value={form.oferta_vence_el}
+              onChange={(e) => setForm((f) => ({ ...f, oferta_vence_el: e.target.value }))}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Vacío = la oferta se mantiene hasta que quites el descuento manualmente.
+            </p>
+          </div>
+        )}
         {!!form.precio && !!form.descuento_porcentaje && Number(form.descuento_porcentaje) > 0 && (
-          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 flex items-center gap-2 text-sm">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 flex items-center gap-2 text-sm flex-wrap">
             <span className="text-muted-foreground line-through">{fmt(Number(form.precio))}</span>
             <span className="font-semibold text-destructive">
               {fmt(Number(form.precio) - (Number(form.precio) * Number(form.descuento_porcentaje)) / 100)}
             </span>
-            <span className="text-xs text-muted-foreground ml-auto">precio final con -{form.descuento_porcentaje}%</span>
+            {form.oferta_vence_el && new Date(form.oferta_vence_el).getTime() <= Date.now() ? (
+              <span className="text-xs text-destructive font-medium ml-auto">⚠ Esta fecha ya pasó — la oferta no se mostrará</span>
+            ) : (
+              <span className="text-xs text-muted-foreground ml-auto">precio final con -{form.descuento_porcentaje}%</span>
+            )}
           </div>
         )}
         <div>
@@ -568,6 +600,8 @@ function ProductosPage() {
     p.sku?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const enOfertaCount = data.filter((p: any) => ofertaInfo(p).activa).length;
+
   // Normaliza las imagenes de un producto de BD al tipo ProductImage[]
   const parseImagenes = (p: any): ProductImage[] => {
     if (Array.isArray(p.imagenes) && p.imagenes.length > 0) return p.imagenes;
@@ -581,6 +615,11 @@ function ProductosPage() {
         <div>
           <h1 className="text-3xl font-display font-semibold">Productos</h1>
           <p className="text-muted-foreground">Catálogo propio con imágenes Cloudinary</p>
+          {enOfertaCount > 0 && (
+            <p className="text-xs font-medium text-destructive mt-1">
+              🔥 {enOfertaCount} {enOfertaCount === 1 ? "producto en oferta" : "productos en oferta"} ahora mismo
+            </p>
+          )}
         </div>
         <Button onClick={() => setEditItem(null)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo producto
@@ -615,6 +654,7 @@ function ProductosPage() {
               <tbody>
                 {filtered.map((p: any) => {
                   const imgs = parseImagenes(p);
+                  const oi = ofertaInfo(p);
                   return (
                     <tr key={p.id} className="border-t hover:bg-muted/30">
                       <td className="px-4 py-3">
@@ -660,21 +700,23 @@ function ProductosPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">
-                        {p.descuento_porcentaje ? (
+                        {oi.activa ? (
                           <div className="flex flex-col items-end leading-tight">
                             <span className="text-muted-foreground line-through text-xs font-normal">{fmt(Number(p.precio))}</span>
-                            <span className="text-destructive">
-                              {fmt(Number(p.precio) - (Number(p.precio) * p.descuento_porcentaje) / 100)}
-                            </span>
+                            <span className="text-destructive">{fmt(oi.precioFinal)}</span>
                           </div>
                         ) : (
                           fmt(Number(p.precio))
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {p.descuento_porcentaje ? (
+                        {oi.activa ? (
                           <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">
                             -{p.descuento_porcentaje}%
+                          </Badge>
+                        ) : p.descuento_porcentaje ? (
+                          <Badge variant="outline" className="text-muted-foreground" title="El descuento sigue guardado pero ya venció">
+                            Vencida
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground text-xs">—</span>
@@ -697,6 +739,7 @@ function ProductosPage() {
                               sku: p.sku ?? "",
                               precio: String(p.precio),
                               descuento_porcentaje: p.descuento_porcentaje != null ? String(p.descuento_porcentaje) : "",
+                              oferta_vence_el: isoToLocalInput(p.oferta_vence_el),
                               stock: String(p.stock ?? 0),
                               categoria: p.categoria ?? "",
                               subcategoria: p.subcategoria ?? "",

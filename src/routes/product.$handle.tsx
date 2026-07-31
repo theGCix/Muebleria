@@ -15,7 +15,7 @@ import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
-import { precioFinal, tieneOferta } from "@/lib/pricing";
+import { ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
 
 export const Route = createFileRoute("/product/$handle")({
   head: ({ params }) => ({
@@ -310,8 +310,8 @@ function ProductPage() {
   const thumbImgs = allImgs;
   const displayImg = allImgs[activeImg] ?? mainImg;
 
-  const enOferta = tieneOferta(product.descuento_porcentaje);
-  const precioMostrado = precioFinal(product.precio, product.descuento_porcentaje);
+  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
+  const cuentaRegresiva = enOferta ? textoCuentaRegresiva(venceEl) : null;
 
   const handleAdd = () => {
     setAdding(true);
@@ -705,6 +705,11 @@ function ProductPage() {
               )}
               {outOfStock && <span style={{ fontSize: 13, background: "#fde8e8", color: "#b91c1c", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>}
             </div>
+            {cuentaRegresiva && (
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#c0392b", marginTop: -4, marginBottom: 8 }}>
+                ⏳ {cuentaRegresiva}
+              </p>
+            )}
             <p className="gm-price-note">Precio incluye IGV · Entrega a domicilio disponible</p>
 
             <div className="gm-divider" />

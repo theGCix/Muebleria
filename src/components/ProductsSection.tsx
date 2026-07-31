@@ -1,46 +1,42 @@
-import { useProducts } from "@/hooks/useProducts";
+// src/components/OfertasSection.tsx
+import { useOfertas } from "@/hooks/useProducts";
 import { ProductCard } from "./ProductCard";
-import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { useSearchStore } from "@/stores/searchStore";
+import { Flame } from "lucide-react";
 
-export function ProductsSection() {
-  const storeQuery = useSearchStore((s) => s.query);
-  const setStoreQuery = useSearchStore((s) => s.setQuery);
-  const [search, setSearch] = useState(storeQuery);
-  const { data = [], isLoading } = useProducts(24, search || undefined);
+export function OfertasSection() {
+  const { data = [], isLoading } = useOfertas(8);
 
-  // Si la búsqueda se dispara desde el navbar, refleja el término aquí.
-  useEffect(() => {
-    setSearch(storeQuery);
-  }, [storeQuery]);
+  // Sin productos en oferta: no mostramos la sección (evita un bloque vacío en la home)
+  if (!isLoading && data.length === 0) return null;
 
   return (
-    <section id="catalogo" className="py-16 px-4">
-      <div className="container mx-auto max-w-7xl">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-          <div>
-            <h2 className="text-3xl font-display font-semibold">Catálogo</h2>
-            <p className="text-muted-foreground mt-1">Encuentra el mueble perfecto para tu hogar</p>
-          </div>
-          <Input
-            placeholder="Buscar productos…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setStoreQuery(e.target.value);
-            }}
-            className="max-w-xs"
-          />
+    <section
+      id="ofertas"
+      className="py-14 px-4 relative overflow-hidden"
+      style={{ background: "var(--gradient-warm)" }}
+    >
+      <div className="absolute inset-0 bg-background/93" />
+      <div className="container mx-auto max-w-7xl relative">
+        <div className="flex items-center gap-3 mb-1">
+          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-destructive text-destructive-foreground">
+            <Flame className="h-4.5 w-4.5" />
+          </span>
+          <h2 className="text-3xl font-display font-semibold">Ofertas</h2>
+          {!isLoading && data.length > 0 && (
+            <span className="text-xs font-semibold bg-destructive/10 text-destructive rounded-full px-2.5 py-1">
+              {data.length} {data.length === 1 ? "producto" : "productos"}
+            </span>
+          )}
         </div>
+        <p className="text-muted-foreground mb-8 ml-12">
+          Piezas seleccionadas con descuento por tiempo limitado
+        </p>
+
         {isLoading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : data.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground">
-            No se encontraron productos.
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="aspect-[4/3] rounded-xl bg-muted animate-pulse" />
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">

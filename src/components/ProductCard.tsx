@@ -10,7 +10,7 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { LoginModal } from "./LoginModal";
-import { fmtPEN, precioFinal, tieneOferta } from "@/lib/pricing";
+import { fmtPEN, ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
 
 interface Props { product: Product; }
 
@@ -25,8 +25,8 @@ export function ProductCard({ product: p }: Props) {
   const enCarrito = items.some((i) => i.id === p.id);
 
   const fmt = fmtPEN;
-  const enOferta = tieneOferta(p.descuento_porcentaje);
-  const precioOferta = precioFinal(p.precio, p.descuento_porcentaje);
+  const { activa: enOferta, precioFinal: precioOferta, venceEl } = ofertaInfo(p);
+  const cuentaRegresiva = enOferta ? textoCuentaRegresiva(venceEl) : null;
 
   const imgSrc = p.imagen_public_id
     ? cloudinaryUrl(p.imagen_public_id, { w: 400, h: 300 })
@@ -114,6 +114,9 @@ export function ProductCard({ product: p }: Props) {
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="font-bold text-lg text-destructive">{fmt(precioOferta)}</span>
                   <span className="text-sm text-muted-foreground line-through">{fmt(p.precio)}</span>
+                  {cuentaRegresiva && (
+                    <span className="text-[11px] font-medium text-destructive/80">{cuentaRegresiva}</span>
+                  )}
                 </div>
               ) : (
                 <span className="font-bold text-lg">{fmt(p.precio)}</span>

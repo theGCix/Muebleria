@@ -14,6 +14,7 @@ export interface Product {
   imagen_url: string | null;
   imagen_public_id: string | null;
   descuento_porcentaje: number | null;
+  oferta_vence_el: string | null;
   created_at: string;
 }
 
@@ -89,17 +90,20 @@ export function useCategoryFacets(categoria: string) {
 }
 
 /**
- * Productos con oferta activa (descuento_porcentaje > 0), ordenados por
- * mayor descuento primero. Usado por la sección de Ofertas en la home.
+ * Productos con oferta activa (descuento_porcentaje > 0 y, si tiene fecha,
+ * aún no vencida), ordenados por mayor descuento primero. Usado por la
+ * sección de Ofertas en la home.
  */
 export function useOfertas(first = 8) {
   return useQuery({
     queryKey: ["products-ofertas", first],
     queryFn: async () => {
+      const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from("products")
         .select("*")
         .gt("descuento_porcentaje", 0)
+        .or(`oferta_vence_el.is.null,oferta_vence_el.gt.${nowIso}`)
         .order("descuento_porcentaje", { ascending: false })
         .limit(first);
       if (error) throw new Error(error.message);
