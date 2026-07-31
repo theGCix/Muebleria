@@ -15,6 +15,7 @@ import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
+import { precioFinal, tieneOferta } from "@/lib/pricing";
 
 export const Route = createFileRoute("/product/$handle")({
   head: ({ params }) => ({
@@ -309,12 +310,15 @@ function ProductPage() {
   const thumbImgs = allImgs;
   const displayImg = allImgs[activeImg] ?? mainImg;
 
+  const enOferta = tieneOferta(product.descuento_porcentaje);
+  const precioMostrado = precioFinal(product.precio, product.descuento_porcentaje);
+
   const handleAdd = () => {
     setAdding(true);
     addItem({
       id: product.id,
       title: product.nombre,
-      price: product.precio,
+      price: precioMostrado,
       image: mainImg ?? "",
       sku: product.sku ?? undefined,
     });
@@ -681,7 +685,13 @@ function ProductPage() {
 
             {/* price */}
             <div className="gm-price-block">
-              <span className="gm-price-main">{fmt(product.precio)}</span>
+              <span className="gm-price-main">{fmt(precioMostrado)}</span>
+              {enOferta && (
+                <>
+                  <span className="gm-price-old">{fmt(product.precio)}</span>
+                  <span className="gm-price-save">-{product.descuento_porcentaje}% de descuento</span>
+                </>
+              )}
               {outOfStock && <span style={{ fontSize: 13, background: "#fde8e8", color: "#b91c1c", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>}
             </div>
             <p className="gm-price-note">Precio incluye IGV · Entrega a domicilio disponible</p>

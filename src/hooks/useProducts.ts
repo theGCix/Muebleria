@@ -13,6 +13,7 @@ export interface Product {
   material_base: string | null;
   imagen_url: string | null;
   imagen_public_id: string | null;
+  descuento_porcentaje: number | null;
   created_at: string;
 }
 
@@ -83,6 +84,26 @@ export function useCategoryFacets(categoria: string) {
         .eq("categoria", categoria);
       if (error) throw new Error(error.message);
       return (data ?? []) as Pick<Product, "subcategoria" | "material_base">[];
+    },
+  });
+}
+
+/**
+ * Productos con oferta activa (descuento_porcentaje > 0), ordenados por
+ * mayor descuento primero. Usado por la sección de Ofertas en la home.
+ */
+export function useOfertas(first = 8) {
+  return useQuery({
+    queryKey: ["products-ofertas", first],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .gt("descuento_porcentaje", 0)
+        .order("descuento_porcentaje", { ascending: false })
+        .limit(first);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Product[];
     },
   });
 }

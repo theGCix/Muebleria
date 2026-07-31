@@ -10,6 +10,7 @@ import { useWishlist } from "@/context/WishlistContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { LoginModal } from "./LoginModal";
+import { fmtPEN, precioFinal, tieneOferta } from "@/lib/pricing";
 
 interface Props { product: Product; }
 
@@ -23,8 +24,9 @@ export function ProductCard({ product: p }: Props) {
 
   const enCarrito = items.some((i) => i.id === p.id);
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+  const fmt = fmtPEN;
+  const enOferta = tieneOferta(p.descuento_porcentaje);
+  const precioOferta = precioFinal(p.precio, p.descuento_porcentaje);
 
   const imgSrc = p.imagen_public_id
     ? cloudinaryUrl(p.imagen_public_id, { w: 400, h: 300 })
@@ -38,7 +40,7 @@ export function ProductCard({ product: p }: Props) {
     addItem({
       id: p.id,
       title: p.nombre,
-      price: p.precio,
+      price: precioOferta,
       image: imgSrc ?? "",
       sku: p.sku ?? undefined,
     });
@@ -74,6 +76,13 @@ export function ProductCard({ product: p }: Props) {
               </div>
             )}
 
+            {/* Badge de descuento */}
+            {enOferta && (
+              <span className="absolute top-2 left-2 rounded-full bg-destructive text-destructive-foreground text-xs font-bold px-2.5 py-1 shadow-sm">
+                -{p.descuento_porcentaje}%
+              </span>
+            )}
+
             {/* Botón corazón — refleja estado en tiempo real desde el contexto compartido */}
             <button
               type="button"
@@ -101,7 +110,14 @@ export function ProductCard({ product: p }: Props) {
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.descripcion}</p>
             )}
             <div className="mt-3 flex flex-col gap-2">
-              <span className="font-bold text-lg">{fmt(p.precio)}</span>
+              {enOferta ? (
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="font-bold text-lg text-destructive">{fmt(precioOferta)}</span>
+                  <span className="text-sm text-muted-foreground line-through">{fmt(p.precio)}</span>
+                </div>
+              ) : (
+                <span className="font-bold text-lg">{fmt(p.precio)}</span>
+              )}
               <Button
                 size="sm"
                 onClick={handleAdd}
