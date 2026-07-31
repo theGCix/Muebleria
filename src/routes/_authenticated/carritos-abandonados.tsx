@@ -1,9 +1,7 @@
 // src/routes/_authenticated/carritos-abandonados.tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  listCarritosAbandonados, updateCarritoEstado, type CarritoAbandonado,
-} from "@/lib/carrito.functions";
+import {listCarritosAbandonados, updateCarritoEstado, type CarritoAbandonado,} from "@/lib/carrito.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
