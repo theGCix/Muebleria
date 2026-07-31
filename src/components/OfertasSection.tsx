@@ -22,6 +22,11 @@ export function OfertasSection() {
             <Flame className="h-4.5 w-4.5" />
           </span>
           <h2 className="text-3xl font-display font-semibold">Ofertas</h2>
+          {!isLoading && data.length > 0 && (
+            <span className="text-xs font-semibold bg-destructive/10 text-destructive rounded-full px-2.5 py-1">
+              {data.length} {data.length === 1 ? "producto" : "productos"}
+            </span>
+          )}
         </div>
         <p className="text-muted-foreground mb-8 ml-12">
           Piezas seleccionadas con descuento por tiempo limitado
