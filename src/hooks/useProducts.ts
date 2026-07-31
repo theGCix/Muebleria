@@ -14,6 +14,8 @@ export interface Product {
   imagen_url: string | null;
   imagen_public_id: string | null;
   created_at: string;
+  descuento_porcentaje: number | null;
+  oferta_vence_el: string | null;
 }
 
 export type ProductSort = "recientes" | "precio_asc" | "precio_desc";
@@ -87,9 +89,32 @@ export function useCategoryFacets(categoria: string) {
   });
 }
 
+/**
+ * Productos con oferta activa (descuento_porcentaje > 0 y sin vencer) —
+ * usado por OfertasSection en el home. El criterio de "activa" debe
+ * coincidir con lib/pricing.ts#ofertaInfo.
+ */
+export function useOfertas(first = 8) {
+  return useQuery({
+    queryKey: ["products-ofertas", first],
+    queryFn: async () => {
+      const nowIso = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("activo", true)
+        .gt("descuento_porcentaje", 0)
+        .or(`oferta_vence_el.is.null,oferta_vence_el.gt.${nowIso}`)
+        .order("descuento_porcentaje", { ascending: false })
+        .limit(first);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as Product[];
+    },
+  });
+}
+
 export function useProduct(id: string) {
   return useQuery({
-    queryKey: ["product", id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")
