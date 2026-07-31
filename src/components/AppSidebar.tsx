@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
-import { ShoppingBag, Boxes, Hammer, Wrench, Truck, BarChart2 } from "lucide-react"; // ya lo tienes importado
+import { ShoppingBag, Boxes, Hammer, Wrench, Truck, BarChart2, PackageCheck } from "lucide-react"; // ya lo tienes importado
 // import { Boxes } from "lucide-react";
 
 
@@ -19,6 +19,7 @@ const items = [
   { title: "Carritos abandonados", url: "/carritos-abandonados", icon: ShoppingBag, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Clientes", url: "/clientes", icon: Users, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Productos", url: "/productos", icon: Package, roles: ["admin"] as AppRole[] },
+  { title: "Combos", url: "/combos", icon: PackageCheck, roles: ["admin"] as AppRole[] },
   { title: "Usuarios", url: "/usuarios", icon: UserCog, roles: ["admin"] as AppRole[] },
   { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Mis órdenes", url: "/mi-produccion",  icon: Wrench, roles: ["carpintero"] as AppRole[] },

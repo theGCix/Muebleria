@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero"; 
 import { Categories } from "@/components/Categories";
 import { OfertasSection } from "@/components/OfertasSection";
+import { CombosSection } from "@/components/CombosSection";
 import { ProductsSection } from "@/components/ProductsSection";
 import { Testimonials } from "@/components/Testimonials"; 
 import { Footer } from "@/components/Footer";
@@ -29,5 +30,5 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main> <Hero /> <OfertasSection /> <Categories /> <ProductsSection /> <Testimonials /> 
+     <main> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <ProductsSection /> <Testimonials /> 
      </main> <Footer /> </div> ); }
