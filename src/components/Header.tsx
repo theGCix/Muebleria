@@ -15,7 +15,6 @@ import { useSearchStore } from "@/stores/searchStore";
 
 const navLinks = [
   { label: "Inicio", href: "/" },
-  { label: "Catálogo", href: "#catalogo" },
   { label: "Testimonios", href: "#testimonios" },
 ];
 
@@ -42,7 +41,7 @@ export function Header() {
 
   const goToCatalogo = (term: string) => {
     setQuery(term);
-    navigate({ to: "/", hash: "catalogo" });
+    navigate({ to: "/catalogo", search: term ? { q: term } : {} });
   };
 
   const handleDesktopSearch = (e: React.FormEvent<HTMLFormElement>) => {
@@ -83,6 +82,9 @@ export function Header() {
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6 flex-shrink-0">
               <CategoryMegaMenu />
+              <Link to="/catalogo" className="text-sm text-foreground/70 hover:text-foreground transition-colors">
+                Catálogo
+              </Link>
               {navLinks.map((l) => (
                 <a key={l.label} href={l.href} className="text-sm text-foreground/70 hover:text-foreground transition-colors">
                   {l.label}
@@ -185,6 +187,15 @@ export function Header() {
           {/* Mobile dropdown */}
           {mobileOpen && (
             <div className="md:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Catálogo completo */}
+              <Link
+                to="/catalogo"
+                onClick={() => setMobileOpen(false)}
+                className="block text-sm font-medium text-foreground py-2 border-b border-border/30"
+              >
+                Ver catálogo completo
+              </Link>
+
               {/* Categorías (acordeón) */}
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1 px-1">

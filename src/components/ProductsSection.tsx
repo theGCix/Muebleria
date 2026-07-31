@@ -1,15 +1,17 @@
 import { useProducts } from "@/hooks/useProducts";
 import { ProductCard } from "./ProductCard";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 import { useSearchStore } from "@/stores/searchStore";
 
 export function ProductsSection() {
   const storeQuery = useSearchStore((s) => s.query);
   const setStoreQuery = useSearchStore((s) => s.setQuery);
   const [search, setSearch] = useState(storeQuery);
-  const { data = [], isLoading } = useProducts(24, search || undefined);
+  const { data = [], isLoading } = useProducts(8, search || undefined);
 
   // Si la búsqueda se dispara desde el navbar, refleja el término aquí.
   useEffect(() => {
@@ -43,11 +45,20 @@ export function ProductsSection() {
             No se encontraron productos.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {data.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {data.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+            <div className="flex justify-center mt-10">
+              <Button asChild size="lg" className="rounded-full px-8">
+                <Link to="/catalogo" search={search ? { q: search } : {}}>
+                  Ver catálogo completo <ArrowRight className="h-4 w-4 ml-2" />
+                </Link>
+              </Button>
+            </div>
+          </>
         )}
       </div>
     </section>

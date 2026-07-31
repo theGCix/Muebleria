@@ -13,8 +13,6 @@ export interface Product {
   material_base: string | null;
   imagen_url: string | null;
   imagen_public_id: string | null;
-  descuento_porcentaje: number | null;
-  oferta_vence_el: string | null;
   created_at: string;
 }
 
@@ -89,29 +87,6 @@ export function useCategoryFacets(categoria: string) {
   });
 }
 
-/**
- * Productos con oferta activa (descuento_porcentaje > 0 y, si tiene fecha,
- * aún no vencida), ordenados por mayor descuento primero. Usado por la
- * sección de Ofertas en la home.
- */
-export function useOfertas(first = 8) {
-  return useQuery({
-    queryKey: ["products-ofertas", first],
-    queryFn: async () => {
-      const nowIso = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .gt("descuento_porcentaje", 0)
-        .or(`oferta_vence_el.is.null,oferta_vence_el.gt.${nowIso}`)
-        .order("descuento_porcentaje", { ascending: false })
-        .limit(first);
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Product[];
-    },
-  });
-}
-
 export function useProduct(id: string) {
   return useQuery({
     queryKey: ["product", id],
@@ -125,5 +100,63 @@ export function useProduct(id: string) {
       return data as Product;
     },
     enabled: !!id,
+  });
+}
+
+const PAGE_SIZE = 16;
+
+interface AllProductsQuery {
+  search?: string;
+  categoria?: string; // slug de CATEGORIAS, o undefined = todas
+  sort?: ProductSort;
+  page: number; // 0-indexed
+}
+
+/**
+ * Catálogo completo con paginación — usado por /catalogo.
+ * A diferencia de useProducts (preview acotado del home), esta trae
+ * el conteo total para poder mostrar "Cargar más" con precisión.
+ */
+export function useAllProducts({ search, categoria, sort = "recientes", page }: AllProductsQuery) {
+  return useQuery({
+    queryKey: ["products-all", search ?? null, categoria ?? null, sort, page],
+    queryFn: async () => {
+      let q = supabase
+        .from("products")
+        .select("*", { count: "exact" })
+        .eq("activo", true);
+
+      if (categoria) q = q.eq("categoria", categoria);
+      if (search) q = q.or(`nombre.ilike.%${search}%,descripcion.ilike.%${search}%`);
+
+      if (sort === "precio_asc") q = q.order("precio", { ascending: true });
+      else if (sort === "precio_desc") q = q.order("precio", { ascending: false });
+      else q = q.order("created_at", { ascending: false });
+
+      const from = page * PAGE_SIZE;
+      const { data, error, count } = await q.range(from, from + PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      return { products: (data ?? []) as Product[], total: count ?? 0 };
+    },
+  });
+}
+
+/**
+ * Conteo de productos por categoría, para mostrar en los chips de filtro
+ * de /catalogo sin disparar una query por categoría.
+ */
+export function useProductCountsByCategory() {
+  return useQuery({
+    queryKey: ["products-counts-by-category"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products").select("categoria").eq("activo", true);
+      if (error) throw new Error(error.message);
+      const counts: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const c = (row as { categoria: string | null }).categoria;
+        if (c) counts[c] = (counts[c] ?? 0) + 1;
+      }
+      return counts;
+    },
   });
 }
