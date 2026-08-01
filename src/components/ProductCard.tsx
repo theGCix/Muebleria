@@ -21,6 +21,7 @@ export function ProductCard({ product: p }: Props) {
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [loginOpen, setLoginOpen] = useState(false);
   const [wishPending, setWishPending] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
 
   const enCarrito = items.some((i) => i.id === p.id);
 
@@ -45,6 +46,8 @@ export function ProductCard({ product: p }: Props) {
       sku: p.sku ?? undefined,
     });
     toast.success(`"${p.nombre}" añadido al carrito`);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1200);
   };
 
   const handleWishlist = async (e: React.MouseEvent) => {
@@ -121,21 +124,42 @@ export function ProductCard({ product: p }: Props) {
               ) : (
                 <span className="font-bold text-lg">{fmt(p.precio)}</span>
               )}
-              <Button
-                size="sm"
+              <button
+                type="button"
                 onClick={handleAdd}
                 disabled={(p.stock ?? 1) <= 0 || enCarrito}
-                variant={enCarrito ? "secondary" : "default"}
-                className="rounded-full w-full"
+                className={`group/btn relative w-full flex items-center gap-2.5 rounded-full pl-1.5 pr-4 py-1.5 transition-all duration-300 ${
+                  (p.stock ?? 1) <= 0
+                    ? "bg-muted text-muted-foreground cursor-default"
+                    : enCarrito
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                    : "bg-primary text-primary-foreground shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+                }`}
               >
-                {(p.stock ?? 1) <= 0 ? (
-                  "Agotado"
-                ) : enCarrito ? (
-                  <><Check className="h-3.5 w-3.5 mr-1" /> En el carrito</>
-                ) : (
-                  <><ShoppingBag className="h-3.5 w-3.5 mr-1" /> Agregar</>
-                )}
-              </Button>
+                <span
+                  className={`relative flex-shrink-0 h-7 w-7 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                    (p.stock ?? 1) <= 0
+                      ? "bg-muted-foreground/10"
+                      : enCarrito
+                      ? "bg-emerald-100"
+                      : "bg-white/15 group-hover/btn:bg-white/25"
+                  }`}
+                >
+                  {justAdded && (
+                    <span className="absolute inset-0 rounded-full bg-white/50 animate-ping" />
+                  )}
+                  {(p.stock ?? 1) <= 0 ? (
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                  ) : enCarrito ? (
+                    <Check className="h-3.5 w-3.5 animate-in zoom-in-50 duration-300" />
+                  ) : (
+                    <ShoppingBag className="h-3.5 w-3.5 transition-transform duration-300 group-hover/btn:-rotate-12 group-hover/btn:scale-110" />
+                  )}
+                </span>
+                <span className="text-sm font-medium">
+                  {(p.stock ?? 1) <= 0 ? "Agotado" : enCarrito ? "En el carrito" : "Agregar al carrito"}
+                </span>
+              </button>
             </div>
           </div>
         </div>
