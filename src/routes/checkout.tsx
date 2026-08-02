@@ -108,6 +108,15 @@ function CheckoutPage() {
     direccion: "", distrito: "", ciudad: "Lima", notas: "",
   });
 
+  // ── Cupón de descuento ─────────────────────────────────────
+  const [cuponCodigo, setCuponCodigo] = useState("");
+  const [cuponAplicado, setCuponAplicado] = useState<{
+    codigo: string;
+    descuento: number;
+  } | null>(null);
+  const [validandoCupon, setValidandoCupon] = useState(false);
+  const [errorCupon, setErrorCupon] = useState<string | null>(null);
+
   // ── Disponibilidad / modo de entrega (pedidos mixtos) ─────
   const [disponibilidad, setDisponibilidad] = useState<{
     requiere_eleccion_modo_entrega: boolean;
@@ -141,9 +150,56 @@ function CheckoutPage() {
   const cargoParcial     = (metodoEntrega === "domicilio" && requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
   const envioBase        = metodoEntrega === "recojo_tienda" ? 0 : getPrecioEnvio(form.distrito);
   const envio            = (envioBase ?? 0) + cargoParcial;
-  const totalFinal       = subtotal + envio;
+  const descuentoCupon   = cuponAplicado?.descuento ?? 0;
+  const totalFinal       = subtotal + envio - descuentoCupon;
   const distritoSinCobertura = metodoEntrega === "domicilio" && form.distrito !== "" && envioBase === null;
 
+  // Si cambian los productos del carrito, el cupón aplicado puede dejar de
+  // ser válido (ej. era por categoría/producto específico) — se limpia y
+  // se vuelve a validar al tocar "Aplicar" de nuevo, para no cobrar un
+  // descuento que ya no corresponde.
+  useEffect(() => {
+    if (cuponAplicado) {
+      setCuponAplicado(null);
+      setErrorCupon("Tu carrito cambió — vuelve a aplicar el cupón");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
+
+  async function validarCupon() {
+    if (!cuponCodigo.trim()) return;
+    setValidandoCupon(true);
+    setErrorCupon(null);
+    try {
+      const res = await fetch(`${API}/api/cupones/validar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          codigo: cuponCodigo,
+          items: items.map((i) => ({ product_id: i.id, qty: i.qty })),
+          user_id: user?.id ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setCuponAplicado({ codigo: data.codigo, descuento: data.descuento });
+        toast.success(`Cupón aplicado: -${fmt(data.descuento)}`);
+      } else {
+        setCuponAplicado(null);
+        setErrorCupon(data.motivo ?? "Cupón no válido");
+      }
+    } catch {
+      setErrorCupon("No pudimos validar el cupón, intenta de nuevo");
+    } finally {
+      setValidandoCupon(false);
+    }
+  }
+
+  function quitarCupon() {
+    setCuponAplicado(null);
+    setCuponCodigo("");
+    setErrorCupon(null);
+  }
 
   useEffect(() => {
   if (items.length === 0) return;
@@ -206,6 +262,7 @@ useEffect(() => {
         subtotal:         saved.subtotal ?? 0,
         envio:            saved.envio ?? 0,
         total:            saved.total ?? 0,
+        cupon_codigo:     saved.cuponCodigo ?? null,     // ← nuevo: se revalida en el servidor
         modo_entrega:     saved.modoEntrega ?? null,
         metodo_entrega:   saved.metodoEntrega ?? "domicilio",
         sessionKey:       niubizRef.current?.sessionKey ?? "",
@@ -316,6 +373,7 @@ useEffect(() => {
         subtotal,
         envio,
         total: totalFinal,
+        cuponCodigo: cuponAplicado?.codigo ?? null,   // ← nuevo
         modoEntrega: requiereEleccion ? modoEntrega : null,
         metodoEntrega,
       }));
@@ -599,6 +657,39 @@ useEffect(() => {
                 </div>
               )}
 
+              {/* ── Cupón de descuento ── */}
+              <div className="mt-4 pt-4 border-t border-border space-y-2">
+                <Label htmlFor="cupon" className="text-xs">¿Tienes un cupón?</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="cupon"
+                    value={cuponCodigo}
+                    onChange={(e) => setCuponCodigo(e.target.value.toUpperCase())}
+                    placeholder="CODIGO"
+                    className="h-9 text-sm"
+                    disabled={!!cuponAplicado}
+                  />
+                  {cuponAplicado ? (
+                    <Button type="button" size="sm" variant="outline" onClick={quitarCupon}>
+                      Quitar
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      onClick={validarCupon} disabled={validandoCupon || !cuponCodigo.trim()}
+                    >
+                      {validandoCupon ? "..." : "Aplicar"}
+                    </Button>
+                  )}
+                </div>
+                {errorCupon && <p className="text-xs text-destructive">{errorCupon}</p>}
+                {cuponAplicado && (
+                  <p className="text-xs text-green-600">
+                    ✓ {cuponAplicado.codigo} aplicado — ahorras {fmt(cuponAplicado.descuento)}
+                  </p>
+                )}
+              </div>
+
               <div className="mt-4 pt-4 border-t border-border space-y-2 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span><span>{fmt(subtotal)}</span>
@@ -615,6 +706,12 @@ useEffect(() => {
                       : (form.distrito ? fmt(envio) : "—")}
                   </span>
                 </div>
+                {descuentoCupon > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Descuento ({cuponAplicado?.codigo})</span>
+                    <span>-{fmt(descuentoCupon)}</span>
+                  </div>
+                )}
                 {metodoEntrega === "domicilio" && !form.distrito && (
                   <p className="text-xs text-muted-foreground">Selecciona tu distrito para calcular el envío</p>
                 )}
