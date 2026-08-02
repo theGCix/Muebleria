@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, ShoppingCart, ShoppingBag, Receipt, Users, UserCog, Package, LogOut, Home, LayoutGrid, UserPlus } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, ShoppingBag, Receipt, Users, UserCog, Package, LogOut, Home, LayoutGrid, UserPlus, Star } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
@@ -17,6 +17,7 @@ const items = [
   { title: "Ventas Realizadas", url: "/ventas", icon: Receipt, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Leads", url: "/leads", icon: UserPlus, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Carritos abandonados", url: "/carritos-abandonados", icon: ShoppingBag, roles: ["admin", "vendedor"] as AppRole[] },
+  { title: "Reseñas", url: "/resenas", icon: Star, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Clientes", url: "/clientes", icon: Users, roles: ["admin", "vendedor"] as AppRole[] },
   { title: "Productos", url: "/productos", icon: Package, roles: ["admin"] as AppRole[] },
   { title: "Combos", url: "/combos", icon: PackageCheck, roles: ["admin"] as AppRole[] },

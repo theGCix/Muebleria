@@ -16,6 +16,7 @@ import { trackEvent } from "@/hooks/useEventTracking";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
 import { ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
+import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
 
 export const Route = createFileRoute("/product/$handle")({
   head: ({ params }) => ({
@@ -88,11 +89,29 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
     ["Garantía", "2 años en estructura"],
   ];
 
-  const reviews = [
-    { name: "María C.", loc: "Lima", stars: 5, text: "Hermoso juego de sala, los cojines y el tapizado son de excelente calidad. La entrega fue puntual y el armado muy prolijo." },
-    { name: "Pamela R.", loc: "San Isidro", stars: 4, text: "El diseño es precioso y combina perfecto con mi sala. Solo le bajo una estrella porque tardó un poco más de lo esperado en llegar." },
-    { name: "Lucía B.", loc: "Miraflores", stars: 5, text: "Muy buena relación calidad-precio para ser hecho a mano en Perú. El acabado premium se nota en cada detalle." },
-  ];
+  const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
+    queryKey: ["resenas-producto", product?.id],
+    queryFn: () => fetchProductReviews(product!.id),
+    enabled: !!product?.id,
+    staleTime: 60_000,
+  });
+  const { data: ratingData } = useQuery({
+    queryKey: ["rating-producto", product?.id],
+    queryFn: () => fetchProductRating(product!.id),
+    enabled: !!product?.id,
+    staleTime: 60_000,
+  });
+  const reviews = reviewsData?.resenas ?? [];
+  const rating = ratingData?.rating ?? null;
+  const ratingBars = rating
+    ? [
+        [5, rating.cinco_estrellas],
+        [4, rating.cuatro_estrellas],
+        [3, rating.tres_estrellas],
+        [2, rating.dos_estrellas],
+        [1, rating.una_estrella],
+      ] as const
+    : [];
 
   return (
     <div className="gm-tabs-section">
@@ -133,18 +152,69 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
         )}
 
         {active === 1 && (
-          <div className="gm-reviews-grid">
-            {reviews.map(r => (
-              <div key={r.name} className="gm-review-card">
-                <div className="gm-stars-row">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} size={13} fill={i < r.stars ? "var(--gm-gold)" : "none"} color={i < r.stars ? "var(--gm-gold)" : "var(--gm-border)"} />
-                  ))}
+          <div>
+            {rating && rating.total_resenas > 0 && (
+              <div className="gm-rating-summary">
+                <div className="gm-rating-avg">
+                  <div className="gm-rating-avg-num">{rating.calificacion_promedio.toFixed(1)}</div>
+                  <div className="gm-stars-row" style={{ justifyContent: "center", margin: "6px 0" }}>
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} size={15} fill={i < Math.round(rating.calificacion_promedio) ? "var(--gm-gold)" : "none"} color={i < Math.round(rating.calificacion_promedio) ? "var(--gm-gold)" : "var(--gm-border)"} />
+                    ))}
+                  </div>
+                  <div className="gm-rating-count">{rating.total_resenas} reseña{rating.total_resenas === 1 ? "" : "s"}</div>
                 </div>
-                <p className="gm-review-text">"{r.text}"</p>
-                <div className="gm-review-author">— {r.name} · {r.loc}</div>
+                <div className="gm-rating-bars">
+                  {ratingBars.map(([stars, count]) => {
+                    const pct = rating.total_resenas > 0 ? Math.round((count / rating.total_resenas) * 100) : 0;
+                    return (
+                      <div key={stars} className="gm-rating-bar-row">
+                        <span>{stars}★</span>
+                        <div className="gm-rating-bar-track"><div className="gm-rating-bar-fill" style={{ width: `${pct}%` }} /></div>
+                        <span className="gm-rating-bar-count">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
+            )}
+
+            {reviewsLoading ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "32px 0" }}>
+                <Loader2 className="animate-spin" size={20} color="var(--gm-muted)" />
+              </div>
+            ) : reviews.length === 0 ? (
+              <p style={{ textAlign: "center", padding: "32px 0", color: "var(--gm-muted)", fontSize: 14 }}>
+                Este producto aún no tiene reseñas. ¡Sé el primero en comprarlo y contarnos qué te pareció!
+              </p>
+            ) : (
+              <div className="gm-reviews-grid">
+                {reviews.map(r => (
+                  <div key={r.id} className="gm-review-card">
+                    <div className="gm-stars-row">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} size={13} fill={i < r.calificacion ? "var(--gm-gold)" : "none"} color={i < r.calificacion ? "var(--gm-gold)" : "var(--gm-border)"} />
+                      ))}
+                    </div>
+                    {r.titulo && <div className="gm-review-title">{r.titulo}</div>}
+                    {r.comentario && <p className="gm-review-text">"{r.comentario}"</p>}
+                    {r.fotos?.length > 0 && (
+                      <div className="gm-review-photos">
+                        {r.fotos.slice(0, 4).map((url, i) => (
+                          <img key={i} src={url} alt="" className="gm-review-photo" />
+                        ))}
+                      </div>
+                    )}
+                    <div className="gm-review-author">— {r.autor_nombre}</div>
+                    {r.respuesta_tienda && (
+                      <div className="gm-review-reply">
+                        <span>Respuesta de la tienda:</span> {r.respuesta_tienda}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -567,6 +637,20 @@ function ProductPage() {
         .gm-review-card { background:var(--gm-cream); padding:22px 24px; border-radius:6px; border:1px solid var(--gm-border); }
         .gm-review-text { font-size:13px; color:var(--gm-mid); line-height:1.7; margin:10px 0 12px; }
         .gm-review-author { font-size:12px; color:var(--gm-muted); }
+        .gm-review-title { font-size:14px; font-weight:600; color:var(--gm-walnut); margin:2px 0 4px; }
+        .gm-review-photos { display:flex; gap:6px; margin:8px 0; }
+        .gm-review-photo { width:52px; height:52px; border-radius:5px; object-fit:cover; border:1px solid var(--gm-border); }
+        .gm-review-reply { margin-top:10px; padding:10px 12px; background:var(--gm-warm); border-radius:5px; font-size:12px; color:var(--gm-mid); line-height:1.6; }
+        .gm-review-reply span { font-weight:600; color:var(--gm-walnut); }
+        .gm-rating-summary { display:flex; gap:40px; align-items:center; padding:24px 0 36px; border-bottom:1px solid var(--gm-border); margin-bottom:28px; flex-wrap:wrap; }
+        .gm-rating-avg { text-align:center; min-width:120px; }
+        .gm-rating-avg-num { font-family:var(--font-display,inherit); font-size:42px; font-weight:600; color:var(--gm-walnut); line-height:1; }
+        .gm-rating-count { font-size:12px; color:var(--gm-muted); }
+        .gm-rating-bars { flex:1; min-width:220px; max-width:360px; display:flex; flex-direction:column; gap:6px; }
+        .gm-rating-bar-row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--gm-muted); }
+        .gm-rating-bar-track { flex:1; height:6px; border-radius:3px; background:var(--gm-border); overflow:hidden; }
+        .gm-rating-bar-fill { height:100%; background:var(--gm-gold); border-radius:3px; }
+        .gm-rating-bar-count { width:20px; text-align:right; }
 
         /* recommended */
         .gm-recommended { background:var(--gm-cream); padding:80px 0; }
