@@ -1,4 +1,10 @@
 // supabase/functions/send-notifications/index.ts
+//
+// CAMBIO respecto al original: usa notif.asunto y notif.mensaje en vez del
+// texto hardcodeado de "tu pedido ha cambiado de estado". Esto es necesario
+// porque ahora la cola también recibe 'recordatorio_carrito' y (más
+// adelante) 'solicitud_resena', que no son notificaciones de pedido.
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -15,7 +21,6 @@ Deno.serve(async () => {
 
   for (const notif of pendientes ?? []) {
     try {
-      // Enviar con Resend, SendGrid, etc.
       await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -25,8 +30,12 @@ Deno.serve(async () => {
         body: JSON.stringify({
           from: "G&M Mueblería <noreply@tudominio.com>",
           to: notif.destinatario_email,
-          subject: notif.asunto,
-          html: `<p>Hola ${notif.destinatario_nombre}, tu pedido ha cambiado de estado.</p>`,
+          subject: notif.asunto ?? "Novedades de tu pedido — G&M Mueblería",
+          // notif.mensaje ya viene armado desde el origen (recordatorios-carrito,
+          // cambiar_estado_pedido, etc). Solo lo convertimos a párrafos con <br>.
+          html: `<div style="font-family: sans-serif; white-space: pre-line;">${
+            notif.mensaje ?? `Hola ${notif.destinatario_nombre ?? ""}, tu pedido ha cambiado de estado.`
+          }</div>`,
         }),
       });
       await supabase

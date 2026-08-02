@@ -158,7 +158,157 @@ app.post("/niubiz-return.html", express.urlencoded({ extended: true }), (req, re
   res.redirect(`${frontendUrl}/checkout?${qs}`);
 });
 
+
+
+
+// ════════════════════════════════════════════════════════════════
+// CUPONES — agregar a server/index.js, ANTES de app.post("/api/orders", ...)
+// ════════════════════════════════════════════════════════════════
+//
+// Regla de oro: el servidor NUNCA confía en un monto de descuento que
+// venga del cliente. Siempre recalcula el subtotal a partir de los
+// product_id + qty recibidos, cruzando contra el precio real en `products`.
+
+// ── Recalcula subtotal real desde la base de datos, ignorando precios
+//    que vengan del cliente (igual de crítico para el total de la orden,
+//    no solo para el cupón — pero eso ya es una limitación previa del
+//    sistema, fuera del alcance de este cambio).
+async function calcularSubtotalReal(items) {
+  const productIds = items.map((i) => i.product_id).filter(Boolean);
+  if (productIds.length === 0) return { subtotal: 0, detalle: [] };
+
+  const { data: productos, error } = await supabaseAdmin
+    .from("products")
+    .select("id, precio, categoria")
+    .in("id", productIds);
+
+  if (error) throw new Error(error.message);
+
+  const precioPorId = Object.fromEntries((productos ?? []).map((p) => [p.id, p]));
+  let subtotal = 0;
+  const detalle = [];
+
+  for (const item of items) {
+    const prod = precioPorId[item.product_id];
+    if (!prod) continue; // ítem sin product_id (ej. combo suelto) — no participa en validación de cupón por producto/categoría
+    const precioReal = Number(prod.precio);
+    subtotal += precioReal * item.qty;
+    detalle.push({ product_id: item.product_id, categoria: prod.categoria, precio: precioReal, qty: item.qty });
+  }
+
+  return { subtotal, detalle };
+}
+
+// ── Valida un cupón contra reglas + subtotal real. NO lo marca como usado
+//    (eso pasa recién al crear la orden, vía cupon_usos).
+async function validarCupon({ codigo, items, customer_id }) {
+  const { data: cupon, error } = await supabaseAdmin
+    .from("cupones")
+    .select("*")
+    .eq("codigo", codigo.trim().toUpperCase())
+    .eq("activo", true)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!cupon) return { valid: false, motivo: "Cupón no encontrado" };
+  if (cupon.vence_el && new Date(cupon.vence_el) < new Date()) {
+    return { valid: false, motivo: "Este cupón ya expiró" };
+  }
+  if (cupon.uso_maximo_total && cupon.usos_actuales >= cupon.uso_maximo_total) {
+    return { valid: false, motivo: "Este cupón alcanzó su límite de usos" };
+  }
+
+  const { subtotal, detalle } = await calcularSubtotalReal(items);
+
+  if (subtotal < Number(cupon.monto_minimo_compra)) {
+    return {
+      valid: false,
+      motivo: `Compra mínima de ${cupon.monto_minimo_compra} para usar este cupón`,
+    };
+  }
+
+  // Si el cupón aplica solo a categoría/producto/combo, recalcular el
+  // subtotal elegible (el descuento solo se aplica sobre esa porción)
+  let subtotalElegible = subtotal;
+  if (cupon.aplica_a === "categoria") {
+    subtotalElegible = detalle
+      .filter((d) => d.categoria === cupon.categoria)
+      .reduce((s, d) => s + d.precio * d.qty, 0);
+  } else if (cupon.aplica_a === "producto") {
+    subtotalElegible = detalle
+      .filter((d) => d.product_id === cupon.producto_id)
+      .reduce((s, d) => s + d.precio * d.qty, 0);
+  }
+  if (subtotalElegible === 0) {
+    return { valid: false, motivo: "El cupón no aplica a los productos de tu carrito" };
+  }
+
+  // Límite por cliente (si tenemos con quién cruzar)
+  if (customer_id) {
+    const { count } = await supabaseAdmin
+      .from("cupon_usos")
+      .select("id", { count: "exact", head: true })
+      .eq("cupon_id", cupon.id)
+      .eq("customer_id", customer_id);
+    if ((count ?? 0) >= cupon.uso_maximo_por_cliente) {
+      return { valid: false, motivo: "Ya usaste este cupón antes" };
+    }
+  }
+
+  // Calcular descuento
+  let descuento =
+    cupon.tipo_descuento === "porcentaje"
+      ? subtotalElegible * (Number(cupon.valor) / 100)
+      : Number(cupon.valor);
+
+  if (cupon.descuento_maximo) {
+    descuento = Math.min(descuento, Number(cupon.descuento_maximo));
+  }
+  descuento = Math.min(descuento, subtotalElegible); // nunca más que lo elegible
+
+  return {
+    valid: true,
+    cupon_id: cupon.id,
+    codigo: cupon.codigo,
+    descuento: Math.round(descuento * 100) / 100,
+  };
+}
+
+// ── POST /api/cupones/validar
+// Body: { codigo, items: [{product_id, qty}], customer_id? }
+app.post("/api/cupones/validar", async (req, res) => {
+  try {
+    const { codigo, items, customer_id } = req.body;
+    if (!codigo || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ valid: false, motivo: "Datos incompletos" });
+    }
+    const resultado = await validarCupon({ codigo, items, customer_id });
+    res.json(resultado);
+  } catch (err) {
+    console.error("Error validando cupón:", err.message);
+    res.status(500).json({ valid: false, motivo: "Error validando el cupón" });
+  }
+});
+
+
+
+
+
 // ── POST /api/orders — guarda el pedido en Supabase ───────────
+// ════════════════════════════════════════════════════════════════
+// PARCHE a server/index.js — POST /api/orders (línea ~162)
+// ════════════════════════════════════════════════════════════════
+//
+// Cambios respecto al original:
+// 1. Si viene `order.cupon_codigo`, se revalida en el servidor (nunca se
+//    confía en `order.descuento_cupon` si lo mandara el cliente).
+// 2. El total insertado se recalcula: subtotal + envío - descuento.
+// 3. Después de crear la orden, se registra el uso en `cupon_usos` — el
+//    trigger `fn_validar_y_registrar_uso_cupon` (ver migración de cupones)
+//    revalida límites de nuevo dentro de la misma transacción de BD y
+//    lanza excepción si алguien alcanzó a usarlo entre la validación y
+//    el pago (condición de carrera con alto tráfico).
+
 app.post("/api/orders", async (req, res) => {
   try {
     const { order, items } = req.body;
@@ -168,7 +318,6 @@ app.post("/api/orders", async (req, res) => {
       ? order.orderNumber
       : `GM-${Date.now()}-${(order.transactionToken ?? "").slice(-6).toUpperCase()}`;
 
-    // Evitar duplicados por transactionToken
     const { data: existing } = await supabaseAdmin
       .from("orders")
       .select("id")
@@ -178,6 +327,33 @@ app.post("/api/orders", async (req, res) => {
     if (existing) {
       return res.json({ success: true, orderId: existing.id, alreadyExists: true });
     }
+
+    // ── Revalidar cupón en el servidor (si se aplicó uno en el checkout) ──
+    let cuponAplicado = null;
+    let descuento = 0;
+
+    if (order.cupon_codigo) {
+      const itemsParaValidar = (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty }));
+      const resultado = await validarCupon({
+        codigo: order.cupon_codigo,
+        items: itemsParaValidar,
+        customer_id: order.customer_id ?? null,
+      });
+
+      if (resultado.valid) {
+        cuponAplicado = resultado;
+        descuento = resultado.descuento;
+      } else {
+        // El cupón dejó de ser válido entre que se aplicó y se pagó
+        // (ej. venció, o alguien más lo usó). No bloqueamos el pedido
+        // — ya se cobró en Niubiz — pero lo dejamos en el log para
+        // revisión manual y no aplicamos descuento fantasma.
+        console.warn(`⚠️ Cupón ${order.cupon_codigo} inválido al crear la orden: ${resultado.motivo}`);
+      }
+    }
+
+    const subtotalReal = order.subtotal ?? 0; // ver nota: idealmente esto también se recalcula desde `items`, ya es así hoy sin cupón
+    const totalConDescuento = subtotalReal + (order.envio ?? 0) - descuento;
 
     const { data: newOrder, error: orderError } = await supabaseAdmin
       .from("orders")
@@ -192,9 +368,12 @@ app.post("/api/orders", async (req, res) => {
         distrito:           order.distrito  ?? null,
         ciudad:             order.ciudad    ?? null,
         notas:              order.notas     ?? null,
-        subtotal:           order.subtotal  ?? 0,
+        subtotal:           subtotalReal,
         envio:              order.envio     ?? 0,
-        total:              order.total     ?? 0,
+        total:              totalConDescuento,
+        cupon_id:           cuponAplicado?.cupon_id ?? null,
+        cupon_codigo:       cuponAplicado?.codigo ?? null,
+        descuento_cupon:    descuento,
         modo_entrega:       order.modo_entrega ?? null,
         metodo_entrega:     order.metodo_entrega ?? "domicilio",
         currency:           "PEN",
@@ -207,6 +386,21 @@ app.post("/api/orders", async (req, res) => {
       .single();
 
     if (orderError) throw new Error(orderError.message);
+
+    // ── Registrar el uso del cupón (dispara la validación atómica final) ──
+    if (cuponAplicado) {
+      const { error: usoError } = await supabaseAdmin.from("cupon_usos").insert({
+        cupon_id: cuponAplicado.cupon_id,
+        order_id: newOrder.id,
+        customer_id: order.customer_id ?? null,
+        descuento_aplicado: descuento,
+      });
+      if (usoError) {
+        // No revertimos la orden (ya se cobró), pero sí lo logueamos fuerte
+        // para revisar manualmente — esto sería raro (condición de carrera).
+        console.error(`🚨 No se pudo registrar el uso del cupón para la orden ${newOrder.id}:`, usoError.message);
+      }
+    }
 
     const orderItems = (items ?? []).map((item) => ({
       order_id:   newOrder.id,
@@ -225,10 +419,6 @@ app.post("/api/orders", async (req, res) => {
         .insert(orderItems);
       if (itemsError) throw new Error(itemsError.message);
 
-      // Procesar stock del pedido recién pagado:
-      // - Ítems retail: descuenta de stock_ubicacion/products si hay stock,
-      //   o marca "pendiente_reposicion" + empuja estimated_delivery +5 días hábiles.
-      // - Ítems manufactura: no se tocan aquí (se resuelven al pasar a producción).
       const { error: procesarErr } = await supabaseAdmin.rpc(
         "procesar_pago_pedido",
         { _order_id: newOrder.id }
@@ -238,13 +428,12 @@ app.post("/api/orders", async (req, res) => {
       }
     }
 
-    res.json({ success: true, orderId: newOrder.id });
+    res.json({ success: true, orderId: newOrder.id, descuentoAplicado: descuento });
   } catch (err) {
     console.error("Error guardando orden:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 
 

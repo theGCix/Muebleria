@@ -88,6 +88,14 @@ async function fetchNiubizSession(payload: {
   }>;
 }
 
+interface CuponValidacion {
+  valid: boolean;
+  codigo?: string;
+  cupon_id?: string;
+  descuento?: number;
+  motivo?: string;
+}
+
 function CheckoutPage() {
   const { items, total, clearCart, updateQty, removeItem } = useCartStore();
   const [loading, setLoading] = useState(false);
@@ -102,6 +110,15 @@ function CheckoutPage() {
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [modalDatos, setModalDatos] = useState<ModalDatos>({});
+
+  // ── Cupón ───────────────────────────────────────────────────
+  const [cuponCodigo, setCuponCodigo] = useState("");
+  const [cuponAplicado, setCuponAplicado] = useState<{
+    codigo: string;
+    descuento: number;
+  } | null>(null);
+  const [validandoCupon, setValidandoCupon] = useState(false);
+  const [errorCupon, setErrorCupon] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     nombre: "", email: "", telefono: "", dni: "",
@@ -141,8 +158,44 @@ function CheckoutPage() {
   const cargoParcial     = (metodoEntrega === "domicilio" && requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
   const envioBase        = metodoEntrega === "recojo_tienda" ? 0 : getPrecioEnvio(form.distrito);
   const envio            = (envioBase ?? 0) + cargoParcial;
-  const totalFinal       = subtotal + envio;
+  const descuentoCupon   = cuponAplicado?.descuento ?? 0;
+  const totalFinal       = subtotal + envio - descuentoCupon;
   const distritoSinCobertura = metodoEntrega === "domicilio" && form.distrito !== "" && envioBase === null;
+
+  async function validarCupon() {
+    if (!cuponCodigo.trim()) return;
+    setValidandoCupon(true);
+    setErrorCupon(null);
+    try {
+      const res = await fetch(`${API}/api/cupones/validar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          codigo: cuponCodigo,
+          items: items.map((i) => ({ product_id: i.id, qty: i.qty })),
+          customer_id: user?.id ?? null,
+        }),
+      });
+      const data = (await res.json()) as CuponValidacion;
+      if (data.valid && data.codigo && typeof data.descuento === "number") {
+        setCuponAplicado({ codigo: data.codigo, descuento: data.descuento });
+        toast.success(`Cupón aplicado: -${fmt(data.descuento)}`);
+      } else {
+        setCuponAplicado(null);
+        setErrorCupon(data.motivo ?? "Cupón no válido");
+      }
+    } catch {
+      setErrorCupon("No pudimos validar el cupón, intenta de nuevo");
+    } finally {
+      setValidandoCupon(false);
+    }
+  }
+
+  function quitarCupon() {
+    setCuponAplicado(null);
+    setCuponCodigo("");
+    setErrorCupon(null);
+  }
 
 
   useEffect(() => {
@@ -208,6 +261,8 @@ useEffect(() => {
         total:            saved.total ?? 0,
         modo_entrega:     saved.modoEntrega ?? null,
         metodo_entrega:   saved.metodoEntrega ?? "domicilio",
+        cupon_codigo:     saved.cuponCodigo ?? null,
+        customer_id:      saved.userId ?? null,
         sessionKey:       niubizRef.current?.sessionKey ?? "",
         transactionToken,
         // UTM
@@ -320,6 +375,7 @@ useEffect(() => {
         subtotal,
         envio,
         total: totalFinal,
+        cuponCodigo: cuponAplicado?.codigo ?? null,
         modoEntrega: requiereEleccion ? modoEntrega : null,
         metodoEntrega,
       }));
@@ -589,6 +645,38 @@ useEffect(() => {
                 </div>
               )}
 
+              <div className="mt-4 pt-4 border-t border-border space-y-2">
+                <Label htmlFor="cupon" className="text-xs">¿Tienes un cupón?</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="cupon"
+                    value={cuponCodigo}
+                    onChange={(e) => setCuponCodigo(e.target.value.toUpperCase())}
+                    placeholder="CODIGO"
+                    className="h-9 text-sm"
+                    disabled={!!cuponAplicado}
+                  />
+                  {cuponAplicado ? (
+                    <Button type="button" size="sm" variant="outline" onClick={quitarCupon}>
+                      Quitar
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      onClick={validarCupon} disabled={validandoCupon || !cuponCodigo.trim()}
+                    >
+                      {validandoCupon ? "..." : "Aplicar"}
+                    </Button>
+                  )}
+                </div>
+                {errorCupon && <p className="text-xs text-destructive">{errorCupon}</p>}
+                {cuponAplicado && (
+                  <p className="text-xs text-green-600">
+                    ✓ {cuponAplicado.codigo} aplicado — ahorras {fmt(cuponAplicado.descuento)}
+                  </p>
+                )}
+              </div>
+
               <div className="mt-4 pt-4 border-t border-border space-y-2 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span><span>{fmt(subtotal)}</span>
@@ -612,6 +700,12 @@ useEffect(() => {
                   <p className="text-xs text-destructive">
                     No tenemos tarifa registrada para este distrito — te contactaremos para coordinar el envío.
                   </p>
+                )}
+                {descuentoCupon > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Descuento ({cuponAplicado?.codigo})</span>
+                    <span>-{fmt(descuentoCupon)}</span>
+                  </div>
                 )}
                 <div className="flex justify-between font-semibold text-base pt-2 border-t border-border">
                   <span>Total</span>
