@@ -25,12 +25,6 @@ export const CartDrawer = () => {
   const totalItems = items.reduce((s, i) => s + i.qty, 0);
 
   const handleCheckout = () => {
-    if (!user) {
-      // Close cart drawer and open login modal
-      setIsOpen(false);
-      setLoginOpen(true);
-      return;
-    }
     setIsOpen(false);
     window.location.href = "/checkout";
   };
@@ -129,12 +123,6 @@ export const CartDrawer = () => {
                     <span className="text-lg font-medium">Total</span>
                     <span className="text-2xl font-display font-semibold">{fmt(total())}</span>
                   </div>
-                  {!user && (
-                    <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
-                      <LogIn className="h-3 w-3" />
-                      Debes iniciar sesión para comprar
-                    </p>
-                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -147,7 +135,7 @@ export const CartDrawer = () => {
                       className="flex-1"
                       onClick={handleCheckout}
                     >
-                      {user ? "Comprar ahora" : "Iniciar sesión"}
+                      Comprar ahora
                     </Button>
                   </div>
                 </div>
@@ -156,9 +144,6 @@ export const CartDrawer = () => {
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* Login modal — triggered when user tries to checkout without being logged in */}
-      <LoginModal open={loginOpen} onOpenChange={setLoginOpen} onSuccess={() => { setLoginOpen(false); window.location.href = "/checkout"; }} />
     </>
   );
 };

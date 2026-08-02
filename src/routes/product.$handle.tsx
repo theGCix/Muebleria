@@ -773,7 +773,6 @@ function ProductPage() {
                 onClick={async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (!user) { setLoginOpen(true); return; }
                   if (!product) return;
                   setWishPending(true);
                   const added = await toggleWishlist(product.id);
