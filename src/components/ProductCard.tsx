@@ -63,8 +63,8 @@ export function ProductCard({ product: p }: Props) {
 
   return (
     <>
-      <Link to="/product/$handle" params={{ handle: p.id }} className="group block">
-        <div className="bg-card rounded-xl border border-border/50 overflow-hidden hover:shadow-lg transition-all duration-300">
+      <Link to="/product/$handle" params={{ handle: p.id }} className="group block h-full">
+        <div className="bg-card rounded-xl border border-border/50 overflow-hidden hover:shadow-lg transition-all duration-300 h-full flex flex-col">
           <div className="aspect-[4/3] overflow-hidden bg-muted relative">
             {imgSrc ? (
               <img
@@ -104,7 +104,7 @@ export function ProductCard({ product: p }: Props) {
             </button>
           </div>
 
-          <div className="p-4">
+          <div className="p-4 flex flex-1 flex-col">
             {p.categoria && (
               <span className="text-xs text-muted-foreground uppercase tracking-wider">{p.categoria}</span>
             )}
@@ -112,7 +112,7 @@ export function ProductCard({ product: p }: Props) {
             {p.descripcion && (
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.descripcion}</p>
             )}
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="mt-auto pt-3 flex flex-col gap-2">
               {enOferta ? (
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="font-bold text-lg text-destructive">{fmt(precioOferta)}</span>
@@ -120,9 +120,25 @@ export function ProductCard({ product: p }: Props) {
                   {cuentaRegresiva && (
                     <span className="text-[11px] font-medium text-destructive/80">{cuentaRegresiva}</span>
                   )}
+                  <span className="basis-full text-xs font-medium text-destructive">
+                    Ahorras {fmt(p.precio - precioOferta)}
+                  </span>
                 </div>
               ) : (
                 <span className="font-bold text-lg">{fmt(p.precio)}</span>
+              )}
+              {enOferta && p.stock != null && p.stock > 0 && p.stock <= 10 && (
+                <div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-destructive/15">
+                    <div
+                      className="h-full rounded-full bg-destructive"
+                      style={{ width: `${Math.max(8, (p.stock / 10) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {p.stock === 1 ? "Queda 1 unidad" : `Quedan ${p.stock} unidades`}
+                  </p>
+                </div>
               )}
               <button
                 type="button"
