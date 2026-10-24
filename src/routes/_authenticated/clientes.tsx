@@ -28,6 +28,9 @@ import { format } from "date-fns";
 import type { ClienteUnificado } from "@/lib/pos.functions";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
+  validateSearch: (s: Record<string, unknown>): { q?: string } => ({
+    q: typeof s.q === "string" && s.q ? s.q : undefined,
+  }),
   head: () => ({ meta: [{ title: "Clientes — G&M" }] }),
   component: ClientesPage,
 });
@@ -308,7 +311,8 @@ function ClienteDetalle({ cliente, onClose }: { cliente: ClienteUnificado; onClo
 // ── Página principal ──────────────────────────────────────────
 function ClientesPage() {
   const qc = useQueryClient();
-  const [q, setQ] = useState("");
+  const { q: initialQ } = Route.useSearch();
+  const [q, setQ] = useState(initialQ ?? "");
   const [segmentoFilter, setSegmentoFilter] = useState("todos");
   const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
 

@@ -22,6 +22,9 @@ import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 import { ofertaInfo } from "@/lib/pricing";
 
 export const Route = createFileRoute("/_authenticated/productos")({
+  validateSearch: (s: Record<string, unknown>): { q?: string } => ({
+    q: typeof s.q === "string" && s.q ? s.q : undefined,
+  }),
   head: () => ({ meta: [{ title: "Productos — G&M POS" }] }),
   component: ProductosPage,
 });
@@ -586,7 +589,8 @@ function ProductosPage() {
   const { data = [], isLoading } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const qc = useQueryClient();
   const [editItem, setEditItem] = useState<ProductForm | null | undefined>(undefined);
-  const [search, setSearch] = useState("");
+  const { q: initialQ } = Route.useSearch();
+  const [search, setSearch] = useState(initialQ ?? "");
 
   const delMut = useMutation({
     mutationFn: deleteProduct,

@@ -24,6 +24,9 @@ import { cambiarEstadoPedido } from "@/lib/pos.functions";
 
 
 export const Route = createFileRoute("/_authenticated/pedidos")({
+  validateSearch: (s: Record<string, unknown>): { q?: string } => ({
+    q: typeof s.q === "string" && s.q ? s.q : undefined,
+  }),
   head: () => ({ meta: [{ title: "Pedidos online — G&M" }] }),
   component: PedidosPage,
 });
@@ -124,7 +127,8 @@ async function cambiarEstado(orderId: string, nuevoEstado: OrderStatus) {
 function PedidosPage() {
   const [itemAsignaciones, setItemAsignaciones] = useState<Record<string, { modelo: string; talla: string }>>({});
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
+  const { q: initialQ } = Route.useSearch();
+  const [search, setSearch] = useState(initialQ ?? "");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 

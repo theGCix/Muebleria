@@ -1,87 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { User } from "@supabase/supabase-js";
-import {
-  LayoutDashboard, ShoppingCart, ShoppingBag, ShoppingBasket, Receipt, Users, UserCog, Package,
-  Home, LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2,
-  PackageCheck, Tag, ChevronRight, type LucideIcon,
-} from "lucide-react";
+import { Home, ChevronRight } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarUserBlock } from "@/components/SidebarUserBlock";
+import { groups, POS_ITEM, canSee, type NavGroup } from "@/components/nav-config";
 import type { AppRole } from "@/hooks/useAuth";
 import { useSidebarCounts, type CountKey, type SidebarCounts } from "@/hooks/useSidebarCounts";
-
-type NavItem = { title: string; url: string; icon: LucideIcon; roles: AppRole[]; countKey?: CountKey };
-type NavGroup = { label: string; items: NavItem[]; alwaysOpen?: boolean };
-
-const ADMIN_VENDEDOR: AppRole[] = ["admin", "vendedor"];
-const ADMIN: AppRole[] = ["admin"];
-const CARPINTERO: AppRole[] = ["carpintero"];
-
-// Agrupación del menú. Si cambias o agregas rutas, hazlo aquí.
-// Un grupo sin ítems visibles para el rol del usuario no se muestra.
-const groups: NavGroup[] = [
-  {
-    label: "General",
-    alwaysOpen: true,
-    items: [
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ADMIN_VENDEDOR },
-      { title: "Analytics", url: "/analytics", icon: BarChart2, roles: ADMIN_VENDEDOR },
-    ],
-  },
-  {
-    label: "Ventas",
-    items: [
-      { title: "Realizar Venta", url: "/pos", icon: ShoppingCart, roles: ADMIN_VENDEDOR },
-      { title: "Pedidos", url: "/pedidos", icon: ShoppingBag, roles: ADMIN_VENDEDOR, countKey: "pedidos" },
-      { title: "Ventas Realizadas", url: "/ventas", icon: Receipt, roles: ADMIN_VENDEDOR },
-    ],
-  },
-  {
-    label: "Clientes y Marketing",
-    items: [
-      { title: "Clientes", url: "/clientes", icon: Users, roles: ADMIN_VENDEDOR },
-      { title: "Leads", url: "/leads", icon: UserPlus, roles: ADMIN_VENDEDOR, countKey: "leads" },
-      { title: "Carritos abandonados", url: "/carritos-abandonados", icon: ShoppingBasket, roles: ADMIN_VENDEDOR, countKey: "carritos" },
-      { title: "Reseñas", url: "/resenas", icon: Star, roles: ADMIN_VENDEDOR, countKey: "resenas" },
-      { title: "Cupones", url: "/cupones", icon: Tag, roles: ADMIN },
-    ],
-  },
-  {
-    label: "Catálogo",
-    items: [
-      { title: "Productos", url: "/productos", icon: Package, roles: ADMIN },
-      { title: "Combos", url: "/combos", icon: PackageCheck, roles: ADMIN },
-    ],
-  },
-  {
-    label: "Fabricación",
-    items: [
-      { title: "Mis órdenes", url: "/mi-produccion", icon: Wrench, roles: CARPINTERO },
-      { title: "Producción", url: "/produccion", icon: Hammer, roles: ADMIN_VENDEDOR },
-      { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ADMIN_VENDEDOR, countKey: "insumos" },
-      { title: "Proveedores", url: "/proveedores", icon: Truck, roles: ADMIN_VENDEDOR },
-    ],
-  },
-  {
-    label: "Administración",
-    items: [
-      { title: "Usuarios", url: "/usuarios", icon: UserCog, roles: ADMIN },
-    ],
-  },
-];
 
 const fmtCount = (n: number) => (n > 99 ? "99+" : String(n));
 
 // Insumos bajo mínimo es una alerta (rojo); el resto son pendientes (ámbar).
 const badgeClass = (key: CountKey) =>
-  key === "insumos"
-    ? "bg-red-100 text-red-700"
-    : "bg-amber-100 text-amber-800";
+  key === "insumos" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800";
 
 function NavSection({
   group, currentPath, collapsed, counts,
@@ -158,8 +93,10 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
   const counts = useSidebarCounts(roles);
 
   const visibleGroups = groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => i.roles.some((r) => roles.includes(r))) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, roles)) }))
     .filter((g) => g.items.length > 0);
+
+  const showPos = canSee(POS_ITEM, roles);
 
   return (
     <Sidebar collapsible="icon">
@@ -176,6 +113,25 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
         </div>
       </SidebarHeader>
       <SidebarContent>
+        {showPos && (
+          <SidebarGroup className="pb-0">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  size="lg"
+                  tooltip={POS_ITEM.title}
+                  className="justify-center bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground group-data-[collapsible=icon]:justify-center"
+                >
+                  <Link to={POS_ITEM.url}>
+                    <POS_ITEM.icon className="h-5 w-5" />
+                    <span>{POS_ITEM.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
         {visibleGroups.map((group) => (
           <NavSection key={group.label} group={group} currentPath={currentPath} collapsed={collapsed} counts={counts} />
         ))}
@@ -183,16 +139,8 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
       <SidebarFooter className="border-t">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild tooltip="Ir a la tienda">
               <Link to="/"><Home className="h-4 w-4" /><span>Ir a la tienda</span></Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link to="/central">
-                <LayoutGrid className="h-4 w-4" />
-                <span>Central KPIs</span>
-              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
