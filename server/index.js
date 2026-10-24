@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import { URLSearchParams } from "url";
 import rateLimit from "express-rate-limit";
+import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -693,8 +694,8 @@ app.get("/api/nubefact/pdf/:sale_id", requireAuth, async (req, res) => {
 
 
 
-
-
+// ── Nota de crédito (devoluciones) ────────────────────────────
+registerNotaCreditoRoutes({ app, supabaseAdmin, requireAuth, getNubefactBase });
 
 // ── Iniciar servidor ──────────────────────────────────────────
 const PORT = process.env.PORT ?? 3001;
