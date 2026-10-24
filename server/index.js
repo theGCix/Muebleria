@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { URLSearchParams } from "url";
 import rateLimit from "express-rate-limit";
 import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
+import { registerCuponSalida } from "./cupon-salida.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -202,7 +203,7 @@ async function calcularSubtotalReal(items) {
 
 // ── Valida un cupón contra reglas + subtotal real. NO lo marca como usado
 //    (eso pasa recién al crear la orden, vía cupon_usos).
-async function validarCupon({ codigo, items, customer_id }) {
+async function validarCupon({ codigo, items, customer_id, user_id }) {
   const { data: cupon, error } = await supabaseAdmin
     .from("cupones")
     .select("*")
@@ -244,6 +245,18 @@ async function validarCupon({ codigo, items, customer_id }) {
     return { valid: false, motivo: "El cupón no aplica a los productos de tu carrito" };
   }
 
+  // Cupones "solo primera compra": si el usuario está logueado, no debe tener pedidos pagados
+  if (cupon.solo_primera_compra && user_id) {
+    const { count: pagados } = await supabaseAdmin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user_id)
+      .not("paid_at", "is", null);
+    if ((pagados ?? 0) > 0) {
+      return { valid: false, motivo: "Este cupón es solo para tu primera compra" };
+    }
+  }
+
   // Límite por cliente (si tenemos con quién cruzar)
   if (customer_id) {
     const { count } = await supabaseAdmin
@@ -279,11 +292,11 @@ async function validarCupon({ codigo, items, customer_id }) {
 // Body: { codigo, items: [{product_id, qty}], customer_id? }
 app.post("/api/cupones/validar", async (req, res) => {
   try {
-    const { codigo, items, customer_id } = req.body;
+    const { codigo, items, customer_id, user_id } = req.body;
     if (!codigo || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ valid: false, motivo: "Datos incompletos" });
     }
-    const resultado = await validarCupon({ codigo, items, customer_id });
+    const resultado = await validarCupon({ codigo, items, customer_id, user_id });
     res.json(resultado);
   } catch (err) {
     console.error("Error validando cupón:", err.message);
@@ -339,6 +352,7 @@ app.post("/api/orders", async (req, res) => {
         codigo: order.cupon_codigo,
         items: itemsParaValidar,
         customer_id: order.customer_id ?? null,
+        user_id: order.userId ?? null,
       });
 
       if (resultado.valid) {
@@ -696,6 +710,7 @@ app.get("/api/nubefact/pdf/:sale_id", requireAuth, async (req, res) => {
 
 // ── Nota de crédito (devoluciones) ────────────────────────────
 registerNotaCreditoRoutes({ app, supabaseAdmin, requireAuth, getNubefactBase });
+registerCuponSalida({ app, supabaseAdmin, rateLimit });
 
 // ── Iniciar servidor ──────────────────────────────────────────
 const PORT = process.env.PORT ?? 3001;

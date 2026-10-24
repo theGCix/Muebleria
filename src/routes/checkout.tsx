@@ -65,6 +65,7 @@ interface ModalDatos {
 import { API_URL as API } from "@/config";
 import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
+import { leerCuponSalida } from "@/lib/cupon-salida";
 
 async function fetchNiubizSession(payload: {
   amount: number;
@@ -165,6 +166,24 @@ function CheckoutPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length]);
+
+  // Cupón de salida guardado en este navegador: se rellena y se aplica solo (una vez)
+  const [cuponAuto, setCuponAuto] = useState(false);
+  useEffect(() => {
+    const guardado = leerCuponSalida();
+    if (guardado && !cuponCodigo && !cuponAplicado) {
+      setCuponCodigo(guardado.codigo);
+      setCuponAuto(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (cuponAuto && cuponCodigo && items.length > 0 && !cuponAplicado) {
+      setCuponAuto(false);
+      validarCupon();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuponAuto, cuponCodigo, items.length]);
 
   async function validarCupon() {
     if (!cuponCodigo.trim()) return;

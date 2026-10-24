@@ -10,6 +10,7 @@ import { useCartSync } from "@/hooks/useCartSync";
 import { useUtmCapture } from "@/hooks/useUtm";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { AsistenteChat } from "@/components/AsistenteChat";
+import { ExitCouponDialog } from "@/components/ExitCouponDialog";
 
 
 
@@ -86,6 +87,7 @@ function RootComponent() {
       <WishlistProvider>
         <Outlet />
         <AsistenteChat />
+        <ExitCouponDialog />
         <Toaster position="top-center" closeButton />
       </WishlistProvider>
     </QueryClientProvider>
