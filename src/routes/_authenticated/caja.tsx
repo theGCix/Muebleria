@@ -25,7 +25,7 @@ import {
   getTurnoActual, getResumenTurno, listTurnosCerrados, listMovimientos, abrirCaja, cerrarCaja,
   registrarMovimientoCaja, anularMovimientoCaja, rangoMesLima, mesActualLima, fmtFechaHora,
   movimientosACsv, categoriaLabel, GASTO_CATEGORIAS, METODO_LABEL, TIPO_MOV_LABEL,
-  type Turno, type Movimiento, type ResumenTurno, type MetodoPago, type TipoMov,
+  type Turno, type Movimiento, type ResumenTurno, type MetodoPago, type TipoMov, type TipoManual,
 } from "@/lib/caja.functions";
 
 export const Route = createFileRoute("/_authenticated/caja")({
@@ -39,6 +39,7 @@ const TIPO_CLS: Record<TipoMov, string> = {
   gasto: "bg-red-100 text-red-800 border-red-200",
   ingreso: "bg-emerald-100 text-emerald-800 border-emerald-200",
   retiro: "bg-amber-100 text-amber-800 border-amber-200",
+  devolucion: "bg-orange-100 text-orange-800 border-orange-200",
 };
 
 function CajaPage() {
@@ -190,7 +191,9 @@ function ResumenCards({ r }: { r: ResumenTurno }) {
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Retiros / ingresos</div>
           <div className="mt-1 text-2xl font-semibold">{fmtPEN(r.retiros)}</div>
-          <div className="text-[11px] text-muted-foreground">Ingresos extra: {fmtPEN(r.ingresos)}</div>
+          <div className="text-[11px] text-muted-foreground">
+            Ingresos extra: {fmtPEN(r.ingresos)} · Devoluciones: {fmtPEN(r.devoluciones ?? 0)}
+          </div>
         </Card>
       </div>
 
@@ -302,7 +305,7 @@ function AbrirCaja({ onOpened }: { onOpened: () => void }) {
 
 // ── Registrar gasto / retiro / ingreso ───────────────────────
 function MovimientoDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [tipo, setTipo] = useState<TipoMov>("gasto");
+  const [tipo, setTipo] = useState<TipoManual>("gasto");
   const [categoria, setCategoria] = useState("otros");
   const [metodo, setMetodo] = useState<MetodoPago>("efectivo");
   const [monto, setMonto] = useState("");
@@ -329,7 +332,7 @@ function MovimientoDialog({ onClose, onSaved }: { onClose: () => void; onSaved: 
         <DialogHeader><DialogTitle>Registrar movimiento</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-1.5">
-            {(["gasto", "retiro", "ingreso"] as TipoMov[]).map((t) => (
+            {(["gasto", "retiro", "ingreso"] as TipoManual[]).map((t) => (
               <Button key={t} type="button" size="sm" variant={tipo === t ? "default" : "outline"}
                       onClick={() => setTipo(t)}>
                 {TIPO_MOV_LABEL[t]}
@@ -427,6 +430,9 @@ function CierreDialog({
             <div className="flex justify-between"><span>+ Ingresos</span><span>{fmtPEN(resumen.ingresos)}</span></div>
             <div className="flex justify-between"><span>− Gastos en efectivo</span><span>{fmtPEN(resumen.gastos_efectivo)}</span></div>
             <div className="flex justify-between"><span>− Retiros</span><span>{fmtPEN(resumen.retiros)}</span></div>
+            {(resumen.devoluciones ?? 0) > 0 && (
+              <div className="flex justify-between"><span>− Devoluciones en efectivo</span><span>{fmtPEN(resumen.devoluciones ?? 0)}</span></div>
+            )}
             <div className="mt-1.5 flex justify-between border-t pt-1.5 font-semibold">
               <span>Efectivo esperado</span><span>{fmtPEN(resumen.esperado)}</span>
             </div>
@@ -675,6 +681,9 @@ function DetalleTurnoDialog({ turno, onClose }: { turno: Turno; onClose: () => v
               <div className="flex justify-between"><span>+ Ingresos</span><span>{fmtPEN(r.ingresos)}</span></div>
               <div className="flex justify-between"><span>− Gastos en efectivo</span><span>{fmtPEN(r.gastos_efectivo)}</span></div>
               <div className="flex justify-between"><span>− Retiros</span><span>{fmtPEN(r.retiros)}</span></div>
+              {(r.devoluciones ?? 0) > 0 && (
+                <div className="flex justify-between"><span>− Devoluciones en efectivo</span><span>{fmtPEN(r.devoluciones ?? 0)}</span></div>
+              )}
               <div className="mt-1.5 flex justify-between border-t pt-1.5 font-semibold">
                 <span>Esperado / contado</span><span>{fmtPEN(r.esperado)} / {fmtPEN(turno.efectivo_contado ?? 0)}</span>
               </div>

@@ -15,14 +15,16 @@ async function db(): Promise<{ db: Db; userId: string }> {
 
 // ── Tipos ──────────────────────────────────────────────────
 export type MetodoPago = "efectivo" | "tarjeta" | "transferencia" | "yape_plin";
-export type TipoMov = "gasto" | "ingreso" | "retiro";
+export type TipoMov = "gasto" | "ingreso" | "retiro" | "devolucion";
+// Los que se registran a mano (la devolución la crea el módulo Devoluciones)
+export type TipoManual = Exclude<TipoMov, "devolucion">;
 
 export const METODO_LABEL: Record<MetodoPago, string> = {
   efectivo: "Efectivo", tarjeta: "Tarjeta", transferencia: "Transferencia", yape_plin: "Yape / Plin",
 };
 
 export const TIPO_MOV_LABEL: Record<TipoMov, string> = {
-  gasto: "Gasto", ingreso: "Ingreso", retiro: "Retiro",
+  gasto: "Gasto", ingreso: "Ingreso", retiro: "Retiro", devolucion: "Devolución",
 };
 
 export const GASTO_CATEGORIAS = [
@@ -65,6 +67,7 @@ export interface ResumenTurno {
   gastos_otros: number;
   ingresos: number;
   retiros: number;
+  devoluciones?: number; // turnos cerrados antes de existir Devoluciones no lo traen
   esperado: number;
 }
 
