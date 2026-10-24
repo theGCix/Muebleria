@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import type { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, ShoppingBasket, Receipt, Users, UserCog, Package,
-  LogOut, Home, LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2,
+  Home, LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2,
   PackageCheck, Tag, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import {
@@ -10,7 +11,7 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { supabase } from "@/integrations/supabase/client";
+import { SidebarUserBlock } from "@/components/SidebarUserBlock";
 import type { AppRole } from "@/hooks/useAuth";
 import { useSidebarCounts, type CountKey, type SidebarCounts } from "@/hooks/useSidebarCounts";
 
@@ -150,21 +151,15 @@ function NavSection({
   );
 }
 
-export function AppSidebar({ roles }: { roles: AppRole[] }) {
+export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | null }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
-  const navigate = useNavigate();
   const counts = useSidebarCounts(roles);
 
   const visibleGroups = groups
     .map((g) => ({ ...g, items: g.items.filter((i) => i.roles.some((r) => roles.includes(r))) }))
     .filter((g) => g.items.length > 0);
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/" });
-  };
 
   return (
     <Sidebar collapsible="icon">
@@ -200,12 +195,8 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={logout}>
-              <LogOut className="h-4 w-4" /><span>Cerrar sesión</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </SidebarMenu>
+        <SidebarUserBlock user={user} roles={roles} />
       </SidebarFooter>
     </Sidebar>
   );

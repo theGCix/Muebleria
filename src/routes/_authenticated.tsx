@@ -33,7 +33,7 @@ const isFullscreen = currentPath === "/central";
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-muted/30">
-        <AppSidebar roles={roles} />
+        <AppSidebar roles={roles} user={user} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center gap-2 border-b bg-background px-4 sticky top-0 z-10">
             <SidebarTrigger />
