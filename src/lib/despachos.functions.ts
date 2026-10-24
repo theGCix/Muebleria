@@ -15,6 +15,11 @@ async function db(): Promise<{ db: Db; userId: string }> {
 // ── Tipos ──────────────────────────────────────────────────
 export type DespachoEstado = "programado" | "en_ruta" | "entregado" | "fallido" | "cancelado";
 export type Franja = "manana" | "tarde" | "todo_el_dia";
+export type TipoEntrega = "domicilio" | "recojo";
+
+export const TIPO_LABEL: Record<TipoEntrega, string> = {
+  domicilio: "Domicilio", recojo: "Recojo en tienda",
+};
 
 export const FRANJA_LABEL: Record<Franja, string> = {
   manana: "Mañana", tarde: "Tarde", todo_el_dia: "Todo el día",
@@ -23,6 +28,7 @@ export const FRANJA_LABEL: Record<Franja, string> = {
 export interface Despacho {
   id: string;
   order_id: string;
+  tipo: TipoEntrega;
   estado: DespachoEstado;
   fecha_programada: string; // YYYY-MM-DD
   franja: Franja;
@@ -66,6 +72,7 @@ const ESTADOS_PROGRAMABLES = ["pagado", "en_produccion", "control_calidad", "lis
 // ── Esquemas ───────────────────────────────────────────────
 const crearSchema = z.object({
   order_id: z.string().uuid(),
+  tipo: z.enum(["domicilio", "recojo"]).default("domicilio"),
   fecha_programada: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
   franja: z.enum(["manana", "tarde", "todo_el_dia"]),
   conductor: z.string().trim().max(80).optional().nullable(),
@@ -76,7 +83,7 @@ const crearSchema = z.object({
 });
 export type CrearDespachoInput = z.input<typeof crearSchema>;
 
-const editarSchema = crearSchema.omit({ order_id: true }).partial().extend({ id: z.string().uuid() });
+const editarSchema = crearSchema.omit({ order_id: true, tipo: true }).partial().extend({ id: z.string().uuid() });
 export type EditarDespachoInput = z.input<typeof editarSchema>;
 
 const cambioSchema = z.object({
@@ -96,7 +103,7 @@ export async function listDespachos(): Promise<Despacho[]> {
   const { data, error } = await c
     .from("entregas")
     .select(`
-      id, order_id, estado, fecha_programada, franja, conductor, vehiculo, referencia,
+      id, order_id, tipo, estado, fecha_programada, franja, conductor, vehiculo, referencia,
       costo_flete, notas, intentos, motivo_fallo, salida_at, entregado_at, recibido_por, created_at,
       orders ( order_number, nombre, telefono, direccion, distrito, ciudad, total, status )
     `)
@@ -128,14 +135,16 @@ export async function listPedidosSinDespacho(): Promise<PedidoSinDespacho[]> {
 export async function crearDespacho(input: CrearDespachoInput) {
   const v = crearSchema.parse(input);
   const { db: c, userId } = await db();
+  const recojo = v.tipo === "recojo"; // el recojo no lleva conductor, vehículo, referencia ni flete
   const { error } = await c.from("entregas").insert({
     order_id: v.order_id,
+    tipo: v.tipo,
     fecha_programada: v.fecha_programada,
     franja: v.franja,
-    conductor: emptyToNull(v.conductor),
-    vehiculo: emptyToNull(v.vehiculo),
-    referencia: emptyToNull(v.referencia),
-    costo_flete: v.costo_flete,
+    conductor: recojo ? null : emptyToNull(v.conductor),
+    vehiculo: recojo ? null : emptyToNull(v.vehiculo),
+    referencia: recojo ? null : emptyToNull(v.referencia),
+    costo_flete: recojo ? 0 : v.costo_flete,
     notas: emptyToNull(v.notas),
     creado_por: userId,
   });

@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Navigation, Plus, Pencil, MessageCircle, Play, CheckCircle2, XCircle, CalendarClock,
-  Ban, ClipboardCopy, PackageCheck, AlertTriangle, Loader2,
+  Ban, ClipboardCopy, PackageCheck, AlertTriangle, Loader2, Store,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,8 @@ import { EmptyState, TableSkeleton } from "@/components/states";
 import { fmtPEN } from "@/lib/pricing";
 import {
   listDespachos, listPedidosSinDespacho, crearDespacho, editarDespacho,
-  cambiarEstadoDespacho, hoyISO, whatsappLink, FRANJA_LABEL,
-  type Despacho, type DespachoEstado, type Franja,
+  cambiarEstadoDespacho, hoyISO, whatsappLink, FRANJA_LABEL, TIPO_LABEL,
+  type Despacho, type DespachoEstado, type Franja, type TipoEntrega,
 } from "@/lib/despachos.functions";
 
 export const Route = createFileRoute("/_authenticated/despachos")({
@@ -107,9 +107,9 @@ function DespachosPage() {
   const copiarHojaDeRuta = async () => {
     const dia = fecha || hoy;
     const lista = despachos
-      .filter((d) => d.fecha_programada === dia && ["programado", "en_ruta"].includes(d.estado))
+      .filter((d) => d.tipo === "domicilio" && d.fecha_programada === dia && ["programado", "en_ruta"].includes(d.estado))
       .sort((a, b) => a.franja.localeCompare(b.franja) || (a.orders?.distrito ?? "").localeCompare(b.orders?.distrito ?? ""));
-    if (lista.length === 0) return toast.info("No hay entregas activas para ese día.");
+    if (lista.length === 0) return toast.info("No hay entregas a domicilio activas para ese día.");
     const texto = [
       `HOJA DE RUTA — ${fmtFecha(dia)}`,
       ...lista.map((d, i) => {
@@ -223,9 +223,12 @@ function DespachosPage() {
                 {filtrados.map((d) => {
                   const o = d.orders;
                   const vencido = d.estado === "programado" && d.fecha_programada < hoy;
+                  const nombre = o?.nombre?.split(" ")[0] ?? "";
                   const wa = whatsappLink(
                     o?.telefono,
-                    `Hola ${o?.nombre?.split(" ")[0] ?? ""}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está programado para el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que habrá alguien para recibirlo?`,
+                    d.tipo === "recojo"
+                      ? `Hola ${nombre}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está listo para que lo retires el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que pasarás?`
+                      : `Hola ${nombre}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está programado para el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que habrá alguien para recibirlo?`,
                   );
                   const busy = salirARuta.isPending && salirARuta.variables === d.id;
                   return (
@@ -236,9 +239,15 @@ function DespachosPage() {
                         {o?.telefono && <div className="text-xs text-muted-foreground">{o.telefono}</div>}
                       </td>
                       <td className="max-w-[240px] px-4 py-3">
-                        <div className="truncate">{o?.direccion ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground">{o?.distrito ?? ""}</div>
-                        {d.referencia && <div className="truncate text-xs italic text-muted-foreground">Ref: {d.referencia}</div>}
+                        {d.tipo === "recojo" ? (
+                          <div className="flex items-center gap-1.5 text-sm"><Store className="h-3.5 w-3.5" /> Recojo en tienda</div>
+                        ) : (
+                          <>
+                            <div className="truncate">{o?.direccion ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">{o?.distrito ?? ""}</div>
+                            {d.referencia && <div className="truncate text-xs italic text-muted-foreground">Ref: {d.referencia}</div>}
+                          </>
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className={vencido ? "font-medium text-red-700" : ""}>{fmtFecha(d.fecha_programada)}</div>
@@ -246,7 +255,11 @@ function DespachosPage() {
                         {vencido && <div className="text-xs text-red-700">Vencido</div>}
                       </td>
                       <td className="px-4 py-3">
-                        <div>{d.conductor ?? <span className="text-muted-foreground">Sin asignar</span>}</div>
+                        {d.tipo === "recojo" ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <div>{d.conductor ?? <span className="text-muted-foreground">Sin asignar</span>}</div>
+                        )}
                         {d.vehiculo && <div className="text-xs text-muted-foreground">{d.vehiculo}</div>}
                         {d.costo_flete > 0 && <div className="text-xs text-muted-foreground">Flete {fmtPEN(d.costo_flete)}</div>}
                       </td>
@@ -262,7 +275,17 @@ function DespachosPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap justify-end gap-1">
-                          {d.estado === "programado" && (
+                          {d.estado === "programado" && d.tipo === "recojo" && (
+                            <>
+                              <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "entregado" })}>
+                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Retiró
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-8" onClick={() => setAccion({ d, tipo: "fallido" })}>
+                                <XCircle className="mr-1 h-3.5 w-3.5" /> No vino
+                              </Button>
+                            </>
+                          )}
+                          {d.estado === "programado" && d.tipo === "domicilio" && (
                             <Button size="sm" className="h-8" disabled={busy} onClick={() => salirARuta.mutate(d.id)}>
                               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1 h-3.5 w-3.5" />}
                               Salir a ruta
@@ -385,6 +408,7 @@ function DespachoDialog({
   onSaved: () => void;
 }) {
   const [order, setOrder] = useState(orderId ?? "");
+  const [tipo, setTipo] = useState<TipoEntrega>(edit?.tipo ?? "domicilio");
   const [fecha, setFecha] = useState(edit?.fecha_programada ?? hoyISO());
   const [franja, setFranja] = useState<Franja>(edit?.franja ?? "manana");
   const [conductor, setConductor] = useState(edit?.conductor ?? "");
@@ -399,10 +423,14 @@ function DespachoDialog({
     mutationFn: async () => {
       const costo_flete = Number(flete) || 0;
       if (edit) {
-        await editarDespacho({ id: edit.id, fecha_programada: fecha, franja, conductor, vehiculo, referencia, costo_flete, notas });
+        await editarDespacho(
+          edit.tipo === "recojo"
+            ? { id: edit.id, fecha_programada: fecha, franja, notas }
+            : { id: edit.id, fecha_programada: fecha, franja, conductor, vehiculo, referencia, costo_flete, notas },
+        );
       } else {
         if (!order) throw new Error("Elige el pedido a despachar");
-        await crearDespacho({ order_id: order, fecha_programada: fecha, franja, conductor, vehiculo, referencia, costo_flete, notas });
+        await crearDespacho({ order_id: order, tipo, fecha_programada: fecha, franja, conductor, vehiculo, referencia, costo_flete, notas });
       }
     },
     onSuccess: () => { toast.success(edit ? "Despacho actualizado" : "Despacho programado"); onSaved(); },
@@ -434,11 +462,23 @@ function DespachoDialog({
               )}
               {pedido && (
                 <p className="text-xs text-muted-foreground">
-                  {pedido.direccion ?? "Sin dirección"} · {fmtPEN(pedido.total)} · pedido en «{pedido.status.replace("_", " ")}»
+                  {tipo === "domicilio" ? (pedido.direccion ?? "Sin dirección") + " · " : ""}{fmtPEN(pedido.total)} · pedido en «{pedido.status.replace("_", " ")}»
                 </p>
               )}
             </div>
           )}
+
+          <div className="space-y-1.5">
+            <Label>Tipo de entrega</Label>
+            <Select value={tipo} onValueChange={(v) => setTipo(v as TipoEntrega)} disabled={!!edit}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="domicilio">{TIPO_LABEL.domicilio}</SelectItem>
+                <SelectItem value="recojo">{TIPO_LABEL.recojo}</SelectItem>
+              </SelectContent>
+            </Select>
+            {edit && <p className="text-xs text-muted-foreground">Para cambiar el tipo, cancela esta entrega y crea otra.</p>}
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -456,25 +496,37 @@ function DespachoDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Conductor</Label>
-              <Input value={conductor} onChange={(e) => setConductor(e.target.value)} placeholder="Nombre" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Vehículo</Label>
-              <Input value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} placeholder="Placa o tipo" />
-            </div>
+            {tipo === "domicilio" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Conductor</Label>
+                  <Input value={conductor} onChange={(e) => setConductor(e.target.value)} placeholder="Nombre" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Vehículo</Label>
+                  <Input value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} placeholder="Placa o tipo" />
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Referencia de la dirección</Label>
-            <Input value={referencia} onChange={(e) => setReferencia(e.target.value)}
-                   placeholder="Ej. Frente al parque, portón negro, 3er piso sin ascensor" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Costo del flete (S/)</Label>
-            <Input type="number" min={0} step="0.01" value={flete} onChange={(e) => setFlete(e.target.value)} />
-          </div>
+          {tipo === "domicilio" ? (
+            <>
+              <div className="space-y-1.5">
+                <Label>Referencia de la dirección</Label>
+                <Input value={referencia} onChange={(e) => setReferencia(e.target.value)}
+                       placeholder="Ej. Frente al parque, portón negro, 3er piso sin ascensor" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Costo del flete (S/)</Label>
+                <Input type="number" min={0} step="0.01" value={flete} onChange={(e) => setFlete(e.target.value)} />
+              </div>
+            </>
+          ) : (
+            <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              El cliente retira en tienda: no se necesita dirección, conductor ni flete.
+            </p>
+          )}
           <div className="space-y-1.5">
             <Label>Notas internas</Label>
             <Textarea rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} />
@@ -533,13 +585,13 @@ function AccionDialog({
         <DialogHeader><DialogTitle>{titulo} · {d.orders?.order_number}</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {d.orders?.nombre} — {d.orders?.direccion ?? "sin dirección"}{d.orders?.distrito ? `, ${d.orders.distrito}` : ""}
+            {d.orders?.nombre} — {d.tipo === "recojo" ? "Recojo en tienda" : `${d.orders?.direccion ?? "sin dirección"}${d.orders?.distrito ? `, ${d.orders.distrito}` : ""}`}
           </p>
 
           {tipo === "entregado" && (
             <div className="space-y-1.5">
-              <Label>¿Quién recibió? (opcional)</Label>
-              <Input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Nombre de quien recibió" />
+              <Label>{d.tipo === "recojo" ? "¿Quién retiró?" : "¿Quién recibió?"} (opcional)</Label>
+              <Input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Nombre de la persona" />
               <p className="text-xs text-muted-foreground">
                 Si el pedido está en «listo despacho» o «enviado», también pasará a «entregado».
               </p>
@@ -549,7 +601,7 @@ function AccionDialog({
             <div className="space-y-1.5">
               <Label>Motivo</Label>
               <Textarea rows={3} value={texto} onChange={(e) => setTexto(e.target.value)}
-                        placeholder="Ej. Cliente ausente, dirección incorrecta, no pasa por la puerta…" />
+                        placeholder={d.tipo === "recojo" ? "Ej. No se presentó, pidió cambiar el día…" : "Ej. Cliente ausente, dirección incorrecta, no pasa por la puerta…"} />
             </div>
           )}
           {tipo === "reprogramar" && (
