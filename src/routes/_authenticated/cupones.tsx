@@ -18,6 +18,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { fmtPEN } from "@/lib/pricing";
 import { CATEGORIAS } from "@/lib/categories";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/cupones")({
   head: () => ({ meta: [{ title: "Cupones — G&M POS" }] }),
@@ -492,7 +493,7 @@ function CuponesPage() {
 
       <Card className="overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          <TableSkeleton rows={5} cols={6} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
             <table className="w-full min-w-[700px] text-sm">
@@ -582,8 +583,12 @@ function CuponesPage() {
                 })}
                 {data.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-muted-foreground">
-                      Sin cupones todavía. ¡Crea el primero!
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon={Tag}
+                        title="Aún no hay cupones"
+                        description="Crea un cupón de descuento para campañas, reactivar clientes o recuperar carritos."
+                      />
                     </td>
                   </tr>
                 )}

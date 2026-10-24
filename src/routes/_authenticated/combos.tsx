@@ -16,6 +16,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN } from "@/lib/pricing";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/combos")({
   head: () => ({ meta: [{ title: "Combos — G&M POS" }] }),
@@ -331,7 +332,7 @@ function CombosPage() {
 
       <Card className="overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          <TableSkeleton rows={5} cols={5} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
             <table className="w-full min-w-[600px] text-sm">
@@ -405,8 +406,12 @@ function CombosPage() {
                 })}
                 {data.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="text-center py-10 text-muted-foreground">
-                      Sin combos todavía. ¡Crea el primero!
+                    <td colSpan={5}>
+                      <EmptyState
+                        icon={PackageCheck}
+                        title="Aún no hay combos"
+                        description="Agrupa varios productos con un precio especial para venderlos juntos."
+                      />
                     </td>
                   </tr>
                 )}

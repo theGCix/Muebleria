@@ -16,6 +16,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { EmptyState, ListSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/resenas")({
   head: () => ({ meta: [{ title: "Reseñas — G&M" }] }),
@@ -253,13 +254,13 @@ function ResenasPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-14">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <ListSkeleton count={3} />
       ) : resenas.length === 0 ? (
-        <div className="text-center py-14 text-sm text-muted-foreground">
-          No hay reseñas en esta bandeja.
-        </div>
+        <EmptyState
+          icon={q ? Search : Star}
+          title={q ? "Ninguna reseña coincide con la búsqueda" : "No hay reseñas en esta bandeja"}
+          description={q ? "Prueba con otras palabras." : "Las reseñas nuevas llegan aquí para que las apruebes o rechaces."}
+        />
       ) : (
         <div className="space-y-3">
           {resenas.map((r) => <ResenaCard key={r.id} r={r} />)}

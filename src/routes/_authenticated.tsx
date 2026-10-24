@@ -5,6 +5,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AdminTopbar } from "@/components/AdminTopbar";
 import { MobileBottomBar } from "@/components/MobileBottomBar";
+import { useNewActivityAlerts } from "@/hooks/useNewActivityAlerts";
 import { Loader2 } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
 
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthLayout() {
   const { user, roles, loading } = useAuth();
   const navigate = useNavigate();
+  useNewActivityAlerts(roles);
 
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
 const isFullscreen = currentPath === "/central";

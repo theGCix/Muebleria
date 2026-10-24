@@ -13,6 +13,7 @@ import { listMiProduccion } from "@/lib/pos.functions";
 import type { MiOrdenRow } from "@/types/produccion";
 import { OrdenCard } from "@/components/produccion/OrdenCard";
 import { Button } from "@/components/ui/button";
+import { CardGridSkeleton, EmptyState } from "@/components/states";
 
 // ─────────────────────────────────────────────────────────────
 
@@ -77,25 +78,15 @@ function MiProduccionPage() {
       </div>
 
       {/* Estado cargando */}
-      {isLoading && (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
+      {isLoading && <CardGridSkeleton count={3} />}
 
       {/* Estado vacío */}
       {!isLoading && ordenes.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
-          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-            <Hammer className="h-7 w-7" />
-          </div>
-          <div className="text-center">
-            <p className="font-medium">Sin órdenes asignadas</p>
-            <p className="text-sm mt-1">
-              El supervisor te asignará trabajo en breve.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={Hammer}
+          title="Sin órdenes asignadas"
+          description="El supervisor te asignará trabajo en breve. Esta lista se actualiza sola."
+        />
       )}
 
       {/* Órdenes urgentes primero */}

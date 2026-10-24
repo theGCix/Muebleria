@@ -17,11 +17,12 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Search, Phone, Mail, Package, RefreshCw, UserCheck } from "lucide-react";
+import { Loader2, Search, Phone, Mail, Package, RefreshCw, UserCheck, Inbox } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { EmptyState, KanbanSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/leads")({
   head: () => ({ meta: [{ title: "Leads — G&M" }] }),
@@ -287,9 +288,7 @@ function LeadsPage() {
 
       {/* Kanban */}
       {isLoading ? (
-        <div className="flex justify-center py-14">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <KanbanSkeleton columns={4} />
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {LEAD_ESTADOS.map((estado) => {
@@ -345,7 +344,9 @@ function LeadsPage() {
                     </Card>
                   ))}
                   {leads.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-6">Sin leads</p>
+                    <div className="rounded-lg border border-dashed">
+                      <EmptyState compact icon={Inbox} title="Sin leads en esta etapa" />
+                    </div>
                   )}
                 </div>
               </div>

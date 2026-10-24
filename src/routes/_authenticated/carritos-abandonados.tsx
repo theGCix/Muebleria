@@ -11,6 +11,7 @@ import { Loader2, RefreshCw, MessageCircle, Mail, Phone, ShoppingCart } from "lu
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
+import { CardGridSkeleton, EmptyState } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/carritos-abandonados")({
   head: () => ({ meta: [{ title: "Carritos abandonados — G&M" }] }),
@@ -164,14 +165,13 @@ function CarritosAbandonadosPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-14">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <CardGridSkeleton count={6} />
       ) : carritos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <ShoppingCart className="h-10 w-10 mb-3 opacity-40" />
-          <p>No hay carritos abandonados por ahora 🎉</p>
-        </div>
+        <EmptyState
+          icon={ShoppingCart}
+          title="No hay carritos abandonados por ahora"
+          description="Cuando un visitante deje productos sin comprar por más de 1 hora, aparecerá aquí para que lo contactes."
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {carritos.map((c) => <CarritoCard key={c.id} carrito={c} />)}

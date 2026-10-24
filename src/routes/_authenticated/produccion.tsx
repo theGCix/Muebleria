@@ -25,6 +25,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { format, isPast, isToday } from "date-fns";
 import { es } from "date-fns/locale";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/produccion")({
   head: () => ({ meta: [{ title: "Producción — G&M" }] }),
@@ -441,14 +442,21 @@ function ProduccionPage() {
 
       {/* Tabla */}
       {isLoading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <TableSkeleton rows={6} cols={7} />
       ) : filtradas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Hammer className="h-10 w-10" />
-          <p className="text-sm">No hay órdenes de fabricación activas</p>
-        </div>
+        ordenes.length === 0 ? (
+          <EmptyState
+            icon={Hammer}
+            title="No hay órdenes de fabricación activas"
+            description="Aparecen cuando un pedido pagado pasa a producción."
+          />
+        ) : (
+          <EmptyState
+            icon={Hammer}
+            title="Ninguna orden con este estado"
+            action={<Button variant="outline" size="sm" onClick={() => setStatusFilter("todos")}>Ver todas</Button>}
+          />
+        )
       ) : (
         <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">

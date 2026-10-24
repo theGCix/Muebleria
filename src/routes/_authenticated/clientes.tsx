@@ -20,12 +20,12 @@ import {
 } from "@/components/ui/dialog";
 import {
   Loader2, Search, Eye,
-  ShoppingBag, Package, Phone, Mail, MapPin,
-} from "lucide-react";
+  ShoppingBag, Package, Phone, Mail, MapPin, Users } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { ClienteUnificado } from "@/lib/pos.functions";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   validateSearch: (s: Record<string, unknown>): { q?: string } => ({
@@ -389,13 +389,26 @@ function ClientesPage() {
       {/* Tabla */}
       <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-14">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
+          <TableSkeleton rows={7} cols={6} bare />
         ) : filtered.length === 0 ? (
-          <div className="text-center py-14 text-muted-foreground text-sm">
-            No se encontraron clientes.
-          </div>
+          !q && segmentoFilter === "todos" ? (
+            <EmptyState
+              icon={Users}
+              title="Aún no hay clientes"
+              description="Se agregan solos al vender en el POS o cuando alguien compra en la tienda."
+            />
+          ) : (
+            <EmptyState
+              icon={Search}
+              title="No se encontraron clientes"
+              description="Prueba con otro nombre, documento o teléfono, o quita el filtro de segmento."
+              action={
+                <Button variant="outline" size="sm" onClick={() => { setQ(""); setSegmentoFilter("todos"); }}>
+                  Limpiar filtros
+                </Button>
+              }
+            />
+          )
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

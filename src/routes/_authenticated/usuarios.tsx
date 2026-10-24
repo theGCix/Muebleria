@@ -15,6 +15,7 @@ import {
 import { Loader2, Shield, ShieldOff, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import { TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   head: () => ({ meta: [{ title: "Usuarios — G&M POS" }] }),
@@ -126,7 +127,7 @@ function UsuariosPage() {
       </div>
       <Card className="overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          <TableSkeleton rows={5} cols={4} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
             <table className="w-full min-w-[560px] text-sm">

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, FileText, Download, Mail, MessageCircle, XCircle, FileX, FileDown, Send, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, FileText, Download, Mail, MessageCircle, XCircle, FileX, FileDown, Send, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
 import {
@@ -26,6 +26,7 @@ import {
 } from "@/lib/comprobante-pdf";
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 import { useNubefact } from "@/hooks/useNubefact";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
   head: () => ({ meta: [{ title: "Ventas y comprobantes — G&M" }] }),
@@ -462,9 +463,13 @@ function VentasPage() {
 
       <Card className="overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin" />
-          </div>
+          <TableSkeleton rows={7} cols={6} bare />
+        ) : ventas.length === 0 ? (
+          <EmptyState
+            icon={Receipt}
+            title="No hay comprobantes en este período"
+            description="Las ventas del POS y de la tienda online aparecerán aquí. Prueba ampliando el rango de fechas."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

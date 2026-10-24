@@ -24,6 +24,7 @@ import {
 import { Loader2, AlertTriangle, Plus, ArrowDown, Calculator, Package, Hammer } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/insumos")({
   head: () => ({ meta: [{ title: "Insumos MRP — G&M" }] }),
@@ -790,11 +791,21 @@ function InsumosPage() {
 
           <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
             {isLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              <TableSkeleton rows={6} cols={6} bare />
             ) : filtrados.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">Sin insumos.</div>
+              busqueda.trim() ? (
+                <EmptyState
+                  icon={Package}
+                  title="Ningún insumo coincide"
+                  action={<Button variant="outline" size="sm" onClick={() => setBusqueda("")}>Limpiar búsqueda</Button>}
+                />
+              ) : (
+                <EmptyState
+                  icon={Package}
+                  title="Aún no hay insumos"
+                  description="Registra madera, herrajes y demás materiales para controlar el stock y calcular materiales por pedido."
+                />
+              )
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

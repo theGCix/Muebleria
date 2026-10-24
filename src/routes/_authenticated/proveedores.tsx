@@ -28,6 +28,7 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/proveedores")({
   head: () => ({ meta: [{ title: "Proveedores — G&M" }] }),
@@ -639,13 +640,14 @@ function ProveedoresPage() {
 
       {/* Tabla */}
       {isLoading ? (
-        <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        <TableSkeleton rows={6} cols={5} />
       ) : filtrados.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Truck className="h-10 w-10" />
-          <p className="text-sm">No hay proveedores registrados</p>
-          <Button size="sm" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4 mr-1" /> Añadir el primero</Button>
-        </div>
+        <EmptyState
+          icon={Truck}
+          title="No hay proveedores registrados"
+          description="Registra a quién le compras insumos para generar órdenes de compra."
+          action={<Button size="sm" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4 mr-1" /> Añadir el primero</Button>}
+        />
       ) : (
         <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">

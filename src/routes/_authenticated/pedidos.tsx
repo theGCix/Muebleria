@@ -21,6 +21,7 @@ import {
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { cambiarEstadoPedido } from "@/lib/pos.functions";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 
 export const Route = createFileRoute("/_authenticated/pedidos")({
@@ -308,14 +309,26 @@ function PedidosPage() {
 
       {/* Tabla */}
       {isLoading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <TableSkeleton rows={7} cols={6} />
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <ShoppingBag className="h-10 w-10" />
-          <p className="text-sm">No hay pedidos que coincidan</p>
-        </div>
+        orders.length === 0 ? (
+          <EmptyState
+            icon={ShoppingBag}
+            title="Aún no hay pedidos"
+            description="Cuando un cliente compre en la tienda, su pedido aparecerá aquí."
+          />
+        ) : (
+          <EmptyState
+            icon={Search}
+            title="Ningún pedido coincide"
+            description="Prueba con otra búsqueda o quita el filtro de estado."
+            action={
+              <Button variant="outline" size="sm" onClick={() => { setSearch(""); setStatusFilter("todos"); }}>
+                Limpiar filtros
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">

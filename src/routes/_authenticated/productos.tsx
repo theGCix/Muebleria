@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Image } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Image, Package, Search } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,6 +20,7 @@ import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 import { ofertaInfo } from "@/lib/pricing";
+import { EmptyState, TableSkeleton } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/productos")({
   validateSearch: (s: Record<string, unknown>): { q?: string } => ({
@@ -639,7 +640,7 @@ function ProductosPage() {
 
       <Card className="overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          <TableSkeleton rows={6} cols={6} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
             <table className="w-full min-w-[600px] text-sm">
@@ -771,8 +772,21 @@ function ProductosPage() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center py-10 text-muted-foreground">
-                      Sin productos. ¡Crea el primero!
+                    <td colSpan={8}>
+                      {data.length === 0 ? (
+                        <EmptyState
+                          icon={Package}
+                          title="Aún no hay productos"
+                          description="Crea el primero para que aparezca en la tienda y en el POS."
+                        />
+                      ) : (
+                        <EmptyState
+                          icon={Search}
+                          title="Ningún producto coincide"
+                          description="Prueba con otro nombre o SKU."
+                          action={<Button variant="outline" size="sm" onClick={() => setSearch("")}>Limpiar búsqueda</Button>}
+                        />
+                      )}
                     </td>
                   </tr>
                 )}
