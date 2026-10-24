@@ -1,30 +1,16 @@
 // src/components/ComboCard.tsx
-import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Image as ImageIcon, PackageCheck } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cloudinaryUrl } from "@/lib/cloudinary";
-import { useCartStore } from "@/stores/cartStore";
 import { fmtPEN } from "@/lib/pricing";
-import { precioNormalCombo, type Combo } from "@/hooks/useCombos";
+import type { Combo } from "@/hooks/useCombos";
+import { useAgregarCombo } from "@/hooks/useAgregarCombo";
 
 interface Props { combo: Combo; }
 
 export function ComboCard({ combo }: Props) {
-  const addItems = useCartStore((s) => s.addItems);
-  const items = useCartStore((s) => s.items);
-  const [adding, setAdding] = useState(false);
-
-  const precioNormal = precioNormalCombo(combo);
-  const ahorro = precioNormal - combo.precio_combo;
-  const factor = precioNormal > 0 ? combo.precio_combo / precioNormal : 1;
-
-  const yaEnCarrito = combo.combo_items.every((it) =>
-    items.some((c) => c.id === it.product_id && c.comboId === combo.id)
-  );
-
-  const agotado = combo.combo_items.some((it) => (it.products.stock ?? 1) <= 0);
+  const { agregar, adding, yaEnCarrito, agotado, precioNormal, ahorro } = useAgregarCombo(combo);
 
   const thumbs = combo.combo_items.slice(0, 3).map((it) =>
     it.products.imagen_public_id
@@ -35,25 +21,7 @@ export function ComboCard({ combo }: Props) {
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setAdding(true);
-    // Reparte el precio del combo entre los productos, proporcional al
-    // precio individual de cada uno, para que cada línea del carrito
-    // siga apuntando a un product_id real (necesario para el checkout).
-    const nuevos = combo.combo_items.map((it) => ({
-      id: it.product_id,
-      title: it.products.nombre,
-      price: Math.round(it.products.precio * factor * 100) / 100,
-      image: it.products.imagen_public_id
-        ? cloudinaryUrl(it.products.imagen_public_id, { w: 400, h: 300 })
-        : it.products.imagen_url ?? "",
-      sku: it.products.sku ?? undefined,
-      qty: it.cantidad,
-      comboId: combo.id,
-      comboLabel: combo.nombre,
-    }));
-    addItems(nuevos);
-    toast.success(`Combo "${combo.nombre}" agregado al carrito`);
-    setTimeout(() => setAdding(false), 1200);
+    agregar();
   };
 
   return (

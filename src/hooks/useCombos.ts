@@ -67,3 +67,25 @@ export function useCombo(id: string) {
 export function precioNormalCombo(combo: Combo): number {
   return combo.combo_items.reduce((s, it) => s + it.products.precio * it.cantidad, 0);
 }
+
+/**
+ * Combo para el banner de la home: el que más ahorro real le da al cliente entre los que
+ * tienen stock completo. Si ninguno ahorra algo, no hay destacado (no afirmamos ahorros falsos).
+ */
+export function comboDestacado(combos: Combo[]): Combo | null {
+  const candidatos = combos
+    .filter((c) => c.combo_items.length > 0)
+    .filter((c) => c.combo_items.every((it) => (it.products.stock ?? 1) > 0))
+    .map((c) => ({ c, ahorro: precioNormalCombo(c) - c.precio_combo }))
+    .filter((x) => x.ahorro > 0)
+    .sort((a, b) => b.ahorro - a.ahorro);
+  return candidatos[0]?.c ?? null;
+}
+
+/** Cuántos combos completos se pueden armar con el stock actual (limitado por la pieza más escasa). */
+export function combosDisponibles(combo: Combo): number | null {
+  const n = combo.combo_items
+    .filter((it) => it.products.stock != null)
+    .map((it) => Math.floor((it.products.stock as number) / Math.max(1, it.cantidad)));
+  return n.length ? Math.min(...n) : null;
+}

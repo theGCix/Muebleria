@@ -1,0 +1,657 @@
+diff --git a/server/cupon-salida.js b/server/cupon-salida.js
+index d0edd8b..2a6e907 100644
+--- a/server/cupon-salida.js
++++ b/server/cupon-salida.js
+@@ -13,6 +13,13 @@
+ //   cupon_salida_horas    horas de vigencia desde que lo pide (por defecto 48)
+ //   cupon_salida_minimo   compra mínima en S/               (por defecto 300)
+ //   cupon_salida_tope     descuento máximo en S/ (opcional, sin tope por defecto)
++//
++// Correo con el cupón (opcional pero recomendado). Variables de entorno del servidor:
++//   RESEND_API_KEY   la misma clave que ya usa la función send-notifications
++//   RESEND_FROM      remitente con dominio verificado en Resend, p. ej. "G&M Mueblería <hola@tudominio.com>"
++//   FRONTEND_URL     ya existe; se usa para el botón "Ir a la tienda"
++// Con ambas variables el correo sale al instante. Sin ellas (o si Resend falla) se encola en
++// `notificaciones` (tipo 'cupon_bienvenida') y lo despacha el worker send-notifications.
+ // ════════════════════════════════════════════════════════════════
+ import crypto from "crypto";
+ 
+@@ -28,6 +35,75 @@ function generarCodigo() {
+   return `GM${s}`;
+ }
+ 
++const escapeHtml = (v) =>
++  String(v).replace(
++    /[&<>"']/g,
++    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
++  );
++
++const soles = (n) => `S/ ${Number.isInteger(n) ? n : n.toFixed(2)}`;
++
++function armarCorreo({ codigo, porcentaje, minimo, venceEl, tiendaUrl }) {
++  const vence = new Date(venceEl).toLocaleString("es-PE", {
++    timeZone: "America/Lima",
++    dateStyle: "full",
++    timeStyle: "short",
++  });
++  const asunto = `Tu cupón del ${porcentaje}% en G&M Mueblería`;
++  const texto = [
++    "¡Hola!",
++    "",
++    `Aquí está tu cupón de ${porcentaje}% de descuento en tu primera compra:`,
++    "",
++    `  Código: ${codigo}`,
++    "",
++    `Válido hasta el ${vence} (hora de Lima), en compras desde ${soles(minimo)}.`,
++    "Un solo uso. Ingrésalo en el checkout, en el campo “¿Tienes un cupón?”.",
++    "",
++    `Ir a la tienda: ${tiendaUrl}`,
++    "",
++    "G&M Mueblería",
++  ].join("\n");
++
++  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#f6f1ea;font-family:Arial,Helvetica,sans-serif;color:#2b211a">
++<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e6dccf">
++<div style="background:#6b4a2f;color:#fbf7f1;text-align:center;padding:28px 24px">
++<div style="font-size:12px;letter-spacing:3px;text-transform:uppercase;opacity:.8">Tu cupón está listo</div>
++<div style="font-family:Georgia,serif;font-size:56px;line-height:1.1;margin:6px 0">-${escapeHtml(porcentaje)}%</div>
++<div style="font-size:14px;opacity:.9">en tu primera compra</div></div>
++<div style="padding:24px;text-align:center">
++<div style="font-size:14px;color:#6f6256;margin-bottom:10px">Tu código</div>
++<div style="display:inline-block;border:2px dashed #b99a7d;border-radius:8px;padding:12px 20px;font-family:Courier New,monospace;font-size:26px;font-weight:bold;letter-spacing:4px">${escapeHtml(codigo)}</div>
++<p style="font-size:14px;line-height:1.6;color:#4a3d32;margin:18px 0 6px">Válido hasta el <b>${escapeHtml(vence)}</b> (hora de Lima), en compras desde <b>${escapeHtml(soles(minimo))}</b>.</p>
++<p style="font-size:13px;line-height:1.6;color:#6f6256;margin:0 0 20px">Un solo uso. Ingrésalo en el checkout, en el campo “¿Tienes un cupón?”.</p>
++<a href="${escapeHtml(tiendaUrl)}" style="display:inline-block;background:#6b4a2f;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:999px;font-size:14px;font-weight:bold">Ir a la tienda</a>
++</div></div>
++<p style="text-align:center;font-size:12px;color:#8a7d70;margin:16px 0 0">G&amp;M Mueblería · Recibes este correo porque pediste un cupón en nuestra tienda.</p>
++</body></html>`;
++  return { asunto, texto, html };
++}
++
++/** Envía por Resend si hay credenciales. Devuelve { ok, motivo? }; nunca lanza. */
++async function enviarPorResend({ to, asunto, html, texto }) {
++  const key = process.env.RESEND_API_KEY;
++  const from = process.env.RESEND_FROM;
++  if (!key || !from)
++    return { ok: false, motivo: "Resend sin configurar (RESEND_API_KEY / RESEND_FROM)" };
++  try {
++    const res = await fetch("https://api.resend.com/emails", {
++      method: "POST",
++      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
++      body: JSON.stringify({ from, to, subject: asunto, html, text: texto }),
++      signal: AbortSignal.timeout(6000),
++    });
++    if (!res.ok)
++      return { ok: false, motivo: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };
++    return { ok: true };
++  } catch (err) {
++    return { ok: false, motivo: String(err?.message ?? err) };
++  }
++}
++
+ export function registerCuponSalida({ app, supabaseAdmin, rateLimit }) {
+   async function leerConfig() {
+     const { data, error } = await supabaseAdmin
+@@ -140,11 +216,47 @@ export function registerCuponSalida({ app, supabaseAdmin, rateLimit }) {
+       }
+       if (!creado) throw new Error("No se pudo generar un código único");
+ 
++      const porcentaje = Number(creado.valor);
++      const minimo = Number(creado.monto_minimo_compra);
++
++      // Correo: directo si hay Resend; si no, o si falla, queda en cola para el worker.
++      // Un fallo aquí nunca debe impedir que el visitante reciba su cupón en pantalla.
++      let correo = "no";
++      try {
++        const tiendaUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
++        const msg = armarCorreo({
++          codigo: creado.codigo,
++          porcentaje,
++          minimo,
++          venceEl: creado.vence_el,
++          tiendaUrl,
++        });
++        const envio = await enviarPorResend({ to: email, ...msg });
++        const { error: errCola } = await supabaseAdmin.from("notificaciones").insert({
++          tipo: "cupon_bienvenida",
++          canal: "email",
++          destinatario_email: email,
++          asunto: msg.asunto,
++          mensaje: msg.texto,
++          enviado: envio.ok,
++          enviado_at: envio.ok ? new Date().toISOString() : null,
++          error: envio.ok ? null : envio.motivo,
++        });
++        if (envio.ok) correo = "enviado";
++        else if (!errCola) correo = "en_cola";
++        if (errCola)
++          console.error("cupon-salida: no se pudo registrar la notificación:", errCola.message);
++        if (!envio.ok) console.warn("cupon-salida: correo no enviado directo:", envio.motivo);
++      } catch (err) {
++        console.error("cupon-salida correo:", err.message);
++      }
++
+       res.json({
+         codigo: creado.codigo,
+         vence_el: creado.vence_el,
+-        porcentaje: Number(creado.valor),
+-        minimo: Number(creado.monto_minimo_compra),
++        porcentaje,
++        minimo,
++        correo,
+       });
+     } catch (err) {
+       console.error("cupon-salida:", err.message);
+diff --git a/src/components/ComboBanner.tsx b/src/components/ComboBanner.tsx
+new file mode 100644
+index 0000000..f31871c
+--- /dev/null
++++ b/src/components/ComboBanner.tsx
+@@ -0,0 +1,171 @@
++// src/components/ComboBanner.tsx
++// Banner grande del combo que más ahorro le da al cliente. Todo sale de datos reales:
++// precios de los productos, precio del combo, vencimiento y stock.
++import { Link } from "@tanstack/react-router";
++import { Image as ImageIcon, PackageCheck, ShoppingBag, Timer } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { cloudinaryUrl } from "@/lib/cloudinary";
++import { fmtPEN } from "@/lib/pricing";
++import { combosDisponibles, type Combo } from "@/hooks/useCombos";
++import { useAgregarCombo } from "@/hooks/useAgregarCombo";
++import { useCountdown } from "@/hooks/useCountdown";
++
++const dos = (n: number) => String(n).padStart(2, "0");
++/** Un reloj de más de 30 días no genera urgencia real: no se muestra */
++const MAX_DIAS_RELOJ = 30;
++/** Por debajo de esta cantidad de combos armables avisamos que quedan pocos */
++const POCO_STOCK = 5;
++
++function imagenItem(it: Combo["combo_items"][number]) {
++  return it.products.imagen_public_id
++    ? cloudinaryUrl(it.products.imagen_public_id, { w: 700, h: 700 })
++    : it.products.imagen_url;
++}
++
++export function ComboBanner({ combo, otros }: { combo: Combo; otros: number }) {
++  const { agregar, adding, yaEnCarrito, agotado, precioNormal, ahorro } = useAgregarCombo(combo);
++
++  const venceMs = combo.vence_el ? new Date(combo.vence_el).getTime() : null;
++  const r = useCountdown(venceMs);
++  const mostrarReloj = r && !r.terminada && r.d <= MAX_DIAS_RELOJ && r.ms > 0;
++  const restante =
++    r && (r.d > 0 ? `${r.d}d ${dos(r.h)}h ${dos(r.m)}m` : `${dos(r.h)}:${dos(r.m)}:${dos(r.s)}`);
++
++  const pct = precioNormal > 0 ? Math.round((ahorro / precioNormal) * 100) : 0;
++  const armables = combosDisponibles(combo);
++  const pocoStock = armables != null && armables > 0 && armables <= POCO_STOCK;
++
++  const fotos = combo.combo_items.slice(0, 4).map(imagenItem);
++  const celda = (i: number) => {
++    const n = fotos.length;
++    if (n === 1) return "col-span-2 row-span-2";
++    if (n === 2) return "row-span-2";
++    if (n === 3 && i === 0) return "row-span-2";
++    return "";
++  };
++
++  return (
++    <div className="overflow-hidden rounded-2xl border border-accent/30 bg-card shadow-[var(--shadow-elegant)]">
++      <div className="grid md:grid-cols-2">
++        <div className="flex flex-col justify-center gap-4 p-6 sm:p-8 lg:p-10">
++          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent-foreground">
++            <PackageCheck className="h-3.5 w-3.5" /> Combo destacado
++          </span>
++
++          <div>
++            <h2 className="font-display text-4xl font-semibold leading-tight sm:text-5xl">
++              {combo.nombre}
++            </h2>
++            {combo.descripcion && (
++              <p className="mt-2 line-clamp-2 text-muted-foreground">{combo.descripcion}</p>
++            )}
++          </div>
++
++          <ul className="space-y-1.5 text-sm">
++            {combo.combo_items.map((it) => (
++              <li
++                key={it.id}
++                className="flex items-baseline justify-between gap-3 border-b border-dashed border-border pb-1.5"
++              >
++                <span>
++                  {it.cantidad > 1 && <b>{it.cantidad}× </b>}
++                  {it.products.nombre}
++                </span>
++                <span className="tabular-nums text-muted-foreground">
++                  {fmtPEN(it.products.precio * it.cantidad)}
++                </span>
++              </li>
++            ))}
++          </ul>
++
++          <div>
++            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
++              <span className="font-display text-5xl font-semibold text-accent">
++                {fmtPEN(combo.precio_combo)}
++              </span>
++              <span className="text-lg text-muted-foreground line-through">
++                {fmtPEN(precioNormal)}
++              </span>
++            </div>
++            <p className="mt-1 text-sm font-semibold text-accent">
++              Ahorras {fmtPEN(ahorro)}
++              {pct > 0 && ` (${pct}%)`} llevándolos juntos
++            </p>
++          </div>
++
++          {(mostrarReloj || pocoStock) && (
++            <div className="flex flex-wrap gap-2 text-xs font-medium">
++              {mostrarReloj && (
++                <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1">
++                  <Timer className="h-3.5 w-3.5" />
++                  Termina en <span className="tabular-nums font-semibold">{restante}</span>
++                </span>
++              )}
++              {pocoStock && (
++                <span className="inline-flex items-center rounded-full bg-destructive/10 px-3 py-1 text-destructive">
++                  {armables === 1 ? "Queda 1 combo" : `Quedan ${armables} combos`}
++                </span>
++              )}
++            </div>
++          )}
++
++          <div className="flex flex-wrap items-center gap-3 pt-1">
++            <Button
++              size="lg"
++              className="rounded-full"
++              onClick={agregar}
++              disabled={adding || agotado || yaEnCarrito}
++            >
++              {yaEnCarrito ? (
++                "Combo en el carrito"
++              ) : (
++                <>
++                  <ShoppingBag className="mr-1.5 h-4 w-4" /> Agregar combo
++                </>
++              )}
++            </Button>
++            <Link
++              to="/combo/$id"
++              params={{ id: combo.id }}
++              className="text-sm font-medium underline-offset-4 hover:underline"
++            >
++              Ver detalle
++            </Link>
++            {otros > 0 && (
++              <a
++                href="#combos-todos"
++                className="text-sm text-muted-foreground underline-offset-4 hover:underline"
++              >
++                Ver {otros === 1 ? "otro combo" : `los otros ${otros} combos`}
++              </a>
++            )}
++          </div>
++        </div>
++
++        <Link
++          to="/combo/$id"
++          params={{ id: combo.id }}
++          aria-label={`Ver el combo ${combo.nombre}`}
++          className="group grid min-h-[16rem] grid-cols-2 grid-rows-2 gap-1.5 bg-muted p-1.5 md:min-h-[26rem]"
++        >
++          {fotos.map((src, i) => (
++            <div key={i} className={`overflow-hidden rounded-xl bg-background ${celda(i)}`}>
++              {src ? (
++                <img
++                  src={src}
++                  alt=""
++                  loading="lazy"
++                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
++                />
++              ) : (
++                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
++                  <ImageIcon className="h-10 w-10" />
++                </div>
++              )}
++            </div>
++          ))}
++        </Link>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/ComboCard.tsx b/src/components/ComboCard.tsx
+index c0b27d3..35adbee 100644
+--- a/src/components/ComboCard.tsx
++++ b/src/components/ComboCard.tsx
+@@ -1,30 +1,16 @@
+ // src/components/ComboCard.tsx
+-import { useState } from "react";
+ import { Link } from "@tanstack/react-router";
+ import { ShoppingBag, Image as ImageIcon, PackageCheck } from "lucide-react";
+-import { toast } from "sonner";
+ import { Button } from "@/components/ui/button";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+-import { useCartStore } from "@/stores/cartStore";
+ import { fmtPEN } from "@/lib/pricing";
+-import { precioNormalCombo, type Combo } from "@/hooks/useCombos";
++import type { Combo } from "@/hooks/useCombos";
++import { useAgregarCombo } from "@/hooks/useAgregarCombo";
+ 
+ interface Props { combo: Combo; }
+ 
+ export function ComboCard({ combo }: Props) {
+-  const addItems = useCartStore((s) => s.addItems);
+-  const items = useCartStore((s) => s.items);
+-  const [adding, setAdding] = useState(false);
+-
+-  const precioNormal = precioNormalCombo(combo);
+-  const ahorro = precioNormal - combo.precio_combo;
+-  const factor = precioNormal > 0 ? combo.precio_combo / precioNormal : 1;
+-
+-  const yaEnCarrito = combo.combo_items.every((it) =>
+-    items.some((c) => c.id === it.product_id && c.comboId === combo.id)
+-  );
+-
+-  const agotado = combo.combo_items.some((it) => (it.products.stock ?? 1) <= 0);
++  const { agregar, adding, yaEnCarrito, agotado, precioNormal, ahorro } = useAgregarCombo(combo);
+ 
+   const thumbs = combo.combo_items.slice(0, 3).map((it) =>
+     it.products.imagen_public_id
+@@ -35,25 +21,7 @@ export function ComboCard({ combo }: Props) {
+   const handleAdd = (e: React.MouseEvent) => {
+     e.preventDefault();
+     e.stopPropagation();
+-    setAdding(true);
+-    // Reparte el precio del combo entre los productos, proporcional al
+-    // precio individual de cada uno, para que cada línea del carrito
+-    // siga apuntando a un product_id real (necesario para el checkout).
+-    const nuevos = combo.combo_items.map((it) => ({
+-      id: it.product_id,
+-      title: it.products.nombre,
+-      price: Math.round(it.products.precio * factor * 100) / 100,
+-      image: it.products.imagen_public_id
+-        ? cloudinaryUrl(it.products.imagen_public_id, { w: 400, h: 300 })
+-        : it.products.imagen_url ?? "",
+-      sku: it.products.sku ?? undefined,
+-      qty: it.cantidad,
+-      comboId: combo.id,
+-      comboLabel: combo.nombre,
+-    }));
+-    addItems(nuevos);
+-    toast.success(`Combo "${combo.nombre}" agregado al carrito`);
+-    setTimeout(() => setAdding(false), 1200);
++    agregar();
+   };
+ 
+   return (
+diff --git a/src/components/CombosSection.tsx b/src/components/CombosSection.tsx
+index 633fa9c..2066812 100644
+--- a/src/components/CombosSection.tsx
++++ b/src/components/CombosSection.tsx
+@@ -1,46 +1,59 @@
+ // src/components/CombosSection.tsx
+-import { useCombos } from "@/hooks/useCombos";
++// Banner del combo destacado + el resto de los combos en cuadrícula.
++import { useMemo } from "react";
++import { comboDestacado, useCombos } from "@/hooks/useCombos";
++import { ComboBanner } from "./ComboBanner";
+ import { ComboCard } from "./ComboCard";
+ import { PackageCheck } from "lucide-react";
+ 
+ export function CombosSection() {
+   const { data = [], isLoading } = useCombos(6);
+ 
++  const destacado = useMemo(() => comboDestacado(data), [data]);
++  const resto = useMemo(() => data.filter((c) => c.id !== destacado?.id), [data, destacado]);
++
+   // Sin combos activos: no mostramos la sección
+   if (!isLoading && data.length === 0) return null;
+ 
+   return (
+-    <section id="combos" className="py-14 px-4">
++    <section id="combos" className="scroll-mt-28 px-4 py-14">
+       <div className="container mx-auto max-w-7xl">
+-        <div className="flex items-center gap-3 mb-1">
+-          <span className="flex items-center justify-center h-9 w-9 rounded-full bg-accent text-accent-foreground">
+-            <PackageCheck className="h-4.5 w-4.5" />
+-          </span>
+-          <h2 className="text-3xl font-display font-semibold">Combos</h2>
+-          {!isLoading && data.length > 0 && (
+-            <span className="text-xs font-semibold bg-accent/10 text-accent rounded-full px-2.5 py-1">
+-              {data.length} {data.length === 1 ? "combo" : "combos"}
+-            </span>
+-          )}
+-        </div>
+-        <p className="text-muted-foreground mb-8 ml-12">
+-          Combina piezas y ahorra más que comprándolas por separado
+-        </p>
+-
+         {isLoading ? (
+-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
++          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+             {Array.from({ length: 3 }).map((_, i) => (
+-              <div key={i} className="aspect-[4/3] rounded-xl bg-muted animate-pulse" />
++              <div key={i} className="aspect-[4/3] animate-pulse rounded-xl bg-muted" />
+             ))}
+           </div>
+         ) : (
+-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+-            {data.map((c) => (
+-              <ComboCard key={c.id} combo={c} />
+-            ))}
+-          </div>
++          <>
++            {destacado && <ComboBanner combo={destacado} otros={resto.length} />}
++
++            {resto.length > 0 && (
++              <div id="combos-todos" className={destacado ? "mt-14 scroll-mt-28" : ""}>
++                <div className="mb-1 flex items-center gap-3">
++                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground">
++                    <PackageCheck className="h-4.5 w-4.5" />
++                  </span>
++                  <h2 className="font-display text-3xl font-semibold">
++                    {destacado ? "Más combos" : "Combos"}
++                  </h2>
++                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
++                    {resto.length} {resto.length === 1 ? "combo" : "combos"}
++                  </span>
++                </div>
++                <p className="mb-8 ml-12 text-muted-foreground">
++                  Combina piezas y ahorra más que comprándolas por separado
++                </p>
++                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
++                  {resto.map((c) => (
++                    <ComboCard key={c.id} combo={c} />
++                  ))}
++                </div>
++              </div>
++            )}
++          </>
+         )}
+       </div>
+     </section>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/components/ExitCouponDialog.tsx b/src/components/ExitCouponDialog.tsx
+index f9f28c4..8b4a22e 100644
+--- a/src/components/ExitCouponDialog.tsx
++++ b/src/components/ExitCouponDialog.tsx
+@@ -75,6 +75,7 @@ export function ExitCouponDialog() {
+   const [email, setEmail] = useState("");
+   const [enviando, setEnviando] = useState(false);
+   const [error, setError] = useState<string | null>(null);
++  const [correo, setCorreo] = useState<"enviado" | "en_cola" | "no">("no");
+ 
+   const publica = esPaginaPublica(pathname);
+   const esStaff = roles.some((r) => r !== "cliente");
+@@ -130,8 +131,12 @@ export function ExitCouponDialog() {
+         setError(data?.error ?? "No pudimos generar tu cupón. Inténtalo de nuevo.");
+         return;
+       }
+-      guardarCuponSalida(data as CuponSalida);
+-      setCupon(data as CuponSalida);
++      const { correo: estadoCorreo, ...datosCupon } = data as CuponSalida & {
++        correo?: "enviado" | "en_cola" | "no";
++      };
++      guardarCuponSalida(datosCupon);
++      setCupon(datosCupon);
++      setCorreo(estadoCorreo ?? "no");
+       setPastillaVisible(true);
+       navigator.clipboard?.writeText(data.codigo).catch(() => {});
+     } catch {
+@@ -226,6 +231,13 @@ export function ExitCouponDialog() {
+                   </span>
+                   . Compra mínima {soles(cupon.minimo)}. Lo aplicamos solo en el checkout.
+                 </p>
++                {correo !== "no" && (
++                  <p className="text-xs text-muted-foreground">
++                    {correo === "enviado"
++                      ? `También te lo enviamos a ${email.trim().toLowerCase()}.`
++                      : `En unos minutos te llegará una copia a ${email.trim().toLowerCase()}.`}
++                  </p>
++                )}
+                 <Button className="w-full" onClick={() => setAbierto(false)}>
+                   Seguir comprando
+                 </Button>
+diff --git a/src/hooks/useAgregarCombo.ts b/src/hooks/useAgregarCombo.ts
+new file mode 100644
+index 0000000..c67d544
+--- /dev/null
++++ b/src/hooks/useAgregarCombo.ts
+@@ -0,0 +1,46 @@
++// src/hooks/useAgregarCombo.ts
++// Lógica compartida para agregar un combo al carrito (tarjeta y banner usan exactamente la misma).
++import { useState } from "react";
++import { toast } from "sonner";
++import { cloudinaryUrl } from "@/lib/cloudinary";
++import { useCartStore } from "@/stores/cartStore";
++import { precioNormalCombo, type Combo } from "@/hooks/useCombos";
++
++export function useAgregarCombo(combo: Combo) {
++  const addItems = useCartStore((s) => s.addItems);
++  const items = useCartStore((s) => s.items);
++  const [adding, setAdding] = useState(false);
++
++  const precioNormal = precioNormalCombo(combo);
++  const ahorro = precioNormal - combo.precio_combo;
++  const factor = precioNormal > 0 ? combo.precio_combo / precioNormal : 1;
++
++  const yaEnCarrito = combo.combo_items.every((it) =>
++    items.some((c) => c.id === it.product_id && c.comboId === combo.id),
++  );
++  const agotado = combo.combo_items.some((it) => (it.products.stock ?? 1) <= 0);
++
++  function agregar() {
++    setAdding(true);
++    // Reparte el precio del combo entre los productos, proporcional al precio individual
++    // de cada uno, para que cada línea del carrito siga apuntando a un product_id real
++    // (necesario para el checkout).
++    const nuevos = combo.combo_items.map((it) => ({
++      id: it.product_id,
++      title: it.products.nombre,
++      price: Math.round(it.products.precio * factor * 100) / 100,
++      image: it.products.imagen_public_id
++        ? cloudinaryUrl(it.products.imagen_public_id, { w: 400, h: 300 })
++        : (it.products.imagen_url ?? ""),
++      sku: it.products.sku ?? undefined,
++      qty: it.cantidad,
++      comboId: combo.id,
++      comboLabel: combo.nombre,
++    }));
++    addItems(nuevos);
++    toast.success(`Combo "${combo.nombre}" agregado al carrito`);
++    setTimeout(() => setAdding(false), 1200);
++  }
++
++  return { agregar, adding, yaEnCarrito, agotado, precioNormal, ahorro };
++}
+diff --git a/src/hooks/useCombos.ts b/src/hooks/useCombos.ts
+index 0821aaa..b0fe040 100644
+--- a/src/hooks/useCombos.ts
++++ b/src/hooks/useCombos.ts
+@@ -66,4 +66,26 @@ export function useCombo(id: string) {
+ /** Suma de precios individuales de los productos del combo (para el tachado). */
+ export function precioNormalCombo(combo: Combo): number {
+   return combo.combo_items.reduce((s, it) => s + it.products.precio * it.cantidad, 0);
+-}
+\ No newline at end of file
++}
++
++/**
++ * Combo para el banner de la home: el que más ahorro real le da al cliente entre los que
++ * tienen stock completo. Si ninguno ahorra algo, no hay destacado (no afirmamos ahorros falsos).
++ */
++export function comboDestacado(combos: Combo[]): Combo | null {
++  const candidatos = combos
++    .filter((c) => c.combo_items.length > 0)
++    .filter((c) => c.combo_items.every((it) => (it.products.stock ?? 1) > 0))
++    .map((c) => ({ c, ahorro: precioNormalCombo(c) - c.precio_combo }))
++    .filter((x) => x.ahorro > 0)
++    .sort((a, b) => b.ahorro - a.ahorro);
++  return candidatos[0]?.c ?? null;
++}
++
++/** Cuántos combos completos se pueden armar con el stock actual (limitado por la pieza más escasa). */
++export function combosDisponibles(combo: Combo): number | null {
++  const n = combo.combo_items
++    .filter((it) => it.products.stock != null)
++    .map((it) => Math.floor((it.products.stock as number) / Math.max(1, it.cantidad)));
++  return n.length ? Math.min(...n) : null;
++}
+diff --git a/supabase/functions/send-notifications/index.ts b/supabase/functions/send-notifications/index.ts
+index d386d5f..d87ef9e 100644
+--- a/supabase/functions/send-notifications/index.ts
++++ b/supabase/functions/send-notifications/index.ts
+@@ -13,22 +13,25 @@ const supabase = createClient(
+ );
+ 
+ Deno.serve(async () => {
++  // Reintenta solo los últimos 3 días: un correo que falla siempre no se reintenta para siempre
++  const desde = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+   const { data: pendientes } = await supabase
+     .from("notificaciones")
+     .select("*")
+     .eq("enviado", false)
++    .gt("created_at", desde)
+     .limit(50);
+ 
+   for (const notif of pendientes ?? []) {
+     try {
+-      await fetch("https://api.resend.com/emails", {
++      const res = await fetch("https://api.resend.com/emails", {
+         method: "POST",
+         headers: {
+           Authorization: `Bearer ${Deno.env.get("RESEND_API_KEY")}`,
+           "Content-Type": "application/json",
+         },
+         body: JSON.stringify({
+-          from: "G&M Mueblería <noreply@tudominio.com>",
++          from: Deno.env.get("RESEND_FROM") ?? "G&M Mueblería <noreply@tudominio.com>",
+           to: notif.destinatario_email,
+           subject: notif.asunto ?? "Novedades de tu pedido — G&M Mueblería",
+           // notif.mensaje ya viene armado desde el origen (recordatorios-carrito,
+@@ -38,9 +41,11 @@ Deno.serve(async () => {
+           }</div>`,
+         }),
+       });
++      // fetch no lanza con 4xx/5xx: sin esto un envío rechazado quedaba marcado como enviado
++      if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+       await supabase
+         .from("notificaciones")
+-        .update({ enviado: true, enviado_at: new Date().toISOString() })
++        .update({ enviado: true, enviado_at: new Date().toISOString(), error: null })
+         .eq("id", notif.id);
+     } catch (err) {
+       await supabase
+diff --git a/supabase/migrations/20261024_cupon_salida_email.sql b/supabase/migrations/20261024_cupon_salida_email.sql
+new file mode 100644
+index 0000000..481ac92
+--- /dev/null
++++ b/supabase/migrations/20261024_cupon_salida_email.sql
+@@ -0,0 +1,4 @@
++-- Cupón de salida: tipo de notificación para el correo con el cupón.
++-- Ejecutar UNA vez en el SQL Editor de Supabase (antes de usar el cupón de salida con correo).
++-- Si 'cupon_bienvenida' ya existe no hace nada. Debe correr solo, en su propia ejecución.
++ALTER TYPE public.notif_tipo ADD VALUE IF NOT EXISTS 'cupon_bienvenida';

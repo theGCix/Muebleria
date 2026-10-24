@@ -75,6 +75,7 @@ export function ExitCouponDialog() {
   const [email, setEmail] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [correo, setCorreo] = useState<"enviado" | "en_cola" | "no">("no");
 
   const publica = esPaginaPublica(pathname);
   const esStaff = roles.some((r) => r !== "cliente");
@@ -130,8 +131,12 @@ export function ExitCouponDialog() {
         setError(data?.error ?? "No pudimos generar tu cupón. Inténtalo de nuevo.");
         return;
       }
-      guardarCuponSalida(data as CuponSalida);
-      setCupon(data as CuponSalida);
+      const { correo: estadoCorreo, ...datosCupon } = data as CuponSalida & {
+        correo?: "enviado" | "en_cola" | "no";
+      };
+      guardarCuponSalida(datosCupon);
+      setCupon(datosCupon);
+      setCorreo(estadoCorreo ?? "no");
       setPastillaVisible(true);
       navigator.clipboard?.writeText(data.codigo).catch(() => {});
     } catch {
@@ -226,6 +231,13 @@ export function ExitCouponDialog() {
                   </span>
                   . Compra mínima {soles(cupon.minimo)}. Lo aplicamos solo en el checkout.
                 </p>
+                {correo !== "no" && (
+                  <p className="text-xs text-muted-foreground">
+                    {correo === "enviado"
+                      ? `También te lo enviamos a ${email.trim().toLowerCase()}.`
+                      : `En unos minutos te llegará una copia a ${email.trim().toLowerCase()}.`}
+                  </p>
+                )}
                 <Button className="w-full" onClick={() => setAbierto(false)}>
                   Seguir comprando
                 </Button>
