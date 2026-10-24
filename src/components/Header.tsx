@@ -1,4 +1,5 @@
 // src/components/Header.tsx
+import { CampanaTicker } from "@/components/CampanaTicker";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,8 +65,14 @@ export function Header() {
         <div className="w-full bg-primary text-primary-foreground">
           <div className="container mx-auto flex h-8 items-center justify-center px-4 md:px-6">
             <p className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium tracking-wide text-center">
-              <Truck className="h-3.5 w-3.5 flex-shrink-0" />
-              Recojo en tienda o delivery a todo Lima
+              <CampanaTicker
+                fallback={
+                  <>
+                    <Truck className="h-3.5 w-3.5 flex-shrink-0" />
+                    Recojo en tienda o delivery a todo Lima
+                  </>
+                }
+              />
             </p>
           </div>
         </div>

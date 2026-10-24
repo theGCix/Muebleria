@@ -201,3 +201,63 @@
 /* Altura de botón extra (h-13) — si no la tienes en tu config de Tailwind */
 .h-13 { height: 3.25rem; }
 .w-13 { width:  3.25rem; }
+
+/* ================================================================
+   Hero de campaña — etiquetas colgadas del riel
+   ================================================================ */
+.hero-display {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+/* Veta de madera muy sutil sobre el nogal */
+.hero-taller {
+  background-image: repeating-linear-gradient(
+    92deg,
+    rgb(255 255 255 / 0.018) 0 2px,
+    transparent 2px 9px
+  );
+}
+
+/* La cuerda: del ojal de la etiqueta hasta el riel */
+.etiqueta {
+  position: relative;
+  transform-origin: 50% calc(var(--cuerda, 36px) * -1);
+  animation: etiqueta-balanceo 2.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  animation-delay: calc(var(--i, 0) * 160ms + 150ms);
+}
+.etiqueta::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 6px);
+  width: 2px;
+  height: var(--cuerda, 36px);
+  background: var(--color-gold);
+  opacity: 0.8;
+  transform: translateX(-50%);
+}
+/* Un solo momento de movimiento: las etiquetas se balancean al cargar y se asientan */
+@keyframes etiqueta-balanceo {
+  0%   { transform: rotate(-9deg); }
+  20%  { transform: rotate(6deg); }
+  40%  { transform: rotate(-4deg); }
+  60%  { transform: rotate(2.5deg); }
+  80%  { transform: rotate(-1deg); }
+  100% { transform: rotate(0); }
+}
+/* Respuesta al pasar el mouse */
+.etiqueta:hover {
+  animation: etiqueta-roce 0.9s ease-in-out;
+}
+@keyframes etiqueta-roce {
+  0%, 100% { transform: rotate(0); }
+  35%      { transform: rotate(2.5deg); }
+  70%      { transform: rotate(-1.5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .etiqueta,
+  .etiqueta:hover {
+    animation: none;
+  }
+}
