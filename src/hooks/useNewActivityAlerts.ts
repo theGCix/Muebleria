@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
+import { uniqueChannelName } from "@/hooks/useSidebarCounts";
 
 const money = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -26,7 +27,7 @@ export function useNewActivityAlerts(roles: AppRole[]) {
       navigate({ to: "/pedidos", search: { q: numero } } as never);
 
     const channel = supabase
-      .channel("new-activity-alerts")
+      .channel(uniqueChannelName("new-activity-alerts"))
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
         const o = payload.new as {
           id: string; order_number?: string; nombre?: string; total?: number; status?: string;

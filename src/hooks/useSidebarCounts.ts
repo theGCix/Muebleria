@@ -61,21 +61,40 @@ async function fetchCounts(): Promise<SidebarCounts> {
 export function useSidebarCounts(roles: AppRole[]) {
   // El carpintero no ve estos módulos: no hace falta consultar nada.
   const enabled = roles.includes("admin") || roles.includes("vendedor");
+  const { data } = useQuery({
+    queryKey: ["sidebar-counts"],
+    queryFn: fetchCounts,
+    enabled,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+  });
+  return data ?? {};
+}
+
+// Nombre único por suscripción: supabase.channel(nombre) devuelve el canal existente si el nombre se repite,
+// y añadir listeners a un canal ya suscrito lanza un error que tumba la página.
+let channelSeq = 0;
+export const uniqueChannelName = (base: string) => `${base}-${++channelSeq}`;
+
+// Tiempo real de los contadores. Debe montarse UNA sola vez (en el layout del panel),
+// no en cada componente que lee los conteos.
+// Los carritos abandonados no se escuchan: "abandonado" depende del tiempo sin actividad,
+// no de un evento, y los clientes los actualizan constantemente; ese conteo lo cubre el refresco periódico.
+export function useSidebarCountsRealtime(roles: AppRole[]) {
+  const enabled = roles.includes("admin") || roles.includes("vendedor");
   const qc = useQueryClient();
 
-  // Tiempo real: cuando cambia una tabla relevante se vuelven a pedir los conteos.
-  // Un pequeño retardo agrupa ráfagas de cambios en una sola consulta.
-  // Los carritos abandonados no se escuchan: "abandonado" depende del tiempo sin actividad,
-  // no de un evento, y los clientes los actualizan constantemente; ese conteo lo cubre el refresco periódico.
   useEffect(() => {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Un pequeño retardo agrupa ráfagas de cambios en una sola consulta.
     const refresh = () => {
       clearTimeout(timer);
       timer = setTimeout(() => qc.invalidateQueries({ queryKey: ["sidebar-counts"] }), 1500);
     };
 
-    let channel = supabase.channel("sidebar-counts-live");
+    let channel = supabase.channel(uniqueChannelName("sidebar-counts-live"));
     for (const table of ["orders", "leads", "resenas", "insumos"]) {
       channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
     }
@@ -86,14 +105,4 @@ export function useSidebarCounts(roles: AppRole[]) {
       supabase.removeChannel(channel);
     };
   }, [enabled, qc]);
-
-  const { data } = useQuery({
-    queryKey: ["sidebar-counts"],
-    queryFn: fetchCounts,
-    enabled,
-    refetchInterval: 60_000,
-    refetchOnWindowFocus: true,
-    staleTime: 30_000,
-  });
-  return data ?? {};
 }
