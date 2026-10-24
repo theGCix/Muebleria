@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AdminTopbar } from "@/components/AdminTopbar";
+import { MobileBottomBar } from "@/components/MobileBottomBar";
 import { Loader2 } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
 
@@ -37,10 +38,12 @@ const isFullscreen = currentPath === "/central";
         <AppSidebar roles={roles} user={user} />
         <div className="flex-1 flex flex-col min-w-0">
           <AdminTopbar roles={roles} />
-          <main className={isFullscreen ? "flex-1 p-4 overflow-auto" : "flex-1 p-6 overflow-auto"}>
+          {/* En móvil se deja espacio abajo para la barra de navegación rápida */}
+          <main className={`${isFullscreen ? "flex-1 p-4 overflow-auto" : "flex-1 p-6 overflow-auto"} max-md:pb-24`}>
             <Outlet />
           </main>
         </div>
+        <MobileBottomBar roles={roles} />
       </div>
     </SidebarProvider>
   );

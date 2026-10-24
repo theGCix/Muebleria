@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
 
@@ -60,6 +61,32 @@ async function fetchCounts(): Promise<SidebarCounts> {
 export function useSidebarCounts(roles: AppRole[]) {
   // El carpintero no ve estos módulos: no hace falta consultar nada.
   const enabled = roles.includes("admin") || roles.includes("vendedor");
+  const qc = useQueryClient();
+
+  // Tiempo real: cuando cambia una tabla relevante se vuelven a pedir los conteos.
+  // Un pequeño retardo agrupa ráfagas de cambios en una sola consulta.
+  // Los carritos abandonados no se escuchan: "abandonado" depende del tiempo sin actividad,
+  // no de un evento, y los clientes los actualizan constantemente; ese conteo lo cubre el refresco periódico.
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => qc.invalidateQueries({ queryKey: ["sidebar-counts"] }), 1500);
+    };
+
+    let channel = supabase.channel("sidebar-counts-live");
+    for (const table of ["orders", "leads", "resenas", "insumos"]) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
+    }
+    channel.subscribe();
+
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [enabled, qc]);
+
   const { data } = useQuery({
     queryKey: ["sidebar-counts"],
     queryFn: fetchCounts,

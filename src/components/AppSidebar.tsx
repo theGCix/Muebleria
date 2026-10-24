@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { User } from "@supabase/supabase-js";
 import { Home, ChevronRight } from "lucide-react";
@@ -17,20 +17,35 @@ const fmtCount = (n: number) => (n > 99 ? "99+" : String(n));
 // Insumos bajo mínimo es una alerta (rojo); el resto son pendientes (ámbar).
 const badgeClass = (key: CountKey) =>
   key === "insumos" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800";
+const dotClass = (key: CountKey) => (key === "insumos" ? "bg-red-500" : "bg-amber-500");
+
+// Ítem activo: fondo suave + barra de color a la izquierda.
+const ACTIVE_ITEM =
+  "relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-full before:bg-primary before:opacity-0 " +
+  "data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary data-[active=true]:before:opacity-100";
 
 function NavSection({
-  group, currentPath, collapsed, counts,
-}: { group: NavGroup; currentPath: string; collapsed: boolean; counts: SidebarCounts }) {
+  group, currentPath, collapsed, counts, open, loaded, onOpenChange,
+}: {
+  group: NavGroup; currentPath: string; collapsed: boolean; counts: SidebarCounts;
+  open: boolean | undefined; loaded: boolean; onOpenChange: (open: boolean) => void;
+}) {
   const hasActive = group.items.some((i) => currentPath === i.url);
-  const [open, setOpen] = useState(group.alwaysOpen || hasActive);
 
-  // Si se navega a una ruta de este grupo (ej. desde un enlace interno), se abre solo.
+  // Estado efectivo: lo que la persona dejó guardado; si no hay nada guardado, abierto solo si contiene la página actual.
+  const effectiveOpen = open ?? hasActive;
+
+  // Al navegar a una página de este grupo, se abre solo, aunque estuviera plegado.
+  // Se compara con la ruta anterior para no reabrirlo cuando la persona lo pliega a propósito.
+  const lastPath = useRef<string | null>(null);
   useEffect(() => {
-    if (hasActive) setOpen(true);
-  }, [hasActive]);
+    if (!loaded) return;
+    if (lastPath.current !== currentPath && hasActive && open === false) onOpenChange(true);
+    lastPath.current = currentPath;
+  }, [loaded, currentPath, hasActive, open, onOpenChange]);
 
   // Con la barra colapsada a iconos, siempre se muestran todos los íconos.
-  const isOpen = collapsed || group.alwaysOpen || open;
+  const isOpen = collapsed || group.alwaysOpen || effectiveOpen;
 
   // Total de pendientes del grupo: se muestra en el título cuando el grupo está plegado,
   // para que las alertas no queden escondidas.
@@ -39,17 +54,19 @@ function NavSection({
     0,
   );
 
+  const labelClass = "text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/80";
+
   return (
-    <Collapsible open={isOpen} onOpenChange={setOpen} asChild>
+    <Collapsible open={isOpen} onOpenChange={onOpenChange} asChild>
       <SidebarGroup className="py-1">
         {group.alwaysOpen ? (
-          <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+          <SidebarGroupLabel className={labelClass}>{group.label}</SidebarGroupLabel>
         ) : (
-          <SidebarGroupLabel asChild>
+          <SidebarGroupLabel asChild className={labelClass}>
             <CollapsibleTrigger className="group/label w-full cursor-pointer hover:text-sidebar-foreground">
               {group.label}
               {!isOpen && groupTotal > 0 && (
-                <span className="ml-2 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold leading-4 text-amber-800 tabular-nums">
+                <span className="ml-2 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold leading-4 text-amber-800 tabular-nums normal-case tracking-normal">
                   {fmtCount(groupTotal)}
                 </span>
               )}
@@ -60,24 +77,39 @@ function NavSection({
         <CollapsibleContent>
           <SidebarGroupContent>
             <SidebarMenu>
-              {group.items.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild isActive={currentPath === item.url} tooltip={item.title}>
-                    <Link to={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  {item.countKey && (counts[item.countKey] ?? 0) > 0 && (
-                    <SidebarMenuBadge
-                      className={`${badgeClass(item.countKey)} rounded-full text-[11px] font-semibold`}
-                      aria-label={`${counts[item.countKey]} pendientes`}
+              {group.items.map((item) => {
+                const n = item.countKey ? counts[item.countKey] ?? 0 : 0;
+                return (
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={currentPath === item.url}
+                      tooltip={item.title}
+                      className={ACTIVE_ITEM}
                     >
-                      {fmtCount(counts[item.countKey] ?? 0)}
-                    </SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
-              ))}
+                      <Link to={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {item.countKey && n > 0 && (
+                      <>
+                        <SidebarMenuBadge
+                          className={`${badgeClass(item.countKey)} rounded-full text-[11px] font-semibold`}
+                          aria-label={`${n} pendientes`}
+                        >
+                          {fmtCount(n)}
+                        </SidebarMenuBadge>
+                        {/* Con la barra colapsada el número se oculta: queda un punto sobre el ícono */}
+                        <span
+                          aria-hidden
+                          className={`pointer-events-none absolute right-1 top-1 hidden h-2 w-2 rounded-full ring-2 ring-sidebar group-data-[collapsible=icon]:block ${dotClass(item.countKey)}`}
+                        />
+                      </>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </CollapsibleContent>
@@ -91,6 +123,33 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
   const counts = useSidebarCounts(roles);
+
+  // Grupos abiertos/plegados, recordados por persona en este navegador.
+  const storageKey = `gm.sidebar.groups:${user?.id ?? "anon"}`;
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      setOpenMap(raw ? JSON.parse(raw) : {});
+    } catch {
+      setOpenMap({});
+    }
+    setLoaded(true);
+  }, [storageKey]);
+
+  const setGroupOpen = (label: string, open: boolean) => {
+    setOpenMap((prev) => {
+      const next = { ...prev, [label]: open };
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        /* almacenamiento no disponible: se sigue sin recordar */
+      }
+      return next;
+    });
+  };
 
   const visibleGroups = groups
     .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, roles)) }))
@@ -133,7 +192,16 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
           </SidebarGroup>
         )}
         {visibleGroups.map((group) => (
-          <NavSection key={group.label} group={group} currentPath={currentPath} collapsed={collapsed} counts={counts} />
+          <NavSection
+            key={group.label}
+            group={group}
+            currentPath={currentPath}
+            collapsed={collapsed}
+            counts={counts}
+            open={openMap[group.label]}
+            loaded={loaded}
+            onOpenChange={(o) => setGroupOpen(group.label, o)}
+          />
         ))}
       </SidebarContent>
       <SidebarFooter className="border-t">
