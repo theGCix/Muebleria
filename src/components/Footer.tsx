@@ -1,6 +1,8 @@
 import { Instagram, Facebook, Twitter } from "lucide-react";
+import { useHayTestimonios } from "@/hooks/useResenasDestacadas";
 
 export function Footer() {
+  const hayTestimonios = useHayTestimonios();
   return (
     <footer className="border-t border-border bg-secondary/40 mt-20">
       <div className="container mx-auto px-6 py-16">
@@ -21,7 +23,9 @@ export function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><a href="#categorias" className="hover:text-foreground">Categorías</a></li>
               <li><a href="#catalogo" className="hover:text-foreground">Catálogo</a></li>
-              <li><a href="#testimonios" className="hover:text-foreground">Testimonios</a></li>
+              {hayTestimonios && (
+                <li><a href="#testimonios" className="hover:text-foreground">Testimonios</a></li>
+              )}
             </ul>
           </div>
           <div>

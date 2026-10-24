@@ -13,8 +13,9 @@ import { Menu, X, LogIn, User, Search, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchStore } from "@/stores/searchStore";
+import { useHayTestimonios } from "@/hooks/useResenasDestacadas";
 
-const navLinks = [
+const NAV_LINKS = [
   { label: "Inicio", href: "/" },
   { label: "Testimonios", href: "#testimonios" },
 ];
@@ -27,6 +28,8 @@ export function Header() {
   const { user, roles } = useAuth();
   const navigate = useNavigate();
   const setQuery = useSearchStore((s) => s.setQuery);
+  const hayTestimonios = useHayTestimonios();
+  const navLinks = NAV_LINKS.filter((l) => l.href !== "#testimonios" || hayTestimonios);
 
   const isStaff = roles.includes("admin") || roles.includes("vendedor");
   const isCarpintero = roles.includes("carpintero") && !isStaff;

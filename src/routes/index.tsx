@@ -6,7 +6,8 @@ import { Categories } from "@/components/Categories";
 import { OfertasSection } from "@/components/OfertasSection";
 import { CombosSection } from "@/components/CombosSection";
 import { ProductsSection } from "@/components/ProductsSection";
-import { Testimonials } from "@/components/Testimonials"; 
+import { Testimonials } from "@/components/Testimonials";
+import { MedidaCTA } from "@/components/MedidaCTA";
 import { Footer } from "@/components/Footer";
 
 import { trackEvent } from "@/hooks/useEventTracking"; // ajusta la ruta si es diferente
@@ -30,5 +31,5 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <ProductsSection /> <Testimonials /> 
+     <main> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <ProductsSection /> <Testimonials /> <MedidaCTA /> 
      </main> <Footer /> </div> ); }

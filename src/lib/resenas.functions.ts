@@ -81,6 +81,62 @@ export async function fetchProductRating(productId: string) {
   return { rating: data as ProductoRating | null };
 }
 
+// ── Público: reseñas destacadas para el home ─────────────────
+export interface ResenaDestacada extends ResenaPublica {
+  producto_nombre: string | null;
+}
+
+/**
+ * Mejores reseñas aprobadas de toda la tienda: 4–5 estrellas y comentario con
+ * contenido. Priorizamos las que traen fotos, luego las más útiles y recientes.
+ */
+export async function fetchResenasDestacadas(limit = 6) {
+  const { data, error } = await supabase
+    .from("v_resenas_publicas")
+    .select("*")
+    .gte("calificacion", 4)
+    .not("comentario", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(60);
+  if (error) throw new Error(error.message);
+
+  const elegidas = ((data ?? []) as ResenaPublica[])
+    .filter((r) => (r.comentario?.trim().length ?? 0) >= 25)
+    .sort(
+      (a, b) =>
+        Number((b.fotos?.length ?? 0) > 0) - Number((a.fotos?.length ?? 0) > 0) ||
+        b.votos_utiles - a.votos_utiles ||
+        b.created_at.localeCompare(a.created_at)
+    )
+    .slice(0, limit);
+
+  // Nombre del producto reseñado (la vista pública solo trae product_id)
+  const ids = [...new Set(elegidas.map((r) => r.product_id))];
+  const nombres = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: prods } = await supabase.from("products").select("id, nombre").in("id", ids);
+    for (const p of (prods ?? []) as { id: string; nombre: string }[]) nombres.set(p.id, p.nombre);
+  }
+
+  return elegidas.map((r) => ({ ...r, producto_nombre: nombres.get(r.product_id) ?? null }));
+}
+
+/** Promedio ponderado y total de reseñas de toda la tienda. */
+export async function fetchCalificacionGlobal() {
+  const { data, error } = await supabase
+    .from("v_producto_rating")
+    .select("total_resenas, calificacion_promedio");
+  if (error) throw new Error(error.message);
+
+  let total = 0;
+  let suma = 0;
+  for (const r of (data ?? []) as Pick<ProductoRating, "total_resenas" | "calificacion_promedio">[]) {
+    total += r.total_resenas;
+    suma += r.total_resenas * r.calificacion_promedio;
+  }
+  return { total, promedio: total > 0 ? suma / total : 0 };
+}
+
 // ── Staff: cola de moderación ────────────────────────────────
 export async function listResenasAdmin(input?: { estado?: ResenaEstado | "todas"; q?: string }) {
   const { supabase } = await getAuthenticatedClient();
