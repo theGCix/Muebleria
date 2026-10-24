@@ -7,13 +7,14 @@ import {
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
+import { useSidebarCounts, type CountKey, type SidebarCounts } from "@/hooks/useSidebarCounts";
 
-type NavItem = { title: string; url: string; icon: LucideIcon; roles: AppRole[] };
+type NavItem = { title: string; url: string; icon: LucideIcon; roles: AppRole[]; countKey?: CountKey };
 type NavGroup = { label: string; items: NavItem[]; alwaysOpen?: boolean };
 
 const ADMIN_VENDEDOR: AppRole[] = ["admin", "vendedor"];
@@ -35,7 +36,7 @@ const groups: NavGroup[] = [
     label: "Ventas",
     items: [
       { title: "Realizar Venta", url: "/pos", icon: ShoppingCart, roles: ADMIN_VENDEDOR },
-      { title: "Pedidos", url: "/pedidos", icon: ShoppingBag, roles: ADMIN_VENDEDOR },
+      { title: "Pedidos", url: "/pedidos", icon: ShoppingBag, roles: ADMIN_VENDEDOR, countKey: "pedidos" },
       { title: "Ventas Realizadas", url: "/ventas", icon: Receipt, roles: ADMIN_VENDEDOR },
     ],
   },
@@ -43,9 +44,9 @@ const groups: NavGroup[] = [
     label: "Clientes y Marketing",
     items: [
       { title: "Clientes", url: "/clientes", icon: Users, roles: ADMIN_VENDEDOR },
-      { title: "Leads", url: "/leads", icon: UserPlus, roles: ADMIN_VENDEDOR },
-      { title: "Carritos abandonados", url: "/carritos-abandonados", icon: ShoppingBasket, roles: ADMIN_VENDEDOR },
-      { title: "Reseñas", url: "/resenas", icon: Star, roles: ADMIN_VENDEDOR },
+      { title: "Leads", url: "/leads", icon: UserPlus, roles: ADMIN_VENDEDOR, countKey: "leads" },
+      { title: "Carritos abandonados", url: "/carritos-abandonados", icon: ShoppingBasket, roles: ADMIN_VENDEDOR, countKey: "carritos" },
+      { title: "Reseñas", url: "/resenas", icon: Star, roles: ADMIN_VENDEDOR, countKey: "resenas" },
       { title: "Cupones", url: "/cupones", icon: Tag, roles: ADMIN },
     ],
   },
@@ -61,7 +62,7 @@ const groups: NavGroup[] = [
     items: [
       { title: "Mis órdenes", url: "/mi-produccion", icon: Wrench, roles: CARPINTERO },
       { title: "Producción", url: "/produccion", icon: Hammer, roles: ADMIN_VENDEDOR },
-      { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ADMIN_VENDEDOR },
+      { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ADMIN_VENDEDOR, countKey: "insumos" },
       { title: "Proveedores", url: "/proveedores", icon: Truck, roles: ADMIN_VENDEDOR },
     ],
   },
@@ -73,9 +74,17 @@ const groups: NavGroup[] = [
   },
 ];
 
+const fmtCount = (n: number) => (n > 99 ? "99+" : String(n));
+
+// Insumos bajo mínimo es una alerta (rojo); el resto son pendientes (ámbar).
+const badgeClass = (key: CountKey) =>
+  key === "insumos"
+    ? "bg-red-100 text-red-700"
+    : "bg-amber-100 text-amber-800";
+
 function NavSection({
-  group, currentPath, collapsed,
-}: { group: NavGroup; currentPath: string; collapsed: boolean }) {
+  group, currentPath, collapsed, counts,
+}: { group: NavGroup; currentPath: string; collapsed: boolean; counts: SidebarCounts }) {
   const hasActive = group.items.some((i) => currentPath === i.url);
   const [open, setOpen] = useState(group.alwaysOpen || hasActive);
 
@@ -87,6 +96,13 @@ function NavSection({
   // Con la barra colapsada a iconos, siempre se muestran todos los íconos.
   const isOpen = collapsed || group.alwaysOpen || open;
 
+  // Total de pendientes del grupo: se muestra en el título cuando el grupo está plegado,
+  // para que las alertas no queden escondidas.
+  const groupTotal = group.items.reduce(
+    (sum, i) => sum + (i.countKey ? counts[i.countKey] ?? 0 : 0),
+    0,
+  );
+
   return (
     <Collapsible open={isOpen} onOpenChange={setOpen} asChild>
       <SidebarGroup className="py-1">
@@ -96,6 +112,11 @@ function NavSection({
           <SidebarGroupLabel asChild>
             <CollapsibleTrigger className="group/label w-full cursor-pointer hover:text-sidebar-foreground">
               {group.label}
+              {!isOpen && groupTotal > 0 && (
+                <span className="ml-2 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold leading-4 text-amber-800 tabular-nums">
+                  {fmtCount(groupTotal)}
+                </span>
+              )}
               <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/label:rotate-90" />
             </CollapsibleTrigger>
           </SidebarGroupLabel>
@@ -111,6 +132,14 @@ function NavSection({
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
+                  {item.countKey && (counts[item.countKey] ?? 0) > 0 && (
+                    <SidebarMenuBadge
+                      className={`${badgeClass(item.countKey)} rounded-full text-[11px] font-semibold`}
+                      aria-label={`${counts[item.countKey]} pendientes`}
+                    >
+                      {fmtCount(counts[item.countKey] ?? 0)}
+                    </SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -126,6 +155,7 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
   const navigate = useNavigate();
+  const counts = useSidebarCounts(roles);
 
   const visibleGroups = groups
     .map((g) => ({ ...g, items: g.items.filter((i) => i.roles.some((r) => roles.includes(r))) }))
@@ -152,7 +182,7 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
       </SidebarHeader>
       <SidebarContent>
         {visibleGroups.map((group) => (
-          <NavSection key={group.label} group={group} currentPath={currentPath} collapsed={collapsed} />
+          <NavSection key={group.label} group={group} currentPath={currentPath} collapsed={collapsed} counts={counts} />
         ))}
       </SidebarContent>
       <SidebarFooter className="border-t">
