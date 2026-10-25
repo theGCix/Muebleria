@@ -1,0 +1,2007 @@
+diff --git a/src/components/LeadFormDialog.tsx b/src/components/LeadFormDialog.tsx
+index c82f190..ff59a49 100644
+--- a/src/components/LeadFormDialog.tsx
++++ b/src/components/LeadFormDialog.tsx
+@@ -1,5 +1,5 @@
+ // src/components/LeadFormDialog.tsx
+-import { useState } from "react";
++import { useEffect, useState } from "react";
+ import { useMutation } from "@tanstack/react-query";
+ import { createLead } from "@/lib/leads.functions";
+ import {
+@@ -20,16 +20,26 @@ interface LeadFormDialogProps {
+   productoNombre?: string;
+   title?: string;
+   description?: string;
++  /** Texto con el que se pre-llena "Cuéntanos qué necesitas" (ej. las opciones que eligió el cliente) */
++  mensajeInicial?: string;
+ }
+ 
+ export function LeadFormDialog({
+   open, onOpenChange, productoId, productoNombre,
+   title = "Solicitar cotización personalizada",
+   description = "Déjanos tus datos y un asesor te contactará a la brevedad.",
++  mensajeInicial,
+ }: LeadFormDialogProps) {
+   const [form, setForm] = useState({ nombre: "", telefono: "", email: "", mensaje: "" });
+   const [sent, setSent] = useState(false);
+ 
++  // Al abrir, pre-llenamos el mensaje con las preferencias elegidas (sin pisar lo que ya escribió)
++  useEffect(() => {
++    if (open && mensajeInicial) {
++      setForm((f) => (f.mensaje ? f : { ...f, mensaje: mensajeInicial }));
++    }
++  }, [open, mensajeInicial]);
++
+   const mutation = useMutation({
+     mutationFn: () =>
+       createLead({
+diff --git a/src/components/product/BundleBuilder.tsx b/src/components/product/BundleBuilder.tsx
+new file mode 100644
+index 0000000..b4940e5
+--- /dev/null
++++ b/src/components/product/BundleBuilder.tsx
+@@ -0,0 +1,110 @@
++// src/components/product/BundleBuilder.tsx
++// "Completa el ambiente": arma un conjunto con otras piezas y agrégalo de un toque.
++// Sin descuentos inventados: el total es la suma real de precios vigentes.
++import { useMemo, useState } from "react";
++import { useQuery } from "@tanstack/react-query";
++import { Link } from "@tanstack/react-router";
++import { ShoppingBag } from "lucide-react";
++import { toast } from "sonner";
++import { supabase } from "@/integrations/supabase/client";
++import { useCartStore } from "@/stores/cartStore";
++import { cloudinaryUrl } from "@/lib/cloudinary";
++import { fmtPEN, ofertaInfo } from "@/lib/pricing";
++import type { ProductProfile } from "@/lib/productProfiles";
++import "./product-experience.css";
++
++interface Base { id: string; nombre: string; precio: number; image: string | null; sku: string | null; categoria: string | null }
++
++async function fetchComplementarios(currentId: string, categoria: string | null) {
++  let q = supabase.from("products").select("*").eq("activo", true).neq("id", currentId).limit(3);
++  if (categoria) q = q.neq("categoria", categoria);
++  const { data, error } = await q;
++  if (error) throw new Error(error.message);
++  return data ?? [];
++}
++
++export function BundleBuilder({ base, profile }: { base: Base; profile: ProductProfile }) {
++  const { data: others } = useQuery({
++    queryKey: ["complementarios", base.id, base.categoria],
++    queryFn: () => fetchComplementarios(base.id, base.categoria),
++    staleTime: 300_000,
++  });
++  const addItems = useCartStore((s) => s.addItems);
++  const [sel, setSel] = useState<Set<string>>(new Set());
++
++  const items = useMemo(
++    () => (others ?? []).map((p) => {
++      const img = p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w: 600, h: 450 }) : p.imagen_url;
++      return { p, img: img as string | null, precio: ofertaInfo(p).precioFinal };
++    }),
++    [others],
++  );
++
++  if (!items.length) return null;
++
++  const elegidos = items.filter((i) => sel.has(i.p.id));
++  const total = base.precio + elegidos.reduce((s, i) => s + i.precio, 0);
++  const toggle = (id: string) => setSel((prev) => {
++      const n = new Set(prev);
++      if (n.has(id)) n.delete(id);
++      else n.add(id);
++      return n;
++    });
++
++  const addAll = () => {
++    addItems([
++      { id: base.id, title: base.nombre, price: base.precio, image: base.image ?? "", sku: base.sku ?? undefined },
++      ...elegidos.map((i) => ({ id: i.p.id, title: i.p.nombre, price: i.precio, image: i.img ?? "", sku: i.p.sku ?? undefined })),
++    ]);
++    toast.success(`${1 + elegidos.length} piezas agregadas al carrito`, { position: "top-center" });
++  };
++
++  return (
++    <section className="gmx-bundle">
++      <div className="gm-container">
++        <p className="gm-eyebrow" style={{ color: "var(--gmx-accent)" }}>Completa el ambiente</p>
++        <h2 className="gm-section-title">{profile.bundleTitle}</h2>
++        <p className="gm-section-sub">{profile.bundleSub}</p>
++
++        <div className="gmx-bundle-grid">
++          <div className="gmx-bcard fixed" aria-label="Este producto, incluido">
++            <span className="gmx-bcheck">✓</span>
++            <div className="gmx-bimg">{base.image && <img src={base.image} alt="" />}</div>
++            <div className="gmx-bbody">
++              <div className="gmx-bname">{base.nombre}</div>
++              <div style={{ fontSize: 11, color: "var(--gm-muted)" }}>Tu elección</div>
++              <div className="gmx-bprice">{fmtPEN(base.precio)}</div>
++            </div>
++          </div>
++
++          {items.map(({ p, img, precio }) => (
++            <button key={p.id} type="button" className="gmx-bcard" aria-pressed={sel.has(p.id)} onClick={() => toggle(p.id)}>
++              <span className="gmx-bcheck">{sel.has(p.id) ? "✓" : "+"}</span>
++              <div className="gmx-bimg">{img && <img src={img} alt="" loading="lazy" />}</div>
++              <div className="gmx-bbody">
++                <div className="gmx-bname">{p.nombre}</div>
++                {p.categoria && <div style={{ fontSize: 11, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
++                <div className="gmx-bprice">{fmtPEN(precio)}</div>
++                <Link to="/product/$handle" params={{ handle: p.id }} onClick={(e) => e.stopPropagation()}
++                  style={{ fontSize: 11, color: "var(--gmx-accent)", textDecoration: "underline", marginTop: 2 }}>
++                  Ver detalle
++                </Link>
++              </div>
++            </button>
++          ))}
++        </div>
++
++        <div className="gmx-bar">
++          <div className="gmx-bar-total">
++            {elegidos.length === 0 ? "Elige las piezas que quieras sumar" : `Conjunto de ${1 + elegidos.length} piezas`}
++            <b>{fmtPEN(total)}</b>
++          </div>
++          <button className="gm-btn-primary" onClick={addAll} disabled={elegidos.length === 0} style={{ opacity: elegidos.length ? 1 : .5 }}>
++            <ShoppingBag size={16} />
++            {elegidos.length ? `Agregar las ${1 + elegidos.length} al carrito` : "Agregar conjunto"}
++          </button>
++        </div>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/product/DeliveryPromise.tsx b/src/components/product/DeliveryPromise.tsx
+new file mode 100644
+index 0000000..a9f54aa
+--- /dev/null
++++ b/src/components/product/DeliveryPromise.tsx
+@@ -0,0 +1,68 @@
++// src/components/product/DeliveryPromise.tsx
++// Promesa de entrega con fechas calculadas desde HOY + costo de envío real por distrito.
++import { useEffect, useState } from "react";
++import { Truck } from "lucide-react";
++import { DISTRITOS_ENVIO, getPrecioEnvio } from "@/lib/envios";
++import { fmtPEN } from "@/lib/pricing";
++import "./product-experience.css";
++
++// Plazos de la ficha: Lima Metropolitana 5–7 días hábiles
++const MIN_DIAS = 5;
++const MAX_DIAS = 7;
++const STORE_KEY = "gm_distrito_envio";
++
++function addBusinessDays(from: Date, days: number) {
++  const d = new Date(from);
++  let added = 0;
++  while (added < days) {
++    d.setDate(d.getDate() + 1);
++    const wd = d.getDay();
++    if (wd !== 0 && wd !== 6) added++;
++  }
++  return d;
++}
++const fmtDia = (d: Date) =>
++  new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", month: "short" }).format(d).replace(".", "");
++
++export function DeliveryPromise() {
++  const [distrito, setDistrito] = useState("");
++
++  useEffect(() => {
++    try { setDistrito(localStorage.getItem(STORE_KEY) ?? ""); } catch { /* sin storage */ }
++  }, []);
++  const onChange = (v: string) => {
++    setDistrito(v);
++    try { localStorage.setItem(STORE_KEY, v); } catch { /* sin storage */ }
++  };
++
++  const hoy = new Date();
++  const desde = addBusinessDays(hoy, MIN_DIAS);
++  const hasta = addBusinessDays(hoy, MAX_DIAS);
++  const precio = distrito ? getPrecioEnvio(distrito) : null;
++
++  return (
++    <div className="gmx-delivery">
++      <div className="gmx-delivery-head">
++        <Truck size={18} color="var(--gmx-accent)" />
++        <span>Si lo pides hoy, llega entre el <b>{fmtDia(desde)}</b> y el <b>{fmtDia(hasta)}</b></span>
++      </div>
++
++      <div className="gmx-track" aria-hidden>
++        <div className="gmx-step done"><div className="gmx-dot" /><b>Pedido</b>Hoy</div>
++        <div className="gmx-step"><div className="gmx-dot" /><b>Fabricación</b>A mano</div>
++        <div className="gmx-step"><div className="gmx-dot" /><b>Control</b>Calidad</div>
++        <div className="gmx-step"><div className="gmx-dot" /><b>Entrega</b>A domicilio</div>
++      </div>
++
++      <div className="gmx-ship">
++        <label htmlFor="gmx-distrito">Calcula tu envío:</label>
++        <select id="gmx-distrito" value={distrito} onChange={(e) => onChange(e.target.value)}>
++          <option value="">Elige tu distrito</option>
++          {DISTRITOS_ENVIO.map((d) => <option key={d.destino} value={d.destino}>{d.destino}</option>)}
++        </select>
++        {precio != null && <b style={{ color: "var(--gm-walnut)" }}>{fmtPEN(precio)}</b>}
++      </div>
++      <p className="gmx-note" style={{ marginTop: 8 }}>Fechas estimadas para Lima Metropolitana (días hábiles). Provincias: 10–15 días.</p>
++    </div>
++  );
++}
+diff --git a/src/components/product/LivePrice.tsx b/src/components/product/LivePrice.tsx
+new file mode 100644
+index 0000000..6602a25
+--- /dev/null
++++ b/src/components/product/LivePrice.tsx
+@@ -0,0 +1,63 @@
++// src/components/product/LivePrice.tsx
++// Precio con ancla de ahorro, cuotas, reloj de oferta REAL (usa oferta_vence_el) y escasez REAL (stock).
++import { useCountdown } from "@/hooks/useCountdown";
++import { fmtPEN } from "@/lib/pricing";
++import "./product-experience.css";
++
++const CATORCE_DIAS = 14 * 24 * 60 * 60 * 1000;
++const CUOTAS = 6; // la ficha ya promete "3 o 6 cuotas sin intereses"
++const pad = (n: number) => String(n).padStart(2, "0");
++
++interface Props {
++  precioOriginal: number;
++  precioFinal: number;
++  enOferta: boolean;
++  descuento: number | null;
++  venceEl: Date | null;
++  stock: number | null;
++  agotado: boolean;
++}
++
++export function LivePrice({ precioOriginal, precioFinal, enOferta, descuento, venceEl, stock, agotado }: Props) {
++  const restante = useCountdown(enOferta && venceEl ? venceEl.getTime() : null);
++  // Solo mostramos el reloj cuando la oferta realmente está cerca de terminar
++  const mostrarReloj = !!restante && !restante.terminada && restante.ms <= CATORCE_DIAS;
++  const pocasUnidades = stock != null && stock > 0 && stock <= 5;
++
++  return (
++    <div className="gmx-price-card">
++      <div className="gmx-price-row">
++        <span className="gmx-price-main">{fmtPEN(precioFinal)}</span>
++        {enOferta && (
++          <>
++            <span className="gmx-price-old">{fmtPEN(precioOriginal)}</span>
++            <span className="gmx-save-chip">Ahorras {fmtPEN(precioOriginal - precioFinal)}{descuento ? ` (-${descuento}%)` : ""}</span>
++          </>
++        )}
++        {agotado && (
++          <span style={{ fontSize: 13, background: "#fde8e8", color: "#b91c1c", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>
++        )}
++      </div>
++
++      <p className="gmx-cuotas">
++        o <strong>{CUOTAS} cuotas de {fmtPEN(precioFinal / CUOTAS)}</strong> sin intereses
++      </p>
++      <p className="gmx-note">Precio incluye IGV · Entrega a domicilio disponible</p>
++
++      {mostrarReloj && restante && (
++        <div className="gmx-clock" role="timer" aria-label="Tiempo restante de la oferta">
++          <span className="gmx-clock-label">La oferta termina en</span>
++          <div className="gmx-clock-boxes">
++            {([["d", "días"], ["h", "hrs"], ["m", "min"], ["s", "seg"]] as const).map(([k, l]) => (
++              <div key={k} className="gmx-clock-box"><b>{pad(restante[k])}</b><span>{l}</span></div>
++            ))}
++          </div>
++        </div>
++      )}
++
++      {pocasUnidades && !agotado && (
++        <div className="gmx-stock"><span className="gmx-pulse" />Quedan {stock} unidad{stock === 1 ? "" : "es"} listas</div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/components/product/SignatureModules.tsx b/src/components/product/SignatureModules.tsx
+new file mode 100644
+index 0000000..6074325
+--- /dev/null
++++ b/src/components/product/SignatureModules.tsx
+@@ -0,0 +1,310 @@
++// src/components/product/SignatureModules.tsx
++// El módulo "firma" de cada categoría: una pequeña herramienta que deja al cliente
++// comprobar que la pieza encaja en SU casa antes de comprar. Todo es cálculo real
++// (geometría y medidas estándar), no datos inventados.
++import { useEffect, useId, useState, type ReactNode } from "react";
++import type { ProductProfile } from "@/lib/productProfiles";
++import "./product-experience.css";
++
++export type SetPref = (key: string, value: string | null) => void;
++
++interface ModuleProps {
++  profile: ProductProfile;
++  nombre: string;
++  subcategoria: string | null;
++  setPref: SetPref;
++  ambient: boolean;
++  setAmbient: (v: boolean) => void;
++}
++
++function Shell({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
++  return (
++    <section className="gmx-module">
++      <div className="gmx-module-kicker">{kicker}</div>
++      <h3 className="gmx-module-title">{title}</h3>
++      {children}
++    </section>
++  );
++}
++
++function Chips<T extends string | number>({
++  options, value, onPick, render,
++}: { options: readonly T[]; value: T | null; onPick: (v: T) => void; render: (v: T) => string }) {
++  return (
++    <div className="gmx-chips" role="group">
++      {options.map((o) => (
++        <button key={String(o)} type="button" className="gmx-chip" aria-pressed={value === o} onClick={() => onPick(o)}>
++          {render(o)}
++        </button>
++      ))}
++    </div>
++  );
++}
++
++/* ═════════════ 1 · TV: medidor de pantalla + modo noche ═════════════ */
++const TV_SIZES = [43, 50, 55, 65, 75, 85] as const;
++const TV_RATIO = 16 / Math.sqrt(16 ** 2 + 9 ** 2); // ancho/diagonal en 16:9
++
++function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
++  const gid = useId().replace(/:/g, "");
++  const [picked, setPicked] = useState<number | null>(null);
++  const size = picked ?? 55; // escena por defecto; el chip solo se marca cuando el cliente elige
++
++  const tvW = size * 2.54 * TV_RATIO;                 // cm
++  const recW = Math.ceil((tvW * 1.25) / 10) * 10;     // mueble ≥ 25 % más ancho que el TV
++  const distMin = (size * 2.54 * 1.2) / 100;          // m
++  const distMax = (size * 2.54 * 1.6) / 100;
++
++  const S = 260 / 240;                                // px por cm (escala fija para comparar tamaños)
++  const tvPx = tvW * S, tvH = tvPx * 9 / 16, unitPx = recW * S;
++  const cx = 160;
++
++  return (
++    <Shell kicker="Asegúrate de que encaja" title="¿De cuántas pulgadas es tu TV?">
++      <Chips options={TV_SIZES} value={picked} onPick={(v) => { setPicked(v); setPref("Pantalla", `${v}″`); }} render={(v) => `${v}″`} />
++
++      <button type="button" role="switch" aria-checked={ambient} className="gmx-switch" onClick={() => setAmbient(!ambient)}>
++        <span className="gmx-switch-track" /> Luz LED ambiente <span style={{ color: "var(--gm-muted)" }}>(míralo de noche en la foto)</span>
++      </button>
++
++      <svg className="gmx-viz" viewBox="0 0 320 200" role="img" aria-label={`Un TV de ${size} pulgadas sobre un mueble de ${recW} cm`}>
++        <defs>
++          <radialGradient id={`g${gid}`} cx="50%" cy="60%" r="60%">
++            <stop offset="0" stopColor="#FFB860" stopOpacity={ambient ? 0.75 : 0} />
++            <stop offset="1" stopColor="#FFB860" stopOpacity="0" />
++          </radialGradient>
++        </defs>
++        <rect width="320" height="200" fill={ambient ? "#2A211B" : "#F7F4EF"} style={{ transition: "fill .6s" }} />
++        <rect x={cx - unitPx / 2 - 14} y="120" width={unitPx + 28} height="70" fill={`url(#g${gid})`} />
++        <rect x={cx - tvPx / 2} y={150 - tvH} width={tvPx} height={tvH} rx="3" fill="#15110E" />
++        <rect x={cx - tvPx / 2 + 3} y={153 - tvH} width={tvPx - 6} height={tvH - 6} rx="2" fill={ambient ? "#26364a" : "#1d2733"} />
++        <rect x={cx - unitPx / 2} y="156" width={unitPx} height="26" rx="3" fill="var(--gm-walnut-mid)" />
++        <line x1={cx - unitPx / 2} x2={cx + unitPx / 2} y1="192" y2="192" stroke="var(--gmx-accent)" strokeWidth="1.5" />
++        <text x={cx} y="198" textAnchor="middle" fontSize="8" fill={ambient ? "#e9dccb" : "#5A4035"}>{recW} cm</text>
++      </svg>
++
++      <p className="gmx-readout">
++        Tu TV de {size}″ mide <b>~{Math.round(tvW)} cm</b> de ancho. Te recomendamos un mueble de <b>{recW} cm o más</b> y verlo
++        desde <b>{distMin.toFixed(1)} a {distMax.toFixed(1)} m</b>. ¿Tu pared mide otra cosa? Lo hacemos a medida.
++      </p>
++    </Shell>
++  );
++}
++
++/* ═════════════ 2 · Comedor: simulador de comensales ═════════════ */
++const GUESTS = [2, 4, 6, 8, 10] as const;
++const CAPS = [4, 6, 8];
++
++function capacidadDe(nombre: string, sub: string | null): number | null {
++  const m = (sub ?? "").match(/(\d+)/) ?? nombre.match(/(\d+)\s*sillas/i);
++  return m ? Number(m[1]) : null;
++}
++
++function Seating({ nombre, subcategoria, setPref }: ModuleProps) {
++  const cap = capacidadDe(nombre, subcategoria);
++  const [picked, setPicked] = useState<number | null>(null);
++  const g = picked ?? cap ?? 6;
++
++  const dibujados = cap ? Math.min(g, cap) : g;
++  const heads = dibujados >= 6 ? 2 : 0;
++  const sides = dibujados - heads;
++  const top = Math.ceil(sides / 2), bottom = Math.floor(sides / 2);
++  const tw = Math.max(110, Math.max(top, bottom) * 42 + 28);
++  const tx = 160 - tw / 2, ty = 70, th = 56;
++
++  const chairs: { x: number; y: number }[] = [];
++  const place = (n: number, y: number) => {
++    for (let i = 0; i < n; i++) chairs.push({ x: tx + (tw / (n + 1)) * (i + 1), y });
++  };
++  place(top, ty - 16); place(bottom, ty + th + 16);
++  if (heads) { chairs.push({ x: tx - 17, y: ty + th / 2 }, { x: tx + tw + 17, y: ty + th / 2 }); }
++
++  const exceso = cap && g > cap ? g - cap : 0;
++  const siguiente = CAPS.find((c) => c >= g);
++  const ladoCm = Math.ceil(g / 2) * 60;
++
++  return (
++    <Shell kicker="Pruébalo antes de comprarlo" title="¿Cuántos se sientan a tu mesa?">
++      <Chips options={GUESTS} value={picked} onPick={(v) => { setPicked(v); setPref("Comensales", `${v} personas`); }} render={(v) => `${v} personas`} />
++
++      <svg className="gmx-viz" viewBox="0 0 320 190" role="img" aria-label={`Mesa vista desde arriba con ${dibujados} sillas`}>
++        <rect x={tx} y={ty} width={tw} height={th} rx="8" fill="var(--gm-walnut-mid)" />
++        <rect x={tx + 5} y={ty + 5} width={tw - 10} height={th - 10} rx="5" fill="none" stroke="rgba(255,255,255,.18)" />
++        {chairs.map((c, i) => (
++          <circle key={i} cx={c.x} cy={c.y} r="11" fill="var(--gmx-accent)" opacity=".92">
++            <animate attributeName="r" from="0" to="11" dur=".25s" begin={`${i * 0.04}s`} fill="freeze" />
++          </circle>
++        ))}
++        <text x="160" y="170" textAnchor="middle" fontSize="10" fill="#5A4035">
++          {cap ? `Mesa pensada para ${cap}` : `Mesa de ~${ladoCm} cm de largo`}
++        </text>
++      </svg>
++
++      <p className="gmx-readout">
++        {cap == null && <>Para <b>{g} personas</b> calcula unos <b>{ladoCm} cm</b> de largo (60 cm por comensal). Cuéntanos tu espacio y la hacemos a tu medida.</>}
++        {cap != null && !exceso && <>Para <b>{g} personas</b> esta mesa funciona perfecto: queda espacio para fuentes, copas y codos. </>}
++        {cap != null && exceso > 0 && (
++          <>Esta versión está pensada para <b>{cap}</b>; te faltarían <b>{exceso}</b> lugares. {siguiente
++            ? <>Mira los <a href={`/categoria/comedores?sub=${siguiente}-sillas`}>comedores de {siguiente} sillas</a> o pídenos una a medida.</>
++            : <>Pídenos una mesa a medida para {g} personas.</>}</>
++        )}
++      </p>
++    </Shell>
++  );
++}
++
++/* ═════════════ 3 · Recámara: tamaño de cama y espacio libre ═════════════ */
++const CAMAS = [
++  { k: "1 plaza", w: 0.9, l: 1.9 },
++  { k: "1½ plazas", w: 1.05, l: 1.9 },
++  { k: "2 plazas", w: 1.4, l: 1.9 },
++  { k: "Queen", w: 1.6, l: 2.0 },
++  { k: "King", w: 1.95, l: 2.0 },
++] as const;
++
++function Sleep({ setPref }: ModuleProps) {
++  const [picked, setPicked] = useState<(typeof CAMAS)[number]["k"] | null>(null);
++  const k = picked ?? "Queen";
++  const cama = CAMAS.find((c) => c.k === k)!;
++
++  const roomW = cama.w + 1.2;      // 60 cm de paso a cada lado
++  const roomL = cama.l + 0.6;      // 60 cm a los pies (la cabecera va contra la pared)
++  const P = 68;                    // px por metro
++  const rx = 160 - (roomW * P) / 2, ry = 14;
++  const bw = cama.w * P, bl = cama.l * P, bx = 160 - bw / 2, by = ry;
++  const dosAlm = cama.w >= 1.4;
++
++  return (
++    <Shell kicker="Pruébalo antes de comprarlo" title="¿Qué tamaño de cama necesitas?">
++      <Chips options={CAMAS.map((c) => c.k)} value={picked} onPick={(v) => { setPicked(v); setPref("Tamaño de cama", v); }} render={(v) => v} />
++
++      <svg className="gmx-viz" viewBox="0 0 320 210" role="img" aria-label={`Cama ${k} con espacio libre`}>
++        <rect x={rx} y={ry} width={roomW * P} height={roomL * P} fill="none" stroke="var(--gmx-accent)" strokeDasharray="5 4" strokeWidth="1.5" />
++        <rect x={bx} y={by} width={bw} height={bl} rx="4" fill="#fff" stroke="var(--gm-walnut-mid)" strokeWidth="1.5" />
++        <rect x={bx - 4} y={by - 6} width={bw + 8} height="9" rx="3" fill="var(--gm-walnut-mid)" />
++        {dosAlm ? (
++          <>
++            <rect x={bx + bw * 0.08} y={by + 10} width={bw * 0.38} height="18" rx="6" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
++            <rect x={bx + bw * 0.54} y={by + 10} width={bw * 0.38} height="18" rx="6" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
++          </>
++        ) : (
++          <rect x={bx + bw * 0.15} y={by + 10} width={bw * 0.7} height="18" rx="6" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
++        )}
++        <text x="160" y={by + bl / 2 + 4} textAnchor="middle" fontSize="11" fill="#5A4035">{cama.w.toFixed(2)} × {cama.l.toFixed(2)} m</text>
++        <text x="160" y={ry + roomL * P + 16} textAnchor="middle" fontSize="9" fill="var(--gmx-accent)">espacio libre recomendado</text>
++      </svg>
++
++      <p className="gmx-readout">
++        Un colchón <b>{k}</b> mide <b>{cama.w.toFixed(2)} × {cama.l.toFixed(2)} m</b>. Para moverte con comodidad
++        necesitas un cuarto de al menos <b>{roomW.toFixed(1)} × {roomL.toFixed(1)} m</b> libres alrededor.
++        Confirmamos medidas exactas y disponibilidad al cotizar.
++      </p>
++    </Shell>
++  );
++}
++
++/* ═════════════ 4 · Sala: firmeza + patas ═════════════ */
++const FIRMEZAS = [
++  { k: "Suave", dent: 14, txt: "Te hundes un poco: sensación envolvente, ideal para tardes de película." },
++  { k: "Equilibrado", dent: 8, txt: "El punto medio: cómodo para sentarte horas y fácil para levantarte." },
++  { k: "Firme", dent: 3, txt: "Apoyo marcado: buena postura para la espalda y para recibir visitas." },
++] as const;
++const PATAS = [
++  { k: "Dorado", hex: "#C9A96E" },
++  { k: "Negro", hex: "#2B2623" },
++] as const;
++
++function Comfort({ setPref }: ModuleProps) {
++  const [f, setF] = useState<(typeof FIRMEZAS)[number]>(FIRMEZAS[1]);
++  const [p, setP] = useState<(typeof PATAS)[number]["k"]>("Dorado");
++
++  // En la sala, firmeza y patas son opciones del pedido: registramos el valor por defecto desde el inicio
++  useEffect(() => { setPref("Firmeza", FIRMEZAS[1].k); setPref("Patas", PATAS[0].k); }, [setPref]);
++
++  const y0 = 62, mid = 160;
++  return (
++    <Shell kicker="Hazlo tuyo" title="¿Cómo te gusta sentarte?">
++      <Chips options={FIRMEZAS.map((x) => x.k)} value={f.k} onPick={(v) => { const n = FIRMEZAS.find((x) => x.k === v)!; setF(n); setPref("Firmeza", v); }} render={(v) => v} />
++
++      <svg className="gmx-viz" viewBox="0 0 320 120" role="img" aria-label={`Cojín con firmeza ${f.k}`}>
++        <rect x="40" y="76" width="240" height="26" rx="10" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
++        <path d={`M40 ${y0} Q ${mid} ${y0 + f.dent * 2} 280 ${y0} L 280 86 L 40 86 Z`} fill="#fff" stroke="var(--gm-walnut-mid)" strokeWidth="1.5" />
++        <circle cx={mid} cy={y0 + f.dent - 12} r="12" fill="var(--gmx-accent)" />
++        <rect x="52" y="102" width="6" height="12" fill={PATAS.find((x) => x.k === p)!.hex} />
++        <rect x="262" y="102" width="6" height="12" fill={PATAS.find((x) => x.k === p)!.hex} />
++      </svg>
++      <p className="gmx-readout">{f.txt}</p>
++
++      <div className="gm-color-label" style={{ marginTop: 14 }}>Patas de metal</div>
++      <div className="gmx-chips">
++        {PATAS.map((x) => (
++          <button key={x.k} type="button" className="gmx-chip" aria-pressed={p === x.k}
++            onClick={() => { setP(x.k); setPref("Patas", x.k); }}>
++            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: x.hex, marginRight: 8, border: "1px solid rgba(0,0,0,.2)" }} />
++            {x.k}
++          </button>
++        ))}
++      </div>
++    </Shell>
++  );
++}
++
++/* ═════════════ 5 · Separador: medidas de tu espacio ═════════════ */
++const num = (s: string) => parseFloat(s.replace(",", "."));
++
++function CustomSpace({ setPref }: ModuleProps) {
++  const [ancho, setAncho] = useState("2.4");
++  const [alto, setAlto] = useState("2.6");
++  const a = num(ancho), h = num(alto);
++  const ok = a >= 0.5 && a <= 8 && h >= 1 && h <= 4;
++
++  useEffect(() => {
++    setPref("Espacio a cubrir", ok ? `${a.toFixed(2)} × ${h.toFixed(2)} m` : null);
++  }, [ok, a, h, setPref]);
++
++  const k = ok ? Math.min(250 / a, 120 / h) : 1;
++  const w = ok ? a * k : 0, hh = ok ? h * k : 0;
++  const slats = ok ? Math.max(4, Math.round(a / 0.12)) : 0;
++
++  return (
++    <Shell kicker="A la medida de tu espacio" title="¿Qué espacio quieres dividir?">
++      <div className="gmx-inputs">
++        <div className="gmx-field"><label htmlFor="gmx-ancho">Ancho (m)</label>
++          <input id="gmx-ancho" inputMode="decimal" value={ancho} onChange={(e) => setAncho(e.target.value)} /></div>
++        <div className="gmx-field"><label htmlFor="gmx-alto">Alto (m)</label>
++          <input id="gmx-alto" inputMode="decimal" value={alto} onChange={(e) => setAlto(e.target.value)} /></div>
++      </div>
++
++      <svg className="gmx-viz" viewBox="0 0 320 150" role="img" aria-label="Vista frontal del separador">
++        {ok && (
++          <>
++            <rect x={160 - w / 2} y={140 - hh} width={w} height={hh} fill="#fff" stroke="var(--gm-walnut-mid)" strokeWidth="1.5" />
++            {Array.from({ length: slats }).map((_, i) => {
++              const x = 160 - w / 2 + (w / (slats + 1)) * (i + 1);
++              return <line key={i} x1={x} x2={x} y1={140 - hh + 4} y2={136} stroke="var(--gm-walnut-mid)" strokeWidth="3" opacity=".85" />;
++            })}
++          </>
++        )}
++        <line x1="20" x2="300" y1="141" y2="141" stroke="var(--gmx-accent)" strokeWidth="1.5" />
++      </svg>
++
++      <p className="gmx-readout">
++        {ok
++          ? <>Superficie a cubrir: <b>{(a * h).toFixed(1)} m²</b>. Guardamos estas medidas en tu cotización para que un asesor ajuste el diseño.</>
++          : <>Ingresa un ancho entre 0.5 y 8 m, y un alto entre 1 y 4 m.</>}
++      </p>
++    </Shell>
++  );
++}
++
++/* ═════════════ Selector ═════════════ */
++export function SignatureModule(props: ModuleProps) {
++  switch (props.profile.module) {
++    case "tv-fit": return <TvFit {...props} />;
++    case "seating": return <Seating {...props} />;
++    case "sleep": return <Sleep {...props} />;
++    case "comfort": return <Comfort {...props} />;
++    case "custom-space": return <CustomSpace {...props} />;
++    default: return null;
++  }
++}
+diff --git a/src/components/product/StickyBuyBar.tsx b/src/components/product/StickyBuyBar.tsx
+new file mode 100644
+index 0000000..c066ece
+--- /dev/null
++++ b/src/components/product/StickyBuyBar.tsx
+@@ -0,0 +1,35 @@
++// src/components/product/StickyBuyBar.tsx
++// Barra de compra que aparece cuando el botón principal sale de pantalla.
++import { ShoppingBag } from "lucide-react";
++import { fmtPEN } from "@/lib/pricing";
++import "./product-experience.css";
++
++interface Props {
++  visible: boolean;
++  image: string | null;
++  nombre: string;
++  resumen: string;
++  precio: number;
++  disabled: boolean;
++  adding: boolean;
++  onAdd: () => void;
++}
++
++export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled, adding, onAdd }: Props) {
++  return (
++    <div className={`gmx-sticky${visible ? " show" : ""}`} aria-hidden={!visible}>
++      <div className="gmx-sticky-in">
++        {image && <img src={image} alt="" />}
++        <div className="gmx-sticky-txt">
++          <div className="gmx-sticky-name">{nombre}</div>
++          {resumen && <div className="gmx-sticky-meta">{resumen}</div>}
++        </div>
++        <div className="gmx-sticky-price">{fmtPEN(precio)}</div>
++        <button className={`gm-btn-primary${adding ? " adding" : ""}`} onClick={onAdd} disabled={disabled} tabIndex={visible ? 0 : -1}>
++          <ShoppingBag size={16} />
++          {adding ? "¡Agregado!" : disabled ? "Agotado" : "Agregar"}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/product/product-experience.css b/src/components/product/product-experience.css
+new file mode 100644
+index 0000000..e752c0e
+--- /dev/null
++++ b/src/components/product/product-experience.css
+@@ -0,0 +1,259 @@
++/* ═══════════════════════════════════════════════════════════════════════════
++   Ficha de producto — experiencia adaptativa por categoría
++   Prefijo gmx-  ·  usa las variables --gm-* definidas en product.$handle.tsx
++   y --gmx-accent / --gmx-accent-soft inyectadas según el perfil del producto.
++   ═══════════════════════════════════════════════════════════════════════════ */
++
++/* ── Atmósfera de categoría ─────────────────────────────────────────────── */
++.gmx-page {
++  background:
++    radial-gradient(900px 480px at 85% -8%, var(--gmx-accent-soft), transparent 70%),
++    var(--background);
++}
++.gmx-eyebrow {
++  display: inline-flex; align-items: center; gap: 8px;
++  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
++  color: var(--gmx-accent); font-weight: 600; margin-bottom: 10px;
++}
++.gmx-eyebrow::before {
++  content: ""; width: 22px; height: 2px; background: var(--gmx-accent); border-radius: 2px;
++}
++.gmx-pitch {
++  font-size: 15px; line-height: 1.6; color: var(--gm-mid); margin: 0 0 18px; max-width: 46ch;
++}
++
++/* ── Galería ────────────────────────────────────────────────────────────── */
++.gmx-gallery-sticky { position: sticky; top: 132px; }
++@media (max-width: 900px) { .gmx-gallery-sticky { position: static; } }
++
++.gmx-stage { position: relative; }
++.gmx-stage img { transition: transform .5s ease, filter .9s ease; }
++.gmx-stage .gmx-glow {
++  position: absolute; inset: 0; pointer-events: none; opacity: 0;
++  transition: opacity .9s ease; mix-blend-mode: screen;
++  background:
++    radial-gradient(60% 55% at 28% 48%, rgba(255,184,96,.55), transparent 70%),
++    radial-gradient(40% 30% at 70% 80%, rgba(255,200,130,.35), transparent 70%);
++}
++.gmx-stage.is-night img { filter: brightness(.42) contrast(1.12) saturate(1.2); }
++.gmx-stage.is-night .gmx-glow { opacity: 1; }
++
++@media (hover: hover) {
++  .gmx-stage.gm-main-img-wrap:hover img {
++    transform: scale(1.9); transform-origin: var(--zx, 50%) var(--zy, 50%);
++  }
++}
++.gmx-counter {
++  position: absolute; bottom: 14px; right: 14px; font-size: 11px; letter-spacing: .08em;
++  background: rgba(28,20,16,.62); color: #fff; padding: 4px 10px; border-radius: 20px;
++  backdrop-filter: blur(6px);
++}
++.gmx-hint {
++  position: absolute; bottom: 14px; left: 14px; font-size: 11px;
++  background: rgba(253,250,246,.88); color: var(--gm-mid);
++  padding: 4px 10px; border-radius: 20px; backdrop-filter: blur(6px);
++}
++@media (hover: none) { .gmx-hint { display: none; } }
++
++/* ── Precio vivo ────────────────────────────────────────────────────────── */
++.gmx-price-card {
++  border: 1px solid var(--gm-border); border-radius: 10px;
++  background: #fff; padding: 18px 20px; margin-bottom: 18px;
++}
++.gmx-price-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
++.gmx-price-main { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--gm-walnut); }
++.gmx-price-old { font-size: 18px; color: var(--gm-muted); text-decoration: line-through; }
++.gmx-save-chip {
++  font-size: 12px; font-weight: 600; background: var(--gm-save); color: var(--gm-save-text);
++  padding: 4px 11px; border-radius: 20px;
++}
++.gmx-cuotas { margin-top: 8px; font-size: 13px; color: var(--gm-mid); }
++.gmx-cuotas strong { color: var(--gm-walnut); }
++.gmx-note { margin-top: 4px; font-size: 12px; color: var(--gm-muted); }
++
++.gmx-clock {
++  margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--gm-border);
++  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
++}
++.gmx-clock-label { font-size: 12px; font-weight: 600; color: #b3332a; letter-spacing: .02em; }
++.gmx-clock-boxes { display: flex; gap: 6px; }
++.gmx-clock-box {
++  min-width: 46px; text-align: center; background: var(--gm-dark); color: #fff;
++  border-radius: 6px; padding: 6px 4px 5px;
++}
++.gmx-clock-box b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; line-height: 1.1; }
++.gmx-clock-box span { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
++
++.gmx-stock {
++  display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
++  font-size: 12px; font-weight: 600; color: #9a5b10;
++  background: #FFF4E0; border: 1px solid #F1D9A8; padding: 5px 12px; border-radius: 20px;
++}
++.gmx-pulse {
++  width: 8px; height: 8px; border-radius: 50%; background: #e08a14;
++  animation: gmx-pulse 1.6s ease-out infinite;
++}
++@keyframes gmx-pulse {
++  0% { box-shadow: 0 0 0 0 rgba(224,138,20,.55); }
++  100% { box-shadow: 0 0 0 10px rgba(224,138,20,0); }
++}
++
++/* ── Chips de beneficio ("ideal para") ──────────────────────────────────── */
++.gmx-ideal { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
++.gmx-ideal li {
++  list-style: none; font-size: 12px; color: var(--gm-mid);
++  background: var(--gmx-accent-soft); padding: 6px 12px; border-radius: 20px;
++}
++
++/* ── Especificaciones (usa .gm-spec-pill existente + acento) ────────────── */
++.gmx-spec-icon { color: var(--gmx-accent); flex-shrink: 0; margin-top: 1px; }
++.gm-spec-pill:hover { border-color: var(--gmx-accent) !important; }
++
++/* ── Acabados ───────────────────────────────────────────────────────────── */
++.gmx-swatch {
++  position: relative; width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
++  border: 1px solid rgba(59,43,31,.18); transition: transform .2s;
++  box-shadow: inset 0 0 0 3px #fff;
++}
++.gmx-swatch:hover { transform: scale(1.08); }
++.gmx-swatch[aria-checked="true"] { outline: 2px solid var(--gmx-accent); outline-offset: 3px; }
++
++/* ── Módulo firma ───────────────────────────────────────────────────────── */
++.gmx-module {
++  border: 1px solid var(--gm-border); border-left: 4px solid var(--gmx-accent);
++  background: linear-gradient(180deg, #fff, var(--gm-warm));
++  border-radius: 10px; padding: 18px 20px 20px; margin: 4px 0 24px;
++}
++.gmx-module-kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gmx-accent); font-weight: 600; }
++.gmx-module-title { font-family: var(--font-display); font-size: 22px; color: var(--gm-walnut); margin: 2px 0 12px; }
++.gmx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
++.gmx-chip {
++  font-size: 13px; padding: 7px 14px; border-radius: 20px; cursor: pointer;
++  border: 1px solid var(--gm-border); background: #fff; color: var(--gm-mid);
++  transition: all .18s;
++}
++.gmx-chip:hover { border-color: var(--gmx-accent); }
++.gmx-chip[aria-pressed="true"] { background: var(--gm-walnut); border-color: var(--gm-walnut); color: #fff; }
++.gmx-viz { width: 100%; height: auto; display: block; border-radius: 8px; background: var(--gm-cream); }
++.gmx-readout { font-size: 13px; color: var(--gm-mid); line-height: 1.6; margin-top: 12px; }
++.gmx-readout b { color: var(--gm-walnut); }
++.gmx-readout a { color: var(--gmx-accent); text-decoration: underline; }
++
++.gmx-switch {
++  display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
++  font-size: 13px; color: var(--gm-mid); user-select: none; margin-bottom: 12px;
++}
++.gmx-switch-track {
++  width: 40px; height: 22px; border-radius: 22px; background: #cfc6bd; position: relative; transition: background .25s;
++}
++.gmx-switch-track::after {
++  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
++  border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
++}
++.gmx-switch[aria-checked="true"] .gmx-switch-track { background: var(--gmx-accent); }
++.gmx-switch[aria-checked="true"] .gmx-switch-track::after { transform: translateX(18px); }
++
++.gmx-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
++.gmx-field label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gm-muted); margin-bottom: 4px; }
++.gmx-field input {
++  width: 100%; border: 1px solid var(--gm-border); border-radius: 6px; padding: 9px 12px;
++  font-size: 14px; background: #fff; color: var(--gm-dark);
++}
++.gmx-field input:focus { outline: 2px solid var(--gmx-accent); outline-offset: 1px; }
++
++/* ── Entrega ────────────────────────────────────────────────────────────── */
++.gmx-delivery { border: 1px solid var(--gm-border); border-radius: 10px; padding: 16px 18px; margin: 18px 0; background: #fff; }
++.gmx-delivery-head { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--gm-dark); }
++.gmx-delivery-head b { color: var(--gm-walnut); }
++.gmx-track { display: flex; align-items: flex-start; margin: 16px 0 6px; }
++.gmx-step { flex: 1; text-align: center; position: relative; font-size: 11px; color: var(--gm-muted); }
++.gmx-step::before {
++  content: ""; position: absolute; top: 6px; left: -50%; width: 100%; height: 2px; background: var(--gm-border);
++}
++.gmx-step:first-child::before { display: none; }
++.gmx-dot { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--gm-border); margin: 0 auto 6px; position: relative; z-index: 1; }
++.gmx-step.done .gmx-dot { background: var(--gmx-accent); border-color: var(--gmx-accent); }
++.gmx-step.done::before { background: var(--gmx-accent); }
++.gmx-step b { display: block; color: var(--gm-dark); font-weight: 600; font-size: 11px; }
++.gmx-ship { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--gm-mid); }
++.gmx-ship select {
++  border: 1px solid var(--gm-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; background: #fff; color: var(--gm-dark);
++}
++
++/* ── CTAs extra ─────────────────────────────────────────────────────────── */
++.gmx-wa {
++  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
++  background: #1f8f4e; color: #fff; border: none; border-radius: 2px; padding: 14px;
++  font-size: 14px; letter-spacing: .04em; cursor: pointer; text-decoration: none; margin-top: 10px;
++  transition: background .2s;
++}
++.gmx-wa:hover { background: #197a42; }
++.gmx-btn-pulse { animation: gmx-btn 2.6s ease-in-out infinite; }
++@keyframes gmx-btn { 0%,100% { box-shadow: 0 0 0 0 rgba(59,43,31,.0); } 50% { box-shadow: 0 6px 22px rgba(59,43,31,.32); } }
++@media (prefers-reduced-motion: reduce) {
++  .gmx-btn-pulse, .gmx-pulse { animation: none; }
++  .gmx-stage img { transition: none; }
++}
++.gmx-prefs { margin: 0 0 14px; font-size: 12px; color: var(--gm-muted); }
++.gmx-prefs b { color: var(--gm-walnut); font-weight: 600; }
++
++/* ── Barra pegajosa de compra ───────────────────────────────────────────── */
++.gmx-sticky {
++  position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
++  transform: translateY(110%); transition: transform .35s ease;
++  background: rgba(253,250,246,.96); backdrop-filter: blur(10px);
++  border-top: 1px solid var(--gm-border); box-shadow: 0 -8px 30px rgba(59,43,31,.10);
++  padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
++}
++.gmx-sticky.show { transform: translateY(0); }
++.gmx-sticky-in { max-width: 1300px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
++.gmx-sticky img { width: 46px; height: 46px; border-radius: 6px; object-fit: cover; background: var(--gm-cream); }
++.gmx-sticky-name { font-size: 14px; font-weight: 500; color: var(--gm-dark); line-height: 1.2; }
++.gmx-sticky-meta { font-size: 12px; color: var(--gm-muted); }
++.gmx-sticky-price { margin-left: auto; font-family: var(--font-display); font-size: 22px; color: var(--gm-walnut); white-space: nowrap; }
++.gmx-sticky .gm-btn-primary { padding: 12px 22px; }
++@media (max-width: 640px) {
++  .gmx-sticky { padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); }
++  .gmx-sticky-txt { display: none; }
++  .gmx-sticky-price { font-size: 19px; }
++  .gmx-sticky .gm-btn-primary { flex: 1; }
++}
++
++/* ── Bundle ─────────────────────────────────────────────────────────────── */
++.gmx-bundle { background: var(--gm-cream); padding: 72px 0 80px; }
++.gmx-bundle-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
++@media (max-width: 1000px) { .gmx-bundle-grid { grid-template-columns: repeat(2, 1fr); } }
++.gmx-bcard {
++  position: relative; text-align: left; background: #fff; border: 2px solid transparent;
++  border-radius: 10px; overflow: hidden; cursor: pointer; padding: 0; transition: border-color .2s, transform .2s, box-shadow .2s;
++  display: flex; flex-direction: column;
++}
++.gmx-bcard:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(59,43,31,.10); }
++.gmx-bcard[aria-pressed="true"] { border-color: var(--gmx-accent); }
++.gmx-bcard.fixed { cursor: default; border-color: var(--gm-walnut); }
++.gmx-bcard.fixed:hover { transform: none; box-shadow: none; }
++.gmx-bimg { aspect-ratio: 4/3; background: #eee7df; overflow: hidden; }
++.gmx-bimg img { width: 100%; height: 100%; object-fit: cover; }
++.gmx-bbody { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
++.gmx-bname { font-family: var(--font-display); font-size: 16px; color: var(--gm-dark); line-height: 1.25; }
++.gmx-bprice { font-size: 14px; font-weight: 600; color: var(--gm-walnut); margin-top: auto; padding-top: 6px; }
++.gmx-bcheck {
++  position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 50%;
++  display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
++  background: rgba(255,255,255,.92); color: var(--gm-muted); border: 1px solid var(--gm-border);
++}
++.gmx-bcard[aria-pressed="true"] .gmx-bcheck { background: var(--gmx-accent); color: #fff; border-color: var(--gmx-accent); }
++.gmx-bcard.fixed .gmx-bcheck { background: var(--gm-walnut); color: #fff; border-color: var(--gm-walnut); }
++.gmx-bar {
++  margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
++  background: #fff; border-radius: 10px; padding: 16px 20px; border: 1px solid var(--gm-border);
++}
++.gmx-bar-total { font-size: 13px; color: var(--gm-muted); }
++.gmx-bar-total b { display: block; font-family: var(--font-display); font-size: 28px; color: var(--gm-walnut); font-weight: 400; }
++
++/* ── Móvil: el CSS base de la ficha declara estos paddings DESPUÉS de su media query,
++      así que en pantallas chicas la galería quedaba angosta; con .gmx-page ganan las reglas móviles ── */
++@media (max-width: 900px) {
++  .gmx-page .gm-gallery-col { padding-right: 0; margin-bottom: 24px; }
++  .gmx-page .gm-info-col { padding-left: 0; }
++}
+diff --git a/src/config.ts b/src/config.ts
+index d90e381..af47bf7 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -6,4 +6,10 @@ export const API_URL = isProd
+ 
+ export const APP_URL = isProd
+   ? import.meta.env.VITE_APP_URL_PROD
+-  : import.meta.env.VITE_APP_URL_LOCAL;
+\ No newline at end of file
++  : import.meta.env.VITE_APP_URL_LOCAL;
++
++/**
++ * Número de WhatsApp de ventas (solo dígitos, con código de país: 51999999999).
++ * Si no está definido, el botón de WhatsApp de la ficha de producto no se muestra.
++ */
++export const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER as string | undefined)?.replace(/\D/g, "") || undefined;
+diff --git a/src/lib/productProfiles.ts b/src/lib/productProfiles.ts
+new file mode 100644
+index 0000000..c4f0992
+--- /dev/null
++++ b/src/lib/productProfiles.ts
+@@ -0,0 +1,292 @@
++// src/lib/productProfiles.ts
++// ─────────────────────────────────────────────────────────────────────────────
++// Perfil de experiencia por tipo de producto. La ficha /product/$handle lee de
++// aquí para adaptar: color de ambiente, textos, tarjetas de especificación,
++// acabados, módulo interactivo "firma", preguntas frecuentes y mensajes de venta.
++//
++// ⚠️  Los textos de materiales / medidas son valores por defecto de la marca.
++//     Revísalos y ajústalos: es el único archivo que hay que tocar para cambiar
++//     el contenido por categoría.
++// ─────────────────────────────────────────────────────────────────────────────
++import {
++  Armchair, BedDouble, Hammer, Layers, Lightbulb, Ruler, Sofa, Sparkles,
++  TreeDeciduous, UtensilsCrossed, Columns3, type LucideIcon,
++} from "lucide-react";
++
++export type ProfileKey =
++  | "tv" | "sala" | "comedor" | "recamara" | "separador" | "accesorio" | "generico";
++
++export type SignatureModuleKey =
++  | "tv-fit" | "seating" | "sleep" | "comfort" | "custom-space" | "none";
++
++export interface Acabado { name: string; hex: string }
++export interface SpecCard { icon: LucideIcon; label: string; value: string }
++export interface Faq { q: string; a: string }
++
++export interface ProductProfile {
++  key: ProfileKey;
++  /** Color de ambiente de la categoría (acentos, bordes, brillo del hero) */
++  accent: string;
++  accentSoft: string;
++  /** Etiqueta corta sobre el título */
++  eyebrow: string;
++  /** Promesa en una línea, orientada al beneficio (no a la ficha técnica) */
++  pitch: string;
++  /** Texto de "para quién / dónde" */
++  idealFor: string[];
++  specs: SpecCard[];
++  acabadoLabel: string;
++  acabados: Acabado[];
++  module: SignatureModuleKey;
++  /** Título de la sección de venta cruzada */
++  bundleTitle: string;
++  bundleSub: string;
++  faqs: Faq[];
++  /** Características para la pestaña de especificaciones */
++  features: string[];
++}
++
++const MADERA = "Madera tornillo seca y tratada";
++
++const FAQ_ENTREGA: Faq = {
++  q: "Tiempos de entrega",
++  a: "Lima Metropolitana: 5–7 días hábiles. Provincias: 10–15 días hábiles. Este modelo se fabrica a pedido — coordinamos la fecha exacta al confirmar tu compra.",
++};
++const FAQ_DEVOLUCION: Faq = {
++  q: "Política de devoluciones",
++  a: "Al ser una pieza fabricada a medida, no se aceptan cambios una vez confirmado el pedido. Si hay un defecto de fabricación, reparamos o reponemos sin costo dentro del período de garantía.",
++};
++
++const PROFILES: Record<ProfileKey, ProductProfile> = {
++  tv: {
++    key: "tv",
++    accent: "#B07A2B",
++    accentSoft: "#F6EAD3",
++    eyebrow: "Centro de entretenimiento",
++    pitch: "Convierte la pared de tu TV en el punto focal de la sala — con luz que se siente de cine.",
++    idealFor: ["Salas y dormitorios amplios", "Quienes quieren ocultar cables", "Ambientación con luz LED cálida"],
++    specs: [
++      { icon: TreeDeciduous, label: "Estructura", value: MADERA },
++      { icon: Lightbulb, label: "Iluminación", value: "Perfiles con LED cálido" },
++      { icon: Ruler, label: "Medida", value: "A tu pared y a tu TV" },
++      { icon: Hammer, label: "Fabricación", value: "A pedido, en Lima" },
++    ],
++    acabadoLabel: "Acabado",
++    acabados: [
++      { name: "Nogal oscuro", hex: "#5B4033" },
++      { name: "Roble natural", hex: "#B58B5D" },
++      { name: "Grafito", hex: "#4A4D52" },
++      { name: "Blanco humo", hex: "#E7E3DC" },
++    ],
++    module: "tv-fit",
++    bundleTitle: "Termina tu rincón de TV",
++    bundleSub: "Piezas de otras colecciones que armonizan con este mueble",
++    faqs: [
++      { q: "¿Se adapta a mi TV y a mi pared?", a: "Sí. Usa el medidor de arriba para ver el ancho recomendado según tus pulgadas, y cuéntanos las medidas de tu pared al cotizar: ajustamos el diseño." },
++      { q: "Cuidado y mantenimiento", a: "Limpia con paño suave y seco o apenas húmedo. Evita químicos abrasivos y deja ventilación detrás de equipos que se calienten." },
++      FAQ_ENTREGA, FAQ_DEVOLUCION,
++    ],
++    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Paso de cables integrado", "Iluminación LED según diseño", "Garantía de 2 años en estructura"],
++  },
++
++  sala: {
++    key: "sala",
++    accent: "#B8806A",
++    accentSoft: "#F4E3DB",
++    eyebrow: "Sala · Tapizado a mano",
++    pitch: "Hecho para quedarte horas: espuma de alta densidad, tapizado antifluidos y tú eliges el color.",
++    idealFor: ["Familias con niños o mascotas", "Salas donde se recibe visitas", "Quienes valoran el confort diario"],
++    specs: [
++      { icon: TreeDeciduous, label: "Estructura", value: MADERA },
++      { icon: Layers, label: "Tapizado", value: "Velvet importado + antifluida" },
++      { icon: Sparkles, label: "Relleno", value: "Espuma alta densidad + napa" },
++      { icon: Armchair, label: "Patas", value: "Metal dorado o negro" },
++    ],
++    acabadoLabel: "Color del tapizado",
++    acabados: [
++      { name: "Rosado blush", hex: "#E8D5CC" },
++      { name: "Beige arena", hex: "#E8E0D0" },
++      { name: "Gris topo", hex: "#C8BFB5" },
++      { name: "Crema marfil", hex: "#D4C5A9" },
++      { name: "Mocha", hex: "#B8A898" },
++    ],
++    module: "comfort",
++    bundleTitle: "Completa tu sala",
++    bundleSub: "Mesas, puffs y detalles que cierran el ambiente",
++    faqs: [
++      { q: "Cuidado y mantenimiento", a: "Limpia con paño húmedo sin químicos agresivos y evita el sol directo. Para el velvet, usa un cepillo suave en dirección del pelo. La estructura de madera puede aceitarse una vez al año." },
++      FAQ_ENTREGA, FAQ_DEVOLUCION,
++    ],
++    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal dorado o negro a elección", "Garantía de 2 años en estructura"],
++  },
++
++  comedor: {
++    key: "comedor",
++    accent: "#7F8A55",
++    accentSoft: "#E9EDDB",
++    eyebrow: "Comedor · Hecho para reunir",
++    pitch: "La mesa donde pasan las cosas importantes: cumpleaños, domingos largos y sobremesas.",
++    idealFor: ["Almuerzos de domingo en familia", "Quienes reciben invitados", "Comedores de uso diario"],
++    specs: [
++      { icon: TreeDeciduous, label: "Estructura", value: MADERA },
++      { icon: Layers, label: "Tablero", value: "Madera o vidrio según modelo" },
++      { icon: UtensilsCrossed, label: "Sillas", value: "Según la versión elegida" },
++      { icon: Hammer, label: "Fabricación", value: "A pedido, en Lima" },
++    ],
++    acabadoLabel: "Acabado de madera",
++    acabados: [
++      { name: "Nogal", hex: "#6B4C38" },
++      { name: "Roble claro", hex: "#C7A57A" },
++      { name: "Wengué", hex: "#3B2B1F" },
++      { name: "Blanco nórdico", hex: "#EDE9E1" },
++    ],
++    module: "seating",
++    bundleTitle: "Viste tu comedor",
++    bundleSub: "Aparadores, lámparas y piezas para completar el espacio",
++    faqs: [
++      { q: "¿Cuántas personas entran cómodas?", a: "Usa el simulador de arriba. Como regla, cuenta unos 60 cm de ancho de mesa por comensal." },
++      { q: "Cuidado y mantenimiento", a: "Limpia con paño suave. Usa individuales o posavasos con bebidas calientes y seca derrames de inmediato." },
++      FAQ_ENTREGA, FAQ_DEVOLUCION,
++    ],
++    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Acabado protector resistente al uso diario", "Garantía de 2 años en estructura"],
++  },
++
++  recamara: {
++    key: "recamara",
++    accent: "#6F86A3",
++    accentSoft: "#E1E8F1",
++    eyebrow: "Recámara · Descanso",
++    pitch: "El lugar donde empieza y termina tu día merece una pieza que se sienta tuya.",
++    idealFor: ["Dormitorios principales", "Quienes buscan cabecera con presencia", "Renovar el cuarto sin mudarse"],
++    specs: [
++      { icon: TreeDeciduous, label: "Estructura", value: MADERA },
++      { icon: Layers, label: "Tapizado / acabado", value: "Según modelo" },
++      { icon: BedDouble, label: "Tamaños", value: "Estándar o a medida" },
++      { icon: Hammer, label: "Fabricación", value: "A pedido, en Lima" },
++    ],
++    acabadoLabel: "Acabado",
++    acabados: [
++      { name: "Gris niebla", hex: "#BFC4CA" },
++      { name: "Beige lino", hex: "#DDD2BF" },
++      { name: "Azul humo", hex: "#8FA3B8" },
++      { name: "Nogal", hex: "#6B4C38" },
++    ],
++    module: "sleep",
++    bundleTitle: "Arma tu dormitorio",
++    bundleSub: "Veladores, bancos y detalles que combinan con tu cama",
++    faqs: [
++      { q: "¿Qué tamaño de cama me conviene?", a: "Usa el visor de arriba: te muestra el espacio libre que necesitas alrededor. Confirmamos medidas y disponibilidad al cotizar." },
++      { q: "Cuidado y mantenimiento", a: "Aspira o cepilla suavemente el tapizado y limpia manchas de inmediato. Evita sol directo prolongado." },
++      FAQ_ENTREGA, FAQ_DEVOLUCION,
++    ],
++    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tamaños estándar o a medida", "Garantía de 2 años en estructura"],
++  },
++
++  separador: {
++    key: "separador",
++    accent: "#5F8A84",
++    accentSoft: "#DCEAE7",
++    eyebrow: "Separador de ambiente",
++    pitch: "Divide sin cerrar: ordena el espacio, deja pasar la luz y le da carácter a tu casa.",
++    idealFor: ["Departamentos y espacios abiertos", "Separar sala y comedor", "Dar privacidad sin construir"],
++    specs: [
++      { icon: TreeDeciduous, label: "Estructura", value: MADERA },
++      { icon: Columns3, label: "Diseño", value: "Listones y vacíos a medida" },
++      { icon: Ruler, label: "Medida", value: "A tu espacio" },
++      { icon: Hammer, label: "Fabricación", value: "A pedido, en Lima" },
++    ],
++    acabadoLabel: "Acabado",
++    acabados: [
++      { name: "Roble natural", hex: "#B58B5D" },
++      { name: "Nogal", hex: "#6B4C38" },
++      { name: "Negro mate", hex: "#2B2623" },
++      { name: "Blanco humo", hex: "#E7E3DC" },
++    ],
++    module: "custom-space",
++    bundleTitle: "Dale vida a cada lado",
++    bundleSub: "Piezas que acompañan a tu separador",
++    faqs: [
++      { q: "¿Se hace a la medida de mi espacio?", a: "Sí. Indica ancho y alto de tu espacio arriba y un asesor te devuelve una cotización con el diseño ajustado." },
++      { q: "Cuidado y mantenimiento", a: "Limpia el polvo con paño seco o ligeramente húmedo. Evita químicos abrasivos." },
++      FAQ_ENTREGA, FAQ_DEVOLUCION,
++    ],
++    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Diseño a medida del espacio", "Garantía de 2 años en estructura"],
++  },
++
++  accesorio: {
++    key: "accesorio",
++    accent: "#B59A5B",
++    accentSoft: "#F3EBD6",
++    eyebrow: "Accesorio · El toque final",
++    pitch: "Los detalles que hacen que un ambiente se sienta terminado.",
++    idealFor: ["Completar una sala o dormitorio", "Regalo para estrenar casa", "Renovar sin cambiar todo"],
++    specs: [
++      { icon: TreeDeciduous, label: "Material", value: "Madera y acabados seleccionados" },
++      { icon: Sparkles, label: "Detalle", value: "Hecho a mano" },
++      { icon: Sofa, label: "Combina con", value: "Nuestras salas y recámaras" },
++      { icon: Hammer, label: "Fabricación", value: "A pedido, en Lima" },
++    ],
++    acabadoLabel: "Acabado",
++    acabados: [
++      { name: "Natural", hex: "#C9A97A" },
++      { name: "Nogal", hex: "#6B4C38" },
++      { name: "Blanco humo", hex: "#E7E3DC" },
++      { name: "Negro mate", hex: "#2B2623" },
++    ],
++    module: "none",
++    bundleTitle: "Combínalo con",
++    bundleSub: "Piezas que se llevan bien con esta",
++    faqs: [
++      { q: "Cuidado y mantenimiento", a: "Limpia con paño suave. Evita sol directo prolongado y químicos agresivos." },
++      FAQ_ENTREGA, FAQ_DEVOLUCION,
++    ],
++    features: ["Fabricado artesanalmente en Perú", "Acabado resistente al uso diario", "Garantía de 2 años en estructura"],
++  },
++
++  generico: {
++    key: "generico",
++    accent: "#9A8070",
++    accentSoft: "#F1E9E2",
++    eyebrow: "Hecho a mano en Lima",
++    pitch: "Muebles fabricados a pedido, con materiales seleccionados y garantía real.",
++    idealFor: ["Quienes buscan piezas únicas", "Espacios que piden medidas propias"],
++    specs: [
++      { icon: TreeDeciduous, label: "Estructura", value: MADERA },
++      { icon: Hammer, label: "Fabricación", value: "A pedido, en Lima" },
++      { icon: Ruler, label: "Medida", value: "Consulta por tu espacio" },
++      { icon: Sparkles, label: "Garantía", value: "2 años en estructura" },
++    ],
++    acabadoLabel: "Acabado",
++    acabados: [
++      { name: "Natural", hex: "#C9A97A" },
++      { name: "Nogal", hex: "#6B4C38" },
++      { name: "Blanco humo", hex: "#E7E3DC" },
++    ],
++    module: "none",
++    bundleTitle: "Completa el ambiente",
++    bundleSub: "Piezas que combinan con tu elección",
++    faqs: [FAQ_ENTREGA, FAQ_DEVOLUCION],
++    features: ["Fabricado artesanalmente en Perú", "Garantía de 2 años en estructura"],
++  },
++};
++
++const norm = (s: string | null | undefined) =>
++  (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
++
++/** Elige el perfil según categoría y, cuando hace falta, el nombre del producto. */
++export function resolveProfile(p: {
++  nombre: string; categoria: string | null; subcategoria?: string | null;
++}): ProductProfile {
++  const nombre = norm(p.nombre);
++  const cat = norm(p.categoria);
++
++  // El nombre manda cuando es inequívoco (ej. "Estante para televisor" vive en "separadores")
++  if (/\b(televisor|tv|rack|entretenimiento)\b/.test(nombre)) return PROFILES.tv;
++
++  if (cat === "muebles") return PROFILES.sala;
++  if (cat === "comedores") return PROFILES.comedor;
++  if (cat === "recamaras") return PROFILES.recamara;
++  if (cat === "separadores") return PROFILES.separador;
++  if (cat === "accesorios") return PROFILES.accesorio;
++  return PROFILES.generico;
++}
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 6f34fb4..88a2c4e 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -1,4 +1,4 @@
+-import { useState, useEffect } from "react";
++import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+ import { useQuery } from "@tanstack/react-query";
+ import { useAuth } from "@/hooks/useAuth";
+ import { useWishlist } from "@/context/WishlistContext";
+@@ -8,14 +8,23 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
+ import { supabase } from "@/integrations/supabase/client";
+ import { Header } from "@/components/Header";
+ import { Footer } from "@/components/Footer";
+-import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Hammer, Star } from "lucide-react";
++import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle } from "lucide-react";
+ import { useCartStore } from "@/stores/cartStore";
+ import { toast } from "sonner";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { trackEvent } from "@/hooks/useEventTracking";
+ import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
+ import { ModelViewer3D } from "@/components/ModelViewer3D";
+-import { ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
++import { ofertaInfo } from "@/lib/pricing";
++import { LeadFormDialog } from "@/components/LeadFormDialog";
++import { WHATSAPP_NUMBER } from "@/config";
++import { resolveProfile, type ProductProfile } from "@/lib/productProfiles";
++import { LivePrice } from "@/components/product/LivePrice";
++import { DeliveryPromise } from "@/components/product/DeliveryPromise";
++import { SignatureModule } from "@/components/product/SignatureModules";
++import { BundleBuilder } from "@/components/product/BundleBuilder";
++import { StickyBuyBar } from "@/components/product/StickyBuyBar";
++import "@/components/product/product-experience.css";
+ import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
+ 
+ export const Route = createFileRoute("/product/$handle")({
+@@ -78,14 +87,16 @@ function AccordionItem({ title, children }: { title: string; children: React.Rea
+ /* ─── tab panel ───────────────────────────────────── */
+ const TABS = ["Especificaciones", "Reseñas", "Entrega y pagos"] as const;
+ 
+-function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
++function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["data"]; profile: ProductProfile }) {
+   const [active, setActive] = useState(0);
+ 
+-  const specs = [
++  const specs: [string, string][] = [
+     ["Modelo", product?.nombre ?? "—"],
+     ["Categoría", product?.categoria ?? "—"],
+-    ["Precio", product ? fmt(product.precio) : "—"],
++    ...(product?.subcategoria ? [["Subcategoría", product.subcategoria] as [string, string]] : []),
++    ...(product?.material_base ? [["Base", product.material_base] as [string, string]] : []),
+     ["SKU", product?.sku ?? "—"],
++    ["Fabricación", "A pedido, en Lima"],
+     ["Garantía", "2 años en estructura"],
+   ];
+ 
+@@ -140,7 +151,7 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
+             <div>
+               <h3 className="gm-section-h3">Características</h3>
+               <ul className="gm-detail-list">
+-                {["Fabricado artesanalmente en Perú", "Estructura de madera tornillo seca y tratada", "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal dorado o negro a elección", "Cojines decorativos incluidos", "Garantía de 2 años en estructura"].map(item => (
++                {profile.features.map(item => (
+                   <li key={item} className="gm-dl-item">
+                     <span className="gm-dl-dot" />
+                     {item}
+@@ -251,158 +262,8 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
+   );
+ }
+ 
+-/* ─── recommended products (complementarios, otra categoría) ─── */
+-async function fetchComplementarios(currentId: string, categoria: string | null) {
+-  let query = supabase
+-    .from("products")
+-    .select("*")
+-    .eq("activo", true)
+-    .neq("id", currentId)
+-    .limit(4);
+-  if (categoria) query = query.neq("categoria", categoria);
+-  const { data, error } = await query;
+-  if (error) throw new Error(error.message);
+-  return data ?? [];
+-}
+-
+-function Recommended({ currentId, categoria }: { currentId: string; categoria?: string | null }) {
+-  const { data: others } = useQuery({
+-    queryKey: ["complementarios", currentId, categoria],
+-    queryFn: () => fetchComplementarios(currentId, categoria ?? null),
+-    staleTime: 300_000,
+-  });
+-  const addItem = useCartStore((s) => s.addItem);
+-
+-  if (!others?.length) return null;
+-
+-  return (
+-    <section className="gm-recommended">
+-      <div className="gm-container">
+-        <p className="gm-eyebrow">Colección seleccionada</p>
+-        <h2 className="gm-section-title">Te podría interesar</h2>
+-        <p className="gm-section-sub">Piezas que complementan perfectamente tu elección</p>
+-
+-        <div className="gm-rec-grid">
+-          {others.map(p => {
+-            const img = p.imagen_public_id
+-              ? cloudinaryUrl(p.imagen_public_id, { w: 600, h: 450 })
+-              : p.imagen_url;
+-
+-            return (
+-              <Link key={p.id} to="/product/$handle" params={{ handle: p.id }} className="gm-rec-card">
+-                <div className="gm-rec-img">
+-                  {img
+-                    ? <img src={img} alt={p.nombre} loading="lazy" />
+-                    : <div className="gm-rec-img-placeholder">🪑</div>
+-                  }
+-                  {p.categoria && <span className="gm-rec-tag">{p.categoria}</span>}
+-                </div>
+-                <div className="gm-rec-body">
+-                  <div className="gm-rec-name">{p.nombre}</div>
+-                  {p.descripcion && <p className="gm-rec-desc">{p.descripcion}</p>}
+-                  <div className="gm-rec-footer">
+-                    <span className="gm-rec-price">{fmt(p.precio)}</span>
+-                    <button
+-                      className="gm-rec-btn"
+-                      onClick={e => {
+-                        e.preventDefault();
+-                        addItem({ id: p.id, title: p.nombre, price: p.precio, image: img ?? "", sku: p.sku ?? undefined });
+-                        toast.success(`"${p.nombre}" añadido al carrito`);
+-                      }}
+-                    >+</button>
+-                  </div>
+-                </div>
+-              </Link>
+-            );
+-          })}
+-        </div>
+-      </div>
+-    </section>
+-  );
+-}
+-
+-/* ─── main product page ───────────────────────────── */
+-function ProductPage() {
+-  const { handle } = Route.useParams();
+-  const { data: product, isLoading } = useProduct(handle);
+-  const addItem = useCartStore((s) => s.addItem);
+-
+-  useEffect(() => {
+-    if (!product) return;
+-    trackEvent({
+-      tipo: "producto_visto",
+-      path: window.location.pathname,
+-      product_id: product.id,
+-      valor: product.precio,
+-    });
+-  }, [product?.id]);
+-
+-  const { user } = useAuth();
+-  const { toggleWishlist, isWishlisted } = useWishlist();
+-  const [loginOpen, setLoginOpen] = useState(false);
+-  const [wishPending, setWishPending] = useState(false);
+-  const [adding, setAdding] = useState(false);
+-  const [activeImg, setActiveImg] = useState(0);
+-  const [vista, setVista] = useState<"foto" | "3d">("foto");
+-
+-  if (isLoading) {
+-    return (
+-      <div className="min-h-screen bg-background">
+-        <Header />
+-        <div className="flex items-center justify-center py-32">
+-          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+-        </div>
+-      </div>
+-    );
+-  }
+-
+-  if (!product) return <ProductNotFound />;
+-
+-  // Construir lista de imágenes desde el array `imagenes` (galería multi-foto)
+-  // con fallback al campo legacy imagen_url/imagen_public_id
+-  const allImgs: string[] = (() => {
+-    const gallery = (product as any).imagenes;
+-    if (Array.isArray(gallery) && gallery.length > 0) {
+-      return gallery.map((img: { url: string; public_id?: string }) =>
+-        img.public_id
+-          ? cloudinaryUrl(img.public_id, { w: 900, h: 900 })
+-          : img.url
+-      );
+-    }
+-    if (product.imagen_public_id) {
+-      return [cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })];
+-    }
+-    if (product.imagen_url) return [product.imagen_url];
+-    return [];
+-  })();
+-
+-  const mainImg = allImgs[0] ?? null;
+-  const thumbImgs = allImgs;
+-  const displayImg = allImgs[activeImg] ?? mainImg;
+-
+-  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
+-  const cuentaRegresiva = enOferta ? textoCuentaRegresiva(venceEl) : null;
+-
+-  const handleAdd = () => {
+-    setAdding(true);
+-    addItem({
+-      id: product.id,
+-      title: product.nombre,
+-      price: precioMostrado,
+-      image: mainImg ?? "",
+-      sku: product.sku ?? undefined,
+-    });
+-    toast.success("Agregado al carrito", { description: product.nombre, position: "top-center" });
+-    setTimeout(() => setAdding(false), 2000);
+-  };
+-
+-  const outOfStock = (product.stock ?? 1) <= 0;
+-  const has3D = !!(product as any).modelo_3d_url;
+ 
+-  return (
+-    <>
+-      {/* ── scoped styles ── */}
+-      <style>{`
++const PAGE_CSS = `
+         :root {
+           --gm-cream: #F7F4EF;
+           --gm-warm: #FDFAF6;
+@@ -504,7 +365,7 @@ function ProductPage() {
+         }
+ 
+         /* info col */
+-        .gm-info-col { padding-left:16px; }
++        .gm-info-col { padding-left:16px; min-width:0; }
+         .gm-sku { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:10px; }
+         .gm-product-title { font-family:var(--font-display); font-size:38px; font-weight:400; line-height:1.15; color:var(--gm-dark); margin-bottom:6px; }
+         .gm-product-sub { font-size:14px; color:var(--gm-muted); letter-spacing:.04em; margin-bottom:24px; }
+@@ -530,7 +391,7 @@ function ProductPage() {
+           border:1px solid transparent; transition:border-color .2s;
+         }
+         .gm-spec-pill:hover { border-color:var(--gm-gold-light); }
+-        .gm-spec-icon { font-size:18px; color:var(--gm-gold); flex-shrink:0; margin-top:1px; }
++        .gm-spec-icon { font-size:18px; color:var(--gmx-accent, var(--gm-gold)); flex-shrink:0; margin-top:1px; }
+         .gm-spec-pill-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:2px; }
+         .gm-spec-pill-val { font-size:13px; font-weight:500; color:var(--gm-dark); }
+ 
+@@ -689,10 +550,151 @@ function ProductPage() {
+           cursor:pointer; transition:background .2s, transform .15s; flex-shrink:0;
+         }
+         .gm-rec-btn:hover { background:var(--gm-walnut-mid); transform:scale(1.1); }
+-      `}</style>
++      `;
++
++type ProductData = NonNullable<ReturnType<typeof useProduct>["data"]>;
++/** Columnas opcionales de products que aún no están en el tipo Product */
++type ProductExtra = { imagenes?: { url: string; public_id?: string }[] | null; modelo_3d_url?: string | null };
++
++/* ─── page shell: carga y estados vacíos ──────────── */
++function ProductPage() {
++  const { handle } = Route.useParams();
++  const { data: product, isLoading } = useProduct(handle);
+ 
++  if (isLoading) {
++    return (
+       <div className="min-h-screen bg-background">
+         <Header />
++        <div className="flex items-center justify-center py-32">
++          <Loader2 className="h-8 w-8 animate-spin text-accent" />
++        </div>
++      </div>
++    );
++  }
++  if (!product) return <ProductNotFound />;
++
++  // key => al cambiar de producto se reinician selecciones, galería y módulos
++  return <ProductView key={product.id} product={product} />;
++}
++
++/* ─── vista de producto (adaptativa por categoría) ── */
++function ProductView({ product: base }: { product: ProductData }) {
++  const product = base as ProductData & ProductExtra;
++  const addItem = useCartStore((s) => s.addItem);
++  const { toggleWishlist, isWishlisted } = useWishlist();
++  const [wishPending, setWishPending] = useState(false);
++  const [adding, setAdding] = useState(false);
++  const [activeImg, setActiveImg] = useState(0);
++  const [vista, setVista] = useState<"foto" | "3d">("foto");
++  const [leadOpen, setLeadOpen] = useState(false);
++  const [ambient, setAmbient] = useState(false);
++  const [finishIdx, setFinishIdx] = useState(0);
++  const [modPrefs, setModPrefs] = useState<Record<string, string>>({});
++  const [showSticky, setShowSticky] = useState(false);
++  const ctaRef = useRef<HTMLDivElement>(null);
++
++  const profile = useMemo(() => resolveProfile(product), [product]);
++
++  useEffect(() => {
++    trackEvent({
++      tipo: "producto_visto",
++      path: window.location.pathname,
++      product_id: product.id,
++      valor: product.precio,
++    });
++  }, [product.id]);
++
++  // Rating REAL (antes la ficha mostraba "4.0 · 38 reseñas" fijo para todos los productos)
++  const { data: ratingData } = useQuery({
++    queryKey: ["rating-producto", product.id],
++    queryFn: () => fetchProductRating(product.id),
++    staleTime: 60_000,
++  });
++  const rating = ratingData?.rating ?? null;
++  const hayRating = !!rating && rating.total_resenas > 0;
++
++  // La barra de compra aparece cuando el botón principal sale de pantalla (hacia arriba)
++  useEffect(() => {
++    const el = ctaRef.current;
++    if (!el || typeof IntersectionObserver === "undefined") return;
++    const io = new IntersectionObserver(
++      ([e]) => setShowSticky(!e.isIntersecting && e.boundingClientRect.top < 0),
++      { threshold: 0 },
++    );
++    io.observe(el);
++    return () => io.disconnect();
++  }, []);
++
++  const setPref = useCallback((k: string, v: string | null) => {
++    setModPrefs((prev) => {
++      if (v == null) {
++        if (!(k in prev)) return prev;
++        const { [k]: _omit, ...rest } = prev;
++        return rest;
++      }
++      return prev[k] === v ? prev : { ...prev, [k]: v };
++    });
++  }, []);
++
++  // Galería: array `imagenes` con fallback al campo legacy
++  const allImgs: string[] = (() => {
++    const gallery = product.imagenes;
++    if (Array.isArray(gallery) && gallery.length > 0) {
++      return gallery.map((img) => (img.public_id ? cloudinaryUrl(img.public_id, { w: 900, h: 900 }) : img.url));
++    }
++    if (product.imagen_public_id) return [cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })];
++    if (product.imagen_url) return [product.imagen_url];
++    return [];
++  })();
++  const mainImg = allImgs[0] ?? null;
++  const displayImg = allImgs[activeImg] ?? mainImg;
++
++  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
++  const outOfStock = (product.stock ?? 1) <= 0;
++  const has3D = !!product.modelo_3d_url;
++  const esNuevo = Date.now() - new Date(product.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
++  const tieneLed = profile.key === "tv";
++
++  // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
++  const acabado = profile.acabados[finishIdx];
++  const prefs: Record<string, string> = { [profile.acabadoLabel]: acabado.name, ...modPrefs };
++  const prefsLista = Object.entries(prefs);
++  const prefsTexto = prefsLista.map(([k, v]) => `${k}: ${v}`).join(" · ");
++
++  const handleAdd = () => {
++    setAdding(true);
++    addItem({
++      id: product.id,
++      title: `${product.nombre} (${Object.values(prefs).join(", ")})`,
++      price: precioMostrado,
++      image: mainImg ?? "",
++      sku: product.sku ?? undefined,
++    });
++    toast.success("Agregado al carrito", { description: `${product.nombre} · ${Object.values(prefs).join(" · ")}`, position: "top-center" });
++    setTimeout(() => setAdding(false), 2000);
++  };
++
++  const waHref = WHATSAPP_NUMBER
++    ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
++        `Hola G&M 👋 Me interesa "${product.nombre}"${product.sku ? ` (SKU ${product.sku})` : ""}.\n${prefsTexto}\n${window.location.href}`,
++      )}`
++    : null;
++
++  const onZoomMove = (e: React.MouseEvent<HTMLDivElement>) => {
++    const r = e.currentTarget.getBoundingClientRect();
++    e.currentTarget.style.setProperty("--zx", `${((e.clientX - r.left) / r.width) * 100}%`);
++    e.currentTarget.style.setProperty("--zy", `${((e.clientY - r.top) / r.height) * 100}%`);
++  };
++
++  return (
++    <>
++      <style>{PAGE_CSS}</style>
++
++      <div
++        className="min-h-screen bg-background gmx-page"
++        style={{ "--gmx-accent": profile.accent, "--gmx-accent-soft": profile.accentSoft } as React.CSSProperties}
++      >
++        <Header />
+ 
+         {/* ── breadcrumb ── */}
+         <div className="gm-breadcrumb">
+@@ -707,142 +709,138 @@ function ProductPage() {
+ 
+           {/* gallery */}
+           <div className="gm-gallery-col">
++            <div className="gmx-gallery-sticky">
++              {has3D && (
++                <div className="gm-vista-toggle">
++                  <button className={`gm-vista-btn${vista === "foto" ? " active" : ""}`} onClick={() => setVista("foto")}>Foto</button>
++                  <button className={`gm-vista-btn${vista === "3d" ? " active" : ""}`} onClick={() => setVista("3d")}>Vista 3D</button>
++                </div>
++              )}
+ 
+-            {/* toggle foto / 3D — solo aparece si el producto tiene modelo 3D */}
+-            {has3D && (
+-              <div className="gm-vista-toggle">
+-                <button
+-                  className={`gm-vista-btn${vista === "foto" ? " active" : ""}`}
+-                  onClick={() => setVista("foto")}
+-                >
+-                  Foto
+-                </button>
+-                <button
+-                  className={`gm-vista-btn${vista === "3d" ? " active" : ""}`}
+-                  onClick={() => setVista("3d")}
++              {vista === "3d" && has3D ? (
++                <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
++                  <ModelViewer3D src={product.modelo_3d_url ?? ""} alt={product.nombre} poster={displayImg ?? undefined} />
++                </div>
++              ) : (
++                <div
++                  className={`gm-main-img-wrap gmx-stage${ambient && tieneLed ? " is-night" : ""}`}
++                  onMouseMove={onZoomMove}
+                 >
+-                  Vista 3D
+-                </button>
+-              </div>
+-            )}
+-
+-            {/* visor principal — foto o 3D según toggle */}
+-            {vista === "3d" && has3D ? (
+-              <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
+-                <ModelViewer3D
+-                  src={(product as any).modelo_3d_url}
+-                  alt={product.nombre}
+-                  poster={displayImg ?? undefined}
+-                />
+-              </div>
+-            ) : (
+-              <div className="gm-main-img-wrap">
+-                {displayImg
+-                  ? <img src={displayImg} alt={product.nombre} />
+-                  : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
+-                }
+-                {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
+-                {enOferta ? (
+-                  <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
+-                ) : (
+-                  <div className="gm-badge-new">Nuevo</div>
+-                )}
+-              </div>
+-            )}
++                  {displayImg
++                    ? <img src={displayImg} alt={product.nombre} />
++                    : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
++                  }
++                  <div className="gmx-glow" />
++                  {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
++                  {enOferta
++                    ? <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
++                    : esNuevo && <div className="gm-badge-new">Nuevo</div>}
++                  <div className="gmx-hint">Pasa el cursor para ampliar</div>
++                  {allImgs.length > 1 && <div className="gmx-counter">{activeImg + 1} / {allImgs.length}</div>}
++                </div>
++              )}
+ 
+-            {/* miniaturas — solo en vista foto */}
+-            {vista === "foto" && thumbImgs.length > 1 && (
+-              <div className="gm-thumbs">
+-                {thumbImgs.map((src, i) => (
+-                  <div key={i} className={`gm-thumb${activeImg === i ? " active" : ""}`} onClick={() => setActiveImg(i)}>
+-                    <img src={src} alt="" />
+-                  </div>
+-                ))}
+-              </div>
+-            )}
++              {vista === "foto" && allImgs.length > 1 && (
++                <div className="gm-thumbs">
++                  {allImgs.map((src, i) => (
++                    <button key={i} type="button" aria-label={`Ver foto ${i + 1}`}
++                      className={`gm-thumb${activeImg === i ? " active" : ""}`} onClick={() => setActiveImg(i)}>
++                      <img src={src} alt="" />
++                    </button>
++                  ))}
++                </div>
++              )}
++            </div>
+           </div>
+ 
+           {/* info */}
+           <div className="gm-info-col">
+-            {product.sku && <div className="gm-sku">SKU: {product.sku}</div>}
++            <div className="gmx-eyebrow">{profile.eyebrow}</div>
+             <h1 className="gm-product-title">{product.nombre}</h1>
+-            {product.categoria && <p className="gm-product-sub">Colección {product.categoria} · 2025</p>}
+-
+-            {/* rating */}
+-            <div className="gm-rating-row">
+-              <div className="gm-stars-row">
+-                {[...Array(5)].map((_, i) => (
+-                  <Star key={i} size={14} fill={i < 4 ? "var(--gm-gold)" : "none"} color={i < 4 ? "var(--gm-gold)" : "var(--gm-border)"} />
+-                ))}
++            <p className="gmx-pitch">{profile.pitch}</p>
++
++            {/* rating real */}
++            {hayRating && rating && (
++              <div className="gm-rating-row">
++                <div className="gm-stars-row">
++                  {[...Array(5)].map((_, i) => (
++                    <Star key={i} size={14}
++                      fill={i < Math.round(rating.calificacion_promedio) ? "var(--gm-gold)" : "none"}
++                      color={i < Math.round(rating.calificacion_promedio) ? "var(--gm-gold)" : "var(--gm-border)"} />
++                  ))}
++                </div>
++                <span className="gm-rating-text">{rating.calificacion_promedio.toFixed(1)} · {rating.total_resenas} reseña{rating.total_resenas === 1 ? "" : "s"}</span>
+               </div>
+-              <span className="gm-rating-text">4.0 · 38 reseñas</span>
+-            </div>
+-
+-            {/* price */}
+-            <div className="gm-price-block">
+-              <span className="gm-price-main">{fmt(precioMostrado)}</span>
+-              {enOferta && (
+-                <>
+-                  <span className="gm-price-old">{fmt(product.precio)}</span>
+-                  <span className="gm-price-save">-{product.descuento_porcentaje}% de descuento</span>
+-                </>
+-              )}
+-              {outOfStock && <span style={{ fontSize: 13, background: "#fde8e8", color: "#b91c1c", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>}
+-            </div>
+-            {cuentaRegresiva && (
+-              <p style={{ fontSize: 12, fontWeight: 600, color: "#c0392b", marginTop: -4, marginBottom: 8 }}>
+-                ⏳ {cuentaRegresiva}
+-              </p>
+             )}
+-            <p className="gm-price-note">Precio incluye IGV · Entrega a domicilio disponible</p>
+-
+-            <div className="gm-divider" />
+ 
+-            {/* specs pills */}
++            <LivePrice
++              precioOriginal={product.precio}
++              precioFinal={precioMostrado}
++              enOferta={enOferta}
++              descuento={product.descuento_porcentaje}
++              venceEl={venceEl}
++              stock={product.stock}
++              agotado={outOfStock}
++            />
++
++            <ul className="gmx-ideal" style={{ padding: 0 }}>
++              {profile.idealFor.map((t) => <li key={t}>{t}</li>)}
++            </ul>
++
++            {/* herramienta firma de la categoría */}
++            <SignatureModule
++              profile={profile}
++              nombre={product.nombre}
++              subcategoria={product.subcategoria}
++              setPref={setPref}
++              ambient={ambient}
++              setAmbient={setAmbient}
++            />
++
++            {/* materiales (por categoría) */}
+             <div className="gm-specs-label">Materiales y construcción</div>
+             <div className="gm-specs-grid">
+-              {[
+-                { icon: "🪵", label: "Estructura", val: "Madera tornillo seca y tratada" },
+-                { icon: "🧶", label: "Tapizado", val: "Velvet importado + antifluida" },
+-                { icon: "✨", label: "Relleno", val: "Espuma alta densidad + napa" },
+-                { icon: "🦵", label: "Patas", val: "Metal dorado/negro moderno" },
+-              ].map(s => (
++              {profile.specs.map((s) => (
+                 <div key={s.label} className="gm-spec-pill">
+-                  <span className="gm-spec-icon">{s.icon}</span>
++                  <s.icon size={18} className="gmx-spec-icon" />
+                   <div>
+                     <div className="gm-spec-pill-label">{s.label}</div>
+-                    <div className="gm-spec-pill-val">{s.val}</div>
++                    <div className="gm-spec-pill-val">{s.value}</div>
+                   </div>
+                 </div>
+               ))}
+             </div>
+ 
+-            {/* color picker */}
+-            <div className="gm-color-label">Color</div>
+-            <ColorPicker />
+-
+-            {/* includes */}
+-            <div className="gm-includes-label">El juego incluye</div>
+-            <div className="gm-includes-grid">
+-              {["Sofá 3 cuerpos", "Sofá 2 cuerpos", "Sillón butaca", "Puff redondo", "Cojines decorativos"].map(t => (
+-                <div key={t} className="gm-includes-tag"><div className="gm-tag-dot" />{t}</div>
++            {/* acabado */}
++            <div className="gm-color-label">
++              {profile.acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
++            </div>
++            <div className="gm-color-row" role="radiogroup" aria-label={profile.acabadoLabel}>
++              {profile.acabados.map((c, i) => (
++                <button key={c.hex} type="button" role="radio" aria-checked={finishIdx === i} aria-label={c.name}
++                  className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => setFinishIdx(i)} />
+               ))}
+             </div>
+ 
+-            {/* description */}
++            {/* descripción */}
+             {product.descripcion && (
+               <>
+                 <div className="gm-specs-label" style={{ marginBottom: 8 }}>Descripción</div>
+-                <p style={{ fontSize: 13, color: "var(--gm-mid)", lineHeight: 1.75, marginBottom: 24, whiteSpace: "pre-line" }}>
++                <p style={{ fontSize: 13, color: "var(--gm-mid)", lineHeight: 1.75, marginBottom: 20, whiteSpace: "pre-line" }}>
+                   {product.descripcion}
+                 </p>
+               </>
+             )}
+ 
++            <DeliveryPromise />
++
++            {/* resumen de lo elegido */}
++            <p className="gmx-prefs">Tu selección: <b>{prefsLista.map(([k, v]) => `${k} ${v}`).join(" · ")}</b></p>
++
+             {/* CTA */}
+-            <div className="gm-cta-row">
++            <div className="gm-cta-row" ref={ctaRef}>
+               <button
+-                className={`gm-btn-primary${adding ? " adding" : ""}`}
++                className={`gm-btn-primary${adding ? " adding" : ""}${!adding && !outOfStock ? " gmx-btn-pulse" : ""}`}
+                 style={{ flex: 1 }}
+                 onClick={handleAdd}
+                 disabled={outOfStock}
+@@ -852,95 +850,79 @@ function ProductPage() {
+               </button>
+               <button
+                 type="button"
+-                className={`gm-btn-wish${product && isWishlisted(product.id) ? " active" : ""}`}
++                className={`gm-btn-wish${isWishlisted(product.id) ? " active" : ""}`}
+                 disabled={wishPending}
+                 onClick={async (e) => {
+                   e.preventDefault();
+                   e.stopPropagation();
+-                  if (!product) return;
+                   setWishPending(true);
+                   const added = await toggleWishlist(product.id);
+                   toast.success(added ? `"${product.nombre}" guardado en favoritos` : `"${product.nombre}" eliminado de favoritos`);
+                   setWishPending(false);
+                 }}
+-                title={product && isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
++                title={isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
++                aria-label={isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
+               >
+-                <Heart size={18} fill={product && isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
++                <Heart size={18} fill={isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
+               </button>
+-              <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
+             </div>
+             <div className="gm-cta-row">
+-              <button className="gm-btn-quote">Solicitar cotización personalizada</button>
++              <button className="gm-btn-quote" onClick={() => setLeadOpen(true)}>Solicitar cotización personalizada</button>
+             </div>
++            {waHref && (
++              <a className="gmx-wa" href={waHref} target="_blank" rel="noopener noreferrer">
++                <MessageCircle size={17} /> Hablar con un asesor por WhatsApp
++              </a>
++            )}
++            <LeadFormDialog
++              open={leadOpen}
++              onOpenChange={setLeadOpen}
++              productoId={product.id}
++              productoNombre={product.nombre}
++              mensajeInicial={`Mi selección — ${prefsTexto}.`}
++            />
+ 
+             <div className="gm-divider" />
+ 
+             {/* trust */}
+             <div className="gm-trust-strip">
+-              <div className="gm-trust-item"><Hammer size={16} color="var(--gm-gold)" />Hecho a mano</div>
+-              <div className="gm-trust-item"><Shield size={16} color="var(--gm-gold)" />Garantía 2 años</div>
+-              <div className="gm-trust-item"><Truck size={16} color="var(--gm-gold)" />Envío a domicilio</div>
++              <div className="gm-trust-item"><Hammer size={16} color="var(--gmx-accent)" />Hecho a mano</div>
++              <div className="gm-trust-item"><Shield size={16} color="var(--gmx-accent)" />Garantía 2 años</div>
++              <div className="gm-trust-item"><Truck size={16} color="var(--gmx-accent)" />Envío a domicilio</div>
+             </div>
+ 
+-            {/* accordion */}
++            {/* preguntas frecuentes (por categoría) */}
+             <div style={{ marginTop: 24 }}>
+-              <AccordionItem title="Cuidado y mantenimiento">
+-                Limpie con paño húmedo sin químicos agresivos. Evite exposición directa al sol. Para el velvet, use un cepillo suave en dirección del pelo del tejido. La estructura de madera puede aceitarse anualmente para mantener su durabilidad.
+-              </AccordionItem>
+-              <AccordionItem title="Tiempos de entrega">
+-                Lima Metropolitana: 5–7 días hábiles. Provincias: 10–15 días hábiles. Este modelo es fabricado a pedido — se coordina fecha de entrega al confirmar la compra.
+-              </AccordionItem>
+-              <AccordionItem title="Política de devoluciones">
+-                Al ser un producto fabricado a medida, no se aceptan cambios una vez confirmado el pedido. En caso de defecto de fabricación, realizamos la reparación o reposición sin costo dentro del período de garantía.
+-              </AccordionItem>
++              {profile.faqs.map((f) => <AccordionItem key={f.q} title={f.q}>{f.a}</AccordionItem>)}
+             </div>
+           </div>
+ 
+-          {/* recomendaciones — span full width dentro del grid */}
++          {/* recomendaciones de la misma categoría */}
+           <div style={{ gridColumn: "1 / -1" }}>
+             <ProductRecomendaciones productId={product.id} categoria={product.categoria} />
+           </div>
+         </div>
+ 
+-        {/* ── tabs ── */}
+-        <Tabs product={product} />
++        <Tabs product={product} profile={profile} />
+ 
+-        {/* ── recommended ── */}
+-        <Recommended currentId={product.id} categoria={product.categoria} />
++        <BundleBuilder
++          profile={profile}
++          base={{ id: product.id, nombre: product.nombre, precio: precioMostrado, image: mainImg, sku: product.sku, categoria: product.categoria }}
++        />
+ 
+         <Footer />
+-      </div>
+-    </>
+-  );
+-}
+ 
+-/* ─── color picker (controlled internally) ────────── */
+-const COLORS = [
+-  { hex: "#E8D5CC", name: "Rosado blush" },
+-  { hex: "#E8E0D0", name: "Beige arena" },
+-  { hex: "#C8BFB5", name: "Gris topo" },
+-  { hex: "#D4C5A9", name: "Crema marfil" },
+-  { hex: "#B8A898", name: "Mocha" },
+-];
+-
+-function ColorPicker() {
+-  const [selected, setSelected] = useState(0);
+-  return (
+-    <>
+-      <div className="gm-color-label">
+-        Color — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{COLORS[selected].name}</span>
+-      </div>
+-      <div className="gm-color-row">
+-        {COLORS.map((c, i) => (
+-          <div
+-            key={c.hex}
+-            className={`gm-swatch${selected === i ? " active" : ""}`}
+-            style={{ background: c.hex }}
+-            title={c.name}
+-            onClick={() => setSelected(i)}
+-          />
+-        ))}
++        <StickyBuyBar
++          visible={showSticky}
++          image={mainImg}
++          nombre={product.nombre}
++          resumen={Object.values(prefs).join(" · ")}
++          precio={precioMostrado}
++          disabled={outOfStock}
++          adding={adding}
++          onAdd={handleAdd}
++        />
+       </div>
+     </>
+   );
+-}
+\ No newline at end of file
++}

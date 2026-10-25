@@ -1,5 +1,5 @@
 // src/components/LeadFormDialog.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { createLead } from "@/lib/leads.functions";
 import {
@@ -20,15 +20,25 @@ interface LeadFormDialogProps {
   productoNombre?: string;
   title?: string;
   description?: string;
+  /** Texto con el que se pre-llena "Cuéntanos qué necesitas" (ej. las opciones que eligió el cliente) */
+  mensajeInicial?: string;
 }
 
 export function LeadFormDialog({
   open, onOpenChange, productoId, productoNombre,
   title = "Solicitar cotización personalizada",
   description = "Déjanos tus datos y un asesor te contactará a la brevedad.",
+  mensajeInicial,
 }: LeadFormDialogProps) {
   const [form, setForm] = useState({ nombre: "", telefono: "", email: "", mensaje: "" });
   const [sent, setSent] = useState(false);
+
+  // Al abrir, pre-llenamos el mensaje con las preferencias elegidas (sin pisar lo que ya escribió)
+  useEffect(() => {
+    if (open && mensajeInicial) {
+      setForm((f) => (f.mensaje ? f : { ...f, mensaje: mensajeInicial }));
+    }
+  }, [open, mensajeInicial]);
 
   const mutation = useMutation({
     mutationFn: () =>

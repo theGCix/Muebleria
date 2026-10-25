@@ -1,0 +1,259 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ficha de producto — experiencia adaptativa por categoría
+   Prefijo gmx-  ·  usa las variables --gm-* definidas en product.$handle.tsx
+   y --gmx-accent / --gmx-accent-soft inyectadas según el perfil del producto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Atmósfera de categoría ─────────────────────────────────────────────── */
+.gmx-page {
+  background:
+    radial-gradient(900px 480px at 85% -8%, var(--gmx-accent-soft), transparent 70%),
+    var(--background);
+}
+.gmx-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--gmx-accent); font-weight: 600; margin-bottom: 10px;
+}
+.gmx-eyebrow::before {
+  content: ""; width: 22px; height: 2px; background: var(--gmx-accent); border-radius: 2px;
+}
+.gmx-pitch {
+  font-size: 15px; line-height: 1.6; color: var(--gm-mid); margin: 0 0 18px; max-width: 46ch;
+}
+
+/* ── Galería ────────────────────────────────────────────────────────────── */
+.gmx-gallery-sticky { position: sticky; top: 132px; }
+@media (max-width: 900px) { .gmx-gallery-sticky { position: static; } }
+
+.gmx-stage { position: relative; }
+.gmx-stage img { transition: transform .5s ease, filter .9s ease; }
+.gmx-stage .gmx-glow {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  transition: opacity .9s ease; mix-blend-mode: screen;
+  background:
+    radial-gradient(60% 55% at 28% 48%, rgba(255,184,96,.55), transparent 70%),
+    radial-gradient(40% 30% at 70% 80%, rgba(255,200,130,.35), transparent 70%);
+}
+.gmx-stage.is-night img { filter: brightness(.42) contrast(1.12) saturate(1.2); }
+.gmx-stage.is-night .gmx-glow { opacity: 1; }
+
+@media (hover: hover) {
+  .gmx-stage.gm-main-img-wrap:hover img {
+    transform: scale(1.9); transform-origin: var(--zx, 50%) var(--zy, 50%);
+  }
+}
+.gmx-counter {
+  position: absolute; bottom: 14px; right: 14px; font-size: 11px; letter-spacing: .08em;
+  background: rgba(28,20,16,.62); color: #fff; padding: 4px 10px; border-radius: 20px;
+  backdrop-filter: blur(6px);
+}
+.gmx-hint {
+  position: absolute; bottom: 14px; left: 14px; font-size: 11px;
+  background: rgba(253,250,246,.88); color: var(--gm-mid);
+  padding: 4px 10px; border-radius: 20px; backdrop-filter: blur(6px);
+}
+@media (hover: none) { .gmx-hint { display: none; } }
+
+/* ── Precio vivo ────────────────────────────────────────────────────────── */
+.gmx-price-card {
+  border: 1px solid var(--gm-border); border-radius: 10px;
+  background: #fff; padding: 18px 20px; margin-bottom: 18px;
+}
+.gmx-price-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.gmx-price-main { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--gm-walnut); }
+.gmx-price-old { font-size: 18px; color: var(--gm-muted); text-decoration: line-through; }
+.gmx-save-chip {
+  font-size: 12px; font-weight: 600; background: var(--gm-save); color: var(--gm-save-text);
+  padding: 4px 11px; border-radius: 20px;
+}
+.gmx-cuotas { margin-top: 8px; font-size: 13px; color: var(--gm-mid); }
+.gmx-cuotas strong { color: var(--gm-walnut); }
+.gmx-note { margin-top: 4px; font-size: 12px; color: var(--gm-muted); }
+
+.gmx-clock {
+  margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--gm-border);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.gmx-clock-label { font-size: 12px; font-weight: 600; color: #b3332a; letter-spacing: .02em; }
+.gmx-clock-boxes { display: flex; gap: 6px; }
+.gmx-clock-box {
+  min-width: 46px; text-align: center; background: var(--gm-dark); color: #fff;
+  border-radius: 6px; padding: 6px 4px 5px;
+}
+.gmx-clock-box b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.gmx-clock-box span { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
+
+.gmx-stock {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+  font-size: 12px; font-weight: 600; color: #9a5b10;
+  background: #FFF4E0; border: 1px solid #F1D9A8; padding: 5px 12px; border-radius: 20px;
+}
+.gmx-pulse {
+  width: 8px; height: 8px; border-radius: 50%; background: #e08a14;
+  animation: gmx-pulse 1.6s ease-out infinite;
+}
+@keyframes gmx-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(224,138,20,.55); }
+  100% { box-shadow: 0 0 0 10px rgba(224,138,20,0); }
+}
+
+/* ── Chips de beneficio ("ideal para") ──────────────────────────────────── */
+.gmx-ideal { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.gmx-ideal li {
+  list-style: none; font-size: 12px; color: var(--gm-mid);
+  background: var(--gmx-accent-soft); padding: 6px 12px; border-radius: 20px;
+}
+
+/* ── Especificaciones (usa .gm-spec-pill existente + acento) ────────────── */
+.gmx-spec-icon { color: var(--gmx-accent); flex-shrink: 0; margin-top: 1px; }
+.gm-spec-pill:hover { border-color: var(--gmx-accent) !important; }
+
+/* ── Acabados ───────────────────────────────────────────────────────────── */
+.gmx-swatch {
+  position: relative; width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(59,43,31,.18); transition: transform .2s;
+  box-shadow: inset 0 0 0 3px #fff;
+}
+.gmx-swatch:hover { transform: scale(1.08); }
+.gmx-swatch[aria-checked="true"] { outline: 2px solid var(--gmx-accent); outline-offset: 3px; }
+
+/* ── Módulo firma ───────────────────────────────────────────────────────── */
+.gmx-module {
+  border: 1px solid var(--gm-border); border-left: 4px solid var(--gmx-accent);
+  background: linear-gradient(180deg, #fff, var(--gm-warm));
+  border-radius: 10px; padding: 18px 20px 20px; margin: 4px 0 24px;
+}
+.gmx-module-kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gmx-accent); font-weight: 600; }
+.gmx-module-title { font-family: var(--font-display); font-size: 22px; color: var(--gm-walnut); margin: 2px 0 12px; }
+.gmx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.gmx-chip {
+  font-size: 13px; padding: 7px 14px; border-radius: 20px; cursor: pointer;
+  border: 1px solid var(--gm-border); background: #fff; color: var(--gm-mid);
+  transition: all .18s;
+}
+.gmx-chip:hover { border-color: var(--gmx-accent); }
+.gmx-chip[aria-pressed="true"] { background: var(--gm-walnut); border-color: var(--gm-walnut); color: #fff; }
+.gmx-viz { width: 100%; height: auto; display: block; border-radius: 8px; background: var(--gm-cream); }
+.gmx-readout { font-size: 13px; color: var(--gm-mid); line-height: 1.6; margin-top: 12px; }
+.gmx-readout b { color: var(--gm-walnut); }
+.gmx-readout a { color: var(--gmx-accent); text-decoration: underline; }
+
+.gmx-switch {
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+  font-size: 13px; color: var(--gm-mid); user-select: none; margin-bottom: 12px;
+}
+.gmx-switch-track {
+  width: 40px; height: 22px; border-radius: 22px; background: #cfc6bd; position: relative; transition: background .25s;
+}
+.gmx-switch-track::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.gmx-switch[aria-checked="true"] .gmx-switch-track { background: var(--gmx-accent); }
+.gmx-switch[aria-checked="true"] .gmx-switch-track::after { transform: translateX(18px); }
+
+.gmx-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.gmx-field label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gm-muted); margin-bottom: 4px; }
+.gmx-field input {
+  width: 100%; border: 1px solid var(--gm-border); border-radius: 6px; padding: 9px 12px;
+  font-size: 14px; background: #fff; color: var(--gm-dark);
+}
+.gmx-field input:focus { outline: 2px solid var(--gmx-accent); outline-offset: 1px; }
+
+/* ── Entrega ────────────────────────────────────────────────────────────── */
+.gmx-delivery { border: 1px solid var(--gm-border); border-radius: 10px; padding: 16px 18px; margin: 18px 0; background: #fff; }
+.gmx-delivery-head { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--gm-dark); }
+.gmx-delivery-head b { color: var(--gm-walnut); }
+.gmx-track { display: flex; align-items: flex-start; margin: 16px 0 6px; }
+.gmx-step { flex: 1; text-align: center; position: relative; font-size: 11px; color: var(--gm-muted); }
+.gmx-step::before {
+  content: ""; position: absolute; top: 6px; left: -50%; width: 100%; height: 2px; background: var(--gm-border);
+}
+.gmx-step:first-child::before { display: none; }
+.gmx-dot { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--gm-border); margin: 0 auto 6px; position: relative; z-index: 1; }
+.gmx-step.done .gmx-dot { background: var(--gmx-accent); border-color: var(--gmx-accent); }
+.gmx-step.done::before { background: var(--gmx-accent); }
+.gmx-step b { display: block; color: var(--gm-dark); font-weight: 600; font-size: 11px; }
+.gmx-ship { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--gm-mid); }
+.gmx-ship select {
+  border: 1px solid var(--gm-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; background: #fff; color: var(--gm-dark);
+}
+
+/* ── CTAs extra ─────────────────────────────────────────────────────────── */
+.gmx-wa {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  background: #1f8f4e; color: #fff; border: none; border-radius: 2px; padding: 14px;
+  font-size: 14px; letter-spacing: .04em; cursor: pointer; text-decoration: none; margin-top: 10px;
+  transition: background .2s;
+}
+.gmx-wa:hover { background: #197a42; }
+.gmx-btn-pulse { animation: gmx-btn 2.6s ease-in-out infinite; }
+@keyframes gmx-btn { 0%,100% { box-shadow: 0 0 0 0 rgba(59,43,31,.0); } 50% { box-shadow: 0 6px 22px rgba(59,43,31,.32); } }
+@media (prefers-reduced-motion: reduce) {
+  .gmx-btn-pulse, .gmx-pulse { animation: none; }
+  .gmx-stage img { transition: none; }
+}
+.gmx-prefs { margin: 0 0 14px; font-size: 12px; color: var(--gm-muted); }
+.gmx-prefs b { color: var(--gm-walnut); font-weight: 600; }
+
+/* ── Barra pegajosa de compra ───────────────────────────────────────────── */
+.gmx-sticky {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+  transform: translateY(110%); transition: transform .35s ease;
+  background: rgba(253,250,246,.96); backdrop-filter: blur(10px);
+  border-top: 1px solid var(--gm-border); box-shadow: 0 -8px 30px rgba(59,43,31,.10);
+  padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
+}
+.gmx-sticky.show { transform: translateY(0); }
+.gmx-sticky-in { max-width: 1300px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+.gmx-sticky img { width: 46px; height: 46px; border-radius: 6px; object-fit: cover; background: var(--gm-cream); }
+.gmx-sticky-name { font-size: 14px; font-weight: 500; color: var(--gm-dark); line-height: 1.2; }
+.gmx-sticky-meta { font-size: 12px; color: var(--gm-muted); }
+.gmx-sticky-price { margin-left: auto; font-family: var(--font-display); font-size: 22px; color: var(--gm-walnut); white-space: nowrap; }
+.gmx-sticky .gm-btn-primary { padding: 12px 22px; }
+@media (max-width: 640px) {
+  .gmx-sticky { padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); }
+  .gmx-sticky-txt { display: none; }
+  .gmx-sticky-price { font-size: 19px; }
+  .gmx-sticky .gm-btn-primary { flex: 1; }
+}
+
+/* ── Bundle ─────────────────────────────────────────────────────────────── */
+.gmx-bundle { background: var(--gm-cream); padding: 72px 0 80px; }
+.gmx-bundle-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
+@media (max-width: 1000px) { .gmx-bundle-grid { grid-template-columns: repeat(2, 1fr); } }
+.gmx-bcard {
+  position: relative; text-align: left; background: #fff; border: 2px solid transparent;
+  border-radius: 10px; overflow: hidden; cursor: pointer; padding: 0; transition: border-color .2s, transform .2s, box-shadow .2s;
+  display: flex; flex-direction: column;
+}
+.gmx-bcard:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(59,43,31,.10); }
+.gmx-bcard[aria-pressed="true"] { border-color: var(--gmx-accent); }
+.gmx-bcard.fixed { cursor: default; border-color: var(--gm-walnut); }
+.gmx-bcard.fixed:hover { transform: none; box-shadow: none; }
+.gmx-bimg { aspect-ratio: 4/3; background: #eee7df; overflow: hidden; }
+.gmx-bimg img { width: 100%; height: 100%; object-fit: cover; }
+.gmx-bbody { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.gmx-bname { font-family: var(--font-display); font-size: 16px; color: var(--gm-dark); line-height: 1.25; }
+.gmx-bprice { font-size: 14px; font-weight: 600; color: var(--gm-walnut); margin-top: auto; padding-top: 6px; }
+.gmx-bcheck {
+  position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+  background: rgba(255,255,255,.92); color: var(--gm-muted); border: 1px solid var(--gm-border);
+}
+.gmx-bcard[aria-pressed="true"] .gmx-bcheck { background: var(--gmx-accent); color: #fff; border-color: var(--gmx-accent); }
+.gmx-bcard.fixed .gmx-bcheck { background: var(--gm-walnut); color: #fff; border-color: var(--gm-walnut); }
+.gmx-bar {
+  margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: #fff; border-radius: 10px; padding: 16px 20px; border: 1px solid var(--gm-border);
+}
+.gmx-bar-total { font-size: 13px; color: var(--gm-muted); }
+.gmx-bar-total b { display: block; font-family: var(--font-display); font-size: 28px; color: var(--gm-walnut); font-weight: 400; }
+
+/* ── Móvil: el CSS base de la ficha declara estos paddings DESPUÉS de su media query,
+      así que en pantallas chicas la galería quedaba angosta; con .gmx-page ganan las reglas móviles ── */
+@media (max-width: 900px) {
+  .gmx-page .gm-gallery-col { padding-right: 0; margin-bottom: 24px; }
+  .gmx-page .gm-info-col { padding-left: 0; }
+}

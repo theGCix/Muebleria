@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useWishlist } from "@/context/WishlistContext";
@@ -8,14 +8,23 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Hammer, Star } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
-import { ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
+import { ofertaInfo } from "@/lib/pricing";
+import { LeadFormDialog } from "@/components/LeadFormDialog";
+import { WHATSAPP_NUMBER } from "@/config";
+import { resolveProfile, type ProductProfile } from "@/lib/productProfiles";
+import { LivePrice } from "@/components/product/LivePrice";
+import { DeliveryPromise } from "@/components/product/DeliveryPromise";
+import { SignatureModule } from "@/components/product/SignatureModules";
+import { BundleBuilder } from "@/components/product/BundleBuilder";
+import { StickyBuyBar } from "@/components/product/StickyBuyBar";
+import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
 
 export const Route = createFileRoute("/product/$handle")({
@@ -78,14 +87,16 @@ function AccordionItem({ title, children }: { title: string; children: React.Rea
 /* ─── tab panel ───────────────────────────────────── */
 const TABS = ["Especificaciones", "Reseñas", "Entrega y pagos"] as const;
 
-function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
+function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["data"]; profile: ProductProfile }) {
   const [active, setActive] = useState(0);
 
-  const specs = [
+  const specs: [string, string][] = [
     ["Modelo", product?.nombre ?? "—"],
     ["Categoría", product?.categoria ?? "—"],
-    ["Precio", product ? fmt(product.precio) : "—"],
+    ...(product?.subcategoria ? [["Subcategoría", product.subcategoria] as [string, string]] : []),
+    ...(product?.material_base ? [["Base", product.material_base] as [string, string]] : []),
     ["SKU", product?.sku ?? "—"],
+    ["Fabricación", "A pedido, en Lima"],
     ["Garantía", "2 años en estructura"],
   ];
 
@@ -140,7 +151,7 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
             <div>
               <h3 className="gm-section-h3">Características</h3>
               <ul className="gm-detail-list">
-                {["Fabricado artesanalmente en Perú", "Estructura de madera tornillo seca y tratada", "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal dorado o negro a elección", "Cojines decorativos incluidos", "Garantía de 2 años en estructura"].map(item => (
+                {profile.features.map(item => (
                   <li key={item} className="gm-dl-item">
                     <span className="gm-dl-dot" />
                     {item}
@@ -251,158 +262,8 @@ function Tabs({ product }: { product: ReturnType<typeof useProduct>["data"] }) {
   );
 }
 
-/* ─── recommended products (complementarios, otra categoría) ─── */
-async function fetchComplementarios(currentId: string, categoria: string | null) {
-  let query = supabase
-    .from("products")
-    .select("*")
-    .eq("activo", true)
-    .neq("id", currentId)
-    .limit(4);
-  if (categoria) query = query.neq("categoria", categoria);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return data ?? [];
-}
 
-function Recommended({ currentId, categoria }: { currentId: string; categoria?: string | null }) {
-  const { data: others } = useQuery({
-    queryKey: ["complementarios", currentId, categoria],
-    queryFn: () => fetchComplementarios(currentId, categoria ?? null),
-    staleTime: 300_000,
-  });
-  const addItem = useCartStore((s) => s.addItem);
-
-  if (!others?.length) return null;
-
-  return (
-    <section className="gm-recommended">
-      <div className="gm-container">
-        <p className="gm-eyebrow">Colección seleccionada</p>
-        <h2 className="gm-section-title">Te podría interesar</h2>
-        <p className="gm-section-sub">Piezas que complementan perfectamente tu elección</p>
-
-        <div className="gm-rec-grid">
-          {others.map(p => {
-            const img = p.imagen_public_id
-              ? cloudinaryUrl(p.imagen_public_id, { w: 600, h: 450 })
-              : p.imagen_url;
-
-            return (
-              <Link key={p.id} to="/product/$handle" params={{ handle: p.id }} className="gm-rec-card">
-                <div className="gm-rec-img">
-                  {img
-                    ? <img src={img} alt={p.nombre} loading="lazy" />
-                    : <div className="gm-rec-img-placeholder">🪑</div>
-                  }
-                  {p.categoria && <span className="gm-rec-tag">{p.categoria}</span>}
-                </div>
-                <div className="gm-rec-body">
-                  <div className="gm-rec-name">{p.nombre}</div>
-                  {p.descripcion && <p className="gm-rec-desc">{p.descripcion}</p>}
-                  <div className="gm-rec-footer">
-                    <span className="gm-rec-price">{fmt(p.precio)}</span>
-                    <button
-                      className="gm-rec-btn"
-                      onClick={e => {
-                        e.preventDefault();
-                        addItem({ id: p.id, title: p.nombre, price: p.precio, image: img ?? "", sku: p.sku ?? undefined });
-                        toast.success(`"${p.nombre}" añadido al carrito`);
-                      }}
-                    >+</button>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ─── main product page ───────────────────────────── */
-function ProductPage() {
-  const { handle } = Route.useParams();
-  const { data: product, isLoading } = useProduct(handle);
-  const addItem = useCartStore((s) => s.addItem);
-
-  useEffect(() => {
-    if (!product) return;
-    trackEvent({
-      tipo: "producto_visto",
-      path: window.location.pathname,
-      product_id: product.id,
-      valor: product.precio,
-    });
-  }, [product?.id]);
-
-  const { user } = useAuth();
-  const { toggleWishlist, isWishlisted } = useWishlist();
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [wishPending, setWishPending] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [activeImg, setActiveImg] = useState(0);
-  const [vista, setVista] = useState<"foto" | "3d">("foto");
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="h-8 w-8 animate-spin text-accent" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!product) return <ProductNotFound />;
-
-  // Construir lista de imágenes desde el array `imagenes` (galería multi-foto)
-  // con fallback al campo legacy imagen_url/imagen_public_id
-  const allImgs: string[] = (() => {
-    const gallery = (product as any).imagenes;
-    if (Array.isArray(gallery) && gallery.length > 0) {
-      return gallery.map((img: { url: string; public_id?: string }) =>
-        img.public_id
-          ? cloudinaryUrl(img.public_id, { w: 900, h: 900 })
-          : img.url
-      );
-    }
-    if (product.imagen_public_id) {
-      return [cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })];
-    }
-    if (product.imagen_url) return [product.imagen_url];
-    return [];
-  })();
-
-  const mainImg = allImgs[0] ?? null;
-  const thumbImgs = allImgs;
-  const displayImg = allImgs[activeImg] ?? mainImg;
-
-  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
-  const cuentaRegresiva = enOferta ? textoCuentaRegresiva(venceEl) : null;
-
-  const handleAdd = () => {
-    setAdding(true);
-    addItem({
-      id: product.id,
-      title: product.nombre,
-      price: precioMostrado,
-      image: mainImg ?? "",
-      sku: product.sku ?? undefined,
-    });
-    toast.success("Agregado al carrito", { description: product.nombre, position: "top-center" });
-    setTimeout(() => setAdding(false), 2000);
-  };
-
-  const outOfStock = (product.stock ?? 1) <= 0;
-  const has3D = !!(product as any).modelo_3d_url;
-
-  return (
-    <>
-      {/* ── scoped styles ── */}
-      <style>{`
+const PAGE_CSS = `
         :root {
           --gm-cream: #F7F4EF;
           --gm-warm: #FDFAF6;
@@ -504,7 +365,7 @@ function ProductPage() {
         }
 
         /* info col */
-        .gm-info-col { padding-left:16px; }
+        .gm-info-col { padding-left:16px; min-width:0; }
         .gm-sku { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:10px; }
         .gm-product-title { font-family:var(--font-display); font-size:38px; font-weight:400; line-height:1.15; color:var(--gm-dark); margin-bottom:6px; }
         .gm-product-sub { font-size:14px; color:var(--gm-muted); letter-spacing:.04em; margin-bottom:24px; }
@@ -530,7 +391,7 @@ function ProductPage() {
           border:1px solid transparent; transition:border-color .2s;
         }
         .gm-spec-pill:hover { border-color:var(--gm-gold-light); }
-        .gm-spec-icon { font-size:18px; color:var(--gm-gold); flex-shrink:0; margin-top:1px; }
+        .gm-spec-icon { font-size:18px; color:var(--gmx-accent, var(--gm-gold)); flex-shrink:0; margin-top:1px; }
         .gm-spec-pill-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:2px; }
         .gm-spec-pill-val { font-size:13px; font-weight:500; color:var(--gm-dark); }
 
@@ -689,9 +550,150 @@ function ProductPage() {
           cursor:pointer; transition:background .2s, transform .15s; flex-shrink:0;
         }
         .gm-rec-btn:hover { background:var(--gm-walnut-mid); transform:scale(1.1); }
-      `}</style>
+      `;
 
+type ProductData = NonNullable<ReturnType<typeof useProduct>["data"]>;
+/** Columnas opcionales de products que aún no están en el tipo Product */
+type ProductExtra = { imagenes?: { url: string; public_id?: string }[] | null; modelo_3d_url?: string | null };
+
+/* ─── page shell: carga y estados vacíos ──────────── */
+function ProductPage() {
+  const { handle } = Route.useParams();
+  const { data: product, isLoading } = useProduct(handle);
+
+  if (isLoading) {
+    return (
       <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex items-center justify-center py-32">
+          <Loader2 className="h-8 w-8 animate-spin text-accent" />
+        </div>
+      </div>
+    );
+  }
+  if (!product) return <ProductNotFound />;
+
+  // key => al cambiar de producto se reinician selecciones, galería y módulos
+  return <ProductView key={product.id} product={product} />;
+}
+
+/* ─── vista de producto (adaptativa por categoría) ── */
+function ProductView({ product: base }: { product: ProductData }) {
+  const product = base as ProductData & ProductExtra;
+  const addItem = useCartStore((s) => s.addItem);
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const [wishPending, setWishPending] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
+  const [vista, setVista] = useState<"foto" | "3d">("foto");
+  const [leadOpen, setLeadOpen] = useState(false);
+  const [ambient, setAmbient] = useState(false);
+  const [finishIdx, setFinishIdx] = useState(0);
+  const [modPrefs, setModPrefs] = useState<Record<string, string>>({});
+  const [showSticky, setShowSticky] = useState(false);
+  const ctaRef = useRef<HTMLDivElement>(null);
+
+  const profile = useMemo(() => resolveProfile(product), [product]);
+
+  useEffect(() => {
+    trackEvent({
+      tipo: "producto_visto",
+      path: window.location.pathname,
+      product_id: product.id,
+      valor: product.precio,
+    });
+  }, [product.id]);
+
+  // Rating REAL (antes la ficha mostraba "4.0 · 38 reseñas" fijo para todos los productos)
+  const { data: ratingData } = useQuery({
+    queryKey: ["rating-producto", product.id],
+    queryFn: () => fetchProductRating(product.id),
+    staleTime: 60_000,
+  });
+  const rating = ratingData?.rating ?? null;
+  const hayRating = !!rating && rating.total_resenas > 0;
+
+  // La barra de compra aparece cuando el botón principal sale de pantalla (hacia arriba)
+  useEffect(() => {
+    const el = ctaRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([e]) => setShowSticky(!e.isIntersecting && e.boundingClientRect.top < 0),
+      { threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const setPref = useCallback((k: string, v: string | null) => {
+    setModPrefs((prev) => {
+      if (v == null) {
+        if (!(k in prev)) return prev;
+        const { [k]: _omit, ...rest } = prev;
+        return rest;
+      }
+      return prev[k] === v ? prev : { ...prev, [k]: v };
+    });
+  }, []);
+
+  // Galería: array `imagenes` con fallback al campo legacy
+  const allImgs: string[] = (() => {
+    const gallery = product.imagenes;
+    if (Array.isArray(gallery) && gallery.length > 0) {
+      return gallery.map((img) => (img.public_id ? cloudinaryUrl(img.public_id, { w: 900, h: 900 }) : img.url));
+    }
+    if (product.imagen_public_id) return [cloudinaryUrl(product.imagen_public_id, { w: 900, h: 900 })];
+    if (product.imagen_url) return [product.imagen_url];
+    return [];
+  })();
+  const mainImg = allImgs[0] ?? null;
+  const displayImg = allImgs[activeImg] ?? mainImg;
+
+  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
+  const outOfStock = (product.stock ?? 1) <= 0;
+  const has3D = !!product.modelo_3d_url;
+  const esNuevo = Date.now() - new Date(product.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
+  const tieneLed = profile.key === "tv";
+
+  // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
+  const acabado = profile.acabados[finishIdx];
+  const prefs: Record<string, string> = { [profile.acabadoLabel]: acabado.name, ...modPrefs };
+  const prefsLista = Object.entries(prefs);
+  const prefsTexto = prefsLista.map(([k, v]) => `${k}: ${v}`).join(" · ");
+
+  const handleAdd = () => {
+    setAdding(true);
+    addItem({
+      id: product.id,
+      title: `${product.nombre} (${Object.values(prefs).join(", ")})`,
+      price: precioMostrado,
+      image: mainImg ?? "",
+      sku: product.sku ?? undefined,
+    });
+    toast.success("Agregado al carrito", { description: `${product.nombre} · ${Object.values(prefs).join(" · ")}`, position: "top-center" });
+    setTimeout(() => setAdding(false), 2000);
+  };
+
+  const waHref = WHATSAPP_NUMBER
+    ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+        `Hola G&M 👋 Me interesa "${product.nombre}"${product.sku ? ` (SKU ${product.sku})` : ""}.\n${prefsTexto}\n${window.location.href}`,
+      )}`
+    : null;
+
+  const onZoomMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--zx", `${((e.clientX - r.left) / r.width) * 100}%`);
+    e.currentTarget.style.setProperty("--zy", `${((e.clientY - r.top) / r.height) * 100}%`);
+  };
+
+  return (
+    <>
+      <style>{PAGE_CSS}</style>
+
+      <div
+        className="min-h-screen bg-background gmx-page"
+        style={{ "--gmx-accent": profile.accent, "--gmx-accent-soft": profile.accentSoft } as React.CSSProperties}
+      >
         <Header />
 
         {/* ── breadcrumb ── */}
@@ -707,142 +709,138 @@ function ProductPage() {
 
           {/* gallery */}
           <div className="gm-gallery-col">
+            <div className="gmx-gallery-sticky">
+              {has3D && (
+                <div className="gm-vista-toggle">
+                  <button className={`gm-vista-btn${vista === "foto" ? " active" : ""}`} onClick={() => setVista("foto")}>Foto</button>
+                  <button className={`gm-vista-btn${vista === "3d" ? " active" : ""}`} onClick={() => setVista("3d")}>Vista 3D</button>
+                </div>
+              )}
 
-            {/* toggle foto / 3D — solo aparece si el producto tiene modelo 3D */}
-            {has3D && (
-              <div className="gm-vista-toggle">
-                <button
-                  className={`gm-vista-btn${vista === "foto" ? " active" : ""}`}
-                  onClick={() => setVista("foto")}
+              {vista === "3d" && has3D ? (
+                <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
+                  <ModelViewer3D src={product.modelo_3d_url ?? ""} alt={product.nombre} poster={displayImg ?? undefined} />
+                </div>
+              ) : (
+                <div
+                  className={`gm-main-img-wrap gmx-stage${ambient && tieneLed ? " is-night" : ""}`}
+                  onMouseMove={onZoomMove}
                 >
-                  Foto
-                </button>
-                <button
-                  className={`gm-vista-btn${vista === "3d" ? " active" : ""}`}
-                  onClick={() => setVista("3d")}
-                >
-                  Vista 3D
-                </button>
-              </div>
-            )}
+                  {displayImg
+                    ? <img src={displayImg} alt={product.nombre} />
+                    : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
+                  }
+                  <div className="gmx-glow" />
+                  {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
+                  {enOferta
+                    ? <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
+                    : esNuevo && <div className="gm-badge-new">Nuevo</div>}
+                  <div className="gmx-hint">Pasa el cursor para ampliar</div>
+                  {allImgs.length > 1 && <div className="gmx-counter">{activeImg + 1} / {allImgs.length}</div>}
+                </div>
+              )}
 
-            {/* visor principal — foto o 3D según toggle */}
-            {vista === "3d" && has3D ? (
-              <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
-                <ModelViewer3D
-                  src={(product as any).modelo_3d_url}
-                  alt={product.nombre}
-                  poster={displayImg ?? undefined}
-                />
-              </div>
-            ) : (
-              <div className="gm-main-img-wrap">
-                {displayImg
-                  ? <img src={displayImg} alt={product.nombre} />
-                  : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
-                }
-                {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
-                {enOferta ? (
-                  <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
-                ) : (
-                  <div className="gm-badge-new">Nuevo</div>
-                )}
-              </div>
-            )}
-
-            {/* miniaturas — solo en vista foto */}
-            {vista === "foto" && thumbImgs.length > 1 && (
-              <div className="gm-thumbs">
-                {thumbImgs.map((src, i) => (
-                  <div key={i} className={`gm-thumb${activeImg === i ? " active" : ""}`} onClick={() => setActiveImg(i)}>
-                    <img src={src} alt="" />
-                  </div>
-                ))}
-              </div>
-            )}
+              {vista === "foto" && allImgs.length > 1 && (
+                <div className="gm-thumbs">
+                  {allImgs.map((src, i) => (
+                    <button key={i} type="button" aria-label={`Ver foto ${i + 1}`}
+                      className={`gm-thumb${activeImg === i ? " active" : ""}`} onClick={() => setActiveImg(i)}>
+                      <img src={src} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* info */}
           <div className="gm-info-col">
-            {product.sku && <div className="gm-sku">SKU: {product.sku}</div>}
+            <div className="gmx-eyebrow">{profile.eyebrow}</div>
             <h1 className="gm-product-title">{product.nombre}</h1>
-            {product.categoria && <p className="gm-product-sub">Colección {product.categoria} · 2025</p>}
+            <p className="gmx-pitch">{profile.pitch}</p>
 
-            {/* rating */}
-            <div className="gm-rating-row">
-              <div className="gm-stars-row">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={14} fill={i < 4 ? "var(--gm-gold)" : "none"} color={i < 4 ? "var(--gm-gold)" : "var(--gm-border)"} />
-                ))}
+            {/* rating real */}
+            {hayRating && rating && (
+              <div className="gm-rating-row">
+                <div className="gm-stars-row">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14}
+                      fill={i < Math.round(rating.calificacion_promedio) ? "var(--gm-gold)" : "none"}
+                      color={i < Math.round(rating.calificacion_promedio) ? "var(--gm-gold)" : "var(--gm-border)"} />
+                  ))}
+                </div>
+                <span className="gm-rating-text">{rating.calificacion_promedio.toFixed(1)} · {rating.total_resenas} reseña{rating.total_resenas === 1 ? "" : "s"}</span>
               </div>
-              <span className="gm-rating-text">4.0 · 38 reseñas</span>
-            </div>
-
-            {/* price */}
-            <div className="gm-price-block">
-              <span className="gm-price-main">{fmt(precioMostrado)}</span>
-              {enOferta && (
-                <>
-                  <span className="gm-price-old">{fmt(product.precio)}</span>
-                  <span className="gm-price-save">-{product.descuento_porcentaje}% de descuento</span>
-                </>
-              )}
-              {outOfStock && <span style={{ fontSize: 13, background: "#fde8e8", color: "#b91c1c", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>}
-            </div>
-            {cuentaRegresiva && (
-              <p style={{ fontSize: 12, fontWeight: 600, color: "#c0392b", marginTop: -4, marginBottom: 8 }}>
-                ⏳ {cuentaRegresiva}
-              </p>
             )}
-            <p className="gm-price-note">Precio incluye IGV · Entrega a domicilio disponible</p>
 
-            <div className="gm-divider" />
+            <LivePrice
+              precioOriginal={product.precio}
+              precioFinal={precioMostrado}
+              enOferta={enOferta}
+              descuento={product.descuento_porcentaje}
+              venceEl={venceEl}
+              stock={product.stock}
+              agotado={outOfStock}
+            />
 
-            {/* specs pills */}
+            <ul className="gmx-ideal" style={{ padding: 0 }}>
+              {profile.idealFor.map((t) => <li key={t}>{t}</li>)}
+            </ul>
+
+            {/* herramienta firma de la categoría */}
+            <SignatureModule
+              profile={profile}
+              nombre={product.nombre}
+              subcategoria={product.subcategoria}
+              setPref={setPref}
+              ambient={ambient}
+              setAmbient={setAmbient}
+            />
+
+            {/* materiales (por categoría) */}
             <div className="gm-specs-label">Materiales y construcción</div>
             <div className="gm-specs-grid">
-              {[
-                { icon: "🪵", label: "Estructura", val: "Madera tornillo seca y tratada" },
-                { icon: "🧶", label: "Tapizado", val: "Velvet importado + antifluida" },
-                { icon: "✨", label: "Relleno", val: "Espuma alta densidad + napa" },
-                { icon: "🦵", label: "Patas", val: "Metal dorado/negro moderno" },
-              ].map(s => (
+              {profile.specs.map((s) => (
                 <div key={s.label} className="gm-spec-pill">
-                  <span className="gm-spec-icon">{s.icon}</span>
+                  <s.icon size={18} className="gmx-spec-icon" />
                   <div>
                     <div className="gm-spec-pill-label">{s.label}</div>
-                    <div className="gm-spec-pill-val">{s.val}</div>
+                    <div className="gm-spec-pill-val">{s.value}</div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* color picker */}
-            <div className="gm-color-label">Color</div>
-            <ColorPicker />
-
-            {/* includes */}
-            <div className="gm-includes-label">El juego incluye</div>
-            <div className="gm-includes-grid">
-              {["Sofá 3 cuerpos", "Sofá 2 cuerpos", "Sillón butaca", "Puff redondo", "Cojines decorativos"].map(t => (
-                <div key={t} className="gm-includes-tag"><div className="gm-tag-dot" />{t}</div>
+            {/* acabado */}
+            <div className="gm-color-label">
+              {profile.acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
+            </div>
+            <div className="gm-color-row" role="radiogroup" aria-label={profile.acabadoLabel}>
+              {profile.acabados.map((c, i) => (
+                <button key={c.hex} type="button" role="radio" aria-checked={finishIdx === i} aria-label={c.name}
+                  className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => setFinishIdx(i)} />
               ))}
             </div>
 
-            {/* description */}
+            {/* descripción */}
             {product.descripcion && (
               <>
                 <div className="gm-specs-label" style={{ marginBottom: 8 }}>Descripción</div>
-                <p style={{ fontSize: 13, color: "var(--gm-mid)", lineHeight: 1.75, marginBottom: 24, whiteSpace: "pre-line" }}>
+                <p style={{ fontSize: 13, color: "var(--gm-mid)", lineHeight: 1.75, marginBottom: 20, whiteSpace: "pre-line" }}>
                   {product.descripcion}
                 </p>
               </>
             )}
 
+            <DeliveryPromise />
+
+            {/* resumen de lo elegido */}
+            <p className="gmx-prefs">Tu selección: <b>{prefsLista.map(([k, v]) => `${k} ${v}`).join(" · ")}</b></p>
+
             {/* CTA */}
-            <div className="gm-cta-row">
+            <div className="gm-cta-row" ref={ctaRef}>
               <button
-                className={`gm-btn-primary${adding ? " adding" : ""}`}
+                className={`gm-btn-primary${adding ? " adding" : ""}${!adding && !outOfStock ? " gmx-btn-pulse" : ""}`}
                 style={{ flex: 1 }}
                 onClick={handleAdd}
                 disabled={outOfStock}
@@ -852,94 +850,78 @@ function ProductPage() {
               </button>
               <button
                 type="button"
-                className={`gm-btn-wish${product && isWishlisted(product.id) ? " active" : ""}`}
+                className={`gm-btn-wish${isWishlisted(product.id) ? " active" : ""}`}
                 disabled={wishPending}
                 onClick={async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (!product) return;
                   setWishPending(true);
                   const added = await toggleWishlist(product.id);
                   toast.success(added ? `"${product.nombre}" guardado en favoritos` : `"${product.nombre}" eliminado de favoritos`);
                   setWishPending(false);
                 }}
-                title={product && isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
+                title={isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
+                aria-label={isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
               >
-                <Heart size={18} fill={product && isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
+                <Heart size={18} fill={isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
               </button>
-              <LoginModal open={loginOpen} onOpenChange={setLoginOpen} />
             </div>
             <div className="gm-cta-row">
-              <button className="gm-btn-quote">Solicitar cotización personalizada</button>
+              <button className="gm-btn-quote" onClick={() => setLeadOpen(true)}>Solicitar cotización personalizada</button>
             </div>
+            {waHref && (
+              <a className="gmx-wa" href={waHref} target="_blank" rel="noopener noreferrer">
+                <MessageCircle size={17} /> Hablar con un asesor por WhatsApp
+              </a>
+            )}
+            <LeadFormDialog
+              open={leadOpen}
+              onOpenChange={setLeadOpen}
+              productoId={product.id}
+              productoNombre={product.nombre}
+              mensajeInicial={`Mi selección — ${prefsTexto}.`}
+            />
 
             <div className="gm-divider" />
 
             {/* trust */}
             <div className="gm-trust-strip">
-              <div className="gm-trust-item"><Hammer size={16} color="var(--gm-gold)" />Hecho a mano</div>
-              <div className="gm-trust-item"><Shield size={16} color="var(--gm-gold)" />Garantía 2 años</div>
-              <div className="gm-trust-item"><Truck size={16} color="var(--gm-gold)" />Envío a domicilio</div>
+              <div className="gm-trust-item"><Hammer size={16} color="var(--gmx-accent)" />Hecho a mano</div>
+              <div className="gm-trust-item"><Shield size={16} color="var(--gmx-accent)" />Garantía 2 años</div>
+              <div className="gm-trust-item"><Truck size={16} color="var(--gmx-accent)" />Envío a domicilio</div>
             </div>
 
-            {/* accordion */}
+            {/* preguntas frecuentes (por categoría) */}
             <div style={{ marginTop: 24 }}>
-              <AccordionItem title="Cuidado y mantenimiento">
-                Limpie con paño húmedo sin químicos agresivos. Evite exposición directa al sol. Para el velvet, use un cepillo suave en dirección del pelo del tejido. La estructura de madera puede aceitarse anualmente para mantener su durabilidad.
-              </AccordionItem>
-              <AccordionItem title="Tiempos de entrega">
-                Lima Metropolitana: 5–7 días hábiles. Provincias: 10–15 días hábiles. Este modelo es fabricado a pedido — se coordina fecha de entrega al confirmar la compra.
-              </AccordionItem>
-              <AccordionItem title="Política de devoluciones">
-                Al ser un producto fabricado a medida, no se aceptan cambios una vez confirmado el pedido. En caso de defecto de fabricación, realizamos la reparación o reposición sin costo dentro del período de garantía.
-              </AccordionItem>
+              {profile.faqs.map((f) => <AccordionItem key={f.q} title={f.q}>{f.a}</AccordionItem>)}
             </div>
           </div>
 
-          {/* recomendaciones — span full width dentro del grid */}
+          {/* recomendaciones de la misma categoría */}
           <div style={{ gridColumn: "1 / -1" }}>
             <ProductRecomendaciones productId={product.id} categoria={product.categoria} />
           </div>
         </div>
 
-        {/* ── tabs ── */}
-        <Tabs product={product} />
+        <Tabs product={product} profile={profile} />
 
-        {/* ── recommended ── */}
-        <Recommended currentId={product.id} categoria={product.categoria} />
+        <BundleBuilder
+          profile={profile}
+          base={{ id: product.id, nombre: product.nombre, precio: precioMostrado, image: mainImg, sku: product.sku, categoria: product.categoria }}
+        />
 
         <Footer />
-      </div>
-    </>
-  );
-}
 
-/* ─── color picker (controlled internally) ────────── */
-const COLORS = [
-  { hex: "#E8D5CC", name: "Rosado blush" },
-  { hex: "#E8E0D0", name: "Beige arena" },
-  { hex: "#C8BFB5", name: "Gris topo" },
-  { hex: "#D4C5A9", name: "Crema marfil" },
-  { hex: "#B8A898", name: "Mocha" },
-];
-
-function ColorPicker() {
-  const [selected, setSelected] = useState(0);
-  return (
-    <>
-      <div className="gm-color-label">
-        Color — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{COLORS[selected].name}</span>
-      </div>
-      <div className="gm-color-row">
-        {COLORS.map((c, i) => (
-          <div
-            key={c.hex}
-            className={`gm-swatch${selected === i ? " active" : ""}`}
-            style={{ background: c.hex }}
-            title={c.name}
-            onClick={() => setSelected(i)}
-          />
-        ))}
+        <StickyBuyBar
+          visible={showSticky}
+          image={mainImg}
+          nombre={product.nombre}
+          resumen={Object.values(prefs).join(" · ")}
+          precio={precioMostrado}
+          disabled={outOfStock}
+          adding={adding}
+          onAdd={handleAdd}
+        />
       </div>
     </>
   );
