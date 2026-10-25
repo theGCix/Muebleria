@@ -4,7 +4,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCartStore } from "@/stores/cartStore";
 import {
-  ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles,
+  ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -101,10 +101,11 @@ function volarAlCarrito(origen: HTMLElement | null, src: string) {
 
 export function ProductCard({ product: p }: Props) {
   const addItem = useCartStore((s) => s.addItem);
+  const updateQty = useCartStore((s) => s.updateQty);
+  const removeItem = useCartStore((s) => s.removeItem);
   const items = useCartStore((s) => s.items);
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
-  const [justAdded, setJustAdded] = useState(false);
   const [medidaOpen, setMedidaOpen] = useState(false);
   const [entrega, setEntrega] = useState<{ rango: string; distrito: string; envio: number | null } | null>(null);
 
@@ -112,8 +113,11 @@ export function ProductCard({ product: p }: Props) {
   const mediaRef = useRef<HTMLDivElement | null>(null);
 
   const rating = useProductRating(p.id);
-  const enCarrito = items.some((i) => i.id === p.id);
+  const qty = items.find((i) => i.id === p.id)?.qty ?? 0;
+  const enCarrito = qty > 0;
   const agotado = (p.stock ?? 1) <= 0;
+  const maxQty = p.stock ?? Infinity;          // sin dato de stock: no se limita
+  const llegoAlMaximo = qty >= maxQty;
   const wishlisted = isWishlisted(p.id);
 
   const { activa: enOferta, precioFinal: precioOferta, venceEl } = ofertaInfo(p);
@@ -158,8 +162,23 @@ export function ProductCard({ product: p }: Props) {
     addItem({ id: p.id, title: p.nombre, price: precioOferta, image: imgSrc ?? "", sku: p.sku ?? undefined });
     toast.success(`"${p.nombre}" añadido al carrito`);
     volarAlCarrito(mediaRef.current, imgSrc ?? "");
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1200);
+  };
+
+  // Control de cantidad en la propia tarjeta (dentro de un <Link>: nunca debe navegar)
+  const handleInc = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!llegoAlMaximo && !agotado) updateQty(p.id, qty + 1);
+  };
+  const handleDec = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (qty <= 1) {
+      removeItem(p.id);
+      toast(`"${p.nombre}" quitado del carrito`);
+    } else {
+      updateQty(p.id, qty - 1);
+    }
   };
 
   const handleWishlist = async (e: React.MouseEvent) => {
@@ -351,40 +370,77 @@ export function ProductCard({ product: p }: Props) {
                 </p>
               )}
 
-              {/* Compra */}
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={agotado || enCarrito}
-                style={{ ["--gmc-delay" as string]: retraso }}
-                className={`gmc-cta group/btn flex w-full items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 transition-all duration-300 ${
-                  agotado
-                    ? "cursor-default bg-muted text-muted-foreground"
-                    : enCarrito
-                    ? "cursor-default border border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "gmc-cta-shine bg-primary text-primary-foreground shadow-sm hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
-                }`}
-              >
-                <span
-                  className={`relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ${
-                    agotado ? "bg-muted-foreground/10" : enCarrito ? "bg-emerald-100" : "bg-white/15 group-hover/btn:bg-white/25"
+              {/* Compra: "Agregar" se transforma en un control de cantidad cuando ya está en el carrito */}
+              {enCarrito ? (
+                <div
+                  key="en-carrito"
+                  role="group"
+                  aria-label={`${p.nombre} en el carrito: ${qty} ${qty === 1 ? "unidad" : "unidades"}`}
+                  className="flex w-full items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 p-1 text-emerald-800 animate-in zoom-in-95 fade-in duration-300"
+                >
+                  <button
+                    type="button"
+                    onClick={handleDec}
+                    aria-label={qty <= 1 ? "Quitar del carrito" : "Quitar una unidad"}
+                    title={qty <= 1 ? "Quitar del carrito" : "Quitar una unidad"}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm transition-all hover:bg-emerald-100 active:scale-90"
+                  >
+                    {qty <= 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+                  </button>
+
+                  <div className="min-w-0 flex-1 text-center leading-tight" aria-live="polite">
+                    <span className="flex items-center justify-center gap-1 text-sm font-semibold">
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">
+                        <span className="@[13rem]:hidden">{qty}</span>
+                        <span className="hidden @[13rem]:inline">En el carrito</span>
+                      </span>
+                    </span>
+                    <span className="hidden whitespace-nowrap text-[11px] text-emerald-700/80 @[13rem]:block">
+                      {qty} {qty === 1 ? "unidad" : "unidades"} · {fmtPEN(precioOferta * qty)}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleInc}
+                    disabled={llegoAlMaximo || agotado}
+                    aria-label="Agregar una unidad"
+                    title={llegoAlMaximo ? "Alcanzaste el stock disponible" : "Agregar una unidad"}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-90 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-white/80"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  disabled={agotado}
+                  style={{ ["--gmc-delay" as string]: retraso }}
+                  className={`gmc-cta group/btn flex w-full items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 transition-all duration-300 ${
+                    agotado
+                      ? "cursor-default bg-muted text-muted-foreground"
+                      : "gmc-cta-shine bg-primary text-primary-foreground shadow-sm hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.97]"
                   }`}
                 >
-                  {justAdded && <span className="absolute inset-0 animate-ping rounded-full bg-white/50" />}
-                  {agotado ? (
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                  ) : enCarrito ? (
-                    <Check className="h-3.5 w-3.5 animate-in zoom-in-50 duration-300" />
-                  ) : (
+                  <span
+                    className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ${
+                      agotado ? "bg-muted-foreground/10" : "bg-white/15 group-hover/btn:bg-white/25"
+                    }`}
+                  >
                     <ShoppingBag className="h-3.5 w-3.5 transition-transform duration-300 group-hover/btn:-rotate-12 group-hover/btn:scale-110" />
+                  </span>
+                  <span className="whitespace-nowrap text-sm font-medium">
+                    {agotado ? "Agotado" : (
+                      <>Agregar<span className="hidden @[13rem]:inline"> al carrito</span></>
+                    )}
+                  </span>
+                  {!agotado && (
+                    <Plus className="ml-auto h-4 w-4 opacity-70 transition-transform duration-300 group-hover/btn:rotate-90" />
                   )}
-                </span>
-                <span className="whitespace-nowrap text-sm font-medium">
-                  {agotado ? "Agotado" : enCarrito ? "En el carrito" : (
-                    <>Agregar<span className="hidden @[13rem]:inline"> al carrito</span></>
-                  )}
-                </span>
-              </button>
+                </button>
+              )}
 
               {/* Captura de leads: el taller fabrica a medida */}
               <button
