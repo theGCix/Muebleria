@@ -1,0 +1,209 @@
+/* src/components/checkout/pago-exitoso.css
+   Pantalla de pago aprobado. Todo el movimiento está bajo prefers-reduced-motion: no-preference;
+   con "reducir movimiento" la pantalla aparece completa y estática. */
+
+.gmp-root {
+  --gmp-walnut-deep: oklch(0.24 0.045 55);
+  --gmp-walnut: oklch(0.32 0.055 55);
+  --gmp-amber: #f0a020;
+  --gmp-cream: #f6f1e9;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--gmp-cream);
+}
+
+/* ───────── Hero ───────── */
+.gmp-hero {
+  position: relative;
+  overflow: hidden;
+  color: #fbf4e8;
+  background:
+    radial-gradient(900px 380px at 50% -8%, color-mix(in oklab, var(--gmp-amber) 26%, transparent), transparent 70%),
+    repeating-linear-gradient(92deg, rgba(255, 255, 255, .028) 0 2px, transparent 2px 11px),
+    linear-gradient(180deg, var(--gmp-walnut) 0%, var(--gmp-walnut-deep) 100%);
+}
+
+/* Insignia del check */
+.gmp-badge { position: relative; width: 96px; height: 96px; }
+.gmp-badge-disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #fff7e6, #f3dfb8 70%);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .35), inset 0 -4px 10px rgba(120, 70, 20, .18);
+}
+.gmp-badge svg { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); }
+.gmp-ring, .gmp-tick { fill: none; stroke: var(--gmp-walnut-deep); stroke-linecap: round; stroke-linejoin: round; }
+.gmp-ring { stroke-width: 2.4; stroke-dasharray: 152; stroke-dashoffset: 0; opacity: .22; }
+.gmp-tick { stroke-width: 4.2; stroke-dasharray: 40; stroke-dashoffset: 0; }
+.gmp-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in oklab, var(--gmp-amber) 80%, white);
+  opacity: 0;
+}
+
+/* Partículas (se generan en React; aquí solo su movimiento) */
+.gmp-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.gmp-p {
+  position: absolute;
+  left: 50%;
+  top: 112px;               /* centro de la insignia */
+  width: var(--w);
+  height: var(--h);
+  background: var(--c);
+  border-radius: var(--r);
+  opacity: 0;
+}
+.gmp-fall {
+  position: absolute;
+  top: -24px;
+  left: var(--x);
+  width: var(--w);
+  height: var(--h);
+  background: var(--c);
+  border-radius: var(--r);
+  opacity: 0;
+}
+
+/* ───────── Tarjetas ───────── */
+.gmp-card {
+  background: #fffdf9;
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  border-radius: 1.1rem;
+  box-shadow: 0 18px 40px -26px rgba(60, 35, 15, .45);
+}
+
+/* Ticket con muescas laterales y separador punteado */
+.gmp-ticket { position: relative; }
+.gmp-ticket::before, .gmp-ticket::after {
+  content: "";
+  position: absolute;
+  top: var(--notch-y, 132px);
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--gmp-cream);
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+.gmp-ticket::before { left: -12px; clip-path: inset(0 0 0 50%); }
+.gmp-ticket::after { right: -12px; clip-path: inset(0 50% 0 0); }
+.gmp-perf { border-top: 2px dashed color-mix(in oklab, var(--border) 90%, transparent); }
+
+/* Sello "PAGADO" */
+.gmp-stamp {
+  position: absolute;
+  right: 18px;
+  top: 16px;
+  padding: 3px 12px;
+  border: 3px double color-mix(in oklab, var(--primary) 85%, transparent);
+  border-radius: 6px;
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  transform: rotate(-9deg);
+  mix-blend-mode: multiply;
+  opacity: .9;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .gmp-stamp { right: 12px; top: 14px; padding: 2px 9px; font-size: 12px; }
+}
+
+/* ───────── Línea de tiempo ───────── */
+.gmp-step { position: relative; display: flex; gap: 14px; padding-bottom: 20px; }
+.gmp-step:last-child { padding-bottom: 0; }
+.gmp-step::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 32px;
+  bottom: -2px;
+  width: 2px;
+  background: repeating-linear-gradient(to bottom, color-mix(in oklab, var(--border) 100%, transparent) 0 4px, transparent 4px 8px);
+}
+.gmp-step:last-child::before { display: none; }
+.gmp-step.is-done::before { background: var(--primary); transform-origin: top; }
+.gmp-node {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fffdf9;
+  border: 2px solid color-mix(in oklab, var(--border) 100%, transparent);
+  color: var(--muted-foreground);
+}
+.is-done .gmp-node { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+.is-now .gmp-node { border-color: var(--gmp-amber); color: var(--primary); }
+.is-now .gmp-node::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 2px solid var(--gmp-amber);
+  opacity: .5;
+}
+.is-goal .gmp-node { background: color-mix(in oklab, var(--gmp-amber) 18%, #fffdf9); border-color: var(--gmp-amber); color: var(--primary); }
+
+/* ───────── Barra fija en móvil ───────── */
+.gmp-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in oklab, #fffdf9 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+}
+
+/* ───────── Movimiento ───────── */
+@media (prefers-reduced-motion: no-preference) {
+  .gmp-rise { opacity: 0; animation: gmp-rise .7s cubic-bezier(.2, .8, .2, 1) var(--gmp-d, 0s) forwards; }
+
+  .gmp-badge-disc { animation: gmp-pop .6s cubic-bezier(.2, 1.5, .4, 1) .05s both; }
+  .gmp-ring { stroke-dashoffset: 152; animation: gmp-draw .7s ease-out .25s forwards; }
+  .gmp-tick { stroke-dashoffset: 40; animation: gmp-draw .45s ease-out .85s forwards; }
+  .gmp-pulse { animation: gmp-pulse 1.6s ease-out 1.1s 2; }
+
+  .gmp-p { animation: gmp-burst var(--d) cubic-bezier(.15, .7, .3, 1) var(--delay) forwards; }
+  .gmp-fall { animation: gmp-fall var(--d) linear var(--delay) forwards; }
+
+  .gmp-stamp { animation: gmp-stamp .5s cubic-bezier(.2, 1.7, .4, 1) 1.5s both; }
+  .gmp-ticket { animation: gmp-thud .35s ease-out 1.62s; }
+
+  .gmp-step.is-done::before { animation: gmp-grow .8s ease-out 1.1s both; }
+  .is-now .gmp-node::after { animation: gmp-beat 1.8s ease-out 1.6s infinite; }
+}
+
+@keyframes gmp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes gmp-pop { from { transform: scale(.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes gmp-draw { to { stroke-dashoffset: 0; } }
+@keyframes gmp-pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(2.1); opacity: 0; } }
+@keyframes gmp-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(0) scale(.3); }
+  8% { opacity: 1; }
+  52% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) rotate(var(--rot)) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--tx) * 1.15), calc(-50% + var(--ty) + 230px)) rotate(calc(var(--rot) * 1.7)) scale(.9); }
+}
+@keyframes gmp-fall {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0); }
+  8% { opacity: .95; }
+  100% { opacity: 0; transform: translate3d(var(--sway), 105vh, 0) rotate(var(--rot)); }
+}
+@keyframes gmp-stamp { from { opacity: 0; transform: rotate(-9deg) scale(2.6); } to { opacity: .9; transform: rotate(-9deg) scale(1); } }
+@keyframes gmp-thud { 0%, 100% { transform: none; } 40% { transform: translateY(3px) scale(.995); } }
+@keyframes gmp-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes gmp-beat { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.7); opacity: 0; } }

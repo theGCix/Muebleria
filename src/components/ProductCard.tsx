@@ -376,14 +376,14 @@ export function ProductCard({ product: p }: Props) {
                   key="en-carrito"
                   role="group"
                   aria-label={`${p.nombre} en el carrito: ${qty} ${qty === 1 ? "unidad" : "unidades"}`}
-                  className="flex w-full items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 p-1 text-emerald-800 animate-in zoom-in-95 fade-in duration-300"
+                  className="flex w-full items-center gap-1 rounded-full border border-primary/25 bg-primary/[0.06] p-1 text-primary animate-in zoom-in-95 fade-in duration-300"
                 >
                   <button
                     type="button"
                     onClick={handleDec}
                     aria-label={qty <= 1 ? "Quitar del carrito" : "Quitar una unidad"}
                     title={qty <= 1 ? "Quitar del carrito" : "Quitar una unidad"}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm transition-all hover:bg-emerald-100 active:scale-90"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm transition-all hover:bg-primary/10 active:scale-90"
                   >
                     {qty <= 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                   </button>
@@ -396,7 +396,7 @@ export function ProductCard({ product: p }: Props) {
                         <span className="hidden @[13rem]:inline">En el carrito</span>
                       </span>
                     </span>
-                    <span className="hidden whitespace-nowrap text-[11px] text-emerald-700/80 @[13rem]:block">
+                    <span className="hidden whitespace-nowrap text-[11px] text-primary/70 @[13rem]:block">
                       {qty} {qty === 1 ? "unidad" : "unidades"} · {fmtPEN(precioOferta * qty)}
                     </span>
                   </div>
@@ -407,7 +407,7 @@ export function ProductCard({ product: p }: Props) {
                     disabled={llegoAlMaximo || agotado}
                     aria-label="Agregar una unidad"
                     title={llegoAlMaximo ? "Alcanzaste el stock disponible" : "Agregar una unidad"}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-90 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-white/80"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-90 disabled:cursor-not-allowed disabled:bg-primary/25 disabled:text-primary-foreground/80"
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>

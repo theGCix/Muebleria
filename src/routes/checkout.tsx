@@ -52,12 +52,8 @@ function generateOrderId() {
 }
 
 type ModalTipo = "exitoso" | "error" | null;
-interface ModalDatos {
-  
-  purchase?: string;
-  date?: string;
-  amount?: string;
-  currency?: string;
+// Para "exitoso" se usa el detalle completo del pedido (PagoExitoso); para "error", solo actionDesc.
+interface ModalDatos extends Partial<PagoExitosoDatos> {
   actionDesc?: string;
 }
 
@@ -66,6 +62,7 @@ import { API_URL as API } from "@/config";
 import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
+import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 
 async function fetchNiubizSession(payload: {
   amount: number;
@@ -326,11 +323,18 @@ useEffect(() => {
       date:     new Date().toLocaleString("es-PE"),
       amount:   (saved.total ?? totalFinal).toFixed(2),
       currency: "PEN",
+      nombre:        saved.nombre,
+      email:         saved.email,
+      direccion:     saved.direccion,
+      distrito:      saved.distrito,
+      metodoEntrega: saved.metodoEntrega ?? "domicilio",
+      modoEntrega:   saved.modoEntrega ?? null,
+      subtotal:      saved.subtotal,
+      envio:         saved.envio,
+      items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
     });
     setModalTipo("exitoso");
-    setTimeout(() => {
-      window.location.href = "/perfil";
-    }, 2500);
+    // Sin redirección automática: la pantalla de éxito tiene sus propios botones ("Ver mi pedido", etc.)
 }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Lógica real de pago (Niubiz) — se llama tras validar y, si hace falta, loguearse ──
@@ -751,8 +755,10 @@ useEffect(() => {
       </main>
       <Footer />
 
-      {modalTipo && (
-        <PagoModal tipo={modalTipo} datos={modalDatos} onCerrar={() => setModalTipo(null)} />
+      {modalTipo === "exitoso" ? (
+        <PagoExitoso datos={{ purchase: "—", date: "", amount: "0", ...modalDatos }} />
+      ) : (
+        modalTipo && <PagoModal tipo={modalTipo} datos={modalDatos} onCerrar={() => setModalTipo(null)} />
       )}
 
       <LoginModal
