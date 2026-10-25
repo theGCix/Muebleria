@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"; 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Header } from "@/components/Header"; 
 import { Hero } from "@/components/Hero"; 
 import { Categories } from "@/components/Categories";
@@ -11,6 +11,7 @@ import { MedidaCTA } from "@/components/MedidaCTA";
 import { Footer } from "@/components/Footer";
 
 import { trackEvent } from "@/hooks/useEventTracking"; // ajusta la ruta si es diferente
+import { useHomeCinema } from "@/hooks/useHomeCinema";
 
 export const Route = createFileRoute("/")({ head: () => ({ meta: [ 
   { title: "G&M Mueblería — Muebles artesanales en madera natural" }, 
@@ -21,6 +22,9 @@ export const Route = createFileRoute("/")({ head: () => ({ meta: [
        component: Index, });
 
 function Index() {
+  const mainRef = useRef<HTMLElement>(null);
+  useHomeCinema(mainRef);
+
   useEffect(() => {
     trackEvent({
       tipo: "pagina_vista",
@@ -31,5 +35,5 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <ProductsSection /> <Testimonials /> <MedidaCTA /> 
+     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <ProductsSection /> <Testimonials /> <MedidaCTA /> 
      </main> <Footer /> </div> ); }

@@ -33,7 +33,10 @@ export function OfertasSection() {
       <div className="absolute inset-0 bg-background/93" />
 
       <div className="container relative mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div
+          data-reveal
+          className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between"
+        >
           <div className="flex items-start gap-3">
             <span className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
               <Flame className="h-5 w-5" />

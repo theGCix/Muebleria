@@ -158,7 +158,10 @@ export function ProductsSection() {
     <section id="catalogo" className="scroll-mt-28 px-4 py-16 md:py-20">
       <div className="container mx-auto max-w-7xl">
         {/* ── Encabezado ── */}
-        <div className="mb-8 flex flex-col gap-5 md:mb-10 md:flex-row md:items-end md:justify-between">
+        <div
+          data-reveal
+          className="mb-8 flex flex-col gap-5 md:mb-10 md:flex-row md:items-end md:justify-between"
+        >
           <div className="max-w-2xl">
             <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent">
               Catálogo G&amp;M

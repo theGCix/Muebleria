@@ -26,7 +26,11 @@ export function CombosSection() {
           </div>
         ) : (
           <>
-            {destacado && <ComboBanner combo={destacado} otros={resto.length} />}
+            {destacado && (
+              <div data-reveal="panel">
+                <ComboBanner combo={destacado} otros={resto.length} />
+              </div>
+            )}
 
             {resto.length > 0 && (
               <div id="combos-todos" className={destacado ? "mt-14 scroll-mt-28" : ""}>

@@ -64,7 +64,9 @@ export function MedidaCTA() {
 
   return (
     <section id="a-medida" className="scroll-mt-28 px-4 pb-20 pt-4 md:pb-24">
-      <div className="hero-taller container mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-3xl bg-[var(--wood-dark)] p-7 text-white shadow-[var(--shadow-elegant)] md:p-12 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:p-14">
+      <div
+        data-reveal="panel"
+        className="hero-taller container mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-3xl bg-[var(--wood-dark)] p-7 text-white shadow-[var(--shadow-elegant)] md:p-12 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:p-14">
         <div className="flex flex-col justify-center">
           <span className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-gold)]/50 px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-[var(--color-gold-light)]">
             <Ruler className="h-3.5 w-3.5" /> Muebles a medida

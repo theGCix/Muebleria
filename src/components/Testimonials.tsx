@@ -40,7 +40,10 @@ export function Testimonials() {
   return (
     <section id="testimonios" className="scroll-mt-28 px-4 py-20 md:py-24">
       <div className="container mx-auto max-w-7xl">
-        <div className="mb-12 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+        <div
+          data-reveal
+          className="mb-12 flex flex-col gap-8 md:flex-row md:items-end md:justify-between"
+        >
           <div className="max-w-xl">
             <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent">
               Testimonios
@@ -65,7 +68,9 @@ export function Testimonials() {
           )}
         </div>
 
-        <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory items-start gap-5 overflow-x-auto px-4 pb-2 md:mx-0 md:block md:columns-2 md:gap-5 md:overflow-visible md:px-0 lg:columns-3">
+        <div
+          data-reveal
+          className="no-scrollbar -mx-4 flex snap-x snap-mandatory items-start gap-5 overflow-x-auto px-4 pb-2 md:mx-0 md:block md:columns-2 md:gap-5 md:overflow-visible md:px-0 lg:columns-3">
           {resenas.map((r) => (
             <Tarjeta key={r.id} r={r} />
           ))}

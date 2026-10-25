@@ -155,21 +155,31 @@ function HeroCampana({ c }: { c: Campana }) {
     : "Piezas de madera natural con precio rebajado, directo del taller a tu casa.";
 
   return (
-    <section className="hero-taller relative overflow-hidden bg-[var(--color-walnut)] text-[var(--color-warm-white)]">
+    <section
+      data-hero
+      className="hero-taller relative overflow-hidden bg-[var(--color-walnut)] text-[var(--color-warm-white)]"
+    >
       <div className="container mx-auto grid grid-cols-1 items-center gap-12 px-4 py-14 md:px-6 md:py-20 lg:grid-cols-[1.05fr_1fr]">
-        <div className="min-w-0 space-y-8">
+        <div data-hero-text className="min-w-0 space-y-8">
           <div className="space-y-4">
-            <h1 className="hero-display text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
+            <h1 data-hero-title className="hero-display text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
               {titulo}
             </h1>
-            <p className="max-w-lg text-lg leading-relaxed text-[var(--color-gold-light)]/85">
+            <p
+              data-hero-item
+              className="max-w-lg text-lg leading-relaxed text-[var(--color-gold-light)]/85"
+            >
               {bajada}
             </p>
           </div>
 
-          {c.venceMs != null && <Reloj venceMs={c.venceMs} unificada={c.unificada} />}
+          {c.venceMs != null && (
+            <div data-hero-item>
+              <Reloj venceMs={c.venceMs} unificada={c.unificada} />
+            </div>
+          )}
 
-          <div className="flex flex-wrap gap-3">
+          <div data-hero-item className="flex flex-wrap gap-3">
             <Button
               asChild
               size="lg"
@@ -190,7 +200,10 @@ function HeroCampana({ c }: { c: Campana }) {
             </Button>
           </div>
 
-          <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--color-gold-light)]/80">
+          <ul
+            data-hero-item
+            className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--color-gold-light)]/80"
+          >
             <li className="flex items-center gap-2">
               <Truck className="h-4 w-4" /> Delivery a todo Lima
             </li>
@@ -201,7 +214,7 @@ function HeroCampana({ c }: { c: Campana }) {
         </div>
 
         {/* Riel con etiquetas colgadas */}
-        <div className="relative min-w-0">
+        <div data-hero-rail className="relative min-w-0">
           <div
             aria-hidden
             className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-[var(--color-gold)]/70"
@@ -233,22 +246,27 @@ function HeroCampana({ c }: { c: Campana }) {
 
 function HeroMarca() {
   return (
-    <section className="relative overflow-hidden">
+    <section data-hero className="relative overflow-hidden">
       <div className="container mx-auto px-6 pt-16 pb-24 md:pt-24 md:pb-32">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground">
+          <div data-hero-text className="space-y-8">
+            <div
+              data-hero-item
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5 text-accent" />
               Hecho a mano · Madera noble
             </div>
-            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] text-foreground">
+            <h1
+              data-hero-title
+              className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] text-foreground"
+            >
               Muebles que <em className="text-accent not-italic">cuentan</em> historias en tu hogar
             </h1>
-            <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
+            <p data-hero-item className="text-lg text-muted-foreground max-w-xl leading-relaxed">
               En G&amp;M Mueblería diseñamos piezas atemporales en madera natural, pensadas para
               acompañarte por generaciones. Calidad artesanal con entrega a domicilio.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div data-hero-item className="flex flex-wrap gap-3">
               <Button
                 asChild
                 size="lg"
@@ -267,7 +285,7 @@ function HeroMarca() {
                 <a href="#categorias">Explorar categorías</a>
               </Button>
             </div>
-            <div className="flex items-center gap-8 pt-4">
+            <div data-hero-item className="flex items-center gap-8 pt-4">
               <div>
                 <div className="font-display text-3xl font-semibold">15+</div>
                 <div className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -293,7 +311,10 @@ function HeroMarca() {
 
           <div className="relative">
             <div className="absolute -inset-4 bg-[image:var(--gradient-warm)] opacity-20 blur-3xl rounded-full" />
-            <div className="relative rounded-2xl overflow-hidden shadow-[var(--shadow-elegant)] border border-border/40">
+            <div
+              data-hero-img
+              className="relative rounded-2xl overflow-hidden shadow-[var(--shadow-elegant)] border border-border/40"
+            >
               <img
                 src={heroImg}
                 alt="Mueble artesanal de madera natural en sala iluminada"
