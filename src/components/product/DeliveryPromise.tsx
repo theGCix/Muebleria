@@ -4,25 +4,14 @@ import { useEffect, useState } from "react";
 import { Truck } from "lucide-react";
 import { DISTRITOS_ENVIO, getPrecioEnvio } from "@/lib/envios";
 import { fmtPEN } from "@/lib/pricing";
+import {
+  ENTREGA_MIN_DIAS as MIN_DIAS,
+  ENTREGA_MAX_DIAS as MAX_DIAS,
+  DISTRITO_STORAGE_KEY as STORE_KEY,
+  addBusinessDays,
+  fmtDia,
+} from "@/lib/entrega";
 import "./product-experience.css";
-
-// Plazos de la ficha: Lima Metropolitana 5–7 días hábiles
-const MIN_DIAS = 5;
-const MAX_DIAS = 7;
-const STORE_KEY = "gm_distrito_envio";
-
-function addBusinessDays(from: Date, days: number) {
-  const d = new Date(from);
-  let added = 0;
-  while (added < days) {
-    d.setDate(d.getDate() + 1);
-    const wd = d.getDay();
-    if (wd !== 0 && wd !== 6) added++;
-  }
-  return d;
-}
-const fmtDia = (d: Date) =>
-  new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", month: "short" }).format(d).replace(".", "");
 
 export function DeliveryPromise() {
   const [distrito, setDistrito] = useState("");

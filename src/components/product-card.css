@@ -1,0 +1,128 @@
+/* src/components/product-card.css
+   Tarjeta de producto "vitrina". Todo lo decorativo vive bajo (hover: hover) y respeta
+   prefers-reduced-motion: en celular la tarjeta es estática, rápida y sin efectos que estorben. */
+
+.gmc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--card);
+  border: 1px solid color-mix(in oklab, var(--border) 65%, transparent);
+  transition: box-shadow .35s ease, border-color .3s ease, transform .25s ease-out;
+}
+
+/* Escenario cálido: las fotos con fondo blanco se funden con la tarjeta (mix-blend-multiply en la <img>) */
+.gmc-media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 100%, color-mix(in oklab, var(--primary) 9%, #fbf7f0), #fbf7f0 72%);
+}
+
+/* Brillo que sigue al cursor */
+.gmc-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .3s ease;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 30%), rgba(255, 255, 255, .55), transparent 45%);
+  mix-blend-mode: soft-light;
+}
+
+/* Vista rápida: solo donde hay mouse (en táctil la tarjeta ya es un toque directo a la ficha) */
+.gmc-quick { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .gmc-card:hover {
+    border-color: color-mix(in oklab, var(--primary) 38%, transparent);
+    box-shadow:
+      0 24px 46px -20px color-mix(in oklab, var(--primary) 50%, transparent),
+      0 8px 16px -8px rgba(40, 24, 12, .16);
+  }
+  .gmc-card:hover .gmc-sheen { opacity: 1; }
+
+  .gmc-quick {
+    display: block;
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    padding: 2.25rem .9rem .8rem;
+    color: #fff;
+    background: linear-gradient(to top, rgba(32, 20, 12, .88), rgba(32, 20, 12, .6) 62%, transparent);
+    transform: translateY(102%);
+    transition: transform .38s cubic-bezier(.2, .8, .2, 1);
+  }
+  .gmc-card:hover .gmc-quick,
+  .gmc-card:focus-within .gmc-quick { transform: translateY(0); }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .gmc-card {
+    transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    will-change: transform;
+  }
+}
+
+/* Punto que late junto a "Termina hoy" / "Quedan N" */
+.gmc-dot {
+  position: relative;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.gmc-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: gmc-pulse 1.7s ease-out infinite;
+}
+@keyframes gmc-pulse {
+  0% { transform: scale(1); opacity: .65; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* Destello periódico sobre el botón de compra (escalonado por tarjeta con animation-delay inline) */
+.gmc-cta { position: relative; overflow: hidden; }
+@media (prefers-reduced-motion: no-preference) {
+  .gmc-cta-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 32%, rgba(255, 255, 255, .3) 50%, transparent 68%);
+    transform: translateX(-130%);
+    animation: gmc-shine 5.5s ease-in-out infinite;
+    animation-delay: var(--gmc-delay, 0s);
+  }
+  .gmc-cta-shine:hover::after { animation: none; }
+}
+@keyframes gmc-shine {
+  0%, 62% { transform: translateX(-130%); }
+  100% { transform: translateX(130%); }
+}
+
+/* Miniatura que vuela al carrito (se crea desde JS) */
+.gmc-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(40, 24, 12, .38);
+}
+
+/* Rebote del ícono del carrito al recibir el producto */
+.gmc-bump { animation: gmc-bump .6s cubic-bezier(.3, 1.7, .5, 1); }
+@keyframes gmc-bump {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 55%, transparent); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1); box-shadow: 0 0 0 14px transparent; }
+}
