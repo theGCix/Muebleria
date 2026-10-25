@@ -92,7 +92,7 @@ function hero(raiz: HTMLElement): number {
       });
     }
     if (items.length) {
-      tl.from(items, { autoAlpha: 0, y: 28, duration: 0.9, stagger: 0.1, clearProps: "all" }, 0.35);
+      tl.from(items, { autoAlpha: 0, y: 28, duration: 0.9, stagger: 0.1, clearProps: "transform,opacity,visibility" }, 0.35);
     }
     if (riel) {
       // La entrada va en los hijos; el parallax, en el contenedor (así no se pisan)
@@ -101,11 +101,11 @@ function hero(raiz: HTMLElement): number {
         y: -36,
         duration: 1,
         stagger: 0.1,
-        clearProps: "all",
+        clearProps: "transform,opacity,visibility",
       }, 0.2);
     }
     if (imgWrap) {
-      tl.from(imgWrap, { autoAlpha: 0, scale: 0.94, duration: 1.1, clearProps: "all" }, 0.2);
+      tl.from(imgWrap, { autoAlpha: 0, scale: 0.94, duration: 1.1, clearProps: "transform,opacity,visibility" }, 0.2);
     }
 
     /* Parallax con el scroll (suave, sin pin: no choca con el reloj ni con las etiquetas) */
