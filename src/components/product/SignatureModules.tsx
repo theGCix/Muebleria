@@ -49,13 +49,21 @@ function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
   const gid = useId().replace(/:/g, "");
   const [picked, setPicked] = useState<number | null>(null);
   const size = picked ?? 55; // escena por defecto; el chip solo se marca cuando el cliente elige
+  const [wallTxt, setWallTxt] = useState("");
+  const wall = (() => {
+    const n = Number(wallTxt.replace(",", "."));
+    return Number.isFinite(n) && n >= 60 && n <= 600 ? Math.round(n) : null;
+  })();
 
   const tvW = size * 2.54 * TV_RATIO;                 // cm
   const recW = Math.ceil((tvW * 1.25) / 10) * 10;     // mueble ≥ 25 % más ancho que el TV
   const distMin = (size * 2.54 * 1.2) / 100;          // m
   const distMax = (size * 2.54 * 1.6) / 100;
 
-  const S = 260 / 240;                                // px por cm (escala fija para comparar tamaños)
+  const recFor = (inch: number) => Math.ceil((inch * 2.54 * TV_RATIO * 1.25) / 10) * 10;
+  const margen = wall != null ? wall - recW : null;
+  const maxTv = wall != null ? [...TV_SIZES].reverse().find((t) => recFor(t) <= wall) ?? null : null;
+  const S = 270 / Math.max(240, wall ?? 0);           // px por cm (se achica si la pared es ancha)
   const tvPx = tvW * S, tvH = tvPx * 9 / 16, unitPx = recW * S;
   const cx = 160;
 
@@ -63,8 +71,20 @@ function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
     <Shell kicker="Asegúrate de que encaja" title="¿De cuántas pulgadas es tu TV?">
       <Chips options={TV_SIZES} value={picked} onPick={(v) => { setPicked(v); setPref("Pantalla", `${v}″`); }} render={(v) => `${v}″`} />
 
+      <div className="gmx-field gmx-wall">
+        <label htmlFor={`wall${gid}`}>Ancho libre de tu pared (cm)</label>
+        <input id={`wall${gid}`} type="text" inputMode="numeric" autoComplete="off" placeholder="Ej. 280"
+          value={wallTxt}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^\d.,]/g, "").slice(0, 5);
+            setWallTxt(v);
+            const n = Number(v.replace(",", "."));
+            setPref("Pared", Number.isFinite(n) && n >= 60 && n <= 600 ? `${Math.round(n)} cm` : null);
+          }} />
+      </div>
       <button type="button" role="switch" aria-checked={ambient} className="gmx-switch" onClick={() => setAmbient(!ambient)}>
-        <span className="gmx-switch-track" /> Luz LED ambiente <span style={{ color: "var(--gm-muted)" }}>(míralo de noche en la foto)</span>
+        <span className="gmx-switch-track" />
+        <span>Luz LED ambiente <span className="gmx-switch-hint">(míralo de noche en la foto)</span></span>
       </button>
 
       <svg className="gmx-viz" viewBox="0 0 320 200" role="img" aria-label={`Un TV de ${size} pulgadas sobre un mueble de ${recW} cm`}>
@@ -75,6 +95,19 @@ function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
           </radialGradient>
         </defs>
         <rect width="320" height="200" fill={ambient ? "#2A211B" : "#F7F4EF"} style={{ transition: "fill .6s" }} />
+        {wall != null && (() => {
+          const wPx = wall * S, x1 = cx - wPx / 2, x2 = cx + wPx / 2;
+          const col = margen! >= 0 ? "#3F7D4E" : "#B3412E";
+          return (
+            <g>
+              <rect x={x1} y="22" width={wPx} height="168" fill={ambient ? "#332820" : "#EDE6DC"} />
+              <line x1={x1} x2={x2} y1="16" y2="16" stroke={col} strokeWidth="1.5" />
+              <line x1={x1} x2={x1} y1="12" y2="20" stroke={col} strokeWidth="1.5" />
+              <line x1={x2} x2={x2} y1="12" y2="20" stroke={col} strokeWidth="1.5" />
+              <text x={cx} y="11" textAnchor="middle" fontSize="8" fill={col}>Tu pared: {wall} cm</text>
+            </g>
+          );
+        })()}
         <rect x={cx - unitPx / 2 - 14} y="120" width={unitPx + 28} height="70" fill={`url(#g${gid})`} />
         <rect x={cx - tvPx / 2} y={150 - tvH} width={tvPx} height={tvH} rx="3" fill="#15110E" />
         <rect x={cx - tvPx / 2 + 3} y={153 - tvH} width={tvPx - 6} height={tvH - 6} rx="2" fill={ambient ? "#26364a" : "#1d2733"} />
@@ -85,8 +118,19 @@ function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
 
       <p className="gmx-readout">
         Tu TV de {size}″ mide <b>~{Math.round(tvW)} cm</b> de ancho. Te recomendamos un mueble de <b>{recW} cm o más</b> y verlo
-        desde <b>{distMin.toFixed(1)} a {distMax.toFixed(1)} m</b>. ¿Tu pared mide otra cosa? Lo hacemos a medida.
+        desde <b>{distMin.toFixed(1)} a {distMax.toFixed(1)} m</b>.
       </p>
+      {wall != null && (
+        <p className={`gmx-verdict ${margen! >= 0 ? "ok" : "warn"}`} role="status" aria-live="polite">
+          {margen! >= 0 ? (
+            <>✓ <b>Cabe.</b> Tu pared de {wall} cm deja <b>{margen} cm libres</b> ({Math.round(margen! / 2)} cm por lado).</>
+          ) : maxTv ? (
+            <>Tu pared de {wall} cm es <b>{-margen!} cm más angosta</b> que el mueble recomendado para un TV de {size}″. En esa pared lo ideal es un TV de <b>hasta {maxTv}″</b>, o lo hacemos a medida.</>
+          ) : (
+            <>Tu pared de {wall} cm es muy angosta para un mueble de TV estándar: <b>lo hacemos a medida</b>.</>
+          )}
+        </p>
+      )}
     </Shell>
   );
 }

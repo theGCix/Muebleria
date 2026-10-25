@@ -290,7 +290,7 @@ const PAGE_CSS = `
         }
         .gm-breadcrumb a { color: var(--gm-muted); text-decoration: none; transition: color .2s; }
         .gm-breadcrumb a:hover { color: var(--gm-walnut); }
-        @media(max-width:768px){ .gm-breadcrumb{ padding: 12px 20px; } }
+        @media(max-width:768px){ .gm-breadcrumb{ padding: 12px 20px; flex-wrap:wrap; row-gap:2px; } }
 
         /* product layout */
         .gm-product-layout {
@@ -468,8 +468,11 @@ const PAGE_CSS = `
         /* tabs section */
         .gm-tabs-section { max-width:1300px; margin:0 auto; padding:48px 48px 80px; }
         @media(max-width:768px){ .gm-tabs-section{ padding:32px 20px 60px; } }
-        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; }
+        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; overflow-x:auto; scrollbar-width:none; }
+        .gm-tab-list::-webkit-scrollbar { display:none; }
+        @media(max-width:640px){ .gm-tab-list{ justify-content:space-between; } .gm-tab-btn{ padding:14px 6px !important; font-size:11px !important; letter-spacing:.02em !important; } }
         .gm-tab-btn {
+          flex:none; white-space:nowrap;
           background:none; border:none; padding:14px 24px;
           font-size:13px; letter-spacing:.06em; text-transform:uppercase;
           color:var(--gm-muted); cursor:pointer; position:relative; transition:color .2s;

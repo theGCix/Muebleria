@@ -140,12 +140,20 @@
 .gmx-readout a { color: var(--gmx-accent); text-decoration: underline; }
 
 .gmx-switch {
-  display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer; text-align: left;
   font-size: 13px; color: var(--gm-mid); user-select: none; margin-bottom: 12px;
 }
 .gmx-switch-track {
-  width: 40px; height: 22px; border-radius: 22px; background: #cfc6bd; position: relative; transition: background .25s;
+  flex: none; width: 40px; height: 22px; border-radius: 22px; background: #cfc6bd; position: relative; transition: background .25s;
 }
+.gmx-switch-hint { color: var(--gm-muted); }
+@media (max-width: 640px) { .gmx-switch-hint { display: block; font-size: 12px; } }
+
+.gmx-wall { max-width: 220px; margin-bottom: 14px; }
+.gmx-wall input { font-size: 16px; } /* evita el zoom de iOS */
+.gmx-verdict { font-size: 13px; line-height: 1.55; margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; }
+.gmx-verdict.ok { background: #E6F1E8; color: #2F5E3A; }
+.gmx-verdict.warn { background: #FBEAE5; color: #8A3322; }
 .gmx-switch-track::after {
   content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
   border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
@@ -256,4 +264,9 @@
 @media (max-width: 900px) {
   .gmx-page .gm-gallery-col { padding-right: 0; margin-bottom: 24px; }
   .gmx-page .gm-info-col { padding-left: 0; }
+}
+
+/* ── Móvil: el botón flotante del chat queda sobre la barra de compra fija, sin tapar "Agregar" ── */
+@media (max-width: 640px) {
+  body:has(.gmx-sticky.show) button.fixed.bottom-6.right-6 { bottom: 84px !important; }
 }
