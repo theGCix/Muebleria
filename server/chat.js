@@ -262,16 +262,53 @@ export function crearModelo() {
   });
 }
 
+const ESTADO_HERRAMIENTA = {
+  buscar_productos: "Buscando en el catálogo…",
+  consultar_pedido: "Consultando tu pedido…",
+  agregar_al_carrito: "Agregando al carrito…",
+};
+
+/** Combina la señal de cancelación del cliente con el timeout del turno. */
+function señalDeTurno(signal) {
+  const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 60_000);
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+/** Una llamada al modelo: con streaming si hay `onToken`, completa si no. */
+async function invocarModelo(modelo, conversacion, { signal, onToken }) {
+  if (!onToken) return modelo.invoke(conversacion, { signal });
+
+  let acumulado;
+  for await (const chunk of await modelo.stream(conversacion, { signal })) {
+    const texto = textoDe(chunk.content);
+    if (texto) onToken(texto);
+    acumulado = acumulado ? acumulado.concat(chunk) : chunk;
+  }
+  return acumulado ?? new AIMessage("");
+}
+
 /**
  * Ejecuta el ciclo del agente: modelo → tools → modelo … → respuesta final.
  * `llm` es inyectable para poder probar sin Ollama.
+ * Callbacks opcionales (modo streaming):
+ *   onToken(texto)   → fragmento de la respuesta
+ *   onStatus(texto)  → "Buscando en el catálogo…" mientras corre una tool
+ *   onReset()        → el turno tenía texto previo a una tool: el cliente debe borrarlo
  */
-export async function ejecutarAgente({ messages, supabaseAdmin, llm = crearModelo() }) {
+export async function ejecutarAgente({
+  messages,
+  supabaseAdmin,
+  llm = crearModelo(),
+  onToken,
+  onStatus,
+  onReset,
+  signal,
+}) {
   const ctx = { cartActions: [] };
   const tools = crearHerramientas({ supabaseAdmin }, ctx);
   const porNombre = Object.fromEntries(tools.map((t) => [t.name, t]));
   const modelo = llm.bindTools(tools);
-  const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 60_000);
 
   const conversacion = [new SystemMessage(SYSTEM_PROMPT), ...normalizarHistorial(messages)];
   if (conversacion.length < 2) {
@@ -280,8 +317,9 @@ export async function ejecutarAgente({ messages, supabaseAdmin, llm = crearModel
 
   let reply = "";
   for (let turno = 0; turno < MAX_TURNOS_HERRAMIENTAS; turno++) {
-    const ai = await modelo.invoke(conversacion, {
-      signal: AbortSignal.timeout(timeoutMs),
+    const ai = await invocarModelo(modelo, conversacion, {
+      signal: señalDeTurno(signal),
+      onToken,
     });
     conversacion.push(ai);
 
@@ -291,7 +329,11 @@ export async function ejecutarAgente({ messages, supabaseAdmin, llm = crearModel
       break;
     }
 
+    // El modelo habló antes de llamar a la tool ("voy a buscar…"): ese texto no es la respuesta final.
+    if (onReset && textoDe(ai.content).trim()) onReset();
+
     for (const llamada of llamadas) {
+      onStatus?.(ESTADO_HERRAMIENTA[llamada.name] ?? "Procesando…");
       const herramienta = porNombre[llamada.name];
       let resultado;
       if (!herramienta) {
@@ -325,7 +367,17 @@ export async function ejecutarAgente({ messages, supabaseAdmin, llm = crearModel
   };
 }
 
-// ── Ruta Express ──────────────────────────────────────────────
+// ── Rutas Express ─────────────────────────────────────────────
+
+function mensajeDeError(err) {
+  const sinOllama =
+    err.name === "TimeoutError" ||
+    err.name === "AbortError" ||
+    /ECONNREFUSED|fetch failed|ENOTFOUND/i.test(`${err.message} ${err.cause?.code ?? ""}`);
+  return sinOllama
+    ? { status: 503, mensaje: "El asistente no está disponible en este momento." }
+    : { status: 500, mensaje: "Error interno del asistente." };
+}
 
 export function registerChat({ app, supabaseAdmin, rateLimit }) {
   const chatLimiter = rateLimit({
@@ -345,15 +397,51 @@ export function registerChat({ app, supabaseAdmin, rateLimit }) {
       res.json(out);
     } catch (err) {
       console.error("Error en /api/chat:", err.message);
-      const sinOllama =
-        err.name === "TimeoutError" ||
-        err.name === "AbortError" ||
-        /ECONNREFUSED|fetch failed|ENOTFOUND/i.test(`${err.message} ${err.cause?.code ?? ""}`);
-      res.status(sinOllama ? 503 : 500).json({
-        error: sinOllama
-          ? "El asistente no está disponible en este momento."
-          : "Error interno del asistente.",
+      const { status, mensaje } = mensajeDeError(err);
+      res.status(status).json({ error: mensaje });
+    }
+  });
+
+  // ── Streaming (Server-Sent Events) ──
+  // Eventos: status {text} · token {text} · reset {} · done {reply, cartActions} · error {error}
+  app.post("/api/chat/stream", chatLimiter, async (req, res) => {
+    const { messages } = req.body ?? {};
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "Falta 'messages'" });
+    }
+
+    res.status(200).set({
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no", // evita que un proxy (nginx/Render) acumule el stream
+    });
+    res.flushHeaders?.();
+
+    const enviar = (evento, data = {}) =>
+      res.write(`event: ${evento}\ndata: ${JSON.stringify(data)}\n\n`);
+
+    // Si el cliente cierra la ventana, cancelamos la generación en Ollama.
+    const abort = new AbortController();
+    res.on("close", () => abort.abort());
+
+    try {
+      const out = await ejecutarAgente({
+        messages,
+        supabaseAdmin,
+        signal: abort.signal,
+        onToken: (text) => enviar("token", { text }),
+        onStatus: (text) => enviar("status", { text }),
+        onReset: () => enviar("reset"),
       });
+      enviar("done", out);
+    } catch (err) {
+      if (!abort.signal.aborted) {
+        console.error("Error en /api/chat/stream:", err.message);
+        enviar("error", { error: mensajeDeError(err).mensaje });
+      }
+    } finally {
+      res.end();
     }
   });
 }

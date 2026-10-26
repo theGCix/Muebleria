@@ -54,10 +54,75 @@ async function chatWithAssistant(messages: Message[]): Promise<{ reply: string; 
   return { reply: data.reply ?? "Lo siento, no pude procesar tu consulta.", cartActions: data.cartActions ?? [] };
 }
 
+type ChatResult = { reply: string; cartActions: CartAction[] };
+type StreamHandlers = {
+  onToken: (t: string) => void;
+  onStatus: (t: string) => void;
+  onReset: () => void;
+};
+
+/** El backend no tiene /api/chat/stream (versión anterior): se usa el modo sin streaming. */
+class StreamNoDisponible extends Error {}
+
+// Lee la respuesta por Server-Sent Events: status · token · reset · done · error
+async function chatWithAssistantStream(
+  messages: Message[],
+  h: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<ChatResult> {
+  const res = await fetch(`${API}/api/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+    signal,
+  });
+  if (res.status === 404) throw new StreamNoDisponible();
+  if (!res.ok || !res.body) throw new Error("Error al conectar con el asistente");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ChatResult | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+
+      let event = "message";
+      let data = "";
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      const payload = data ? JSON.parse(data) : {};
+
+      if (event === "token") h.onToken(payload.text ?? "");
+      else if (event === "status") h.onStatus(payload.text ?? "");
+      else if (event === "reset") h.onReset();
+      else if (event === "error") throw new Error(payload.error ?? "Error del asistente");
+      else if (event === "done") {
+        result = {
+          reply: payload.reply ?? "Lo siento, no pude procesar tu consulta.",
+          cartActions: payload.cartActions ?? [],
+        };
+      }
+    }
+  }
+  if (!result) throw new Error("Respuesta incompleta del asistente");
+  return result;
+}
+
 export function AsistenteChat() {
   const [open, setOpen]       = useState(false);
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
+  const [estado, setEstado]   = useState("Pensando…");
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -65,13 +130,17 @@ export function AsistenteChat() {
     },
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const addItem = useCartStore((s) => s.addItem);
   const updateQty = useCartStore((s) => s.updateQty);
   const items = useCartStore((s) => s.items);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, estado]);
+
+  // Si el componente se desmonta, cancelamos la generación en curso
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const aplicarAccionesCarrito = (acciones: CartAction[]) => {
     for (const a of acciones) {
@@ -106,24 +175,51 @@ export function AsistenteChat() {
     }
   };
 
+  // Reemplaza el contenido del último mensaje (el que se está "escribiendo")
+  const editarUltimo = (fn: (prev: string) => string) =>
+    setMessages((m) => {
+      const copia = [...m];
+      const last = copia[copia.length - 1];
+      copia[copia.length - 1] = { ...last, content: fn(last.content) };
+      return copia;
+    });
+
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
 
     const newMessages: Message[] = [...messages, { role: "user", content: text }];
-    setMessages(newMessages);
+    // Burbuja vacía del asistente que se irá llenando con el stream
+    setMessages([...newMessages, { role: "assistant", content: "" }]);
+    setEstado("Pensando…");
     setLoading(true);
 
+    const abort = new AbortController();
+    abortRef.current = abort;
+
     try {
-      const { reply, cartActions } = await chatWithAssistant(newMessages);
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
-      if (cartActions.length > 0) aplicarAccionesCarrito(cartActions);
-    } catch {
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", content: "Disculpa, hubo un error. Por favor intenta de nuevo." },
-      ]);
+      let result: ChatResult;
+      try {
+        result = await chatWithAssistantStream(
+          newMessages,
+          {
+            onToken: (t) => editarUltimo((prev) => prev + t),
+            onStatus: (t) => setEstado(t),
+            onReset: () => editarUltimo(() => ""),
+          },
+          abort.signal,
+        );
+      } catch (e) {
+        if (!(e instanceof StreamNoDisponible)) throw e;
+        result = await chatWithAssistant(newMessages); // backend sin streaming
+      }
+
+      editarUltimo(() => result.reply);
+      if (result.cartActions.length > 0) aplicarAccionesCarrito(result.cartActions);
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      editarUltimo(() => "Disculpa, hubo un error. Por favor intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -167,6 +263,7 @@ export function AsistenteChat() {
           {/* Mensajes */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
             {messages.map((m, i) => (
+              (m.role === "assistant" && !m.content) ? null : (
               <div
                 key={i}
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
@@ -182,15 +279,16 @@ export function AsistenteChat() {
                   {m.content}
                 </div>
               </div>
+              )
             ))}
-            {loading && (
+            {loading && !messages[messages.length - 1]?.content && (
               <div className="flex justify-start">
                 <div
                   className="rounded-2xl px-3.5 py-2.5 flex items-center gap-1.5"
                   style={{ background: "var(--muted)" }}
                 >
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Pensando...</span>
+                  <span className="text-xs text-muted-foreground">{estado}</span>
                 </div>
               </div>
             )}
