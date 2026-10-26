@@ -7,9 +7,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   ShoppingBag, Package, Truck, CheckCircle2,
-  Clock, XCircle, ChevronDown, ChevronUp,
+  Clock, XCircle, ChevronDown, ChevronUp, Receipt, Store,
 } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
+import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 
 export const Route = createFileRoute("/perfil/pedidos")({
   head: () => ({ meta: [{ title: "Mis pedidos — G&M Mueblería" }] }),
@@ -54,6 +56,12 @@ const STATUS_STEPS: OrderStatus[] = [
   "pagado", "en_produccion", "control_calidad", "listo_despacho", "enviado", "entregado"
 ];
 
+// Con recojo en tienda no hay despacho: se quita "En camino" y se renombran los últimos pasos
+const stepLabel = (step: OrderStatus, recojo: boolean) =>
+  recojo && step === "listo_despacho" ? "Listo para recoger"
+  : recojo && step === "entregado" ? "Recogido"
+  : STATUS_CONFIG[step].label;
+
 // ── Fetch pedidos del usuario ─────────────────────────────────
 async function fetchMisPedidos(userId: string) {
   const { data, error } = await supabase
@@ -61,7 +69,7 @@ async function fetchMisPedidos(userId: string) {
     .select(`
       id, order_number, nombre, email, telefono, dni,
       direccion, distrito, ciudad, notas,
-      subtotal, envio, total, currency, status,
+      subtotal, envio, total, currency, status, metodo_entrega,
       paid_at, estimated_delivery, created_at
     `)
     .eq("user_id", userId)
@@ -84,16 +92,39 @@ async function fetchItemsDePedido(orderId: string) {
 // ── Componente de un pedido ───────────────────────────────────
 function PedidoCard({ order }: { order: any }) {
   const [open, setOpen] = useState(false);
+  const [verComprobante, setVerComprobante] = useState(false);
+  const recojo = order.metodo_entrega === "recojo_tienda";
+  const pagado = order.status !== "pendiente" && order.status !== "cancelado";
   const cfg = STATUS_CONFIG[order.status as OrderStatus] ?? STATUS_CONFIG.pendiente;
   const Icon = cfg.icon;
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["order-items-perfil", order.id],
     queryFn:  () => fetchItemsDePedido(order.id),
-    enabled:  open,
+    enabled:  open || verComprobante,
   });
 
-  const stepIndex = STATUS_STEPS.indexOf(order.status);
+  const pasos = recojo ? STATUS_STEPS.filter((st) => st !== "enviado") : STATUS_STEPS;
+  const statusEfectivo = (recojo && order.status === "enviado" ? "listo_despacho" : order.status) as OrderStatus;
+  const stepIndex = pasos.indexOf(statusEfectivo);
+
+  // Mismos datos que vio el cliente en la pantalla de "Pago aprobado"
+  const datosComprobante: PagoExitosoDatos = {
+    purchase:      order.order_number,
+    date:          new Date(order.paid_at ?? order.created_at).toLocaleString("es-PE"),
+    amount:        Number(order.total).toFixed(2),
+    currency:      order.currency ?? "PEN",
+    nombre:        order.nombre,
+    email:         order.email,
+    direccion:     order.direccion,
+    distrito:      order.distrito,
+    metodoEntrega: recojo ? "recojo_tienda" : "domicilio",
+    subtotal:      Number(order.subtotal),
+    envio:         Number(order.envio),
+    items: items.map((it: any) => ({
+      id: it.id, title: it.title, image: it.image_url ?? null, qty: it.qty, price: Number(it.unit_price),
+    })),
+  };
 
   return (
     <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
@@ -136,7 +167,7 @@ function PedidoCard({ order }: { order: any }) {
         {order.status !== "cancelado" && order.status !== "pendiente" && (
           <div className="mt-4">
             <div className="flex items-center gap-0">
-              {STATUS_STEPS.map((step, i) => {
+              {pasos.map((step, i) => {
                 const done   = i <= stepIndex;
                 const active = i === stepIndex;
                 return (
@@ -150,7 +181,7 @@ function PedidoCard({ order }: { order: any }) {
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" style={{ color: done ? "white" : "#9ca3af" }} />
                     </div>
-                    {i < STATUS_STEPS.length - 1 && (
+                    {i < pasos.length - 1 && (
                       <div
                         className="h-0.5 flex-1 mx-1 transition-all"
                         style={{ background: i < stepIndex ? "#1a2e5a" : "#e5e7eb" }}
@@ -161,15 +192,34 @@ function PedidoCard({ order }: { order: any }) {
               })}
             </div>
             <div className="flex justify-between mt-1">
-              {STATUS_STEPS.map((step) => (
+              {pasos.map((step) => (
                 <p key={step} className="text-[10px] text-muted-foreground text-center" style={{ flex: step === "entregado" ? "none" : 1 }}>
-                  {STATUS_CONFIG[step].label}
+                  {stepLabel(step, recojo)}
                 </p>
               ))}
             </div>
           </div>
         )}
       </button>
+
+      {/* Comprobante de pago: reabre la pantalla de "Pago aprobado" */}
+      {pagado && (
+        <div className="flex justify-end px-5 pb-4">
+          <button
+            type="button"
+            onClick={() => setVerComprobante(true)}
+            disabled={verComprobante && isLoading}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-60"
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            {verComprobante && isLoading ? "Abriendo…" : "Ver comprobante de pago"}
+          </button>
+        </div>
+      )}
+      {verComprobante && !isLoading && createPortal(
+        <PagoExitoso modo="comprobante" datos={datosComprobante} onCerrar={() => setVerComprobante(false)} />,
+        document.body,
+      )}
 
       {/* Detalle expandible */}
       {open && (
@@ -213,7 +263,7 @@ function PedidoCard({ order }: { order: any }) {
               <span>Subtotal</span><span>{fmt(Number(order.subtotal))}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
-              <span>Envío</span>
+              <span>{recojo ? "Recojo en tienda" : "Envío"}</span>
               <span>{Number(order.envio) === 0 ? "Gratis" : fmt(Number(order.envio))}</span>
             </div>
             <div className="flex justify-between font-semibold text-base pt-1 border-t">
@@ -224,16 +274,18 @@ function PedidoCard({ order }: { order: any }) {
 
           {/* Datos de entrega */}
           <div className="border-t pt-3">
-            <h4 className="text-sm font-semibold mb-2">Datos de entrega</h4>
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">{recojo && <Store className="h-3.5 w-3.5" />}{recojo ? "Datos del recojo (en tienda)" : "Datos de entrega"}</h4>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm bg-muted/30 rounded-lg p-3">
               {[
                 ["Nombre",    order.nombre],
                 ["Email",     order.email],
                 ["Teléfono",  order.telefono],
                 ["DNI/RUC",   order.dni],
-                ["Dirección", order.direccion],
-                ["Distrito",  order.distrito],
-                ["Ciudad",    order.ciudad],
+                ...(recojo ? [] : [
+                  ["Dirección", order.direccion],
+                  ["Distrito",  order.distrito],
+                  ["Ciudad",    order.ciudad],
+                ]),
               ].map(([label, value]) => value ? (
                 <div key={label}>
                   <span className="text-xs text-muted-foreground">{label}</span>

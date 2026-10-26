@@ -12,10 +12,11 @@ interface Props {
   precio: number;
   disabled: boolean;
   adding: boolean;
+  qtyEnCarrito?: number;
   onAdd: () => void;
 }
 
-export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled, adding, onAdd }: Props) {
+export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled, adding, qtyEnCarrito = 0, onAdd }: Props) {
   return (
     <div className={`gmx-sticky${visible ? " show" : ""}`} aria-hidden={!visible}>
       <div className="gmx-sticky-in">
@@ -25,9 +26,9 @@ export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled
           {resumen && <div className="gmx-sticky-meta">{resumen}</div>}
         </div>
         <div className="gmx-sticky-price">{fmtPEN(precio)}</div>
-        <button className={`gm-btn-primary${adding ? " adding" : ""}`} onClick={onAdd} disabled={disabled} tabIndex={visible ? 0 : -1}>
+        <button className={`gm-btn-primary${adding ? " adding" : ""}${!adding && qtyEnCarrito > 0 ? " in-cart" : ""}`} onClick={onAdd} disabled={disabled} tabIndex={visible ? 0 : -1}>
           <ShoppingBag size={16} />
-          {adding ? "¡Agregado!" : disabled ? "Agotado" : "Agregar"}
+          {adding ? "¡Agregado!" : disabled ? "Agotado" : qtyEnCarrito > 0 ? `En carrito (${qtyEnCarrito}) · +1` : "Agregar"}
         </button>
       </div>
     </div>

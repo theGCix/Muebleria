@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getStoredUtm } from "@/hooks/useUtm";
 import { supabase } from "@/integrations/supabase/client";
 import { DISTRITOS_ENVIO, getPrecioEnvio, ORIGEN_ENVIO } from "@/lib/envios";
+import { leerDistritoGuardado } from "@/lib/entrega";
 
 
 
@@ -103,7 +104,12 @@ function CheckoutPage() {
 
   const [form, setForm] = useState({
     nombre: "", email: "", telefono: "", dni: "",
-    direccion: "", distrito: "", ciudad: "Lima", notas: "",
+    direccion: "", ciudad: "Lima", notas: "",
+    // Distrito elegido en la ficha del producto ("Calcula tu envío"); solo si está en el tarifario
+    distrito: (() => {
+      const g = leerDistritoGuardado();
+      return DISTRITOS_ENVIO.some((d) => d.destino === g) ? g : "";
+    })(),
   });
 
   // ── Cupón de descuento ─────────────────────────────────────
@@ -255,7 +261,8 @@ useEffect(() => {
   localStorage.removeItem("gm_checkout_form");
 
   const allParams = Object.fromEntries(new URLSearchParams(window.location.search).entries());
-  const purchaseNumber = allParams.purchaseNumber ?? orderIdRef.current;
+  const purchaseNumber =
+    allParams.purchaseNumber || orderIdRef.current || saved.orderNumber || `GM-${Date.now()}`;
 
   const utmData = getStoredUtm();
   fetch(`${API}/api/orders`, {
@@ -265,7 +272,7 @@ useEffect(() => {
       order: {
         // Dentro del payload que construyes antes de INSERT
         user_id: user?.id ?? null,
-        orderNumber:      purchaseNumber || `GM-${Date.now()}`,
+        orderNumber:      purchaseNumber,
         userId:           saved.userId ?? null,         // ← viene de localStorage
         nombre:           saved.nombre || "—",
         email:            saved.email || allParams.customerEmail || "—",
@@ -319,7 +326,7 @@ useEffect(() => {
     clearCart();
     // Redirigir directo al perfil después de 1.5s para que vean el modal brevemente
     setModalDatos({
-      purchase: purchaseNumber || "—",
+      purchase: purchaseNumber,
       date:     new Date().toLocaleString("es-PE"),
       amount:   (saved.total ?? totalFinal).toFixed(2),
       currency: "PEN",
@@ -392,6 +399,7 @@ useEffect(() => {
       // Guardar datos del formulario y userId en localStorage antes del redirect
       localStorage.setItem("gm_checkout_form", JSON.stringify({
         ...form,
+        orderNumber: orderId,   // sobrevive al redirect de Niubiz (orderIdRef se pierde al recargar)
         userId: user?.id ?? null,
         subtotal,
         envio,

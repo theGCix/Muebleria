@@ -270,3 +270,122 @@
 @media (max-width: 640px) {
   body:has(.gmx-sticky.show) button.fixed.bottom-6.right-6 { bottom: 84px !important; }
 }
+
+/* ── Estado "en el carrito" ── */
+.gmx-page .gm-btn-primary.in-cart { background:#fff; color:var(--gm-walnut); box-shadow:inset 0 0 0 1.5px var(--gm-walnut); }
+.gmx-page .gm-btn-primary.in-cart:hover { background:var(--gm-cream); }
+.gmx-gopay {
+  display:flex; align-items:center; justify-content:center; gap:4px; margin:10px 0 0;
+  font-size:13px; font-weight:600; color:var(--gm-walnut); text-decoration:none;
+}
+.gmx-gopay:hover { text-decoration:underline; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Galería showroom (ProductGallery)
+   ══════════════════════════════════════════════════════════════════════════ */
+.gmg { position: relative; isolation: isolate; }
+
+/* Aura: la foto activa, desenfocada, tiñe el fondo detrás de la tarjeta */
+.gmg-aura {
+  position: absolute; inset: 4% -4% 12% -4%; z-index: -1; border-radius: 28px;
+  background-size: cover; background-position: center;
+  filter: blur(38px) saturate(1.5); opacity: .55; transform: translateY(18px) scale(.96);
+  transition: background-image .5s ease, opacity .5s ease;
+}
+
+.gmg-stage { position: relative; aspect-ratio: 1 / 1; perspective: 1200px; touch-action: pan-y; cursor: zoom-in; outline: none; user-select: none; -webkit-user-select: none; }
+.gmg-stage:focus-visible .gmg-card { box-shadow: 0 0 0 3px var(--gmx-accent, var(--gm-gold)), 0 30px 60px -25px rgba(40,24,10,.45); }
+.gmg-empty { display: flex; align-items: center; justify-content: center; font-size: 64px; background: var(--gm-cream); border-radius: 18px; cursor: default; }
+
+.gmg-card {
+  position: absolute; inset: 0; border-radius: 18px; overflow: hidden; background: var(--gm-cream);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease;
+  box-shadow: 0 30px 60px -28px rgba(40,24,10,.5), 0 10px 24px -12px rgba(40,24,10,.25);
+  will-change: transform;
+}
+.gmg-stage:hover .gmg-card { box-shadow: 0 40px 70px -26px rgba(40,24,10,.55), 0 14px 28px -12px rgba(40,24,10,.28); }
+
+.gmg-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; animation-duration: .55s; animation-timing-function: cubic-bezier(.2,.8,.2,1); animation-fill-mode: both; }
+.gmg-img.from-right { animation-name: gmg-in-right; }
+.gmg-img.from-left  { animation-name: gmg-in-left; }
+@keyframes gmg-in-right { from { opacity: 0; transform: translateX(7%) scale(1.04); } to { opacity: 1; transform: none; } }
+@keyframes gmg-in-left  { from { opacity: 0; transform: translateX(-7%) scale(1.04); } to { opacity: 1; transform: none; } }
+
+/* Brillo que sigue al cursor */
+.gmg-shine {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s ease;
+  background: radial-gradient(460px circle at var(--lx, 50%) var(--ly, 0%), rgba(255,255,255,.34), transparent 60%);
+  mix-blend-mode: soft-light;
+}
+@media (hover: hover) { .gmg-stage:hover .gmg-shine { opacity: 1; } }
+
+/* Barra de progreso tipo "stories" */
+.gmg-progress { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; gap: 5px; z-index: 3; width: min(58%, 260px); pointer-events: none; }
+.gmg-progress span { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.45); box-shadow: 0 1px 3px rgba(0,0,0,.25); position: relative; overflow: hidden; }
+.gmg-progress span::after { content: ""; position: absolute; inset: 0; background: #fff; transform: scaleX(0); transform-origin: left; transition: transform .45s ease; }
+.gmg-progress span.on::after, .gmg-progress span.done::after { transform: scaleX(1); }
+.gmg-progress span.done { opacity: .75; }
+
+/* Etiquetas inferiores */
+.gmg-meta { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; justify-content: space-between; align-items: center; z-index: 3; pointer-events: none; }
+.gmg-count { font-size: 11px; letter-spacing: .1em; background: rgba(28,20,16,.62); color: #fff; padding: 5px 11px; border-radius: 20px; backdrop-filter: blur(6px); }
+.gmg-expand {
+  pointer-events: auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,.55);
+  background: rgba(253,250,246,.82); color: var(--gm-walnut); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px);
+  transition: background .2s, transform .2s;
+}
+.gmg-expand:hover { background: #fff; transform: translateY(-1px); }
+
+/* Flechas (aparecen al pasar el cursor) */
+.gmg-arrow {
+  position: absolute; top: 50%; z-index: 4; width: 42px; height: 42px; margin-top: -21px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: var(--gm-walnut);
+  background: rgba(253,250,246,.88); backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(28,20,16,.22);
+  opacity: 0; transition: opacity .25s, transform .25s, background .2s;
+}
+.gmg-arrow.prev { left: 12px; transform: translateX(-8px); }
+.gmg-arrow.next { right: 12px; transform: translateX(8px); }
+.gmg-stage:hover .gmg-arrow, .gmg-stage:focus-within .gmg-arrow { opacity: 1; transform: none; }
+.gmg-arrow:hover { background: #fff; }
+@media (hover: none) { .gmg-arrow { display: none; } }
+
+/* Tira de miniaturas */
+.gmg-rail { display: flex; gap: 10px; margin-top: 20px; padding: 6px 4px 8px; overflow-x: auto; scrollbar-width: none; }
+.gmg-rail::-webkit-scrollbar { display: none; }
+.gmg-thumb {
+  flex: 0 0 auto; width: 68px; height: 68px; padding: 0; border: none; border-radius: 14px; overflow: hidden; cursor: pointer; background: var(--gm-cream);
+  opacity: .62; filter: saturate(.8); transition: transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s, box-shadow .25s, filter .25s;
+}
+.gmg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gmg-thumb:hover { opacity: 1; transform: translateY(-2px); }
+.gmg-thumb.active { opacity: 1; filter: none; transform: translateY(-4px) scale(1.06); box-shadow: 0 0 0 2.5px var(--gmx-accent, var(--gm-walnut)), 0 10px 18px -8px rgba(40,24,10,.5); }
+
+/* Lightbox */
+.gmg-lb { position: fixed; inset: 0; z-index: 90; background: rgba(18,12,8,.94); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; animation: gmg-fade .25s ease both; }
+@keyframes gmg-fade { from { opacity: 0; } to { opacity: 1; } }
+.gmg-lb-stage { max-width: min(92vw, 1100px); max-height: 78vh; overflow: hidden; border-radius: 14px; display: flex; }
+.gmg-lb-stage img { max-width: 100%; max-height: 78vh; object-fit: contain; cursor: zoom-in; transition: transform .3s ease; animation: gmg-fade .3s ease both; }
+.gmg-lb-stage img.zoomed { transform: scale(2.2); cursor: zoom-out; }
+.gmg-lb-close, .gmg-lb-arrow {
+  position: absolute; border: none; cursor: pointer; color: #fff; background: rgba(255,255,255,.12); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; transition: background .2s;
+}
+.gmg-lb-close:hover, .gmg-lb-arrow:hover { background: rgba(255,255,255,.24); }
+.gmg-lb-close { top: 18px; right: 18px; width: 44px; height: 44px; }
+.gmg-lb-arrow { top: 50%; width: 52px; height: 52px; margin-top: -26px; }
+.gmg-lb-arrow.prev { left: 18px; }
+.gmg-lb-arrow.next { right: 18px; }
+.gmg-lb-foot { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; color: rgba(255,255,255,.72); font-size: 12px; letter-spacing: .06em; }
+.gmg-lb-thumbs { display: flex; gap: 8px; max-width: 92vw; overflow-x: auto; padding: 2px; }
+.gmg-lb-thumbs button { width: 54px; height: 54px; padding: 0; border: none; border-radius: 10px; overflow: hidden; cursor: pointer; opacity: .5; transition: opacity .2s, transform .2s; background: none; }
+.gmg-lb-thumbs button.active { opacity: 1; box-shadow: 0 0 0 2px #fff; }
+.gmg-lb-thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 640px) { .gmg-lb-arrow { display: none; } .gmg-lb-stage { max-height: 70vh; } .gmg-lb-stage img { max-height: 70vh; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gmg-card, .gmg-thumb, .gmg-arrow { transition: none; }
+  .gmg-img, .gmg-lb, .gmg-lb-stage img { animation: none; }
+  .gmg-aura { transition: none; }
+}

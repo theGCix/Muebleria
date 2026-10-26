@@ -10,7 +10,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Check, Copy, CalendarPlus, MessageCircle, Share2, Truck, Store, MapPin, ShieldCheck,
-  PackageCheck, Hammer, BadgeCheck, Sparkles, ArrowRight, CreditCard,
+  PackageCheck, Hammer, BadgeCheck, Sparkles, ArrowRight, CreditCard, X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -169,7 +169,15 @@ async function fetchCompletaTuEspacio(ids: string[]) {
   return unaPorCategoria;
 }
 
-export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
+export function PagoExitoso({
+  datos, modo = "gracias", onCerrar,
+}: {
+  datos: PagoExitosoDatos;
+  /** "gracias": pantalla tras pagar. "comprobante": la misma vista, reabierta luego desde Mis pedidos. */
+  modo?: "gracias" | "comprobante";
+  onCerrar?: () => void;
+}) {
+  const esComprobante = modo === "comprobante";
   const navigate = useNavigate();
   const tituloRef = useRef<HTMLHeadingElement | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -191,7 +199,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
   const { data: sugeridos } = useQuery({
     queryKey: ["pago-completa-espacio", items.map((i) => i.id).join(",")],
     queryFn: () => fetchCompletaTuEspacio(items.map((i) => i.id)),
-    enabled: items.length > 0,
+    enabled: items.length > 0 && !esComprobante,
     staleTime: 300_000,
     retry: 1,
   });
@@ -203,6 +211,13 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
     tituloRef.current?.focus();
     return () => { document.body.style.overflow = prev; };
   }, []);
+
+  useEffect(() => {
+    if (!esComprobante || !onCerrar) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCerrar(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [esComprobante, onCerrar]);
 
   const copiar = async () => {
     try {
@@ -231,12 +246,20 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
   ];
 
   const irAPedidos = () => navigate({ to: "/perfil/pedidos" });
+  const accionPrincipal = esComprobante && onCerrar ? onCerrar : irAPedidos;
+  const textoPrincipal = esComprobante ? "Volver a mis pedidos" : "Ver mi pedido";
 
   return (
     <div className="gmp-root" role="dialog" aria-modal="true" aria-labelledby="gmp-titulo">
       {/* ───────── Hero ───────── */}
+      {esComprobante && onCerrar && (
+        <button type="button" onClick={onCerrar} aria-label="Cerrar comprobante"
+          className="fixed right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur transition-colors hover:bg-black/55">
+          <X className="h-5 w-5" />
+        </button>
+      )}
       <header className="gmp-hero">
-        <Celebracion />
+        {!esComprobante && <Celebracion />}
         <div className="relative mx-auto flex max-w-3xl flex-col items-center px-5 pb-28 pt-16 text-center sm:pb-32 sm:pt-20">
           <div className="gmp-badge" aria-hidden>
             <span className="gmp-pulse" />
@@ -248,7 +271,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
           </div>
 
           <p className="gmp-rise mt-7 text-xs font-semibold uppercase tracking-[0.28em] text-[#f0a020]" style={{ ["--gmp-d" as string]: "0.9s" }}>
-            Pago aprobado
+            {esComprobante ? "Comprobante de pago" : "Pago aprobado"}
           </p>
           <h1
             id="gmp-titulo"
@@ -257,10 +280,14 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
             className="gmp-rise font-display mt-2 text-4xl font-semibold leading-tight outline-none sm:text-6xl"
             style={{ ["--gmp-d" as string]: "1s" }}
           >
-            {nombre ? `¡Gracias, ${nombre}!` : "¡Gracias por tu compra!"}
+            {esComprobante
+              ? "Tu pago fue aprobado"
+              : nombre ? `¡Gracias, ${nombre}!` : "¡Gracias por tu compra!"}
           </h1>
           <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
-            Recibimos tu pago y tu pedido pasa a producción. Aquí tienes todo lo que sigue, sin sorpresas.
+            {esComprobante
+              ? "Este es el detalle de tu compra. Para ver en qué etapa va, vuelve a Mis pedidos."
+              : "Recibimos tu pago y tu pedido pasa a producción. Aquí tienes todo lo que sigue, sin sorpresas."}
           </p>
 
           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
@@ -273,6 +300,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
             </p>
           </div>
 
+          {!esComprobante && (
           <div className="gmp-rise mt-6 inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm backdrop-blur" style={{ ["--gmp-d" as string]: "1.35s" }}>
             {recojo ? <Store className="h-4 w-4 text-[#f0a020]" /> : <Truck className="h-4 w-4 text-[#f0a020]" />}
             {recojo ? (
@@ -281,6 +309,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
               <span>Llega entre el <b>{fmtDia(desde)}</b> y el <b>{fmtDia(hasta)}</b></span>
             )}
           </div>
+          )}
         </div>
       </header>
 
@@ -288,7 +317,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
       <main className="relative mx-auto -mt-16 max-w-5xl px-4 pb-32 sm:-mt-20 lg:pb-16">
         <div className="grid gap-5 lg:grid-cols-5">
           {/* Ticket del pedido */}
-          <section className="gmp-rise lg:col-span-3" style={{ ["--gmp-d" as string]: "1.5s" }} aria-label="Resumen de tu pedido">
+          <section className={`gmp-rise lg:col-span-3${esComprobante ? " lg:col-start-2" : ""}`} style={{ ["--gmp-d" as string]: "1.5s" }} aria-label="Resumen de tu pedido">
             <div className="gmp-card gmp-ticket h-full" style={{ ["--notch-y" as string]: "98px" }}>
               <span className="gmp-stamp" aria-hidden>Pagado</span>
 
@@ -374,6 +403,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
           </section>
 
           {/* Línea de tiempo */}
+          {!esComprobante && (
           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1.65s" }} aria-label="Lo que sigue">
             <div className="gmp-card h-full p-5 sm:p-6">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
@@ -400,14 +430,15 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
               </p>
             </div>
           </section>
+          )}
         </div>
 
         {/* Acciones */}
         <section className="gmp-rise mt-5 hidden flex-wrap items-center gap-3 lg:flex" style={{ ["--gmp-d" as string]: "1.8s" }} aria-label="Acciones">
-          <button type="button" onClick={irAPedidos} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
-            Ver mi pedido <ArrowRight className="h-4 w-4" />
+          <button type="button" onClick={accionPrincipal} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
+            {textoPrincipal} <ArrowRight className="h-4 w-4" />
           </button>
-          {!recojo && (
+          {!recojo && !esComprobante && (
             <button type="button" onClick={() => descargarCalendario(datos, desde, hasta)} className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary">
               <CalendarPlus className="h-4 w-4" /> Agregar entrega al calendario
             </button>
@@ -417,7 +448,7 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
               <MessageCircle className="h-4 w-4" /> Hablar con un asesor
             </a>
           )}
-          <Link to="/" className="ml-auto text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">Seguir comprando</Link>
+          {!esComprobante && <Link to="/" className="ml-auto text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">Seguir comprando</Link>}
         </section>
 
         {/* Completa tu espacio */}
@@ -455,7 +486,8 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
         )}
 
         {/* Boca a boca */}
-        <section className="gmp-rise mt-10 overflow-hidden rounded-2xl bg-[var(--gmp-walnut-deep)] p-6 text-[#fbf4e8] sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-8" style={{ ["--gmp-d" as string]: "2.1s" }}>
+                {!esComprobante && (
+<section className="gmp-rise mt-10 overflow-hidden rounded-2xl bg-[var(--gmp-walnut-deep)] p-6 text-[#fbf4e8] sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-8" style={{ ["--gmp-d" as string]: "2.1s" }}>
           <div>
             <p className="font-display text-2xl font-semibold sm:text-3xl">¿Conoces a alguien que está amueblando?</p>
             <p className="mt-1 text-sm text-[#fbf4e8]/70">Cuéntale dónde compraste. Una recomendación tuya vale más que cualquier anuncio.</p>
@@ -464,15 +496,16 @@ export function PagoExitoso({ datos }: { datos: PagoExitosoDatos }) {
             <Share2 className="h-4 w-4" /> Compartir por WhatsApp
           </a>
         </section>
+        )}
       </main>
 
       {/* Barra fija: acciones principales en móvil */}
       <div className="gmp-bar lg:hidden">
         <div className="mx-auto flex max-w-md items-center gap-2">
-          <button type="button" onClick={irAPedidos} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground">
-            Ver mi pedido <ArrowRight className="h-4 w-4" />
+          <button type="button" onClick={accionPrincipal} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground">
+            {textoPrincipal} <ArrowRight className="h-4 w-4" />
           </button>
-          {!recojo && (
+          {!recojo && !esComprobante && (
             <button type="button" onClick={() => descargarCalendario(datos, desde, hasta)} aria-label="Agregar entrega al calendario" className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white">
               <CalendarPlus className="h-4.5 w-4.5" />
             </button>

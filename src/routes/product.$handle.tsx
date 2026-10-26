@@ -8,7 +8,7 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Loader2, ArrowLeft, Heart, ShoppingBag, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -24,6 +24,7 @@ import { DeliveryPromise } from "@/components/product/DeliveryPromise";
 import { SignatureModule } from "@/components/product/SignatureModules";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar } from "@/components/product/StickyBuyBar";
+import { ProductGallery } from "@/components/product/ProductGallery";
 import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
 
@@ -428,6 +429,8 @@ const PAGE_CSS = `
         .gm-btn-primary:hover { background:var(--gm-walnut-mid); }
         .gm-btn-primary:active { transform:scale(.99); }
         .gm-btn-primary.adding { background:#3A6B2A; }
+        .gm-btn-primary.in-cart { background:#fff; color:var(--gm-walnut); box-shadow:inset 0 0 0 1.5px var(--gm-walnut); }
+        .gm-btn-primary.in-cart:hover { background:var(--gm-cream); }
         .gm-btn-wish {
           width:52px; height:52px; border:1px solid var(--gm-border);
           background:transparent; border-radius:2px;
@@ -584,6 +587,8 @@ function ProductPage() {
 function ProductView({ product: base }: { product: ProductData }) {
   const product = base as ProductData & ProductExtra;
   const addItem = useCartStore((s) => s.addItem);
+  // Cantidad real de este producto en el carrito: el botón refleja el estado del carrito, no un temporizador
+  const qtyEnCarrito = useCartStore((s) => s.items.find((i) => i.id === product.id)?.qty ?? 0);
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -674,7 +679,8 @@ function ProductView({ product: base }: { product: ProductData }) {
       sku: product.sku ?? undefined,
     });
     toast.success("Agregado al carrito", { description: `${product.nombre} · ${Object.values(prefs).join(" · ")}`, position: "top-center" });
-    setTimeout(() => setAdding(false), 2000);
+    // Solo el destello verde es temporal; después el botón queda en "En tu carrito" (qtyEnCarrito)
+    setTimeout(() => setAdding(false), 1600);
   };
 
   const waHref = WHATSAPP_NUMBER
@@ -682,12 +688,6 @@ function ProductView({ product: base }: { product: ProductData }) {
         `Hola G&M 👋 Me interesa "${product.nombre}"${product.sku ? ` (SKU ${product.sku})` : ""}.\n${prefsTexto}\n${window.location.href}`,
       )}`
     : null;
-
-  const onZoomMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    e.currentTarget.style.setProperty("--zx", `${((e.clientX - r.left) / r.width) * 100}%`);
-    e.currentTarget.style.setProperty("--zy", `${((e.clientY - r.top) / r.height) * 100}%`);
-  };
 
   return (
     <>
@@ -725,33 +725,18 @@ function ProductView({ product: base }: { product: ProductData }) {
                   <ModelViewer3D src={product.modelo_3d_url ?? ""} alt={product.nombre} poster={displayImg ?? undefined} />
                 </div>
               ) : (
-                <div
-                  className={`gm-main-img-wrap gmx-stage${ambient && tieneLed ? " is-night" : ""}`}
-                  onMouseMove={onZoomMove}
+                <ProductGallery
+                  images={allImgs}
+                  alt={product.nombre}
+                  index={activeImg}
+                  onIndexChange={setActiveImg}
+                  night={ambient && tieneLed}
                 >
-                  {displayImg
-                    ? <img src={displayImg} alt={product.nombre} />
-                    : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 64 }}>🪑</div>
-                  }
-                  <div className="gmx-glow" />
                   {product.categoria && <div className="gm-badge-cat">{product.categoria}</div>}
                   {enOferta
                     ? <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
                     : esNuevo && <div className="gm-badge-new">Nuevo</div>}
-                  <div className="gmx-hint">Pasa el cursor para ampliar</div>
-                  {allImgs.length > 1 && <div className="gmx-counter">{activeImg + 1} / {allImgs.length}</div>}
-                </div>
-              )}
-
-              {vista === "foto" && allImgs.length > 1 && (
-                <div className="gm-thumbs">
-                  {allImgs.map((src, i) => (
-                    <button key={i} type="button" aria-label={`Ver foto ${i + 1}`}
-                      className={`gm-thumb${activeImg === i ? " active" : ""}`} onClick={() => setActiveImg(i)}>
-                      <img src={src} alt="" />
-                    </button>
-                  ))}
-                </div>
+                </ProductGallery>
               )}
             </div>
           </div>
@@ -843,13 +828,19 @@ function ProductView({ product: base }: { product: ProductData }) {
             {/* CTA */}
             <div className="gm-cta-row" ref={ctaRef}>
               <button
-                className={`gm-btn-primary${adding ? " adding" : ""}${!adding && !outOfStock ? " gmx-btn-pulse" : ""}`}
+                className={`gm-btn-primary${adding ? " adding" : ""}${!adding && qtyEnCarrito > 0 ? " in-cart" : ""}${!adding && !outOfStock && qtyEnCarrito === 0 ? " gmx-btn-pulse" : ""}`}
                 style={{ flex: 1 }}
                 onClick={handleAdd}
                 disabled={outOfStock}
               >
-                <ShoppingBag size={16} />
-                {adding ? "¡Agregado!" : outOfStock ? "Agotado" : "Agregar al carrito"}
+                {adding || qtyEnCarrito > 0 ? <Check size={16} /> : <ShoppingBag size={16} />}
+                {adding
+                  ? "¡Agregado!"
+                  : outOfStock
+                    ? "Agotado"
+                    : qtyEnCarrito > 0
+                      ? `En tu carrito (${qtyEnCarrito}) · Agregar otro`
+                      : "Agregar al carrito"}
               </button>
               <button
                 type="button"
@@ -869,6 +860,11 @@ function ProductView({ product: base }: { product: ProductData }) {
                 <Heart size={18} fill={isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
               </button>
             </div>
+            {qtyEnCarrito > 0 && (
+              <Link to="/checkout" className="gmx-gopay">
+                Ir a pagar ({qtyEnCarrito} {qtyEnCarrito === 1 ? "unidad" : "unidades"}) <ChevronRight size={14} />
+              </Link>
+            )}
             <div className="gm-cta-row">
               <button className="gm-btn-quote" onClick={() => setLeadOpen(true)}>Solicitar cotización personalizada</button>
             </div>
@@ -923,6 +919,7 @@ function ProductView({ product: base }: { product: ProductData }) {
           precio={precioMostrado}
           disabled={outOfStock}
           adding={adding}
+          qtyEnCarrito={qtyEnCarrito}
           onAdd={handleAdd}
         />
       </div>
