@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { CartDrawer } from "./CartDrawer";
 import { WishlistDrawer } from "./WishlistDrawer";
 import { LoginModal } from "./LoginModal";
+import { AuthButton } from "./AuthButton";
 import { CategoryMegaMenu } from "./CategoryMegaMenu";
 import { CategoryMobileAccordion } from "./CategoryMobileAccordion";
 import { useState } from "react";
-import { Menu, X, LogIn, User, Search, Truck } from "lucide-react";
+import { Menu, X, User, Search, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchStore } from "@/stores/searchStore";
@@ -119,40 +120,12 @@ export function Header() {
 
             {/* Desktop actions */}
             <div className="hidden md:flex items-center gap-3 ml-auto flex-shrink-0">
-              {user ? (
-                <>
-                  {/* Panel admin para staff */}
-                  {isStaff && (
-                    <Link to="/dashboard" className="text-sm text-foreground/60 hover:text-foreground transition-colors">
-                      Panel admin
-                    </Link>
-                  )}
-                  {/* Mis órdenes para carpintero */}
-                  {isCarpintero && (
-                    <Link to="/mi-produccion" className="text-sm text-foreground/60 hover:text-foreground transition-colors">
-                      Mis órdenes
-                    </Link>
-                  )}
-                  <span className="flex items-center gap-1.5 text-sm text-foreground/80">
-                    <User className="h-3.5 w-3.5" />
-                    {displayName}
-                  </span>
-                  <Link to="/perfil" className="text-sm text-foreground/60 hover:text-foreground transition-colors">
-                    Mi cuenta
-                  </Link>
-                  <button onClick={handleLogout} className="text-sm text-foreground/60 hover:text-foreground transition-colors">
-                    Salir
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setLoginOpen(true)}
-                  className="group relative flex items-center gap-1.5 rounded-full pl-3.5 pr-4 py-1.5 text-sm font-medium text-accent-foreground bg-accent hover:bg-accent/90 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  <User className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
-                  Iniciar sesión
-                </button>
-              )}
+              <AuthButton
+                user={user}
+                roles={roles}
+                onLogin={() => setLoginOpen(true)}
+                onLogout={handleLogout}
+              />
               <WishlistDrawer />
               <CartDrawer />
             </div>
@@ -260,6 +233,13 @@ export function Header() {
                     >
                       Mi cuenta
                     </Link>
+                    <Link
+                      to="/perfil/pedidos"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground py-2"
+                    >
+                      Mis pedidos
+                    </Link>
                     <button
                       onClick={() => { handleLogout(); setMobileOpen(false); }}
                       className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground py-2"
@@ -270,7 +250,7 @@ export function Header() {
                 ) : (
                   <button
                     onClick={() => { setLoginOpen(true); setMobileOpen(false); }}
-                    className="flex items-center justify-center gap-1.5 text-sm font-medium text-accent-foreground bg-accent hover:bg-accent/90 rounded-full py-2.5 transition-colors"
+                    className="auth-shine flex w-full items-center justify-center gap-1.5 rounded-full bg-[image:var(--gradient-warm)] py-2.5 text-sm font-medium text-accent-foreground shadow-sm transition-transform active:scale-[0.98]"
                   >
                     <User className="h-4 w-4" />
                     Iniciar sesión

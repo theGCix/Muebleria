@@ -37,4 +37,5 @@ function Index() {
      <div className="min-h-screen bg-background"> 
      <Header /> 
      <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <MedidaCTA />
-     </main> <Footer /> </div> ); }
+     </main> 
+     <Footer /> </div> ); }
