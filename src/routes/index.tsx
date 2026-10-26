@@ -5,6 +5,7 @@ import { Hero } from "@/components/Hero";
 import { Categories } from "@/components/Categories";
 import { OfertasSection } from "@/components/OfertasSection";
 import { CombosSection } from "@/components/CombosSection";
+import { PromoCategoriaBanner } from "@/components/PromoCategoriaBanner";
 import { ProductsSection } from "@/components/ProductsSection";
 import { Testimonials } from "@/components/Testimonials";
 import { MedidaCTA } from "@/components/MedidaCTA";
@@ -35,5 +36,5 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <ProductsSection /> <Testimonials /> <MedidaCTA /> 
+     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <Testimonials /> <MedidaCTA /> 
      </main> <Footer /> </div> ); }
