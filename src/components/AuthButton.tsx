@@ -122,7 +122,7 @@ export function AuthButton({ className }: { className?: string }) {
       {!ready ? (
         <div className="h-10 w-24" aria-hidden="true" />
       ) : session ? (
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <button
               ref={avatarRef}
