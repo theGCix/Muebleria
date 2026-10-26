@@ -43,6 +43,8 @@ export interface PagoExitosoDatos {
   subtotal?: number;
   envio?: number;
   items?: PagoExitosoItem[];
+  /** Solo en modo comprobante: estado real del pedido (pagado, en_produccion, … entregado). */
+  estado?: string;
 }
 
 const COLORES = ["#6b4423", "#f0a020", "#f3dfb8", "#c8553d", "#8a5a34", "#fff4d6", "#2f6f73"];
@@ -245,6 +247,19 @@ export function PagoExitoso({
     { key: "entregado", titulo: recojo ? "Recogido en tienda" : "Entregado", detalle: recojo ? "Disfrútalo. Después te invitaremos a dejar tu reseña." : `Llega entre el ${fmtDia(desde)} y el ${fmtDia(hasta)}.`, icono: Sparkles, estado: "goal" as const },
   ];
 
+  // Comprobante: la línea de tiempo refleja el estado real del pedido, no el de "recién pagado"
+  const pasosMostrados = (() => {
+    if (!esComprobante || !datos.estado) return pasos;
+    const orden = pasos.map((p) => p.key);
+    const efectivo = recojo && datos.estado === "enviado" ? "listo_despacho" : datos.estado;
+    const cur = Math.max(0, orden.indexOf(efectivo));
+    return pasos.map((p, i) => ({
+      ...p,
+      estado: (i <= cur ? "done" : i === cur + 1 ? "now" : i === orden.length - 1 ? "goal" : "todo") as typeof p.estado | "done" | "todo",
+      detalle: !recojo && p.key === "entregado" ? "Coordinamos contigo el día y horario de entrega." : p.detalle,
+    }));
+  })();
+
   const irAPedidos = () => navigate({ to: "/perfil/pedidos" });
   const accionPrincipal = esComprobante && onCerrar ? onCerrar : irAPedidos;
   const textoPrincipal = esComprobante ? "Volver a mis pedidos" : "Ver mi pedido";
@@ -286,7 +301,7 @@ export function PagoExitoso({
           </h1>
           <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
             {esComprobante
-              ? "Este es el detalle de tu compra. Para ver en qué etapa va, vuelve a Mis pedidos."
+              ? "Este es el detalle de tu compra y el avance actual de tu pedido."
               : "Recibimos tu pago y tu pedido pasa a producción. Aquí tienes todo lo que sigue, sin sorpresas."}
           </p>
 
@@ -317,7 +332,7 @@ export function PagoExitoso({
       <main className="relative mx-auto -mt-16 w-full max-w-5xl px-4 pb-32 sm:-mt-20 lg:pb-16">
         <div className="grid gap-5 lg:grid-cols-5">
           {/* Ticket del pedido */}
-          <section className={`gmp-rise ${esComprobante ? "lg:col-span-3 lg:col-start-2" : "lg:col-span-3"}`} style={{ ["--gmp-d" as string]: "1.5s" }} aria-label="Resumen de tu pedido">
+          <section className="gmp-rise lg:col-span-3" style={{ ["--gmp-d" as string]: "1.5s" }} aria-label="Resumen de tu pedido">
             <div className="gmp-card gmp-ticket h-full" style={{ ["--notch-y" as string]: "98px" }}>
               <span className="gmp-stamp" aria-hidden>Pagado</span>
 
@@ -403,13 +418,12 @@ export function PagoExitoso({
           </section>
 
           {/* Línea de tiempo */}
-          {!esComprobante && (
           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1.65s" }} aria-label="Lo que sigue">
             <div className="gmp-card h-full p-5 sm:p-6">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
               <h2 className="font-display mt-1 mb-5 text-2xl font-semibold leading-tight">El camino de tu pedido</h2>
               <ol>
-                {pasos.map((p) => {
+                {pasosMostrados.map((p) => {
                   const Icono = p.icono;
                   return (
                     <li key={p.key} className={`gmp-step ${p.estado === "done" ? "is-done" : p.estado === "now" ? "is-now" : p.estado === "goal" ? "is-goal" : ""}`}>
@@ -430,7 +444,6 @@ export function PagoExitoso({
               </p>
             </div>
           </section>
-          )}
         </div>
 
         {/* Acciones */}

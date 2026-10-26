@@ -119,6 +119,7 @@ function PedidoCard({ order }: { order: any }) {
     direccion:     order.direccion,
     distrito:      order.distrito,
     metodoEntrega: recojo ? "recojo_tienda" : "domicilio",
+    estado:        order.status,
     subtotal:      Number(order.subtotal),
     envio:         Number(order.envio),
     items: items.map((it: any) => ({
