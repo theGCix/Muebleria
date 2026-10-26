@@ -56,9 +56,7 @@ export function PromoCategoriaBanner({
         >
           {/* Texto */}
           <div className="relative z-10 flex-1 p-5 sm:p-8 lg:pl-12">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-90 sm:text-sm">
-              {prefijo}
-            </p>
+           
             <h2 className="font-display text-3xl font-bold uppercase leading-none sm:text-5xl lg:text-6xl">
               {titulo}
             </h2>
