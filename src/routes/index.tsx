@@ -36,5 +36,5 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <Testimonials /> <MedidaCTA /> 
+     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <MedidaCTA />
      </main> <Footer /> </div> ); }
