@@ -33,7 +33,7 @@ function initials(session: Session) {
     .join("");
 }
 
-export function AuthButton({ className }: { className?: string }) {
+export function AuthButton({ className, compact = false }: { className?: string; compact?: boolean }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -122,7 +122,7 @@ export function AuthButton({ className }: { className?: string }) {
   return (
     <div className={cn("relative", className)}>
       {!ready ? (
-        <div className="h-10 w-24" aria-hidden="true" />
+        <div className={compact ? "h-10 w-10" : "h-10 w-24"} aria-hidden="true" />
       ) : session ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>

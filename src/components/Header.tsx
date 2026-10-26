@@ -139,6 +139,8 @@ export function Header() {
               >
                 <Search className="h-5 w-5" />
               </button>
+              {/* Foto de la cuenta, igual que en escritorio y tablet */}
+              {user && <AuthButton compact />}
               <WishlistDrawer />
               <CartDrawer />
               <button
