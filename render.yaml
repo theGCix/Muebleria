@@ -30,3 +30,9 @@ services:
         sync: false
       - key: SUPABASE_SECRET_KEY
         sync: false
+      - key: OLLAMA_BASE_URL   # URL pública de tu servidor Ollama (túnel o VPS)
+        sync: false
+      - key: OLLAMA_MODEL
+        value: qwen2.5:7b
+      - key: OLLAMA_NUM_CTX
+        value: "4096"
