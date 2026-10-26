@@ -1,6 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type Herramienta = { nombre: string; resultado: "ok" | "vacio" | "error" };
+export type Herramienta = {
+  nombre: string;
+  resultado: "ok" | "vacio" | "error";
+  /** Texto buscado (solo buscar_productos). */
+  consulta?: string;
+};
 
 export type ChatSesion = {
   id: string;
@@ -18,6 +23,8 @@ export type ChatMensaje = {
   herramientas: Herramienta[];
   agrego_carrito: boolean;
   sin_resolver: boolean;
+  /** El bot citó un precio que no sale del catálogo ni de la conversación. */
+  precio_sin_verificar: boolean;
   error: string | null;
   latencia_ms: number | null;
   modelo: string | null;
@@ -25,6 +32,8 @@ export type ChatMensaje = {
 };
 
 export type TurnoSinResolver = { respuesta: ChatMensaje; pregunta: string };
+
+export type BusquedaVacia = { consulta: string; veces: number; ultima: string };
 
 export type ResumenTurno = Pick<ChatMensaje, "latencia_ms" | "agrego_carrito" | "sin_resolver" | "error">;
 
@@ -100,6 +109,37 @@ export async function listarSinResolver(dias: number): Promise<TurnoSinResolver[
       .at(-1);
     return { respuesta, pregunta: previa?.contenido ?? "(pregunta no disponible)" };
   });
+}
+
+/**
+ * Búsquedas de producto que no devolvieron nada, agrupadas por texto (sin tildes ni
+ * mayúsculas) y ordenadas por frecuencia. Solo hay datos desde que se guarda `consulta`.
+ * Se agrega en el navegador sobre las últimas LIMITE_RESUMEN respuestas sin resolver.
+ */
+export async function listarBusquedasVacias(dias: number): Promise<BusquedaVacia[]> {
+  const { data, error } = await tabla("chat_mensajes")
+    .select("herramientas, created_at")
+    .eq("rol", "assistant")
+    .eq("sin_resolver", true)
+    .gte("created_at", desde(dias))
+    .order("created_at", { ascending: false })
+    .limit(LIMITE_RESUMEN);
+  if (error) throw error;
+
+  const normalizar = (t: string) =>
+    t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+
+  const grupos = new Map<string, BusquedaVacia>();
+  for (const fila of data as Pick<ChatMensaje, "herramientas" | "created_at">[]) {
+    for (const h of fila.herramientas ?? []) {
+      if (h.nombre !== "buscar_productos" || h.resultado !== "vacio" || !h.consulta) continue;
+      const clave = normalizar(h.consulta);
+      const actual = grupos.get(clave);
+      if (actual) actual.veces += 1;
+      else grupos.set(clave, { consulta: h.consulta, veces: 1, ultima: fila.created_at });
+    }
+  }
+  return [...grupos.values()].sort((a, b) => b.veces - a.veces || b.ultima.localeCompare(a.ultima)).slice(0, 30);
 }
 
 export function percentil(valores: number[], p: number): number | null {

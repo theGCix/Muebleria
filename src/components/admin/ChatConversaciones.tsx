@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   LIMITE_RESUMEN,
+  listarBusquedasVacias,
   listarMensajesSesion,
   listarSesiones,
   listarSinResolver,
@@ -51,6 +52,7 @@ function BadgesHerramientas({ herramientas }: { herramientas: ChatMensaje["herra
           className="font-normal"
         >
           {h.nombre}: {h.resultado === "vacio" ? "sin resultados" : h.resultado}
+          {h.consulta ? ` «${h.consulta}»` : ""}
         </Badge>
       ))}
     </div>
@@ -87,6 +89,9 @@ function Hilo({ sesionId }: { sesionId: string }) {
                 .join(" · ")}
             </p>
             {m.error && <p className="text-xs text-destructive">{m.error}</p>}
+            {m.precio_sin_verificar && (
+              <p className="text-xs text-destructive">Citó un precio que no sale del catálogo.</p>
+            )}
           </div>
         ),
       )}
@@ -107,6 +112,10 @@ export function ChatConversaciones() {
 
   const turnos = useQuery({ queryKey: ["chat-admin", "turnos", dias], queryFn: () => resumenTurnos(dias) });
   const pendientes = useQuery({ queryKey: ["chat-admin", "pendientes", dias], queryFn: () => listarSinResolver(dias) });
+  const busquedas = useQuery({
+    queryKey: ["chat-admin", "busquedas-vacias", dias],
+    queryFn: () => listarBusquedasVacias(dias),
+  });
   const sesiones = useQuery({
     queryKey: ["chat-admin", "sesiones", dias, soloSinResolver],
     queryFn: () => listarSesiones(dias, soloSinResolver),
@@ -169,6 +178,7 @@ export function ChatConversaciones() {
       <Tabs defaultValue="pendientes">
         <TabsList>
           <TabsTrigger value="pendientes">Sin resolver</TabsTrigger>
+          <TabsTrigger value="busquedas">Búsquedas sin resultados</TabsTrigger>
           <TabsTrigger value="sesiones">Conversaciones</TabsTrigger>
         </TabsList>
 
@@ -198,8 +208,36 @@ export function ChatConversaciones() {
                     {respuesta.error}
                   </Badge>
                 )}
+                {respuesta.precio_sin_verificar && (
+                  <Badge variant="destructive" className="font-normal">
+                    Precio sin respaldo del catálogo
+                  </Badge>
+                )}
               </div>
             </button>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="busquedas" className="mt-4 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Lo que buscaron los clientes y no apareció en el catálogo. Las que más se repiten son candidatas
+            para sumar productos o sinónimos. Solo incluye conversaciones sin resolver.
+          </p>
+          {busquedas.isLoading && <Skeleton className="h-24 w-full" />}
+          {busquedas.isError && <ErrorCarga />}
+          {busquedas.data?.length === 0 && (
+            <p className="text-sm text-muted-foreground">No hay búsquedas sin resultados en este período.</p>
+          )}
+          {busquedas.data?.map((b) => (
+            <div key={b.consulta} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">{b.consulta}</p>
+                <p className="text-xs text-muted-foreground">Última vez {fecha(b.ultima)}</p>
+              </div>
+              <Badge variant="secondary" className="tabular-nums">
+                {b.veces} {b.veces === 1 ? "vez" : "veces"}
+              </Badge>
+            </div>
           ))}
         </TabsContent>
 
