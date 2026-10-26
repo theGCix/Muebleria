@@ -93,6 +93,17 @@ const store = {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// OAuth y enlace mágico recargan la página completa, así que `onSuccess` se pierde.
+// Guardamos la ruta actual para que /auth/callback devuelva al cliente a donde estaba.
+const RETURN_KEY = "gm:auth-return";
+function rememberReturnPath() {
+  try {
+    sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search);
+  } catch {
+    /* almacenamiento no disponible */
+  }
+}
+
 function passwordScore(p: string) {
   let s = 0;
   if (p.length >= 8) s++;
@@ -103,7 +114,7 @@ function passwordScore(p: string) {
 }
 
 function displayName(u: User) {
-  const full = u.user_metadata?.full_name as string | undefined;
+  const full = (u.user_metadata?.full_name ?? u.user_metadata?.name) as string | undefined;
   return full?.split(" ")[0] || u.email?.split("@")[0] || "";
 }
 
@@ -344,7 +355,7 @@ function AuthExperience({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/`,
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: { full_name: fullName },
           },
         });
@@ -353,10 +364,12 @@ function AuthExperience({
         if (data.session?.user) {
           await finishLogin(data.session.user);
         } else {
+          rememberReturnPath();
           setSentKind("signup");
           setStage("sent");
         }
       } else if (mode === "magic") {
+        rememberReturnPath();
         const { error } = await supabase.auth.signInWithOtp({
           email,
           options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
@@ -388,6 +401,7 @@ function AuthExperience({
     setOauthLoading(provider);
     try {
       store.set(LAST_METHOD_KEY, provider);
+      rememberReturnPath();
       // OAuth siempre redirige a /auth/callback — el rol se maneja allí
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
