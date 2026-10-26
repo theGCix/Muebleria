@@ -21,6 +21,8 @@ interface CartState {
   addItem: (item: Omit<CartItem, "qty">) => void;
   addItems: (items: (Omit<CartItem, "qty"> & { qty?: number })[]) => void;
   removeItem: (id: string) => void;
+  /** Quita del carrito todas las piezas que entraron con ese combo. */
+  removeCombo: (comboId: string) => void;
   updateQty: (id: string, qty: number) => void;
   clearCart: () => void;
   total: () => number;
@@ -64,6 +66,8 @@ export const useCartStore = create<CartState>()(
       },
       removeItem: (id) =>
         set((state) => ({ items: state.items.filter((i) => i.id !== id) })),
+      removeCombo: (comboId) =>
+        set((state) => ({ items: state.items.filter((i) => i.comboId !== comboId) })),
       updateQty: (id, qty) => {
         if (qty <= 0) {
           get().removeItem(id);
