@@ -275,6 +275,19 @@ function señalDeTurno(signal) {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
+/** Clasifica lo que devolvió una tool: "ok", "vacio" (sin resultados) o "error". */
+export function clasificarResultado(resultado) {
+  try {
+    const r = typeof resultado === "string" ? JSON.parse(resultado) : resultado;
+    if (r?.error || r?.ok === false) return "error";
+    if (r?.encontrado === false) return "vacio";
+    if (Array.isArray(r?.resultados) && r.resultados.length === 0) return "vacio";
+  } catch {
+    /* no es JSON: se asume ok */
+  }
+  return "ok";
+}
+
 /** Una llamada al modelo: con streaming si hay `onToken`, completa si no. */
 async function invocarModelo(modelo, conversacion, { signal, onToken }) {
   if (!onToken) return modelo.invoke(conversacion, { signal });
@@ -306,6 +319,7 @@ export async function ejecutarAgente({
   signal,
 }) {
   const ctx = { cartActions: [] };
+  const herramientas = []; // [{ nombre, resultado: "ok" | "vacio" | "error" }] para analítica
   const tools = crearHerramientas({ supabaseAdmin }, ctx);
   const porNombre = Object.fromEntries(tools.map((t) => [t.name, t]));
   const modelo = llm.bindTools(tools);
@@ -349,6 +363,7 @@ export async function ejecutarAgente({
           });
         }
       }
+      herramientas.push({ nombre: llamada.name, resultado: clasificarResultado(resultado) });
       conversacion.push(
         new ToolMessage({
           content: typeof resultado === "string" ? resultado : JSON.stringify(resultado),
@@ -359,11 +374,13 @@ export async function ejecutarAgente({
     }
   }
 
+  const completado = Boolean(reply);
   return {
     reply:
       reply ||
       "No logré completar tu consulta. ¿Puedes reformularla o escribirnos por WhatsApp?",
     cartActions: ctx.cartActions,
+    meta: { herramientas, completado },
   };
 }
 
@@ -379,6 +396,59 @@ function mensajeDeError(err) {
     : { status: 500, mensaje: "Error interno del asistente." };
 }
 
+// ── Persistencia (Supabase) ───────────────────────────────────
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_CHARS_GUARDADO = 2000;
+
+/** Un turno es "sin resolver" si falló, no completó, o una tool no encontró nada. */
+export function turnoSinResolver({ error, out }) {
+  if (error) return true;
+  if (!out) return false;
+  if (out.meta?.completado === false) return true;
+  return (out.meta?.herramientas ?? []).some((h) => h.resultado !== "ok");
+}
+
+/**
+ * Guarda el turno (pregunta del cliente + respuesta del bot). Nunca lanza:
+ * un fallo de BD no debe romper el chat. Los contadores de la sesión los
+ * mantiene el trigger de chat_mensajes.
+ */
+export async function guardarTurno({ supabaseAdmin, sessionId, messages, out, error, ms }) {
+  try {
+    if (!supabaseAdmin || !UUID_RE.test(String(sessionId ?? ""))) return;
+    const ultimo = [...(Array.isArray(messages) ? messages : [])]
+      .reverse()
+      .find((m) => m?.role === "user" && typeof m.content === "string");
+    if (!ultimo) return;
+
+    const sinResolver = turnoSinResolver({ error, out });
+    const { error: e1 } = await supabaseAdmin
+      .from("chat_sesiones")
+      .upsert({ id: sessionId }, { onConflict: "id", ignoreDuplicates: true });
+    if (e1) throw e1;
+
+    const filas = [
+      { sesion_id: sessionId, rol: "user", contenido: ultimo.content.slice(0, MAX_CHARS_GUARDADO) },
+      {
+        sesion_id: sessionId,
+        rol: "assistant",
+        contenido: (out?.reply ?? "").slice(0, MAX_CHARS_GUARDADO),
+        herramientas: out?.meta?.herramientas ?? [],
+        agrego_carrito: (out?.cartActions?.length ?? 0) > 0,
+        sin_resolver: sinResolver,
+        error: error ? String(error.message ?? error).slice(0, 300) : null,
+        latencia_ms: Math.round(ms),
+        modelo: process.env.OLLAMA_MODEL ?? "qwen2.5:7b",
+      },
+    ];
+    const { error: e2 } = await supabaseAdmin.from("chat_mensajes").insert(filas);
+    if (e2) throw e2;
+  } catch (err) {
+    console.error("No se pudo guardar la conversación:", err.message);
+  }
+}
+
 export function registerChat({ app, supabaseAdmin, rateLimit }) {
   const chatLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -387,15 +457,19 @@ export function registerChat({ app, supabaseAdmin, rateLimit }) {
   });
 
   app.post("/api/chat", chatLimiter, async (req, res) => {
-    const { messages } = req.body ?? {};
+    const { messages, sessionId } = req.body ?? {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Falta 'messages'" });
     }
 
+    const t0 = performance.now();
     try {
       const out = await ejecutarAgente({ messages, supabaseAdmin });
-      res.json(out);
+      guardarTurno({ supabaseAdmin, sessionId, messages, out, ms: performance.now() - t0 });
+      const { meta, ...publico } = out;
+      res.json(publico);
     } catch (err) {
+      guardarTurno({ supabaseAdmin, sessionId, messages, error: err, ms: performance.now() - t0 });
       console.error("Error en /api/chat:", err.message);
       const { status, mensaje } = mensajeDeError(err);
       res.status(status).json({ error: mensaje });
@@ -405,11 +479,12 @@ export function registerChat({ app, supabaseAdmin, rateLimit }) {
   // ── Streaming (Server-Sent Events) ──
   // Eventos: status {text} · token {text} · reset {} · done {reply, cartActions} · error {error}
   app.post("/api/chat/stream", chatLimiter, async (req, res) => {
-    const { messages } = req.body ?? {};
+    const { messages, sessionId } = req.body ?? {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Falta 'messages'" });
     }
 
+    const t0 = performance.now();
     res.status(200).set({
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
@@ -434,9 +509,12 @@ export function registerChat({ app, supabaseAdmin, rateLimit }) {
         onStatus: (text) => enviar("status", { text }),
         onReset: () => enviar("reset"),
       });
-      enviar("done", out);
+      const { meta, ...publico } = out;
+      enviar("done", publico);
+      guardarTurno({ supabaseAdmin, sessionId, messages, out, ms: performance.now() - t0 });
     } catch (err) {
       if (!abort.signal.aborted) {
+        guardarTurno({ supabaseAdmin, sessionId, messages, error: err, ms: performance.now() - t0 });
         console.error("Error en /api/chat/stream:", err.message);
         enviar("error", { error: mensajeDeError(err).mensaje });
       }

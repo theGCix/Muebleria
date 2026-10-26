@@ -43,11 +43,11 @@ const PREGUNTAS_RAPIDAS: { label: string; pregunta: string; respuesta: string }[
   },
 ];
 
-async function chatWithAssistant(messages: Message[]): Promise<{ reply: string; cartActions: CartAction[] }> {
+async function chatWithAssistant(messages: Message[], sessionId: string): Promise<{ reply: string; cartActions: CartAction[] }> {
   const res = await fetch(`${API}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, sessionId }),
   });
   if (!res.ok) throw new Error("Error al conectar con el asistente");
   const data = await res.json();
@@ -67,13 +67,14 @@ class StreamNoDisponible extends Error {}
 // Lee la respuesta por Server-Sent Events: status · token · reset · done · error
 async function chatWithAssistantStream(
   messages: Message[],
+  sessionId: string,
   h: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<ChatResult> {
   const res = await fetch(`${API}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, sessionId }),
     signal,
   });
   if (res.status === 404) throw new StreamNoDisponible();
@@ -131,6 +132,8 @@ export function AsistenteChat() {
   ]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Id de la conversación (se guarda en Supabase para analítica); se renueva al recargar la página
+  const sessionIdRef = useRef<string>(crypto.randomUUID());
   const addItem = useCartStore((s) => s.addItem);
   const updateQty = useCartStore((s) => s.updateQty);
   const items = useCartStore((s) => s.items);
@@ -203,6 +206,7 @@ export function AsistenteChat() {
       try {
         result = await chatWithAssistantStream(
           newMessages,
+          sessionIdRef.current,
           {
             onToken: (t) => editarUltimo((prev) => prev + t),
             onStatus: (t) => setEstado(t),
@@ -212,7 +216,7 @@ export function AsistenteChat() {
         );
       } catch (e) {
         if (!(e instanceof StreamNoDisponible)) throw e;
-        result = await chatWithAssistant(newMessages); // backend sin streaming
+        result = await chatWithAssistant(newMessages, sessionIdRef.current); // backend sin streaming
       }
 
       editarUltimo(() => result.reply);
