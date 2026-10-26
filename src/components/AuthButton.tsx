@@ -94,7 +94,8 @@ export function AuthButton({ user, roles, loading, onLogin, onLogout }: AuthButt
 
   return (
     <div className="relative">
-      <DropdownMenu>
+      {/* modal={false}: no bloquea el scroll del body, así el navbar sticky no se rompe */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
