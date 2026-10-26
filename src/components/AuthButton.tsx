@@ -14,7 +14,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Hammer, LayoutDashboard, LogOut, UserRound } from "lucide-react";
+import { Hammer, LayoutDashboard, LogOut,ShoppingBag, UserRound } from "lucide-react";
+
+import { Link } from "@tanstack/react-router";
 
 const NUDGE_KEY = "gm:auth-nudge-seen";
 
@@ -122,7 +124,7 @@ export function AuthButton({ className }: { className?: string }) {
       {!ready ? (
         <div className="h-10 w-24" aria-hidden="true" />
       ) : session ? (
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <button
               ref={avatarRef}
@@ -161,6 +163,18 @@ export function AuthButton({ className }: { className?: string }) {
                 </a>
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem asChild>
+                <Link to="/perfil/pedidos">
+                    <ShoppingBag className="mr-2 h-4 w-4" />
+                    Mis pedidos
+                </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                <Link to="/perfil/datos">
+                    <UserRound className="mr-2 h-4 w-4" />
+                    Mi cuenta
+                </Link>
+                </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => supabase.auth.signOut()}>
               <LogOut className="mr-2 h-4 w-4" />
               Cerrar sesión
