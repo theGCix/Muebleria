@@ -314,10 +314,10 @@ export function PagoExitoso({
       </header>
 
       {/* ───────── Contenido ───────── */}
-      <main className="relative mx-auto -mt-16 max-w-5xl px-4 pb-32 sm:-mt-20 lg:pb-16">
+      <main className="relative mx-auto -mt-16 w-full max-w-5xl px-4 pb-32 sm:-mt-20 lg:pb-16">
         <div className="grid gap-5 lg:grid-cols-5">
           {/* Ticket del pedido */}
-          <section className={`gmp-rise lg:col-span-3${esComprobante ? " lg:col-start-2" : ""}`} style={{ ["--gmp-d" as string]: "1.5s" }} aria-label="Resumen de tu pedido">
+          <section className={`gmp-rise ${esComprobante ? "lg:col-span-3 lg:col-start-2" : "lg:col-span-3"}`} style={{ ["--gmp-d" as string]: "1.5s" }} aria-label="Resumen de tu pedido">
             <div className="gmp-card gmp-ticket h-full" style={{ ["--notch-y" as string]: "98px" }}>
               <span className="gmp-stamp" aria-hidden>Pagado</span>
 
