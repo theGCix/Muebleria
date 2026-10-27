@@ -22,3 +22,28 @@ export const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER as string |
 const LIBRO_RECLAMACIONES_MANUAL = "";
 const libroUrl = ((import.meta.env.VITE_LIBRO_RECLAMACIONES_URL as string | undefined) || LIBRO_RECLAMACIONES_MANUAL).trim();
 export const LIBRO_RECLAMACIONES_URL: string | undefined = /^https:\/\//i.test(libroUrl) ? libroUrl : undefined;
+
+
+// ── Datos de la empresa (se muestran en Términos y Privacidad) ─────────────────────────
+// Llénalos aquí entre las comillas, o como variables VITE_* en Render. Lo que quede vacío no se muestra.
+const dato = (env: unknown, manual: string) => ((env as string | undefined) || manual).trim();
+
+export const EMPRESA = {
+  nombre: "G&M Mueblería",
+  razonSocial: dato(import.meta.env.VITE_EMPRESA_RAZON_SOCIAL, ""),
+  ruc: dato(import.meta.env.VITE_EMPRESA_RUC, ""),
+  direccion: dato(import.meta.env.VITE_EMPRESA_DIRECCION, ""),
+  email: dato(import.meta.env.VITE_EMPRESA_EMAIL, ""),
+};
+
+// ── Redes sociales del pie de página (solo se muestran las que empiecen con https://) ──
+const redUrl = (env: unknown, manual: string): string | undefined => {
+  const v = dato(env, manual);
+  return /^https:\/\//i.test(v) ? v : undefined;
+};
+
+export const REDES = {
+  instagram: redUrl(import.meta.env.VITE_INSTAGRAM_URL, ""),
+  facebook: redUrl(import.meta.env.VITE_FACEBOOK_URL, ""),
+  twitter: redUrl(import.meta.env.VITE_TWITTER_URL, ""),
+};
