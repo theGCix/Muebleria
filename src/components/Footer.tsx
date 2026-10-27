@@ -24,6 +24,7 @@ export function Footer() {
             <h4 className="font-medium text-foreground mb-4">Empresa</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><Link to="/nosotros" className="hover:text-foreground">Nuestro taller</Link></li>
+              <li><Link to="/proyectos" className="hover:text-foreground">Proyectos</Link></li>
               <li><a href="#categorias" className="hover:text-foreground">Categorías</a></li>
               <li><a href="#catalogo" className="hover:text-foreground">Catálogo</a></li>
               {hayTestimonios && (
