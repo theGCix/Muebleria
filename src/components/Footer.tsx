@@ -1,4 +1,6 @@
-import { Instagram, Facebook, Twitter } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Instagram, Facebook, Twitter, BookOpen } from "lucide-react";
+import { LIBRO_RECLAMACIONES_URL } from "@/config";
 import { useHayTestimonios } from "@/hooks/useResenasDestacadas";
 
 export function Footer() {
@@ -21,6 +23,7 @@ export function Footer() {
           <div>
             <h4 className="font-medium text-foreground mb-4">Empresa</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><Link to="/nosotros" className="hover:text-foreground">Nuestro taller</Link></li>
               <li><a href="#categorias" className="hover:text-foreground">Categorías</a></li>
               <li><a href="#catalogo" className="hover:text-foreground">Catálogo</a></li>
               {hayTestimonios && (
@@ -34,6 +37,19 @@ export function Footer() {
               <li><a href="#" className="hover:text-foreground">Términos</a></li>
               <li><a href="#" className="hover:text-foreground">Privacidad</a></li>
               <li><a href="#" className="hover:text-foreground">Envíos</a></li>
+              {LIBRO_RECLAMACIONES_URL && (
+                <li>
+                  <a
+                    href={LIBRO_RECLAMACIONES_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-medium text-foreground/80 hover:text-foreground"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Libro de Reclamaciones
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
         </div>
