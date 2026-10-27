@@ -10,16 +10,12 @@ import { AuthButton } from "./AuthButton";
 import { CategoryMegaMenu } from "./CategoryMegaMenu";
 import { CategoryMobileAccordion } from "./CategoryMobileAccordion";
 import { useState } from "react";
-import { Menu, X, User, Search, Truck } from "lucide-react";
+import { Menu, X, User, Search, Truck, PackageCheck, Flame } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchStore } from "@/stores/searchStore";
-import { useHayTestimonios } from "@/hooks/useResenasDestacadas";
-
-const NAV_LINKS = [
-  { label: "Inicio", href: "/" },
-  { label: "Testimonios", href: "#testimonios" },
-];
+import { useCombos } from "@/hooks/useCombos";
+import { useOfertas } from "@/hooks/useProducts";
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -29,8 +25,9 @@ export function Header() {
   const { user, roles } = useAuth();
   const navigate = useNavigate();
   const setQuery = useSearchStore((s) => s.setQuery);
-  const hayTestimonios = useHayTestimonios();
-  const navLinks = NAV_LINKS.filter((l) => l.href !== "#testimonios" || hayTestimonios);
+  // Mismos datos (y misma caché) que las secciones de la portada: el enlace solo aparece si la sección existe
+  const hayCombos = (useCombos(6).data?.length ?? 0) > 0;
+  const hayOfertas = (useOfertas(24).data?.length ?? 0) > 0;
 
   const isStaff = roles.includes("admin") || roles.includes("vendedor");
   const isCarpintero = roles.includes("carpintero") && !isStaff;
@@ -93,14 +90,26 @@ export function Header() {
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6 flex-shrink-0">
               <CategoryMegaMenu />
-              <Link to="/catalogo" className="text-sm text-foreground/70 hover:text-foreground transition-colors">
-                Catálogo
-              </Link>
-              {navLinks.map((l) => (
-                <a key={l.label} href={l.href} className="text-sm text-foreground/70 hover:text-foreground transition-colors">
-                  {l.label}
-                </a>
-              ))}
+              {hayCombos && (
+                <Link
+                  to="/"
+                  hash="combos"
+                  className="flex items-center gap-1.5 text-sm font-medium text-foreground/70 hover:text-foreground transition-colors"
+                >
+                  <PackageCheck className="h-4 w-4" />
+                  Combos
+                </Link>
+              )}
+              {hayOfertas && (
+                <Link
+                  to="/"
+                  hash="ofertas"
+                  className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent/80 transition-colors"
+                >
+                  <Flame className="h-4 w-4" />
+                  Ofertas
+                </Link>
+              )}
             </nav>
 
             {/* Buscador (desktop, siempre visible) */}
@@ -189,19 +198,33 @@ export function Header() {
                 <CategoryMobileAccordion onNavigate={() => setMobileOpen(false)} />
               </div>
 
-              {/* Links generales */}
-              <div className="pt-1">
-                {navLinks.map((l) => (
-                  <a
-                    key={l.label}
-                    href={l.href}
-                    onClick={() => setMobileOpen(false)}
-                    className="block text-sm text-foreground/70 hover:text-foreground py-2 border-b border-border/30 last:border-0"
-                  >
-                    {l.label}
-                  </a>
-                ))}
-              </div>
+              {/* Combos y ofertas */}
+              {(hayCombos || hayOfertas) && (
+                <div className="pt-1">
+                  {hayCombos && (
+                    <Link
+                      to="/"
+                      hash="combos"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-2 text-sm font-medium text-foreground/80 hover:text-foreground py-2 border-b border-border/30 last:border-0"
+                    >
+                      <PackageCheck className="h-4 w-4" />
+                      Combos
+                    </Link>
+                  )}
+                  {hayOfertas && (
+                    <Link
+                      to="/"
+                      hash="ofertas"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-2 text-sm font-medium text-accent py-2 border-b border-border/30 last:border-0"
+                    >
+                      <Flame className="h-4 w-4" />
+                      Ofertas
+                    </Link>
+                  )}
+                </div>
+              )}
 
               <div className="pt-2 space-y-2">
                 {user ? (

@@ -146,6 +146,16 @@ export function CategoryMegaMenu({ onNavigate }: CategoryMegaMenuProps) {
               )}
             </div>
           </div>
+
+          {/* Acceso al catálogo completo (reemplaza la pestaña "Catálogo" del navbar) */}
+          <Link
+            to="/catalogo"
+            onClick={handleNavigate}
+            className="flex items-center justify-between border-t border-border/50 bg-secondary/30 px-6 py-3 text-sm font-medium text-accent transition-colors hover:bg-secondary/60"
+          >
+            Ver todo el catálogo
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       )}
     </div>
