@@ -1,6 +1,6 @@
 // src/components/Header.tsx
 import { CampanaTicker } from "@/components/CampanaTicker";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CartDrawer } from "./CartDrawer";
@@ -9,13 +9,24 @@ import { LoginModal } from "./LoginModal";
 import { AuthButton } from "./AuthButton";
 import { CategoryMegaMenu } from "./CategoryMegaMenu";
 import { CategoryMobileAccordion } from "./CategoryMobileAccordion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, X, User, Search, Truck, PackageCheck, Flame } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchStore } from "@/stores/searchStore";
 import { useCombos } from "@/hooks/useCombos";
 import { useOfertas } from "@/hooks/useProducts";
+
+// Enlaces del navbar: el activo se distingue con color pleno y una línea de acento debajo
+const navLinkCls = (activo: boolean, tono: "base" | "accent" = "base") =>
+  [
+    "relative flex items-center gap-1.5 py-2 text-sm font-medium transition-colors",
+    "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:rounded-full after:bg-accent after:transition-transform after:duration-300",
+    activo ? "after:scale-x-100" : "after:scale-x-0",
+    activo
+      ? tono === "accent" ? "text-accent" : "text-foreground"
+      : tono === "accent" ? "text-accent/80 hover:text-accent" : "text-foreground/70 hover:text-foreground",
+  ].join(" ");
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,6 +39,46 @@ export function Header() {
   // Mismos datos (y misma caché) que las secciones de la portada: el enlace solo aparece si la sección existe
   const hayCombos = (useCombos(6).data?.length ?? 0) > 0;
   const hayOfertas = (useOfertas(24).data?.length ?? 0) > 0;
+
+  // ¿Dónde estoy? Por ruta (/combo/…, /categoria/…) y, en la portada, por la sección que se está viendo
+  const location = useRouterState({ select: (s) => s.location });
+  const enInicio = location.pathname === "/";
+  const [seccionActiva, setSeccionActiva] = useState<"combos" | "ofertas" | null>(null);
+
+  useEffect(() => {
+    if (!enInicio || typeof IntersectionObserver === "undefined") {
+      setSeccionActiva(null);
+      return;
+    }
+    const orden = ["combos", "ofertas"] as const;
+    const visibles = new Set<string>();
+    // Franja estrecha a ~40% de la altura: la sección que la cruza es la "actual"
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visibles.add(e.target.id);
+          else visibles.delete(e.target.id);
+        }
+        setSeccionActiva(orden.find((id) => visibles.has(id)) ?? null);
+      },
+      { rootMargin: "-35% 0px -55% 0px" },
+    );
+    // Las secciones se montan cuando llegan sus datos; observamos tras el render
+    const t = setTimeout(() => {
+      orden.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) io.observe(el);
+      });
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      io.disconnect();
+    };
+  }, [enInicio, hayCombos, hayOfertas]);
+
+  const combosActivo = location.pathname.startsWith("/combo/") || seccionActiva === "combos";
+  const ofertasActivo = seccionActiva === "ofertas";
+  const categoriasActivo = location.pathname.startsWith("/categoria/");
 
   const isStaff = roles.includes("admin") || roles.includes("vendedor");
   const isCarpintero = roles.includes("carpintero") && !isStaff;
@@ -89,12 +140,13 @@ export function Header() {
 
             {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-6 flex-shrink-0">
-              <CategoryMegaMenu />
+              <CategoryMegaMenu activo={categoriasActivo} />
               {hayCombos && (
                 <Link
                   to="/"
                   hash="combos"
-                  className="flex items-center gap-1.5 text-sm font-medium text-foreground/70 hover:text-foreground transition-colors"
+                  aria-current={combosActivo ? "true" : undefined}
+                  className={navLinkCls(combosActivo)}
                 >
                   <PackageCheck className="h-4 w-4" />
                   Combos
@@ -104,7 +156,8 @@ export function Header() {
                 <Link
                   to="/"
                   hash="ofertas"
-                  className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent/80 transition-colors"
+                  aria-current={ofertasActivo ? "true" : undefined}
+                  className={navLinkCls(ofertasActivo, "accent")}
                 >
                   <Flame className="h-4 w-4" />
                   Ofertas
@@ -206,7 +259,10 @@ export function Header() {
                       to="/"
                       hash="combos"
                       onClick={() => setMobileOpen(false)}
-                      className="flex items-center gap-2 text-sm font-medium text-foreground/80 hover:text-foreground py-2 border-b border-border/30 last:border-0"
+                      aria-current={combosActivo ? "true" : undefined}
+                      className={`flex items-center gap-2 text-sm font-medium py-2 border-b border-border/30 last:border-0 ${
+                        combosActivo ? "text-accent" : "text-foreground/80 hover:text-foreground"
+                      }`}
                     >
                       <PackageCheck className="h-4 w-4" />
                       Combos
@@ -217,7 +273,10 @@ export function Header() {
                       to="/"
                       hash="ofertas"
                       onClick={() => setMobileOpen(false)}
-                      className="flex items-center gap-2 text-sm font-medium text-accent py-2 border-b border-border/30 last:border-0"
+                      aria-current={ofertasActivo ? "true" : undefined}
+                      className={`flex items-center gap-2 text-sm font-medium py-2 border-b border-border/30 last:border-0 ${
+                        ofertasActivo ? "text-accent underline underline-offset-4" : "text-accent/80"
+                      }`}
                     >
                       <Flame className="h-4 w-4" />
                       Ofertas

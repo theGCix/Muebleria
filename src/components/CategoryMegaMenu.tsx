@@ -10,9 +10,11 @@ import { CATEGORIAS, type CategoriaConfig } from "@/lib/categories";
 
 interface CategoryMegaMenuProps {
   onNavigate?: () => void;
+  /** true cuando la página actual es una categoría (/categoria/…): resalta el botón */
+  activo?: boolean;
 }
 
-export function CategoryMegaMenu({ onNavigate }: CategoryMegaMenuProps) {
+export function CategoryMegaMenu({ onNavigate, activo = false }: CategoryMegaMenuProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<CategoriaConfig>(CATEGORIAS[0]);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,9 +40,10 @@ export function CategoryMegaMenu({ onNavigate }: CategoryMegaMenuProps) {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex items-center gap-1.5 text-sm font-medium transition-colors py-2 ${
-          open ? "text-accent" : "text-foreground/70 hover:text-foreground"
-        }`}
+        aria-current={activo ? "true" : undefined}
+        className={`relative flex items-center gap-1.5 text-sm font-medium transition-colors py-2 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:rounded-full after:bg-accent after:transition-transform after:duration-300 ${
+          activo ? "after:scale-x-100" : "after:scale-x-0"
+        } ${open ? "text-accent" : activo ? "text-foreground" : "text-foreground/70 hover:text-foreground"}`}
       >
         <LayoutGrid className="h-4 w-4" />
         Categorías
