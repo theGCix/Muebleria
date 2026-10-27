@@ -21,6 +21,7 @@ import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 import { ofertaInfo } from "@/lib/pricing";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { ColorFotoEditor, type ColorFoto } from "@/components/admin/ColorFotoEditor";
 
 export const Route = createFileRoute("/_authenticated/productos")({
   validateSearch: (s: Record<string, unknown>): { q?: string } => ({
@@ -47,6 +48,8 @@ const isoToLocalInput = (iso: string | null | undefined): string => {
 type ProductImage = {
   url: string;
   public_id: string;
+  /** Color del mueble en esta foto (lo elige el admin). Alimenta el selector de color de la ficha. */
+  color?: ColorFoto | null;
 };
 
 type ProductForm = {
@@ -218,6 +221,18 @@ function ProductFormModal({
     });
   };
 
+  // Asigna (o quita) el color del mueble que se ve en una foto
+  const setImageColor = (idx: number, color: ColorFoto | null) => {
+    setForm((f) => ({
+      ...f,
+      imagenes: f.imagenes.map((img, i) => {
+        if (i !== idx) return img;
+        const { color: _viejo, ...resto } = img;
+        return color ? { ...resto, color } : resto;
+      }),
+    }));
+  };
+
   // Mueve una imagen a la posición 0 (imagen principal)
   const setMainImage = (idx: number) => {
     if (idx === 0) return;
@@ -307,6 +322,8 @@ function ProductFormModal({
                     Principal
                   </span>
                 )}
+                {/* Color del mueble en esta foto */}
+                <ColorFotoEditor color={img.color} onChange={(c) => setImageColor(idx, c)} />
                 {/* Botón eliminar */}
                 <button
                   type="button"
@@ -343,7 +360,7 @@ function ProductFormModal({
             />
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            JPG, PNG, WEBP · Máx. {MAX_IMAGES} imágenes · Clic para hacer principal · Hover para eliminar
+            JPG, PNG, WEBP · Máx. {MAX_IMAGES} imágenes · Clic para hacer principal · Hover para eliminar · Círculo de la esquina: color de la foto
             {form.imagenes.length >= MAX_IMAGES && (
               <span className="text-amber-600 font-medium"> · Límite alcanzado</span>
             )}

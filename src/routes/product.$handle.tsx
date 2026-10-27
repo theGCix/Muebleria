@@ -560,7 +560,10 @@ const PAGE_CSS = `
 
 type ProductData = NonNullable<ReturnType<typeof useProduct>["data"]>;
 /** Columnas opcionales de products que aún no están en el tipo Product */
-type ProductExtra = { imagenes?: { url: string; public_id?: string }[] | null; modelo_3d_url?: string | null };
+type ProductExtra = {
+  imagenes?: { url: string; public_id?: string; color?: { name: string; hex: string } | null }[] | null;
+  modelo_3d_url?: string | null;
+};
 
 /* ─── page shell: carga y estados vacíos ──────────── */
 function ProductPage() {
@@ -597,6 +600,7 @@ function ProductView({ product: base }: { product: ProductData }) {
   const [leadOpen, setLeadOpen] = useState(false);
   const [ambient, setAmbient] = useState(false);
   const [finishIdx, setFinishIdx] = useState(0);
+  const [fotoColor, setFotoColor] = useState(0);
   const [modPrefs, setModPrefs] = useState<Record<string, string>>({});
   const [showSticky, setShowSticky] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
@@ -657,6 +661,38 @@ function ProductView({ product: base }: { product: ProductData }) {
   const mainImg = allImgs[0] ?? null;
   const displayImg = allImgs[activeImg] ?? mainImg;
 
+  // Colores definidos por foto (los asigna el admin): cada color único apunta a su primera foto.
+  // Si hay al menos uno, reemplazan a los acabados genéricos de la categoría.
+  const fotoColores = useMemo(() => {
+    const out: { name: string; hex: string; imgIdx: number }[] = [];
+    (product.imagenes ?? []).forEach((img, i) => {
+      const c = img.color;
+      if (!c?.hex) return;
+      if (out.some((o) => o.hex.toLowerCase() === c.hex.toLowerCase())) return;
+      out.push({ name: c.name || c.hex, hex: c.hex, imgIdx: i });
+    });
+    return out;
+  }, [product.imagenes]);
+  const hayColoresFoto = fotoColores.length > 0;
+
+  // Al pasar de foto en la galería, el color seleccionado sigue a la foto
+  useEffect(() => {
+    const hex = product.imagenes?.[activeImg]?.color?.hex?.toLowerCase();
+    if (!hex) return;
+    const i = fotoColores.findIndex((c) => c.hex.toLowerCase() === hex);
+    if (i >= 0) setFotoColor(i);
+  }, [activeImg, fotoColores, product.imagenes]);
+
+  const elegirColor = (i: number) => {
+    if (hayColoresFoto) {
+      setFotoColor(i);
+      setActiveImg(fotoColores[i].imgIdx);
+      setVista("foto");
+    } else {
+      setFinishIdx(i);
+    }
+  };
+
   const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
   const outOfStock = (product.stock ?? 1) <= 0;
   const has3D = !!product.modelo_3d_url;
@@ -664,8 +700,11 @@ function ProductView({ product: base }: { product: ProductData }) {
   const tieneLed = profile.key === "tv";
 
   // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
-  const acabado = profile.acabados[finishIdx];
-  const prefs: Record<string, string> = { [profile.acabadoLabel]: acabado.name, ...modPrefs };
+  const swatches: { name: string; hex: string }[] = hayColoresFoto ? fotoColores : profile.acabados;
+  const swatchSel = hayColoresFoto ? Math.min(fotoColor, fotoColores.length - 1) : finishIdx;
+  const acabado = swatches[swatchSel];
+  const acabadoLabel = hayColoresFoto ? "Color" : profile.acabadoLabel;
+  const prefs: Record<string, string> = { [acabadoLabel]: acabado.name, ...modPrefs };
   const prefsLista = Object.entries(prefs);
   const prefsTexto = prefsLista.map(([k, v]) => `${k}: ${v}`).join(" · ");
 
@@ -675,7 +714,8 @@ function ProductView({ product: base }: { product: ProductData }) {
       id: product.id,
       title: `${product.nombre} (${Object.values(prefs).join(", ")})`,
       price: precioMostrado,
-      image: mainImg ?? "",
+      // Con colores por foto, el carrito muestra la foto del color elegido
+      image: (hayColoresFoto ? allImgs[fotoColores[swatchSel]?.imgIdx ?? 0] : null) ?? mainImg ?? "",
       sku: product.sku ?? undefined,
     });
     toast.success("Agregado al carrito", { description: `${product.nombre} · ${Object.values(prefs).join(" · ")}`, position: "top-center" });
@@ -801,12 +841,12 @@ function ProductView({ product: base }: { product: ProductData }) {
 
             {/* acabado */}
             <div className="gm-color-label">
-              {profile.acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
+              {acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
             </div>
-            <div className="gm-color-row" role="radiogroup" aria-label={profile.acabadoLabel}>
-              {profile.acabados.map((c, i) => (
-                <button key={c.hex} type="button" role="radio" aria-checked={finishIdx === i} aria-label={c.name}
-                  className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => setFinishIdx(i)} />
+            <div className="gm-color-row" role="radiogroup" aria-label={acabadoLabel}>
+              {swatches.map((c, i) => (
+                <button key={c.hex} type="button" role="radio" aria-checked={swatchSel === i} aria-label={c.name}
+                  className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => elegirColor(i)} />
               ))}
             </div>
 
