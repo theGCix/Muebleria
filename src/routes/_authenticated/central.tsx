@@ -68,7 +68,7 @@ function RankRow({ pos, name, total, maxTotal, color }: {
       style={{ borderColor: "var(--border)" }}>
       <span className="text-[11px] w-4 text-right flex-shrink-0"
         style={{ color: "var(--muted-foreground)" }}>{pos}</span>
-      <span className="text-xs flex-[0_0_82px] truncate" style={{ color: "var(--foreground)" }}>{name}</span>
+      <span className="text-xs flex-[0_0_120px] md:flex-[0_0_82px] truncate" style={{ color: "var(--foreground)" }}>{name}</span>
       <div className="flex-1 h-1.5 rounded-full overflow-hidden"
         style={{ background: "var(--muted)" }}>
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
@@ -90,7 +90,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className="rounded-xl p-4 border"
+      className="rounded-xl p-4 border min-w-0 overflow-hidden"
       style={{
         background: "var(--card)",
         borderColor: alert ? "#FAC775" : "var(--border)",
@@ -99,7 +99,7 @@ function KpiCard({
     >
       <p className="text-[10px] uppercase tracking-widest mb-1"
         style={{ color: "var(--muted-foreground)" }}>{label}</p>
-      <p className="font-display text-3xl font-semibold leading-none"
+      <p className="font-display text-2xl sm:text-3xl font-semibold leading-none break-words"
         style={{ color: "var(--foreground)" }}>{value}</p>
       {sub && <p className="text-xs mt-1.5" style={{ color: "var(--muted-foreground)" }}>{sub}</p>}
       {trend && (
@@ -246,8 +246,8 @@ function CentralPage() {
   return (
     <div className="space-y-3 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex items-baseline justify-between pb-3 border-b" style={{ borderColor: "var(--border)" }}>
-        <div className="flex items-baseline gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between pb-3 border-b" style={{ borderColor: "var(--border)" }}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           <h1 className="font-display text-xl font-semibold" style={{ color: "var(--foreground)" }}>
             G&M Mueblería
           </h1>
@@ -260,7 +260,7 @@ function CentralPage() {
       </div>
 
       {/* Fila 1: KPIs financieros */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="col-span-2">
           <KpiCard
             label="Ingresos del mes"
@@ -289,14 +289,14 @@ function CentralPage() {
           style={{ color: "var(--muted-foreground)" }}>
           Pipeline de producción · órdenes activas
         </p>
-        <div className="flex items-start px-4">
+        <div className="flex items-start sm:px-4">
           <PipelineNode icon={Clock}        label="Pendiente"       count={kpis?.prod_pendientes ?? 0} color="#854F0B" bg="#FAEEDA" />
           <PipelineNode icon={Hammer}       label="En proceso"      count={kpis?.prod_en_proceso ?? 0} color="#185FA5" bg="#E6F1FB" />
           <PipelineNode icon={CheckCircle2} label="Control calidad" count={0}                          color="#534AB7" bg="#EEEDFE" />
           <PipelineNode icon={Package}      label="Listo despacho"  count={0}                          color="#0F6E56" bg="#E1F5EE" />
           <PipelineNode icon={Truck}        label="Enviado"         count={0}                          color="#3B6D11" bg="#EAF3DE" isLast />
         </div>
-        <div className="flex gap-4 mt-3 pt-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
           <span>Tiempo promedio: <strong style={{ color: "var(--foreground)" }}>
             {kpis?.tiempo_prod_promedio_dias
               ? `${kpis.tiempo_prod_promedio_dias} días`
@@ -315,7 +315,7 @@ function CentralPage() {
       </div>
 
       {/* Fila 3: Rankings + alertas */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
           <p className="text-[10px] uppercase tracking-widest mb-3"
             style={{ color: "var(--muted-foreground)" }}>Top productos (mes)</p>
@@ -365,7 +365,7 @@ function CentralPage() {
       </div>
 
       {/* Fila 4: KPIs operacionales */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           label="Insumos bajo mínimo"
           value={kpis ? String(kpis.insumos_stock_bajo) : "—"}

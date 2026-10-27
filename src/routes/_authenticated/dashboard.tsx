@@ -75,13 +75,13 @@ function KpiCard({
 }) {
   return (
     <Card
-      className={`p-5 cursor-default ${alert ? "border-amber-300 bg-amber-50/60" : ""} ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+      className={`p-4 sm:p-5 cursor-default ${alert ? "border-amber-300 bg-amber-50/60" : ""} ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
-          <p className="text-2xl font-display font-semibold truncate">{value}</p>
+          <p className="text-xl sm:text-2xl font-display font-semibold truncate">{value}</p>
           {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
           {trend !== undefined && trend !== null && (
             <div className={`flex items-center gap-0.5 text-xs mt-1 font-medium ${trend >= 0 ? "text-green-600" : "text-red-500"}`}>
@@ -92,7 +92,7 @@ function KpiCard({
             </div>
           )}
         </div>
-        <div className={`ml-3 p-2.5 rounded-xl flex-shrink-0 ${alert ? "bg-amber-100" : "bg-primary/8"}`}>
+        <div className={`ml-3 p-2.5 rounded-xl flex-shrink-0 hidden sm:block ${alert ? "bg-amber-100" : "bg-primary/8"}`}>
           <Icon className={`h-5 w-5 ${alert ? "text-amber-600" : "text-primary/60"}`} />
         </div>
       </div>

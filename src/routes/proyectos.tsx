@@ -160,7 +160,7 @@ function ProyectosPage() {
                         )}
                       </div>
                       <div className="p-3">
-                        <Estrellas valor={p.calificacion} size={12} />
+                        {p.calificacion > 0 && <Estrellas valor={p.calificacion} size={12} />}
                         <p className="mt-1.5 line-clamp-1 text-sm font-medium">{p.producto_nombre ?? "Mueble G&M"}</p>
                         <p className="text-xs text-muted-foreground">{p.autor_nombre}</p>
                       </div>
@@ -292,10 +292,12 @@ function Visor({
 
             <div className="flex flex-col gap-4 overflow-y-auto p-6 md:max-h-[92vh]">
               <div className="flex items-center justify-between gap-3">
-                <Estrellas valor={p.calificacion} size={16} />
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                  <BadgeCheck className="h-3.5 w-3.5" /> Compra verificada
-                </span>
+                {p.calificacion > 0 ? <Estrellas valor={p.calificacion} size={16} /> : <span />}
+                {p.origen === "resena" && (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                    <BadgeCheck className="h-3.5 w-3.5" /> Compra verificada
+                  </span>
+                )}
               </div>
               {p.titulo && <h3 className="font-display text-2xl font-semibold leading-tight">{p.titulo}</h3>}
               {p.comentario && (
@@ -310,7 +312,7 @@ function Visor({
               <div className="mt-auto border-t border-border/50 pt-4">
                 <p className="text-sm font-medium">{p.autor_nombre}</p>
                 <p className="text-xs text-muted-foreground first-letter:uppercase">{fechaCorta(p.created_at)}</p>
-                {p.producto_nombre && (
+                {p.producto_nombre && p.product_id && (
                   <Button asChild variant="outline" className="mt-4 w-full rounded-full" onClick={onClose}>
                     <Link to="/product/$handle" params={{ handle: p.product_id }}>
                       Ver {p.producto_nombre}
