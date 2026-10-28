@@ -1,14 +1,15 @@
 // src/components/Hero.tsx
 // Hero del home. Con ofertas vigentes muestra la campaña: cuenta regresiva real y
 // etiquetas de precio colgadas de un riel (como en el taller). Sin ofertas, hero de marca.
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Sparkles, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, Sparkles, ShieldCheck, Smartphone, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroImg from "@/assets/hero-furniture.jpg";
 import { useCampana, type Campana } from "@/hooks/useCampana";
 import { useCountdown } from "@/hooks/useCountdown";
+import { useSacudida } from "@/hooks/useSacudida";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN, ofertaInfo } from "@/lib/pricing";
 import type { Product } from "@/hooks/useProducts";
@@ -149,6 +150,9 @@ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
 
 function HeroCampana({ c }: { c: Campana }) {
   const destacadas = c.ofertas.slice(0, 3);
+  // Las etiquetas se balancean al mover o agitar el celular
+  const railRef = useRef<HTMLDivElement>(null);
+  const movimiento = useSacudida(railRef);
   const titulo = c.nombre ?? `Hasta -${c.maxDescuento}% en muebles hechos a mano`;
   const bajada = c.nombre
     ? `Hasta -${c.maxDescuento}% en ${c.ofertas.length} ${c.ofertas.length === 1 ? "pieza" : "piezas"} de madera natural. Precios rebajados mientras dure la campaña.`
@@ -214,7 +218,7 @@ function HeroCampana({ c }: { c: Campana }) {
         </div>
 
         {/* Riel con etiquetas colgadas */}
-        <div data-hero-rail className="relative min-w-0">
+        <div data-hero-rail ref={railRef} className="relative min-w-0">
           <div
             aria-hidden
             className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-[var(--color-gold)]/70"
@@ -223,7 +227,7 @@ function HeroCampana({ c }: { c: Campana }) {
             <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-[var(--color-gold)]" />
           </div>
           <div
-            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-8 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
+            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden px-4 pb-8 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
             style={{ ["--n" as string]: destacadas.length }}
           >
             {destacadas.map((p, i) => (
@@ -236,6 +240,15 @@ function HeroCampana({ c }: { c: Campana }) {
               </div>
             ))}
           </div>
+          {movimiento.necesitaPermiso && (
+            <button
+              type="button"
+              onClick={movimiento.activar}
+              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-[var(--color-gold)]/50 px-3.5 py-1.5 text-xs text-[var(--color-gold-light)] transition-colors hover:bg-[var(--color-warm-white)]/10"
+            >
+              <Smartphone className="h-3.5 w-3.5" /> Activar movimiento
+            </button>
+          )}
         </div>
       </div>
     </section>
