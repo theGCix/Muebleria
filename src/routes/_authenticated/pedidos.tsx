@@ -16,11 +16,13 @@ import {
 import {
   Loader2, Search, ShoppingBag, Eye, RefreshCw,
   Clock, Package, Hammer, CheckCircle2, Truck, XCircle,
-  ChevronRight, AlertCircle,
+  ChevronRight, AlertCircle, MessageCircle, Copy,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { cambiarEstadoPedido } from "@/lib/pos.functions";
+import { whatsappLink } from "@/lib/despachos.functions";
+import { enlaceResena, mensajeResena } from "@/lib/resena-link";
 import { EmptyState, TableSkeleton } from "@/components/states";
 
 
@@ -493,6 +495,44 @@ function PedidosPage() {
                   ) : null)}
                 </div>
               </section>
+
+              {/* Pedir reseña y fotos (solo pedidos entregados) */}
+              {selected.status === "entregado" && (
+                <section className="rounded-xl border border-border bg-secondary/40 p-4">
+                  <h3 className="font-semibold text-sm">Pedir reseña y fotos</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Envíale al cliente el enlace para que califique su compra y suba fotos de su mueble. Lo que envíe llega a
+                    Reseñas y Testimonios para que lo apruebes antes de publicarlo.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {whatsappLink(selected.telefono, mensajeResena(selected.nombre, selected.order_number, selected.id)) ? (
+                      <Button asChild size="sm">
+                        <a
+                          href={whatsappLink(selected.telefono, mensajeResena(selected.nombre, selected.order_number, selected.id)) ?? "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <MessageCircle className="mr-1.5 h-4 w-4" /> Enviar por WhatsApp
+                        </a>
+                      </Button>
+                    ) : (
+                      <span className="self-center text-xs text-muted-foreground">Este pedido no tiene un teléfono válido.</span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard
+                          .writeText(enlaceResena(selected.id))
+                          .then(() => toast.success("Enlace copiado"))
+                          .catch(() => toast.error("No se pudo copiar el enlace"));
+                      }}
+                    >
+                      <Copy className="mr-1.5 h-4 w-4" /> Copiar enlace
+                    </Button>
+                  </div>
+                </section>
+              )}
 
               {/* Productos */}
               <section>

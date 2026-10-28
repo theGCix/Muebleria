@@ -1,11 +1,12 @@
 // src/routes/conformidad.$orderId.tsx
 // El cliente confirma que recibió su pedido y, si quiere, sube fotos de su mueble.
 // Las fotos quedan PENDIENTES: solo se muestran en la web si el equipo las aprueba desde el panel (Testimonios).
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, ImagePlus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { uploadImage } from "@/lib/cloudinary";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -34,6 +35,7 @@ const mini = (url: string, w = 240) =>
 
 function ConformidadPage() {
   const { orderId } = Route.useParams();
+  const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [buscando, setBuscando] = useState(false);
   const [pedido, setPedido] = useState<Pedido | null | undefined>(undefined); // undefined = aún no consultado
@@ -45,6 +47,11 @@ function ConformidadPage() {
   const [enviando, setEnviando] = useState(false);
   const [listo, setListo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Si ya inició sesión, le precargamos el correo de su cuenta.
+  useEffect(() => {
+    if (user?.email) setEmail((cur) => cur || (user.email ?? ""));
+  }, [user?.email]);
 
   const buscar = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,7 +1,8 @@
 // src/routes/resena.$orderId.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -113,10 +114,16 @@ function TarjetaItem({
 
 function ResenaPage() {
   const { orderId } = Route.useParams();
+  const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [buscando, setBuscando] = useState(false);
   const [items, setItems] = useState<ItemPendiente[] | null>(null);
   const [enviados, setEnviados] = useState<Set<string>>(new Set());
+
+  // Si ya inició sesión, le precargamos el correo de su cuenta.
+  useEffect(() => {
+    if (user?.email) setEmail((cur) => cur || (user.email ?? ""));
+  }, [user?.email]);
 
   const buscar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,6 +173,9 @@ function ResenaPage() {
             <p className="text-muted-foreground">
               No encontramos productos pendientes de reseñar con ese correo para este pedido — puede que ya los hayas reseñado todos, o que el correo no coincida.
             </p>
+            <Button variant="outline" className="mt-4 rounded-full" onClick={() => setItems(null)}>
+              Probar con otro correo
+            </Button>
           </div>
         )}
 

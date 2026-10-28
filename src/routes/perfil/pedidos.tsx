@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   ShoppingBag, Package, Truck, CheckCircle2,
-  Clock, XCircle, ChevronDown, ChevronUp, Receipt, Store,
+  Clock, XCircle, ChevronDown, ChevronUp, Receipt, Store, Star, Camera,
 } from "lucide-react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -220,6 +220,32 @@ function PedidoCard({ order }: { order: any }) {
       {verComprobante && !isLoading && createPortal(
         <PagoExitoso modo="comprobante" datos={datosComprobante} onCerrar={() => setVerComprobante(false)} />,
         document.body,
+      )}
+
+      {/* Pedido entregado: invitar a reseñar y subir fotos */}
+      {order.status === "entregado" && (
+        <div className="mx-5 mb-4 rounded-xl border border-border bg-secondary/40 p-4">
+          <p className="text-sm font-medium">¿Qué tal tu mueble?</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Cuéntanos qué te pareció y, si quieres, muéstranos cómo quedó en tu casa.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              to="/resena/$orderId"
+              params={{ orderId: order.id }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              <Star className="h-3.5 w-3.5" /> Calificar mi compra
+            </Link>
+            <Link
+              to="/conformidad/$orderId"
+              params={{ orderId: order.id }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-4 py-2 text-xs font-medium transition-colors hover:bg-muted"
+            >
+              <Camera className="h-3.5 w-3.5" /> Subir fotos
+            </Link>
+          </div>
+        </div>
       )}
 
       {/* Detalle expandible */}

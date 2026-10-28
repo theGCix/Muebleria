@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { mensajeResena } from "@/lib/resena-link";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -316,6 +317,17 @@ function DespachosPage() {
                             <Button size="icon" variant="ghost" className="h-8 w-8" title="Editar"
                                     onClick={() => setForm({ open: true, edit: d })}>
                               <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {d.estado === "entregado" && o?.telefono && (
+                            <Button asChild size="sm" variant="outline" className="h-8" title="Pedir reseña y fotos por WhatsApp">
+                              <a
+                                href={whatsappLink(o.telefono, mensajeResena(o.nombre, o.order_number, d.order_id)) ?? "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <MessageCircle className="mr-1 h-3.5 w-3.5" /> Pedir reseña
+                              </a>
                             </Button>
                           )}
                           {wa && ["programado", "en_ruta", "fallido"].includes(d.estado) && (
