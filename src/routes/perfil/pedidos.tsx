@@ -12,6 +12,7 @@ import {
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
+import { EvidenciasCliente } from "@/components/EvidenciasCliente";
 
 export const Route = createFileRoute("/perfil/pedidos")({
   head: () => ({ meta: [{ title: "Mis pedidos — G&M Mueblería" }] }),
@@ -233,13 +234,21 @@ function PedidoCard({ order }: { order: any }) {
             className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-60"
           >
             <Receipt className="h-3.5 w-3.5" />
-            {verComprobante && isLoading ? "Abriendo…" : "Ver comprobante de pago"}
+            {verComprobante && isLoading ? "Abriendo…" : "Ver comprobante de pago y estado del pedido"}
           </button>
         </div>
       )}
       {verComprobante && !isLoading && createPortal(
         <PagoExitoso modo="comprobante" datos={datosComprobante} onCerrar={() => setVerComprobante(false)} />,
         document.body,
+      )}
+
+      {/* Fotos del avance (solo aparece si el equipo subió alguna) */}
+      {pagado && (
+        <EvidenciasCliente
+          orderId={order.id}
+          className="mx-5 mb-4 rounded-xl border border-border bg-secondary/40 p-4"
+        />
       )}
 
       {/* Pedido entregado: invitar a reseñar y subir fotos */}

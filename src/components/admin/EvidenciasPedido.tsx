@@ -1,7 +1,8 @@
 // src/components/admin/EvidenciasPedido.tsx
 // Sección opcional del diálogo de pedido: el equipo sube fotos del avance según el estado actual.
-import { useRef, useState } from "react";
-import { Camera, Loader2, Trash2 } from "lucide-react";
+// Flujo: elegir fotos → vista previa → (nota + aviso opcional) → Guardar o Cancelar.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, Loader2, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,8 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import {
-  ESTADO_LABEL, agruparPorEstado, useBorrarEvidencia, useEvidencias, useSubirEvidencias,
+  ESTADO_LABEL, MAX_FOTO_MB, agruparPorEstado, useBorrarEvidencia, useEvidencias, useSubirEvidencias,
 } from "@/hooks/useEvidencias";
+
+const MAX_POR_ENVIO = 6;
 
 interface Props {
   order: {
@@ -33,19 +36,45 @@ export function EvidenciasPedido({ order }: Props) {
   const subir = useSubirEvidencias();
   const borrar = useBorrarEvidencia(order.id);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [pendientes, setPendientes] = useState<File[]>([]);
   const [nota, setNota] = useState("");
   const [avisar, setAvisar] = useState(false);
+
+  // Vistas previas locales (aún no se sube nada a Cloudinary)
+  const previews = useMemo(() => pendientes.map((f) => URL.createObjectURL(f)), [pendientes]);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
+
+  const limpiar = () => {
+    setPendientes([]);
+    setNota("");
+    setAvisar(false);
+  };
 
   const onFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (files.length === 0) return;
+    const validas = files.filter((f) => {
+      if (f.size > MAX_FOTO_MB * 1024 * 1024) {
+        toast.error(`"${f.name}" pesa más de ${MAX_FOTO_MB} MB`);
+        return false;
+      }
+      return true;
+    });
+    setPendientes((cur) => {
+      const todas = [...cur, ...validas];
+      if (todas.length > MAX_POR_ENVIO) toast.error(`Máximo ${MAX_POR_ENVIO} fotos por envío`);
+      return todas.slice(0, MAX_POR_ENVIO);
+    });
+  };
+
+  const guardar = () => {
     subir.mutate(
       {
         orderId: order.id,
         orderNumber: order.order_number,
         estado: order.status,
-        files,
+        files: pendientes,
         nota,
         avisar,
         email: order.email,
@@ -53,8 +82,8 @@ export function EvidenciasPedido({ order }: Props) {
       },
       {
         onSuccess: (n) => {
-          setNota("");
-          toast.success(n === 1 ? "Foto agregada" : `${n} fotos agregadas`);
+          limpiar();
+          toast.success(n === 1 ? "Foto publicada para el cliente" : `${n} fotos publicadas para el cliente`);
         },
         onError: (err: Error) => toast.error(err.message),
       },
@@ -62,37 +91,92 @@ export function EvidenciasPedido({ order }: Props) {
   };
 
   const grupos = agruparPorEstado(evidencias);
+  const hayPendientes = pendientes.length > 0;
 
   return (
     <section className="space-y-3">
       <div>
         <h3 className="font-semibold text-sm">Evidencia fotográfica (opcional)</h3>
         <p className="text-xs text-muted-foreground">
-          Las fotos se guardan con el estado actual: <b>{ESTADO_LABEL[order.status] ?? order.status}</b>. El cliente las verá en su perfil.
+          Las fotos se guardan con el estado actual: <b>{ESTADO_LABEL[order.status] ?? order.status}</b>. Al guardar, el cliente las verá en su perfil.
         </p>
       </div>
 
       <div className="space-y-3 rounded-lg border border-dashed border-border p-3">
-        <Textarea
-          value={nota}
-          onChange={(e) => setNota(e.target.value)}
-          placeholder="Nota para el cliente (opcional). Ej: Ya está armado el marco, falta el barniz."
-          rows={2}
-          maxLength={300}
-        />
-        {order.email && (
-          <div className="flex items-center gap-2">
-            <Checkbox id={`avisar-${order.id}`} checked={avisar} onCheckedChange={(v) => setAvisar(v === true)} />
-            <Label htmlFor={`avisar-${order.id}`} className="cursor-pointer text-xs">
-              Avisar al cliente por correo
-            </Label>
-          </div>
-        )}
         <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={onFiles} />
-        <Button type="button" size="sm" variant="outline" disabled={subir.isPending} onClick={() => inputRef.current?.click()}>
-          {subir.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-          {subir.isPending ? "Subiendo…" : "Agregar foto"}
-        </Button>
+
+        {hayPendientes && (
+          <>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {previews.map((src, i) => (
+                <div key={src} className="relative overflow-hidden rounded-lg border bg-muted/30">
+                  <img src={src} alt={`Vista previa ${i + 1}`} className="aspect-square w-full object-cover" />
+                  <button
+                    type="button"
+                    title="Quitar"
+                    disabled={subir.isPending}
+                    onClick={() => setPendientes((cur) => cur.filter((_, j) => j !== i))}
+                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <Textarea
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              placeholder="Nota para el cliente (opcional). Ej: Ya está armado el marco, falta el barniz."
+              rows={2}
+              maxLength={300}
+              disabled={subir.isPending}
+            />
+
+            {order.email && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={`avisar-${order.id}`}
+                  checked={avisar}
+                  disabled={subir.isPending}
+                  onCheckedChange={(v) => setAvisar(v === true)}
+                />
+                <Label htmlFor={`avisar-${order.id}`} className="cursor-pointer text-xs">
+                  Avisar al cliente por correo
+                </Label>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {hayPendientes ? (
+            <>
+              <Button type="button" size="sm" disabled={subir.isPending} onClick={guardar}>
+                {subir.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {subir.isPending
+                  ? "Guardando…"
+                  : `Guardar ${pendientes.length === 1 ? "foto" : `${pendientes.length} fotos`}`}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" disabled={subir.isPending} onClick={limpiar}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={subir.isPending || pendientes.length >= MAX_POR_ENVIO}
+                onClick={() => inputRef.current?.click()}
+              >
+                <Camera className="mr-2 h-4 w-4" /> Agregar otra
+              </Button>
+            </>
+          ) : (
+            <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
+              <Camera className="mr-2 h-4 w-4" /> Agregar foto
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (

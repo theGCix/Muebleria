@@ -9,14 +9,16 @@ import { ESTADO_LABEL, agruparPorEstado, useEvidencias, type Evidencia } from "@
 const fmtFecha = (d: string) =>
   new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(d));
 
-export function EvidenciasCliente({ orderId, enabled = true }: { orderId: string; enabled?: boolean }) {
+export function EvidenciasCliente({
+  orderId, enabled = true, className,
+}: { orderId: string; enabled?: boolean; className?: string }) {
   const { data: evidencias = [] } = useEvidencias(orderId, enabled);
   const [abierta, setAbierta] = useState<Evidencia | null>(null);
 
   if (evidencias.length === 0) return null;
 
   return (
-    <div className="border-t pt-3">
+    <div className={className ?? "border-t pt-3"}>
       <h4 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
         <Camera className="h-3.5 w-3.5" /> Avance de tu mueble
       </h4>
