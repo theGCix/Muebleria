@@ -24,6 +24,7 @@ import { cambiarEstadoPedido } from "@/lib/pos.functions";
 import { whatsappLink } from "@/lib/despachos.functions";
 import { enlaceResena, mensajeResena } from "@/lib/resena-link";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { EvidenciasPedido } from "@/components/admin/EvidenciasPedido";
 
 
 export const Route = createFileRoute("/_authenticated/pedidos")({
@@ -631,6 +632,12 @@ function PedidosPage() {
                 <div className="flex justify-between font-semibold font-display pt-1 border-t">
                   <span>Total</span><span>{fmt(Number(selected.total))}</span>
                 </div>
+
+                {/* Evidencia fotográfica (opcional) */}
+              {selected.status !== "pendiente" && selected.status !== "cancelado" && (
+                <EvidenciasPedido order={selected} />
+              )}
+
               </section>
 
 
