@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   ShoppingBag, Package, Truck, CheckCircle2,
-  Clock, XCircle, ChevronDown, ChevronUp, Receipt, Store, Star, Camera,
+  Clock, XCircle, ChevronDown, ChevronUp, Receipt, Store, Star, Camera, Check,
 } from "lucide-react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -102,6 +102,26 @@ function PedidoCard({ order }: { order: any }) {
     queryKey: ["order-items-perfil", order.id],
     queryFn:  () => fetchItemsDePedido(order.id),
     enabled:  open || verComprobante,
+  });
+
+  // Pedido entregado: ¿ya envió su reseña y/o sus fotos?
+  const { data: opinion } = useQuery({
+    queryKey: ["opinion-pedido", order.id],
+    enabled: order.status === "entregado" && !!order.email,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const [pend, conf] = await Promise.all([
+        supabase.rpc("get_items_pendientes_resena" as never, { _order_id: order.id, _email: order.email } as never),
+        supabase.rpc("get_pedido_conformidad" as never, { _order_id: order.id, _email: order.email } as never),
+      ]);
+      return {
+        // Sin error y sin productos pendientes = ya reseñó todo. Si falla la consulta, mostramos los botones.
+        resenaEnviada: !pend.error && ((pend.data ?? []) as unknown[]).length === 0,
+        fotosEnviadas: !conf.error && (((conf.data ?? []) as { envios_previos: number }[])[0]?.envios_previos ?? 0) > 0,
+      };
+    },
   });
 
   const pasos = recojo ? STATUS_STEPS.filter((st) => st !== "enviado") : STATUS_STEPS;
@@ -225,25 +245,41 @@ function PedidoCard({ order }: { order: any }) {
       {/* Pedido entregado: invitar a reseñar y subir fotos */}
       {order.status === "entregado" && (
         <div className="mx-5 mb-4 rounded-xl border border-border bg-secondary/40 p-4">
-          <p className="text-sm font-medium">¿Qué tal tu mueble?</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Cuéntanos qué te pareció y, si quieres, muéstranos cómo quedó en tu casa.
+          <p className="text-sm font-medium">
+            {opinion?.resenaEnviada ? "¡Gracias por contarnos tu experiencia!" : "¿Qué tal tu mueble?"}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              to="/resena/$orderId"
-              params={{ orderId: order.id }}
-              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              <Star className="h-3.5 w-3.5" /> Calificar mi compra
-            </Link>
-            <Link
-              to="/conformidad/$orderId"
-              params={{ orderId: order.id }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-4 py-2 text-xs font-medium transition-colors hover:bg-muted"
-            >
-              <Camera className="h-3.5 w-3.5" /> Subir fotos
-            </Link>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {opinion?.resenaEnviada
+              ? "Revisamos cada opinión antes de publicarla en la tienda."
+              : "Cuéntanos qué te pareció y, si quieres, muéstranos cómo quedó en tu casa."}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {opinion?.resenaEnviada ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-800">
+                <Check className="h-3.5 w-3.5" /> Tu reseña ya fue enviada
+              </span>
+            ) : (
+              <Link
+                to="/resena/$orderId"
+                params={{ orderId: order.id }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <Star className="h-3.5 w-3.5" /> Calificar mi compra
+              </Link>
+            )}
+            {opinion?.fotosEnviadas ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-800">
+                <Check className="h-3.5 w-3.5" /> Tus fotos ya fueron enviadas
+              </span>
+            ) : (
+              <Link
+                to="/conformidad/$orderId"
+                params={{ orderId: order.id }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-4 py-2 text-xs font-medium transition-colors hover:bg-muted"
+              >
+                <Camera className="h-3.5 w-3.5" /> Subir fotos
+              </Link>
+            )}
           </div>
         </div>
       )}

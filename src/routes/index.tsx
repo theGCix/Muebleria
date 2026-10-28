@@ -8,6 +8,7 @@ import { CombosSection } from "@/components/CombosSection";
 import { PromoCategoriaBanner } from "@/components/PromoCategoriaBanner";
 import { ProductsSection } from "@/components/ProductsSection";
 import { Testimonials } from "@/components/Testimonials";
+import { ClientesSatisfechos } from "@/components/ClientesSatisfechos";
 import { MedidaCTA } from "@/components/MedidaCTA";
 import { Footer } from "@/components/Footer";
 
@@ -36,6 +37,6 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <MedidaCTA />
+     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
      </main> 
      <Footer /> </div> ); }
