@@ -45,6 +45,8 @@ export interface PagoExitosoDatos {
   items?: PagoExitosoItem[];
   /** Solo en modo comprobante: estado real del pedido (pagado, en_produccion, … entregado). */
   estado?: string;
+  /** Pedido a provincia 'enviado' que ya llegó a la agencia. */
+  enAgencia?: boolean;
   /** Provincia de destino cuando el envío es a provincias (el flete se confirma por WhatsApp). */
   provinciaEnvio?: string;
 }
@@ -250,6 +252,7 @@ export function PagoExitoso({
     { key: "control_calidad", titulo: "Control de calidad", detalle: "Revisamos cada acabado antes de despachar.", icono: ShieldCheck, estado: "todo" as const },
     { key: "listo_despacho", titulo: recojo ? "Listo para recoger" : "Listo para despacho", detalle: recojo ? "Te avisamos para que pases por tienda." : "Coordinamos contigo el horario de entrega.", icono: PackageCheck, estado: "todo" as const },
     ...(recojo ? [] : [{ key: "enviado", titulo: "En camino", detalle: "Sale de nuestro taller hacia tu casa.", icono: Truck, estado: "todo" as const }]),
+    ...(!recojo && datos.provinciaEnvio ? [{ key: "en_agencia", titulo: "En agencia", detalle: "Llega a la agencia de tu ciudad: te damos guía y clave para recogerlo.", icono: Store, estado: "todo" as const }] : []),
     { key: "entregado", titulo: recojo ? "Recogido en tienda" : "Entregado", detalle: recojo ? "Disfrútalo. Después te invitaremos a dejar tu reseña." : `Llega entre el ${fmtDia(desde)} y el ${fmtDia(hasta)}.`, icono: Sparkles, estado: "goal" as const },
   ];
 
@@ -257,7 +260,8 @@ export function PagoExitoso({
   const pasosMostrados = (() => {
     if (!esComprobante || !datos.estado) return pasos;
     const orden = pasos.map((p) => p.key);
-    const efectivo = recojo && datos.estado === "enviado" ? "listo_despacho" : datos.estado;
+    const efectivo = recojo && datos.estado === "enviado" ? "listo_despacho"
+      : datos.enAgencia && datos.estado === "enviado" ? "en_agencia" : datos.estado;
     const cur = Math.max(0, orden.indexOf(efectivo));
     return pasos.map((p, i) => ({
       ...p,

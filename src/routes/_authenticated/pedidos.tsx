@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { FleteProvinciaAdmin } from "@/components/admin/FleteProvinciaAdmin";
+import { AgenciaProvinciaAdmin } from "@/components/admin/AgenciaProvinciaAdmin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,6 +91,7 @@ async function fetchOrders() {
       paid_at, created_at,
       metodo_entrega, departamento, provincia, zona_envio, volumen_total_m3,
       envio_estado, envio_final, envio_modo_pago, envio_estimado_min, envio_estimado_max,
+      agencia_preferida, agencia_nombre, agencia_direccion, agencia_guia, agencia_clave, agencia_llegada_at,
       produccion (
         id, status, prioridad, fecha_inicio,
         fecha_fin_estimada, fecha_fin_real, observaciones
@@ -625,6 +627,7 @@ function PedidosPage() {
 
               {/* Flete a provincias */}
               <FleteProvinciaAdmin order={selected as any} />
+              <AgenciaProvinciaAdmin order={selected as any} />
 
               {/* Totales */}
               <section className="border-t pt-4 space-y-1 text-sm">

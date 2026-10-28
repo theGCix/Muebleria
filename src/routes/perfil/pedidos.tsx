@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 import { EvidenciasCliente } from "@/components/EvidenciasCliente";
 import { FleteProvincia } from "@/components/FleteProvincia";
+import { AgenciaProvincia } from "@/components/AgenciaProvincia";
 
 export const Route = createFileRoute("/perfil/pedidos")({
   head: () => ({ meta: [{ title: "Mis pedidos — G&M Mueblería" }] }),
@@ -58,9 +59,15 @@ const STATUS_STEPS: OrderStatus[] = [
   "pagado", "en_produccion", "control_calidad", "listo_despacho", "enviado", "entregado"
 ];
 
+// Provincia: entre "En camino" y "Entregado" hay un paso "En agencia". No es un estado de la BD:
+// se activa cuando el pedido está 'enviado' y el equipo registró la llegada (agencia_llegada_at).
+type Paso = OrderStatus | "en_agencia";
+const EN_AGENCIA_CFG = { label: "En agencia", icon: Store, color: "#6d28d9", bg: "#ede9fe" };
+
 // Con recojo en tienda no hay despacho: se quita "En camino" y se renombran los últimos pasos
-const stepLabel = (step: OrderStatus, recojo: boolean) =>
-  recojo && step === "listo_despacho" ? "Listo para recoger"
+const stepLabel = (step: Paso, recojo: boolean) =>
+  step === "en_agencia" ? EN_AGENCIA_CFG.label
+  : recojo && step === "listo_despacho" ? "Listo para recoger"
   : recojo && step === "entregado" ? "Recogido"
   : STATUS_CONFIG[step].label;
 
@@ -74,7 +81,8 @@ async function fetchMisPedidos(userId: string) {
       subtotal, envio, total, currency, status, metodo_entrega,
       paid_at, estimated_delivery, created_at,
       departamento, provincia, zona_envio, volumen_total_m3,
-      envio_estado, envio_final, envio_modo_pago, envio_estimado_min, envio_estimado_max
+      envio_estado, envio_final, envio_modo_pago, envio_estimado_min, envio_estimado_max,
+      agencia_preferida, agencia_nombre, agencia_direccion, agencia_guia, agencia_clave, agencia_llegada_at
     `)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -99,7 +107,9 @@ function PedidoCard({ order }: { order: any }) {
   const [verComprobante, setVerComprobante] = useState(false);
   const recojo = order.metodo_entrega === "recojo_tienda";
   const pagado = order.status !== "pendiente" && order.status !== "cancelado";
-  const cfg = STATUS_CONFIG[order.status as OrderStatus] ?? STATUS_CONFIG.pendiente;
+  const provincia = !!order.provincia && !recojo;
+  const enAgencia = provincia && order.status === "enviado" && !!order.agencia_llegada_at;
+  const cfg = enAgencia ? EN_AGENCIA_CFG : (STATUS_CONFIG[order.status as OrderStatus] ?? STATUS_CONFIG.pendiente);
   const Icon = cfg.icon;
 
   const { data: items = [], isLoading } = useQuery({
@@ -128,8 +138,12 @@ function PedidoCard({ order }: { order: any }) {
     },
   });
 
-  const pasos = recojo ? STATUS_STEPS.filter((st) => st !== "enviado") : STATUS_STEPS;
-  const statusEfectivo = (recojo && order.status === "enviado" ? "listo_despacho" : order.status) as OrderStatus;
+  const pasos: Paso[] = recojo
+    ? STATUS_STEPS.filter((st) => st !== "enviado")
+    : provincia
+      ? [...STATUS_STEPS.slice(0, -1), "en_agencia", "entregado"]
+      : STATUS_STEPS;
+  const statusEfectivo = (enAgencia ? "en_agencia" : recojo && order.status === "enviado" ? "listo_despacho" : order.status) as Paso;
   const stepIndex = pasos.indexOf(statusEfectivo);
 
   // Mismos datos que vio el cliente en la pantalla de "Pago aprobado"
@@ -144,6 +158,7 @@ function PedidoCard({ order }: { order: any }) {
     distrito:      order.distrito,
     metodoEntrega: recojo ? "recojo_tienda" : "domicilio",
     estado:        order.status,
+    enAgencia,
     provinciaEnvio: order.provincia && !recojo ? order.provincia : undefined,
     subtotal:      Number(order.subtotal),
     envio:         Number(order.envio),
@@ -235,6 +250,9 @@ function PedidoCard({ order }: { order: any }) {
 
       {/* Flete a provincias: confirmar / aceptar / pagar */}
       {pagado && <FleteProvincia order={order} />}
+
+      {/* Provincia: agencia de confianza y datos de recojo */}
+      {pagado && <AgenciaProvincia order={order} />}
 
       {/* Comprobante de pago: reabre la pantalla de "Pago aprobado" */}
       {pagado && (

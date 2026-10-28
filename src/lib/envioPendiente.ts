@@ -18,7 +18,21 @@ export interface OrderEnvio {
   envio_modo_pago?: "transferencia" | "destino" | null;
   envio_estimado_min?: number | null;
   envio_estimado_max?: number | null;
+  status?: string | null;
+  agencia_preferida?: string | null;
+  agencia_nombre?: string | null;
+  agencia_direccion?: string | null;
+  agencia_guia?: string | null;
+  agencia_clave?: string | null;
+  agencia_llegada_at?: string | null;
 }
+
+/** Pedido a provincia que ya llegó a la agencia (status 'enviado' + llegada registrada). */
+export const estaEnAgencia = (o: OrderEnvio) =>
+  esPedidoProvincia(o) && o.status === "enviado" && !!o.agencia_llegada_at;
+
+/** Agencias sugeridas al cliente; puede escribir otra. */
+export const AGENCIAS_SUGERIDAS = ["Olva Courier", "Shalom", "Marvisur", "Cruz del Sur Cargo", "Otra"];
 
 /** Pedido con entrega a domicilio fuera de Lima/Callao (el único que usa esta lógica). */
 export const esPedidoProvincia = (o: OrderEnvio) =>
