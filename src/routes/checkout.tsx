@@ -362,6 +362,7 @@ useEffect(() => {
       distrito:      saved.distrito,
       metodoEntrega: saved.metodoEntrega ?? "domicilio",
       modoEntrega:   saved.modoEntrega ?? null,
+      provinciaEnvio: saved.destino === "provincia" ? (saved.provincia ?? undefined) : undefined,
       subtotal:      saved.subtotal,
       envio:         saved.envio,
       items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),

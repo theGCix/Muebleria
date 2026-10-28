@@ -45,6 +45,8 @@ export interface PagoExitosoDatos {
   items?: PagoExitosoItem[];
   /** Solo en modo comprobante: estado real del pedido (pagado, en_produccion, … entregado). */
   estado?: string;
+  /** Provincia de destino cuando el envío es a provincias (el flete se confirma por WhatsApp). */
+  provinciaEnvio?: string;
 }
 
 const COLORES = ["#6b4423", "#f0a020", "#f3dfb8", "#c8553d", "#8a5a34", "#fff4d6", "#2f6f73"];
@@ -229,7 +231,11 @@ export function PagoExitoso({
     } catch { /* sin permiso de portapapeles: no pasa nada */ }
   };
 
-  const mensajeAsesor = encodeURIComponent(`Hola G&M Mueblería, soy ${nombre || "cliente"}. Quisiera coordinar mi pedido ${datos.purchase}.`);
+  const mensajeAsesor = encodeURIComponent(
+    datos.provinciaEnvio
+      ? `Hola G&M Mueblería, soy ${nombre || "cliente"}. Mi pedido ${datos.purchase} va a ${datos.provinciaEnvio}. Quiero confirmar el costo del envío.`
+      : `Hola G&M Mueblería, soy ${nombre || "cliente"}. Quisiera coordinar mi pedido ${datos.purchase}.`,
+  );
   const linkAsesor = WHATSAPP_NUMBER ? `https://wa.me/${WHATSAPP_NUMBER}?text=${mensajeAsesor}` : null;
 
   const base = (APP_URL as string | undefined) || (typeof window !== "undefined" ? window.location.origin : "");
@@ -458,7 +464,7 @@ export function PagoExitoso({
           )}
           {linkAsesor && (
             <a href={linkAsesor} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary">
-              <MessageCircle className="h-4 w-4" /> Hablar con un asesor
+              <MessageCircle className="h-4 w-4" /> {datos.provinciaEnvio ? "Confirmar mi envío por WhatsApp" : "Hablar con un asesor"}
             </a>
           )}
           {!esComprobante && <Link to="/" className="ml-auto text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">Seguir comprando</Link>}

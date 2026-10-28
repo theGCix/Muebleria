@@ -13,6 +13,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 import { EvidenciasCliente } from "@/components/EvidenciasCliente";
+import { FleteProvincia } from "@/components/FleteProvincia";
 
 export const Route = createFileRoute("/perfil/pedidos")({
   head: () => ({ meta: [{ title: "Mis pedidos — G&M Mueblería" }] }),
@@ -71,7 +72,9 @@ async function fetchMisPedidos(userId: string) {
       id, order_number, nombre, email, telefono, dni,
       direccion, distrito, ciudad, notas,
       subtotal, envio, total, currency, status, metodo_entrega,
-      paid_at, estimated_delivery, created_at
+      paid_at, estimated_delivery, created_at,
+      departamento, provincia, zona_envio, volumen_total_m3,
+      envio_estado, envio_final, envio_modo_pago, envio_estimado_min, envio_estimado_max
     `)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -141,12 +144,18 @@ function PedidoCard({ order }: { order: any }) {
     distrito:      order.distrito,
     metodoEntrega: recojo ? "recojo_tienda" : "domicilio",
     estado:        order.status,
+    provinciaEnvio: order.provincia && !recojo ? order.provincia : undefined,
     subtotal:      Number(order.subtotal),
     envio:         Number(order.envio),
     items: items.map((it: any) => ({
       id: it.id, title: it.title, image: it.image_url ?? null, qty: it.qty, price: Number(it.unit_price),
     })),
   };
+
+  // Pedidos a provincia: el flete se cobra aparte (no está en el total pagado con tarjeta)
+  const fleteAparte = order.provincia && !recojo
+    ? (order.envio_final != null ? `${fmt(Number(order.envio_final))} (se paga aparte)` : "Por confirmar")
+    : null;
 
   return (
     <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
@@ -223,6 +232,9 @@ function PedidoCard({ order }: { order: any }) {
           </div>
         )}
       </button>
+
+      {/* Flete a provincias: confirmar / aceptar / pagar */}
+      {pagado && <FleteProvincia order={order} />}
 
       {/* Comprobante de pago: reabre la pantalla de "Pago aprobado" */}
       {pagado && (
@@ -336,7 +348,11 @@ function PedidoCard({ order }: { order: any }) {
             </div>
             <div className="flex justify-between text-muted-foreground">
               <span>{recojo ? "Recojo en tienda" : "Envío"}</span>
-              <span>{Number(order.envio) === 0 ? "Gratis" : fmt(Number(order.envio))}</span>
+              <span>
+                {fleteAparte
+                  ? (Number(order.envio) > 0 ? `${fmt(Number(order.envio))} + ` : "") + fleteAparte
+                  : Number(order.envio) === 0 ? "Gratis" : fmt(Number(order.envio))}
+              </span>
             </div>
             <div className="flex justify-between font-semibold text-base pt-1 border-t">
               <span>Total</span>

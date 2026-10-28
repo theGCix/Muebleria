@@ -15,6 +15,13 @@ export const APP_URL = isProd
 export const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER as string | undefined)?.replace(/\D/g, "") || undefined;
 
 /**
+ * Datos oficiales para pagar el flete a provincias por transferencia/Yape, tal como se mostrarán al cliente
+ * dentro de "Mis pedidos". Ej: "Yape 999 999 999 · BCP 191-0000000-0-00 · A nombre de G&M Mueblería SAC".
+ * Defínelo como VITE_PAGO_FLETE_TEXTO en Render. Si está vacío, se le pide al cliente que lo solicite por WhatsApp.
+ */
+export const PAGO_FLETE_TEXTO = ((import.meta.env.VITE_PAGO_FLETE_TEXTO as string | undefined) ?? "").trim() || undefined;
+
+/**
  * Enlace del Libro de Reclamaciones virtual (el que te entrega Indecopi en "Tu Libro de Reclamaciones").
  * Pégalo aquí entre las comillas, o defínelo como VITE_LIBRO_RECLAMACIONES_URL en Render.
  * Mientras esté vacío (o no empiece con https://), el enlace no se muestra en el sitio.
