@@ -13,6 +13,7 @@ import heroImg from "@/assets/hero-furniture.jpg";
 import { comboDestacado, precioNormalCombo, useCombos } from "@/hooks/useCombos";
 import { useProductsByCategory } from "@/hooks/useProducts";
 import { cloudinaryUrl } from "@/lib/cloudinary";
+import { slideImg, useCarruselManual } from "@/hooks/useCarruselHome";
 import { fmtPEN, ofertaInfo } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 
@@ -25,11 +26,12 @@ type Destino =
 
 interface Slide {
   id: string;
-  etiqueta: string;
-  titulo: string;
-  bajada: string;
-  cta: string;
-  destino: Destino;
+  // Las diapositivas manuales (panel /carrusel) pueden ser solo imagen: texto y botón opcionales
+  etiqueta?: string;
+  titulo?: string;
+  bajada?: string;
+  cta?: string;
+  destino?: Destino;
   imagen: string;
 }
 
@@ -63,6 +65,7 @@ function CtaLink({ destino, children }: { destino: Destino; children: React.Reac
 function useSlides(): Slide[] {
   const { data: combos = [] } = useCombos(6);
   const { data: salas = [] } = useProductsByCategory({ categoria: "muebles", subcategoria: "sala" });
+  const { data: manuales = [] } = useCarruselManual();
 
   return useMemo(() => {
     const foto = (publicId: string | null | undefined, url: string | null | undefined) =>
@@ -110,8 +113,19 @@ function useSlides(): Slide[] {
       imagen: heroImg,
     });
 
-    return slides;
-  }, [combos, salas]);
+    // Las diapositivas cargadas desde el panel van primero; las automáticas siguen igual después.
+    const delPanel: Slide[] = manuales.map((m) => ({
+      id: `manual-${m.id}`,
+      etiqueta: m.etiqueta ?? undefined,
+      titulo: m.titulo ?? undefined,
+      bajada: m.bajada ?? undefined,
+      cta: m.cta ?? undefined,
+      destino: m.enlace ? { tipo: "ancla", href: m.enlace } : undefined,
+      imagen: slideImg(m.imagen_url),
+    }));
+
+    return [...delPanel, ...slides];
+  }, [combos, salas, manuales]);
 }
 
 export function HeroSlider() {
@@ -181,25 +195,37 @@ export function HeroSlider() {
                 fetchPriority={i === 0 ? "high" : "auto"}
                 className="absolute inset-0 h-full w-full object-cover"
               />
-              {/* Degradado para que el texto se lea sobre cualquier foto */}
-              <div
-                aria-hidden
-                className="absolute inset-0 bg-gradient-to-r from-[var(--color-walnut)]/90 via-[var(--color-walnut)]/55 to-transparent"
-              />
-              <div className="container relative mx-auto flex h-full items-center px-6 md:px-10">
-                <div className="max-w-xl space-y-4 text-[var(--color-warm-white)] sm:space-y-5">
-                  <span className="inline-block rounded-full border border-[var(--color-gold)]/60 px-3 py-1 text-xs font-medium uppercase tracking-widest text-[var(--color-gold-light)]">
-                    {s.etiqueta}
-                  </span>
-                  <h2 className="hero-display text-4xl font-semibold leading-[1.05] sm:text-5xl lg:text-6xl">
-                    {s.titulo}
-                  </h2>
-                  <p className="text-base text-[var(--color-gold-light)]/90 sm:text-lg">{s.bajada}</p>
-                  <CtaLink destino={s.destino}>
-                    {s.cta} <ArrowRight className="h-4 w-4" />
-                  </CtaLink>
-                </div>
-              </div>
+              {s.titulo && (
+                <>
+                  {/* Degradado para que el texto se lea sobre cualquier foto */}
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 bg-gradient-to-r from-[var(--color-walnut)]/90 via-[var(--color-walnut)]/55 to-transparent"
+                  />
+                  <div className="container relative mx-auto flex h-full items-center px-6 md:px-10">
+                    <div className="max-w-xl space-y-4 text-[var(--color-warm-white)] sm:space-y-5">
+                      {s.etiqueta && (
+                        <span className="inline-block rounded-full border border-[var(--color-gold)]/60 px-3 py-1 text-xs font-medium uppercase tracking-widest text-[var(--color-gold-light)]">
+                          {s.etiqueta}
+                        </span>
+                      )}
+                      <h2 className="hero-display text-4xl font-semibold leading-[1.05] sm:text-5xl lg:text-6xl">
+                        {s.titulo}
+                      </h2>
+                      {s.bajada && <p className="text-base text-[var(--color-gold-light)]/90 sm:text-lg">{s.bajada}</p>}
+                      {s.destino && s.cta && (
+                        <CtaLink destino={s.destino}>
+                          {s.cta} <ArrowRight className="h-4 w-4" />
+                        </CtaLink>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+              {/* Diapositiva solo imagen con enlace: toda la imagen es clicable */}
+              {!s.titulo && s.destino?.tipo === "ancla" && (
+                <a href={s.destino.href} aria-label="Ver promoción" className="absolute inset-0" />
+              )}
             </div>
           ))}
         </div>
