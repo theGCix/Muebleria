@@ -454,7 +454,9 @@ export function registerChat({ app, supabaseAdmin, rateLimit }) {
     windowMs: 60 * 1000,
     max: 20, // máx 20 mensajes por IP por minuto
     message: { error: "Estás enviando mensajes muy rápido. Espera un momento." },
-  });
+    
+  },
+console.log(`Chat: usando Ollama en ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434 (por defecto)"}`));
 
   app.post("/api/chat", chatLimiter, async (req, res) => {
     const { messages, sessionId } = req.body ?? {};
