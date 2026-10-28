@@ -61,6 +61,9 @@ type ProductForm = {
   descuento_porcentaje: string;
   oferta_vence_el: string; // formato datetime-local ("" = sin vencimiento)
   stock: string;
+  // Medidas embaladas (base del flete a provincias): volumen en m³ y peso en kg
+  volumen_m3: string;
+  peso_kg: string;
   categoria: string;
   subcategoria: string;
   material_base: string;
@@ -76,7 +79,7 @@ type ProductForm = {
 const emptyForm = (): ProductForm => ({
   nombre: "", descripcion: "", sku: "", precio: "",
   descuento_porcentaje: "", oferta_vence_el: "",
-  stock: "", categoria: "", subcategoria: "", material_base: "",
+  stock: "", volumen_m3: "", peso_kg: "", categoria: "", subcategoria: "", material_base: "",
   tipo_gestion: "manufactura",
   proveedor_id: "",
   imagen_url: "", imagen_public_id: "",
@@ -260,6 +263,8 @@ function ProductFormModal({
         oferta_vence_el: form.oferta_vence_el
           ? new Date(form.oferta_vence_el).toISOString()
           : null,
+        volumen_m3: form.volumen_m3 ? parseFloat(form.volumen_m3) : null,
+        peso_kg: form.peso_kg ? parseFloat(form.peso_kg) : null,
         // Para retail, el stock ya no se edita directo: lo calcula el trigger
         // a partir de stock_ubicacion. Para manufactura, se mantiene manual.
         stock: form.tipo_gestion === "retail" ? undefined : parseInt(form.stock, 10),
@@ -557,6 +562,19 @@ function ProductFormModal({
           )}
         </div>
 
+        {/* Medidas embaladas: sin volumen, el envío a provincias se cotiza manualmente */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="volumen_m3">Volumen embalado (m³)</Label>
+            <Input id="volumen_m3" type="number" step="0.001" min="0" value={form.volumen_m3} onChange={set("volumen_m3")} placeholder="Ej. 1.2" />
+            <p className="text-[11px] text-muted-foreground mt-1">Largo × ancho × alto del bulto, en metros. Si va en varios bultos, suma todos.</p>
+          </div>
+          <div>
+            <Label htmlFor="peso_kg">Peso embalado (kg)</Label>
+            <Input id="peso_kg" type="number" step="0.01" min="0" value={form.peso_kg} onChange={set("peso_kg")} placeholder="Ej. 45" />
+          </div>
+        </div>
+
         {form.tipo_gestion === "retail" && (
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -763,6 +781,8 @@ function ProductosPage() {
                               descuento_porcentaje: p.descuento_porcentaje != null ? String(p.descuento_porcentaje) : "",
                               oferta_vence_el: isoToLocalInput(p.oferta_vence_el),
                               stock: String(p.stock ?? 0),
+                              volumen_m3: p.volumen_m3 != null ? String(p.volumen_m3) : "",
+                              peso_kg: p.peso_kg != null ? String(p.peso_kg) : "",
                               categoria: p.categoria ?? "",
                               subcategoria: p.subcategoria ?? "",
                               material_base: p.material_base ?? "",

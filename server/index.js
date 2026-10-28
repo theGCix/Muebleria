@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
 import { registerCuponSalida } from "./cupon-salida.js";
 import { registerChat } from "./chat.js";
+import { calcularEnvioNacional } from "./envioNacional.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -368,6 +369,29 @@ app.post("/api/orders", async (req, res) => {
       }
     }
 
+    // ── Envío a provincias ──────────────────────────────────────────
+    // El flete a provincias es ESTIMADO y no se cobra en Niubiz: aquí se recalcula
+    // zona/volumen/estimado desde la BD (no desde lo que manda el navegador) y se deja
+    // el pedido marcado para que ventas confirme el flete por WhatsApp.
+    let envioNac = null;
+    const esProvincia = order.destino === "provincia" && (order.metodo_entrega ?? "domicilio") === "domicilio";
+    if (esProvincia) {
+      const ids = (items ?? []).map((i) => i.product_id).filter(Boolean);
+      const { data: prods, error: prodErr } = await supabaseAdmin
+        .from("products").select("id, volumen_m3").in("id", ids);
+      if (prodErr) console.warn("⚠️ No se pudo leer volumen_m3 (¿migración envío nacional aplicada?):", prodErr.message);
+      envioNac = calcularEnvioNacional({
+        departamento: order.departamento, provincia: order.provincia,
+        items: items ?? [], productos: prods ?? [],
+      });
+    }
+    const notaEnvio = envioNac
+      ? `[ENVÍO A PROVINCIA] ${order.provincia}, ${order.departamento} · Zona ${envioNac.zona ?? "?"} · ` +
+        (envioNac.estado === "por_confirmar"
+          ? `flete estimado S/ ${envioNac.min}–${envioNac.max} (${envioNac.volumen} m³), por confirmar por WhatsApp`
+          : "flete por cotizar")
+      : null;
+
     const subtotalReal = order.subtotal ?? 0; // ver nota: idealmente esto también se recalcula desde `items`, ya es así hoy sin cupón
     const totalConDescuento = subtotalReal + (order.envio ?? 0) - descuento;
 
@@ -383,7 +407,7 @@ app.post("/api/orders", async (req, res) => {
         direccion:          order.direccion ?? null,
         distrito:           order.distrito  ?? null,
         ciudad:             order.ciudad    ?? null,
-        notas:              order.notas     ?? null,
+        notas:              [order.notas, notaEnvio].filter(Boolean).join(" | ") || null,
         subtotal:           subtotalReal,
         envio:              order.envio     ?? 0,
         total:              totalConDescuento,
@@ -397,6 +421,16 @@ app.post("/api/orders", async (req, res) => {
         niubiz_token:       order.transactionToken ?? null,
         status:             "pagado",
         paid_at:            new Date().toISOString(),
+        // Solo en pedidos a provincia: así los pedidos de Lima no dependen de la migración nueva
+        ...(envioNac ? {
+          departamento:       order.departamento ?? null,
+          provincia:          order.provincia    ?? null,
+          zona_envio:         envioNac.zona,
+          volumen_total_m3:   envioNac.volumen || null,
+          envio_estimado_min: envioNac.min,
+          envio_estimado_max: envioNac.max,
+          envio_estado:       envioNac.estado,
+        } : {}),
       })
       .select("id")
       .single();

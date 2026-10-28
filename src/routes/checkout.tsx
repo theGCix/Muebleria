@@ -22,6 +22,11 @@ import { getStoredUtm } from "@/hooks/useUtm";
 import { supabase } from "@/integrations/supabase/client";
 import { DISTRITOS_ENVIO, getPrecioEnvio, ORIGEN_ENVIO } from "@/lib/envios";
 import { leerDistritoGuardado } from "@/lib/entrega";
+import {
+  DEPARTAMENTOS_PROVINCIA, provinciasDe, estimarEnvioProvincia, nombreZona,
+} from "@/lib/envioNacional";
+import { useVolumenCarrito } from "@/hooks/useVolumenCarrito";
+import { WHATSAPP_NUMBER } from "@/config";
 
 
 
@@ -105,6 +110,8 @@ function CheckoutPage() {
   const [form, setForm] = useState({
     nombre: "", email: "", telefono: "", dni: "",
     direccion: "", ciudad: "Lima", notas: "",
+    // Envío a provincias (solo se usan si destino === "provincia")
+    departamento: "", provincia: "",
     // Distrito elegido en la ficha del producto ("Calcula tu envío"); solo si está en el tarifario
     distrito: (() => {
       const g = leerDistritoGuardado();
@@ -130,6 +137,10 @@ function CheckoutPage() {
   const [modoEntrega, setModoEntrega] = useState<"unificada" | "parcial">("unificada");
   const [checkingDisponibilidad, setCheckingDisponibilidad] = useState(false);
   const [metodoEntrega, setMetodoEntrega] = useState<"domicilio" | "recojo_tienda">("domicilio");
+  // "lima" = Lima Metropolitana y Callao (tarifa por distrito, se cobra en línea).
+  // "provincia" = resto del país: flete estimado por volumen, se confirma por WhatsApp y NO se cobra en Niubiz.
+  const [destino, setDestino] = useState<"lima" | "provincia">("lima");
+  const { volumenTotal, faltaVolumen } = useVolumenCarrito(items);
 
   useEffect(() => {
     if (items.length === 0) { setDisponibilidad(null); return; }
@@ -152,11 +163,22 @@ function CheckoutPage() {
   const subtotal        = total();
   const requiereEleccion = disponibilidad?.requiere_eleccion_modo_entrega ?? false;
   const cargoParcial     = (metodoEntrega === "domicilio" && requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
-  const envioBase        = metodoEntrega === "recojo_tienda" ? 0 : getPrecioEnvio(form.distrito);
+  const esProvincia      = metodoEntrega === "domicilio" && destino === "provincia";
+  const estimacion       = esProvincia && form.departamento && form.provincia
+    ? estimarEnvioProvincia(form.departamento, form.provincia, volumenTotal, faltaVolumen)
+    : null;
+  // En provincias el flete NO entra al total cobrado (es estimado y se confirma después).
+  const envioBase        = (metodoEntrega === "recojo_tienda" || esProvincia) ? 0 : getPrecioEnvio(form.distrito);
   const envio            = (envioBase ?? 0) + cargoParcial;
   const descuentoCupon   = cuponAplicado?.descuento ?? 0;
   const totalFinal       = subtotal + envio - descuentoCupon;
-  const distritoSinCobertura = metodoEntrega === "domicilio" && form.distrito !== "" && envioBase === null;
+  const distritoSinCobertura = metodoEntrega === "domicilio" && !esProvincia && form.distrito !== "" && envioBase === null;
+  const provinciaIncompleta  = esProvincia && (!form.departamento || !form.provincia || !form.distrito.trim());
+  const linkFleteWhatsApp = (() => {
+    if (!esProvincia || !WHATSAPP_NUMBER) return null;
+    const texto = `Hola, quiero cotizar el envío a ${form.provincia || "mi provincia"}, ${form.departamento || ""} para mi pedido (${volumenTotal > 0 ? volumenTotal + " m³" : "volumen por definir"}).`;
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(texto)}`;
+  })();
 
   // Si cambian los productos del carrito, el cupón aplicado puede dejar de
   // ser válido (ej. era por categoría/producto específico) — se limpia y
@@ -288,6 +310,10 @@ useEffect(() => {
         cupon_codigo:     saved.cuponCodigo ?? null,     // ← nuevo: se revalida en el servidor
         modo_entrega:     saved.modoEntrega ?? null,
         metodo_entrega:   saved.metodoEntrega ?? "domicilio",
+        // Envío nacional: el servidor recalcula zona y estimado (no confía en el navegador)
+        destino:          saved.destino ?? "lima",
+        departamento:     saved.destino === "provincia" ? (saved.departamento ?? null) : null,
+        provincia:        saved.destino === "provincia" ? (saved.provincia ?? null) : null,
         sessionKey:       niubizRef.current?.sessionKey ?? "",
         transactionToken,
         // UTM
@@ -407,6 +433,8 @@ useEffect(() => {
         cuponCodigo: cuponAplicado?.codigo ?? null,   // ← nuevo
         modoEntrega: requiereEleccion ? modoEntrega : null,
         metodoEntrega,
+        destino: esProvincia ? "provincia" : "lima",
+        ciudad: esProvincia ? form.provincia : form.ciudad,
       }));
 
       window.VisanetCheckout.open();
@@ -422,7 +450,8 @@ useEffect(() => {
   const handlePagar = (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) { toast.error("Tu carrito está vacío"); return; }
-    if (metodoEntrega === "domicilio" && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
+    if (provinciaIncompleta) { toast.error("Completa departamento, provincia y distrito / localidad"); return; }
+    if (metodoEntrega === "domicilio" && !esProvincia && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
     if (metodoEntrega === "domicilio" && distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
 
     if (!user) {
@@ -512,32 +541,96 @@ useEffect(() => {
 
               {metodoEntrega === "domicilio" ? (
                 <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2 grid grid-cols-2 gap-2">
+                    {([
+                      ["lima", "Lima y Callao", "Se cobra aquí, según tu distrito"],
+                      ["provincia", "Otras provincias", "Flete estimado; lo confirmamos por WhatsApp"],
+                    ] as const).map(([val, titulo, sub]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setDestino(val)}
+                        className={`p-2.5 rounded-lg border text-left transition-colors ${
+                          destino === val ? "border-primary bg-primary/5" : "border-border"
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{titulo}</p>
+                        <p className="text-[11px] text-muted-foreground">{sub}</p>
+                      </button>
+                    ))}
+                  </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="direccion">Dirección</Label>
                     <Input id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="distrito">Distrito</Label>
-                    <Select
-                      value={form.distrito || undefined}
-                      onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
-                    >
-                      <SelectTrigger id="distrito">
-                        <SelectValue placeholder="Selecciona tu distrito…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DISTRITOS_ENVIO.map((d) => (
-                          <SelectItem key={d.destino} value={d.destino}>
-                            {d.destino} — {fmt(d.precio)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ciudad">Ciudad</Label>
-                    <Input id="ciudad" required value={form.ciudad} onChange={set("ciudad")} placeholder="Lima" />
-                  </div>
+                  {!esProvincia ? (
+                    <>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="distrito">Distrito</Label>
+                          <Select
+                            value={form.distrito || undefined}
+                            onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
+                          >
+                            <SelectTrigger id="distrito">
+                              <SelectValue placeholder="Selecciona tu distrito…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DISTRITOS_ENVIO.map((d) => (
+                                <SelectItem key={d.destino} value={d.destino}>
+                                  {d.destino} — {fmt(d.precio)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="ciudad">Ciudad</Label>
+                          <Input id="ciudad" required value={form.ciudad} onChange={set("ciudad")} placeholder="Lima" />
+                        </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="departamento">Departamento</Label>
+                        <Select
+                          value={form.departamento || undefined}
+                          onValueChange={(v) => setForm((f) => ({ ...f, departamento: v, provincia: "" }))}
+                        >
+                          <SelectTrigger id="departamento"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                          <SelectContent>
+                            {DEPARTAMENTOS_PROVINCIA.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="provincia">Provincia</Label>
+                        <Select
+                          value={form.provincia || undefined}
+                          onValueChange={(v) => setForm((f) => ({ ...f, provincia: v }))}
+                          disabled={!form.departamento}
+                        >
+                          <SelectTrigger id="provincia"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                          <SelectContent>
+                            {provinciasDe(form.departamento).map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label htmlFor="distrito_libre">Distrito / localidad</Label>
+                        <Input
+                          id="distrito_libre" required value={form.distrito}
+                          onChange={set("distrito")} placeholder="Ej. Yanahuara"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 rounded-lg bg-muted/40 p-3 text-xs space-y-1">
+                        <p className="font-medium text-sm">Envío a provincias</p>
+                        <p className="text-muted-foreground">
+                          Hoy pagas solo tus muebles. El flete se calcula por volumen y destino, y te lo confirmamos por
+                          WhatsApp antes de despachar. Puedes elegir recojo en agencia, que sale más económico.
+                        </p>
+                      </div>
+                    </>
+                  )}
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="notas">Notas adicionales (opcional)</Label>
                     <Input id="notas" value={form.notas} onChange={set("notas")} placeholder="Referencias, horario preferido de entrega..." />
@@ -577,7 +670,7 @@ useEffect(() => {
 
             <div className="grid sm:grid-cols-3 gap-3 text-sm text-muted-foreground">
               {[
-                { icon: Truck,      text: "Entrega a domicilio en Lima" },
+                { icon: Truck,      text: "Envíos a todo el Perú" },
                 { icon: Shield,     text: "Garantía de 2 años" },
                 { icon: CreditCard, text: "Pago 100% seguro con Niubiz" },
               ].map(({ icon: Icon, text }) => (
@@ -589,7 +682,7 @@ useEffect(() => {
 
             <Button
               type="submit" size="lg" className="w-full rounded-full h-12 text-base"
-              disabled={loading || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura))}
+              disabled={loading || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura || provinciaIncompleta))}
             >
               {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
             </Button>
@@ -729,12 +822,16 @@ useEffect(() => {
                   <span>
                     {metodoEntrega === "recojo_tienda"
                       ? "Recojo en tienda"
-                      : `Envío${form.distrito ? ` (${form.distrito})` : ""}`}
+                      : esProvincia
+                        ? `Envío${form.provincia ? ` (${form.provincia})` : ""}`
+                        : `Envío${form.distrito ? ` (${form.distrito})` : ""}`}
                   </span>
                   <span>
                     {metodoEntrega === "recojo_tienda"
                       ? <span className="text-green-600">Sin costo</span>
-                      : (form.distrito ? fmt(envio) : "—")}
+                      : esProvincia
+                        ? <span className="text-amber-600">Por confirmar</span>
+                        : (form.distrito ? fmt(envio) : "—")}
                   </span>
                 </div>
                 {descuentoCupon > 0 && (
@@ -743,7 +840,30 @@ useEffect(() => {
                     <span>-{fmt(descuentoCupon)}</span>
                   </div>
                 )}
-                {metodoEntrega === "domicilio" && !form.distrito && (
+                {esProvincia && (
+                  <div className="text-xs rounded-lg bg-amber-50 text-amber-900 border border-amber-200 p-2.5 space-y-1">
+                    {!estimacion && <p>Elige departamento y provincia para ver un estimado del flete.</p>}
+                    {estimacion?.tipo === "estimado" && (
+                      <p>
+                        Flete estimado ({nombreZona(estimacion.zona)}): <strong>{fmt(estimacion.min)} – {fmt(estimacion.max)}</strong>.
+                        No se cobra ahora; es referencial y lo confirmamos por WhatsApp.
+                      </p>
+                    )}
+                    {estimacion?.tipo === "cotizar" && (
+                      <p>
+                        {estimacion.motivo === "sin_volumen"
+                          ? "Algunos productos aún no tienen volumen registrado, así que cotizamos tu envío manualmente."
+                          : "Este destino requiere cotización especial."}
+                      </p>
+                    )}
+                    {linkFleteWhatsApp && (
+                      <a href={linkFleteWhatsApp} target="_blank" rel="noreferrer" className="underline font-medium">
+                        Consultar el flete por WhatsApp
+                      </a>
+                    )}
+                  </div>
+                )}
+                {metodoEntrega === "domicilio" && !esProvincia && !form.distrito && (
                   <p className="text-xs text-muted-foreground">Selecciona tu distrito para calcular el envío</p>
                 )}
                 {distritoSinCobertura && (

@@ -1,0 +1,441 @@
+{
+  "version": "1.0",
+  "estado": "estimado_no_verificado",
+  "fecha_estimacion": "2026-10-28",
+  "advertencia": "Valores de referencia para presupuestar; NO son cotizaciones de un transportista. Validar con 2 o 3 transportistas antes de cobrar el flete.",
+  "formula": "flete = max(flete_minimo_zona, volumen_m3 x tarifa_m3_zona)",
+  "zonas": {
+    "Z1": {
+      "nombre": "Lima Metropolitana y Callao",
+      "tarifa_m3": null,
+      "flete_minimo": null,
+      "nota": "Se usa la tarifa por distrito de src/lib/envios.ts"
+    },
+    "Z2": {
+      "nombre": "Cercano (hasta ~250 km)",
+      "tarifa_m3": {
+        "min": 45,
+        "max": 80
+      },
+      "flete_minimo": 150
+    },
+    "Z3": {
+      "nombre": "Medio (~250 a 800 km)",
+      "tarifa_m3": {
+        "min": 70,
+        "max": 120
+      },
+      "flete_minimo": 220
+    },
+    "Z4": {
+      "nombre": "Lejano (~800 a 1,500 km)",
+      "tarifa_m3": {
+        "min": 100,
+        "max": 170
+      },
+      "flete_minimo": 300
+    },
+    "Z5": {
+      "nombre": "Amazonía / acceso difícil",
+      "tarifa_m3": {
+        "min": 150,
+        "max": 260
+      },
+      "flete_minimo": 450
+    },
+    "Z6": {
+      "nombre": "Sin carretera (aéreo o fluvial)",
+      "tarifa_m3": null,
+      "flete_minimo": null,
+      "nota": "Solo con cotización específica"
+    }
+  },
+  "destinos": [
+    {
+      "departamento": "Amazonas",
+      "provincias": [
+        "Chachapoyas",
+        "Bagua",
+        "Bongará",
+        "Condorcanqui",
+        "Luya",
+        "Rodríguez de Mendoza",
+        "Utcubamba"
+      ],
+      "zona_por_defecto": "Z5",
+      "excepciones_por_provincia": {
+        "Condorcanqui": "Z6"
+      }
+    },
+    {
+      "departamento": "Áncash",
+      "provincias": [
+        "Huaraz",
+        "Aija",
+        "Antonio Raymondi",
+        "Asunción",
+        "Bolognesi",
+        "Carhuaz",
+        "Carlos Fermín Fitzcarrald",
+        "Casma",
+        "Corongo",
+        "Huari",
+        "Huarmey",
+        "Huaylas",
+        "Mariscal Luzuriaga",
+        "Ocros",
+        "Pallasca",
+        "Pomabamba",
+        "Recuay",
+        "Santa",
+        "Sihuas",
+        "Yungay"
+      ],
+      "zona_por_defecto": "Z3"
+    },
+    {
+      "departamento": "Apurímac",
+      "provincias": [
+        "Abancay",
+        "Andahuaylas",
+        "Antabamba",
+        "Aymaraes",
+        "Cotabambas",
+        "Chincheros",
+        "Grau"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "Arequipa",
+      "provincias": [
+        "Arequipa",
+        "Camaná",
+        "Caravelí",
+        "Castilla",
+        "Caylloma",
+        "Condesuyos",
+        "Islay",
+        "La Unión"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "Ayacucho",
+      "provincias": [
+        "Huamanga",
+        "Cangallo",
+        "Huanca Sancos",
+        "Huanta",
+        "La Mar",
+        "Lucanas",
+        "Parinacochas",
+        "Páucar del Sara Sara",
+        "Sucre",
+        "Víctor Fajardo",
+        "Vilcas Huamán"
+      ],
+      "zona_por_defecto": "Z3",
+      "excepciones_por_provincia": {
+        "Lucanas": "Z4",
+        "Parinacochas": "Z4",
+        "Páucar del Sara Sara": "Z4"
+      }
+    },
+    {
+      "departamento": "Cajamarca",
+      "provincias": [
+        "Cajamarca",
+        "Cajabamba",
+        "Celendín",
+        "Chota",
+        "Contumazá",
+        "Cutervo",
+        "Hualgayoc",
+        "Jaén",
+        "San Ignacio",
+        "San Marcos",
+        "San Miguel",
+        "San Pablo",
+        "Santa Cruz"
+      ],
+      "zona_por_defecto": "Z4",
+      "excepciones_por_provincia": {
+        "Jaén": "Z5",
+        "San Ignacio": "Z5"
+      }
+    },
+    {
+      "departamento": "Callao",
+      "provincias": [
+        "Callao"
+      ],
+      "zona_por_defecto": "Z1"
+    },
+    {
+      "departamento": "Cusco",
+      "provincias": [
+        "Cusco",
+        "Acomayo",
+        "Anta",
+        "Calca",
+        "Canas",
+        "Canchis",
+        "Chumbivilcas",
+        "Espinar",
+        "La Convención",
+        "Paruro",
+        "Paucartambo",
+        "Quispicanchi",
+        "Urubamba"
+      ],
+      "zona_por_defecto": "Z4",
+      "excepciones_por_provincia": {
+        "La Convención": "Z5"
+      }
+    },
+    {
+      "departamento": "Huancavelica",
+      "provincias": [
+        "Huancavelica",
+        "Acobamba",
+        "Angaraes",
+        "Castrovirreyna",
+        "Churcampa",
+        "Huaytará",
+        "Tayacaja"
+      ],
+      "zona_por_defecto": "Z3"
+    },
+    {
+      "departamento": "Huánuco",
+      "provincias": [
+        "Huánuco",
+        "Ambo",
+        "Dos de Mayo",
+        "Huacaybamba",
+        "Huamalíes",
+        "Leoncio Prado",
+        "Marañón",
+        "Pachitea",
+        "Puerto Inca",
+        "Lauricocha",
+        "Yarowilca"
+      ],
+      "zona_por_defecto": "Z3",
+      "excepciones_por_provincia": {
+        "Puerto Inca": "Z5",
+        "Marañón": "Z5"
+      }
+    },
+    {
+      "departamento": "Ica",
+      "provincias": [
+        "Ica",
+        "Chincha",
+        "Nasca",
+        "Palpa",
+        "Pisco"
+      ],
+      "zona_por_defecto": "Z2",
+      "excepciones_por_provincia": {
+        "Nasca": "Z3",
+        "Palpa": "Z3"
+      }
+    },
+    {
+      "departamento": "Junín",
+      "provincias": [
+        "Huancayo",
+        "Concepción",
+        "Chanchamayo",
+        "Jauja",
+        "Junín",
+        "Satipo",
+        "Tarma",
+        "Yauli",
+        "Chupaca"
+      ],
+      "zona_por_defecto": "Z3",
+      "excepciones_por_provincia": {
+        "Satipo": "Z4"
+      }
+    },
+    {
+      "departamento": "La Libertad",
+      "provincias": [
+        "Trujillo",
+        "Ascope",
+        "Bolívar",
+        "Chepén",
+        "Julcán",
+        "Otuzco",
+        "Pacasmayo",
+        "Pataz",
+        "Sánchez Carrión",
+        "Santiago de Chuco",
+        "Gran Chimú",
+        "Virú"
+      ],
+      "zona_por_defecto": "Z3",
+      "excepciones_por_provincia": {
+        "Pataz": "Z4",
+        "Bolívar": "Z4"
+      }
+    },
+    {
+      "departamento": "Lambayeque",
+      "provincias": [
+        "Chiclayo",
+        "Ferreñafe",
+        "Lambayeque"
+      ],
+      "zona_por_defecto": "Z3"
+    },
+    {
+      "departamento": "Lima",
+      "provincias": [
+        "Lima",
+        "Barranca",
+        "Cajatambo",
+        "Canta",
+        "Cañete",
+        "Huaral",
+        "Huarochirí",
+        "Huaura",
+        "Oyón",
+        "Yauyos"
+      ],
+      "zona_por_defecto": "Z2",
+      "excepciones_por_provincia": {
+        "Lima": "Z1",
+        "Oyón": "Z3",
+        "Cajatambo": "Z3",
+        "Yauyos": "Z3"
+      }
+    },
+    {
+      "departamento": "Loreto",
+      "provincias": [
+        "Maynas",
+        "Alto Amazonas",
+        "Loreto",
+        "Mariscal Ramón Castilla",
+        "Requena",
+        "Ucayali",
+        "Datem del Marañón",
+        "Putumayo"
+      ],
+      "zona_por_defecto": "Z6"
+    },
+    {
+      "departamento": "Madre de Dios",
+      "provincias": [
+        "Tambopata",
+        "Manu",
+        "Tahuamanu"
+      ],
+      "zona_por_defecto": "Z5"
+    },
+    {
+      "departamento": "Moquegua",
+      "provincias": [
+        "Mariscal Nieto",
+        "General Sánchez Cerro",
+        "Ilo"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "Pasco",
+      "provincias": [
+        "Pasco",
+        "Daniel Alcides Carrión",
+        "Oxapampa"
+      ],
+      "zona_por_defecto": "Z3"
+    },
+    {
+      "departamento": "Piura",
+      "provincias": [
+        "Piura",
+        "Ayabaca",
+        "Huancabamba",
+        "Morropón",
+        "Paita",
+        "Sullana",
+        "Talara",
+        "Sechura"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "Puno",
+      "provincias": [
+        "Puno",
+        "Azángaro",
+        "Carabaya",
+        "Chucuito",
+        "El Collao",
+        "Huancané",
+        "Lampa",
+        "Melgar",
+        "Moho",
+        "San Antonio de Putina",
+        "San Román",
+        "Sandia",
+        "Yunguyo"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "San Martín",
+      "provincias": [
+        "Moyobamba",
+        "Bellavista",
+        "El Dorado",
+        "Huallaga",
+        "Lamas",
+        "Mariscal Cáceres",
+        "Picota",
+        "Rioja",
+        "San Martín",
+        "Tocache"
+      ],
+      "zona_por_defecto": "Z5"
+    },
+    {
+      "departamento": "Tacna",
+      "provincias": [
+        "Tacna",
+        "Candarave",
+        "Jorge Basadre",
+        "Tarata"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "Tumbes",
+      "provincias": [
+        "Tumbes",
+        "Contralmirante Villar",
+        "Zarumilla"
+      ],
+      "zona_por_defecto": "Z4"
+    },
+    {
+      "departamento": "Ucayali",
+      "provincias": [
+        "Coronel Portillo",
+        "Atalaya",
+        "Padre Abad",
+        "Purús"
+      ],
+      "zona_por_defecto": "Z5",
+      "excepciones_por_provincia": {
+        "Atalaya": "Z6",
+        "Purús": "Z6"
+      }
+    }
+  ]
+}
