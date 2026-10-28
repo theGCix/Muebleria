@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"; 
 import { useEffect, useRef } from "react";
 import { Header } from "@/components/Header"; 
+import { HeroSlider } from "@/components/HeroSlider";
 import { Hero } from "@/components/Hero"; 
 import { Categories } from "@/components/Categories";
 import { OfertasSection } from "@/components/OfertasSection";
@@ -37,6 +38,6 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
+     <main ref={mainRef}> <HeroSlider /> <Hero /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
      </main> 
      <Footer /> </div> ); }
