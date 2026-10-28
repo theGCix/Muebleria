@@ -187,6 +187,18 @@ function ResenaPage() {
             <p className="font-medium">¡Gracias! Ya reseñaste todos los productos de este pedido.</p>
           </div>
         )}
+
+        <div className="mt-10 rounded-xl border border-border/50 bg-secondary/40 p-6 text-center">
+          <p className="font-medium">¿Ya te llegó tu mueble?</p>
+          <p className="mt-1 text-sm text-muted-foreground">Confírmanos la entrega y, si quieres, muéstranos cómo quedó en tu casa.</p>
+          <Link
+            to="/conformidad/$orderId"
+            params={{ orderId }}
+            className="mt-3 inline-block text-sm font-medium text-accent hover:underline"
+          >
+            Confirmar entrega y subir fotos
+          </Link>
+        </div>
       </main>
       <Footer />
     </div>

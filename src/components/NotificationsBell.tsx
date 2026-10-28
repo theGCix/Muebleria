@@ -9,6 +9,7 @@ const ITEMS: Array<{ key: CountKey; to: string; one: string; many: string; alert
   { key: "leads",    to: "/leads",                one: "lead nuevo sin contactar",         many: "leads nuevos sin contactar" },
   { key: "carritos", to: "/carritos-abandonados", one: "carrito abandonado sin contactar", many: "carritos abandonados sin contactar" },
   { key: "resenas",  to: "/resenas",              one: "reseña por moderar",               many: "reseñas por moderar" },
+  { key: "testimonios", to: "/fotos-clientes", one: "foto de cliente por aprobar", many: "fotos de clientes por aprobar" },
   { key: "insumos",  to: "/insumos",              one: "insumo bajo el stock mínimo",      many: "insumos bajo el stock mínimo", alert: true },
 ];
 

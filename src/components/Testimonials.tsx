@@ -4,7 +4,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, BadgeCheck, MessageCircle, Star } from "lucide-react";
 import { MIN_RESENAS_HOME, useResenasDestacadas } from "@/hooks/useResenasDestacadas";
-import { useHayProyectos } from "@/hooks/useProyectos";
+import { useHayGaleria } from "@/hooks/useGaleriaClientes";
 import type { ResenaDestacada } from "@/lib/resenas.functions";
 
 const fechaCorta = (iso: string) =>
@@ -35,7 +35,7 @@ function Estrellas({ valor, size = 16 }: { valor: number; size?: number }) {
 export function Testimonials() {
   const { data } = useResenasDestacadas();
   const resenas = data?.resenas ?? [];
-  const hayProyectos = useHayProyectos();
+  const hayGaleria = useHayGaleria();
 
   if (resenas.length < MIN_RESENAS_HOME) return null;
 
@@ -78,13 +78,13 @@ export function Testimonials() {
           ))}
         </div>
 
-        {hayProyectos && (
+        {hayGaleria && (
           <div className="mt-8 text-center">
             <Link
-              to="/proyectos"
+              to="/testimonios"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
             >
-              Ver proyectos realizados <ArrowRight className="h-4 w-4" />
+              Ver más testimonios <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         )}

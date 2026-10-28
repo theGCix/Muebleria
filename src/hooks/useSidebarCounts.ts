@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
 
-export type CountKey = "pedidos" | "leads" | "carritos" | "resenas" | "insumos";
+export type CountKey = "pedidos" | "leads" | "carritos" | "resenas" | "testimonios" | "insumos";
 export type SidebarCounts = Partial<Record<CountKey, number>>;
 
 // Cuenta filas sin traer datos (head + count exact).
@@ -40,6 +40,12 @@ async function fetchCounts(): Promise<SidebarCounts> {
       countRows(() =>
         supabase.from("resenas").select("id", { count: "exact", head: true })
           .eq("aprobada", false).is("motivo_rechazo", null),
+      ),
+    // Fotos de clientes por aprobar (testimonios)
+    testimonios: () =>
+      countRows(() =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from("galeria_clientes").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
       ),
     // Insumos bajo el stock mínimo
     insumos: () =>
@@ -95,7 +101,7 @@ export function useSidebarCountsRealtime(roles: AppRole[]) {
     };
 
     let channel = supabase.channel(uniqueChannelName("sidebar-counts-live"));
-    for (const table of ["orders", "leads", "resenas", "insumos"]) {
+    for (const table of ["orders", "leads", "resenas", "galeria_clientes", "insumos"]) {
       channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
     }
     channel.subscribe();

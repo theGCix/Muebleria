@@ -47,7 +47,7 @@ function PrivacidadPage() {
                 <strong>Cotizaciones y cupones:</strong> los datos de contacto que nos dejas en los formularios.
               </li>
               <li>
-                <strong>Reseñas:</strong> tu comentario, tu calificación y las fotos que subas.
+                <strong>Reseñas y fotos de entrega:</strong> tu comentario, tu calificación y las fotos que subas al recibir tu pedido.
               </li>
               <li>
                 <strong>Asistente virtual:</strong> los mensajes que escribes en el chat de la tienda, que guardamos para mejorar
