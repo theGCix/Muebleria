@@ -394,7 +394,7 @@ function PedidosPage() {
 
       {/* Modal detalle */}
       <Dialog open={!!selectedId} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="font-display text-lg">
               Pedido {selected?.order_number}
@@ -402,7 +402,7 @@ function PedidosPage() {
           </DialogHeader>
 
           {selected && (
-            <div className="space-y-5 mt-2">
+            <div className="min-w-0 space-y-5 mt-2">
               {/* Pipeline de avance */}
               <div className="bg-muted/30 rounded-xl p-4">
                 <p className="text-xs font-medium text-muted-foreground mb-3">Avance del pedido</p>
@@ -479,7 +479,7 @@ function PedidosPage() {
               {/* Datos del cliente */}
               <section>
                 <h3 className="font-semibold text-sm mb-2">Datos del cliente</h3>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm bg-muted/30 rounded-lg p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm bg-muted/30 rounded-lg p-4">
                   {[
                     ["Nombre",    selected.nombre],
                     ["Email",     selected.email],
@@ -489,7 +489,7 @@ function PedidosPage() {
                     ["Distrito",  selected.distrito],
                     ["Ciudad",    selected.ciudad],
                   ].map(([label, value]) => value ? (
-                    <div key={label}>
+                    <div key={label} className="min-w-0 break-words">
                       <span className="text-muted-foreground">{label}:</span>{" "}
                       <span className="font-medium">{value}</span>
                     </div>
@@ -562,13 +562,13 @@ function PedidosPage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{item.title}</p>
+                            <p className="font-medium break-words">{item.title}</p>
                             {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
                             <p className="text-xs text-muted-foreground">
                               {fmt(Number(item.unit_price))} × {item.qty}
                             </p>
                           </div>
-                          <span className="font-semibold">{fmt(Number(item.total))}</span>
+                          <span className="font-semibold whitespace-nowrap flex-shrink-0">{fmt(Number(item.total))}</span>
                         </div>
 
                         {!esManufactura && item.fulfillment_status === "pendiente_reposicion" && (
@@ -583,7 +583,7 @@ function PedidosPage() {
                         )}
 
                         {esManufactura && selected.status === "pagado" && (
-                          <div className="flex gap-2 items-end pt-1 border-t">
+                          <div className="flex flex-wrap gap-2 items-end pt-1 border-t">
                             <div className="flex-1">
                               <Label className="text-xs mb-1 block">Modelo</Label>
                               <Select
@@ -632,17 +632,16 @@ function PedidosPage() {
                 <div className="flex justify-between font-semibold font-display pt-1 border-t">
                   <span>Total</span><span>{fmt(Number(selected.total))}</span>
                 </div>
-
-                {/* Evidencia fotográfica (opcional) */}
-              {selected.status !== "pendiente" && selected.status !== "cancelado" && (
-                <EvidenciasPedido order={selected} />
-              )}
-
               </section>
 
 
                 
               
+
+              {/* Evidencia fotográfica (opcional) */}
+              {selected.status !== "pendiente" && selected.status !== "cancelado" && (
+                <EvidenciasPedido order={selected} />
+              )}
 
               {/* Historial de estados */}
               {historial.length > 0 && (
@@ -687,7 +686,7 @@ function PedidosPage() {
                 <section>
                   <h3 className="font-semibold text-sm mb-2">Datos de pago Niubiz</h3>
                   <div className="bg-muted/30 rounded-lg p-4 space-y-1 font-mono text-xs text-muted-foreground">
-                    {selected.niubiz_token     && <div><span className="w-28 inline-block text-muted-foreground/70">Token:</span><span className="truncate">{selected.niubiz_token}</span></div>}
+                    {selected.niubiz_token     && <div><span className="w-28 inline-block text-muted-foreground/70">Token:</span><span className="break-all">{selected.niubiz_token}</span></div>}
                     {selected.niubiz_auth_code && <div><span className="w-28 inline-block text-muted-foreground/70">Auth code:</span>{selected.niubiz_auth_code}</div>}
                     {selected.niubiz_ref_code  && <div><span className="w-28 inline-block text-muted-foreground/70">Ref code:</span>{selected.niubiz_ref_code}</div>}
                     {selected.paid_at          && <div><span className="w-28 inline-block text-muted-foreground/70">Pagado el:</span>{fmtDate(selected.paid_at)}</div>}
