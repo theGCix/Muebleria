@@ -62,6 +62,7 @@ export const groups: NavGroup[] = [
     items: [
       { title: "Productos", url: "/productos", icon: Package, roles: ADMIN },
       { title: "Combos", url: "/combos", icon: PackageCheck, roles: ADMIN },
+      { title: "Proyectos", url: "/gestionar-proyectos", icon: Sparkles, roles: ADMIN },
     ],
   },
   {
