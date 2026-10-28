@@ -29,6 +29,18 @@ export const ESTADO_LABEL: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
+/** Etiquetas cortas para miniaturas. */
+export const ESTADO_CORTO: Record<string, string> = {
+  pendiente: "Pendiente",
+  pagado: "Pagado",
+  en_produccion: "Producción",
+  control_calidad: "Calidad",
+  listo_despacho: "Listo",
+  enviado: "En camino",
+  entregado: "Entregado",
+  cancelado: "Cancelado",
+};
+
 /** Lee las evidencias de un pedido (staff: todas; cliente: solo las de sus pedidos, por RLS). */
 export function useEvidencias(orderId: string | null | undefined, enabled = true) {
   return useQuery({

@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import {
-  ESTADO_LABEL, MAX_FOTO_MB, agruparPorEstado, useBorrarEvidencia, useEvidencias, useSubirEvidencias,
+  ESTADO_CORTO, ESTADO_LABEL, MAX_FOTO_MB, useBorrarEvidencia, useEvidencias, useSubirEvidencias,
 } from "@/hooks/useEvidencias";
 
 const MAX_POR_ENVIO = 6;
@@ -90,7 +90,6 @@ export function EvidenciasPedido({ order }: Props) {
     );
   };
 
-  const grupos = agruparPorEstado(evidencias);
   const hayPendientes = pendientes.length > 0;
 
   return (
@@ -182,37 +181,35 @@ export function EvidenciasPedido({ order }: Props) {
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : (
-        grupos.map(([estado, fotos]) => (
-          <div key={estado}>
-            <p className="mb-1.5 text-xs font-medium text-muted-foreground">{ESTADO_LABEL[estado] ?? estado}</p>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {fotos.map((f) => (
-                <figure key={f.id} className="group relative overflow-hidden rounded-lg border bg-muted/30">
-                  <a href={f.foto_url} target="_blank" rel="noreferrer">
-                    <img src={miniatura(f)} alt={f.nota ?? "Evidencia"} className="aspect-square w-full object-cover" loading="lazy" />
-                  </a>
-                  <button
-                    type="button"
-                    title="Eliminar foto"
-                    disabled={borrar.isPending}
-                    onClick={() => {
-                      if (confirm("¿Eliminar esta foto? El cliente dejará de verla.")) {
-                        borrar.mutate(f.id, { onError: (e: Error) => toast.error(e.message) });
-                      }
-                    }}
-                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                  <figcaption className="px-1.5 py-1 text-[10px] leading-tight text-muted-foreground">
-                    {fmtFecha(f.created_at)}
-                    {f.nota && <span className="block text-foreground">{f.nota}</span>}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
+        evidencias.length > 0 && (
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+            {evidencias.map((f) => (
+              <figure key={f.id} className="group relative overflow-hidden rounded-md border bg-muted/30">
+                <a href={f.foto_url} target="_blank" rel="noreferrer">
+                  <img src={miniatura(f)} alt={f.nota ?? "Evidencia"} className="aspect-square w-full object-cover" loading="lazy" />
+                </a>
+                <button
+                  type="button"
+                  title="Eliminar foto"
+                  disabled={borrar.isPending}
+                  onClick={() => {
+                    if (confirm("¿Eliminar esta foto? El cliente dejará de verla.")) {
+                      borrar.mutate(f.id, { onError: (e: Error) => toast.error(e.message) });
+                    }
+                  }}
+                  className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+                <figcaption className="px-1 py-0.5 text-[10px] leading-tight text-muted-foreground">
+                  <span className="block truncate font-medium text-foreground">{ESTADO_CORTO[f.estado] ?? f.estado}</span>
+                  <span className="block truncate">{fmtFecha(f.created_at)}</span>
+                  {f.nota && <span className="block truncate" title={f.nota}>{f.nota}</span>}
+                </figcaption>
+              </figure>
+            ))}
           </div>
-        ))
+        )
       )}
     </section>
   );

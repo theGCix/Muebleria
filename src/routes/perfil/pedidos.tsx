@@ -234,7 +234,7 @@ function PedidoCard({ order }: { order: any }) {
             className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-60"
           >
             <Receipt className="h-3.5 w-3.5" />
-            {verComprobante && isLoading ? "Abriendo…" : "Ver comprobante de pago y estado del pedido"}
+            {verComprobante && isLoading ? "Abriendo…" : "Ver comprobante de pago"}
           </button>
         </div>
       )}
@@ -247,7 +247,7 @@ function PedidoCard({ order }: { order: any }) {
       {pagado && (
         <EvidenciasCliente
           orderId={order.id}
-          className="mx-5 mb-4 rounded-xl border border-border bg-secondary/40 p-4"
+          className="mx-5 mb-3 rounded-xl border border-border bg-secondary/40 p-3"
         />
       )}
 
