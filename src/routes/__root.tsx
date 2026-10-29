@@ -11,6 +11,7 @@ import { useUtmCapture } from "@/hooks/useUtm";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { AsistenteChat } from "@/components/AsistenteChat";
 import { ExitCouponDialog } from "@/components/ExitCouponDialog";
+import { GlobalLoginModal } from "@/components/GlobalLoginModal";
 
 
 
@@ -88,6 +89,7 @@ function RootComponent() {
         <Outlet />
         <AsistenteChat />
         <ExitCouponDialog />
+        <GlobalLoginModal />
         <Toaster position="top-center" closeButton />
       </WishlistProvider>
     </QueryClientProvider>

@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthModalStore } from "@/stores/authModalStore";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ShoppingBag, MapPin, FileText, Heart, ShieldCheck, User, LogOut,
@@ -53,7 +54,7 @@ function PerfilLayout() {
         <div className="flex flex-col items-center justify-center py-32 gap-4">
           <User className="h-16 w-16 text-muted-foreground" />
           <h2 className="font-display text-2xl">Inicia sesión para ver tu perfil</h2>
-          <Button asChild><Link to="/login">Iniciar sesión</Link></Button>
+          <Button onClick={() => useAuthModalStore.getState().openLogin()}>Iniciar sesión</Button>
         </div>
         <Footer />
       </div>

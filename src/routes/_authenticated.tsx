@@ -9,6 +9,7 @@ import { useNewActivityAlerts } from "@/hooks/useNewActivityAlerts";
 import { useSidebarCountsRealtime } from "@/hooks/useSidebarCounts";
 import { Loader2 } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
+import { useAuthModalStore } from "@/stores/authModalStore";
 
 
 export const Route = createFileRoute("/_authenticated")({
@@ -25,7 +26,11 @@ function AuthLayout() {
 const isFullscreen = currentPath === "/central";
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/login" });
+    if (!loading && !user) {
+      // Ya no existe /login: volvemos al inicio y abrimos el LoginModal.
+      navigate({ to: "/", replace: true });
+      useAuthModalStore.getState().openLogin();
+    }
   }, [loading, user, navigate]);
 
   if (loading || !user) {
