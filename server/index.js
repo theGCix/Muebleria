@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
 import { registerCuponSalida } from "./cupon-salida.js";
 import { registerChat } from "./chat.js";
+import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
@@ -479,6 +480,9 @@ app.post("/api/orders", async (req, res) => {
     }
 
     res.json({ success: true, orderId: newOrder.id, descuentoAplicado: descuento });
+
+    // Aviso a n8n (correo/WhatsApp). Después de responder: nunca retrasa ni rompe la compra.
+    void notificarPedidoPagado({ supabaseAdmin, orderId: newOrder.id });
   } catch (err) {
     console.error("Error guardando orden:", err.message);
     res.status(500).json({ error: err.message });

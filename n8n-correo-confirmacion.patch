@@ -1,0 +1,374 @@
+diff --git a/n8n/CORREO.md b/n8n/CORREO.md
+new file mode 100644
+index 0000000..c5404d9
+--- /dev/null
++++ b/n8n/CORREO.md
+@@ -0,0 +1,51 @@
++# Correo de confirmación de pago al cliente
++
++Cuando un cliente paga, n8n le envía un correo con el resumen de su pedido (productos, montos, entrega y botón "Ver mi pedido").
++
++```
++Cliente paga → el servidor guarda el pedido → POST a n8n → correo desde tu Gmail al cliente
++```
++
++Archivos: `pedido-pagado-correo.workflow.json` (flujo para importar), `armar-correo.js` (el código del correo) y `armar-correo.test.js` (pruebas).
++
++> Este flujo y el de WhatsApp (`pedido-pagado.workflow.json`) usan **el mismo webhook** (`/webhook/gm-pedido-pagado`): activa solo uno a la vez. Cuando quieras ambos, se unen en un solo flujo con dos ramas.
++
++## Requisitos
++- Tu credencial SMTP de Gmail en n8n (la que ya probaste).
++- El servidor avisando a n8n: `server/notificaciones.js` (parche `n8n-pedido-pagado`) y, en Render, `N8N_PEDIDO_PAGADO_URL` y `N8N_WEBHOOK_SECRET`. Para probar solo en tu PC no necesitas Render: usa el paso 4.
++
++## Puesta en marcha
++1. **Importar:** n8n → *Workflows → Import from file* → `n8n/pedido-pagado-correo.workflow.json`.
++2. **Credenciales:**
++   - Nodo *Pedido pagado (webhook)*: crea una credencial **Header Auth** llamada `G&M webhook secret` con Name `x-webhook-secret` y Value = una contraseña larga (la misma irá en Render como `N8N_WEBHOOK_SECRET`).
++   - Nodo *Enviar correo al cliente*: elige tu credencial SMTP de Gmail.
++3. **Remitente:** en el nodo *Armar correo* cambia `REMITENTE_EMAIL` por tu cuenta Gmail (la misma de la credencial; si no coincide, Gmail cambia el remitente).
++4. **Probar** (PowerShell, con el flujo abierto y *Listen for test event* activado en el webhook; pon tu correo para recibirlo):
++   ```powershell
++   $body = @{
++     evento = "pedido_pagado"
++     pedido = @{ numero = "GM-PRUEBA"; nombre = "Tu Nombre"; email = "TU_CORREO@gmail.com"; subtotal = 1100; envio = 150; total = 1250
++                 metodo_entrega = "domicilio"; direccion = "Av. Larco 123"; distrito = "Miraflores"; requiere_cotizar_flete = $false }
++     items  = @(@{ titulo = "Sofá London"; cantidad = 1; total = 1100 })
++     enlaces = @{ cliente_pedidos = "http://localhost:5173/perfil/pedidos" }
++   } | ConvertTo-Json -Depth 5
++   Invoke-RestMethod -Method Post -Uri "http://localhost:5678/webhook-test/gm-pedido-pagado" `
++     -Headers @{ "x-webhook-secret" = "TU_SECRETO" } -ContentType "application/json; charset=utf-8" `
++     -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
++   ```
++   Revisa tu bandeja (y spam la primera vez). Prueba también con `requiere_cotizar_flete = $true` y con `metodo_entrega = "recojo_tienda"` para ver las otras variantes.
++5. **Activar:** interruptor *Active* del flujo. La URL *Production* del webhook es la que va en `N8N_PEDIDO_PAGADO_URL` (con túnel: ver `LOCAL-Y-TUNEL.md`).
++
++## Qué dice el correo según el pedido
++| Caso | Entrega | Envío |
++|---|---|---|
++| Domicilio en Lima | dirección y fecha estimada (si existe) | monto |
++| Provincia por cotizar | "te escribiremos para confirmar costo y agencia" | "Por confirmar" |
++| Recojo en tienda | "te avisaremos cuando esté listo" | "Recojo sin costo" |
++
++Si el pedido trae cupón, se muestra la línea de descuento. Si el cliente no tiene un correo válido, el flujo termina sin enviar ni dar error.
++
++## Notas
++- **Límite de Gmail:** unos 500 correos al día en cuentas gratuitas. Si el volumen crece o los correos caen en spam, pasa a Resend (ya está en tu proyecto): solo cambia el nodo de envío.
++- El correo no promete plazos: solo muestra la fecha estimada si el pedido la tiene.
++- Para recibir una copia en el negocio, en el nodo *Enviar correo al cliente* → *Options* → *BCC Email*.
+diff --git a/n8n/armar-correo.js b/n8n/armar-correo.js
+new file mode 100644
+index 0000000..b3f01ed
+--- /dev/null
++++ b/n8n/armar-correo.js
+@@ -0,0 +1,127 @@
++// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════
++const REMITENTE_NOMBRE = "G&M Mueblería";
++const REMITENTE_EMAIL = "TU_CUENTA@gmail.com"; // la MISMA cuenta Gmail de la credencial SMTP (Gmail reescribe el remitente si no coincide)
++const COLOR = "#6B4226";                         // color de marca del correo
++// ══════════════════════════════════════════════════════════════
++
++const entrada = $input.first().json;
++const body = entrada.body ?? entrada;
++const p = body.pedido ?? {};
++const items = body.items ?? [];
++const enlaces = body.enlaces ?? {};
++
++// Sin correo válido no hay a quién escribir: el flujo termina sin error.
++const to = String(p.email ?? "").trim();
++if (!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/.test(to)) return [];
++
++// Todo lo que viene del cliente se escapa antes de meterlo en el HTML.
++const esc = (s) =>
++  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
++const sinSaltos = (s) => String(s ?? "").replace(/[\r\n]+/g, " ").trim();
++const soles = (n) => "S/ " + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
++const fecha = (iso) =>
++  iso ? new Date(iso).toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Lima" }) : null;
++
++const numero = sinSaltos(p.numero);
++const nombre = sinSaltos(p.nombre).split(" ")[0] || "";
++const recojo = p.metodo_entrega === "recojo_tienda";
++const entrega = fecha(p.entrega_estimada);
++
++// ── Qué pasa con la entrega ──
++let entregaTitulo, entregaTexto;
++if (recojo) {
++  entregaTitulo = "Recojo en tienda";
++  entregaTexto = "Te avisaremos cuando tu pedido esté listo para recoger.";
++} else if (p.requiere_cotizar_flete) {
++  entregaTitulo = "Envío a provincia";
++  entregaTexto = `Te escribiremos para confirmar el costo y la agencia de envío a ${sinSaltos(p.provincia || p.departamento) || "tu ciudad"}.`;
++} else {
++  entregaTitulo = "Entrega a domicilio";
++  const lugar = [sinSaltos(p.direccion), sinSaltos(p.distrito)].filter(Boolean).join(", ");
++  entregaTexto = `${lugar ? lugar + ". " : ""}${entrega ? "Entrega estimada: " + entrega + "." : "Te contactaremos para coordinar la entrega."}`;
++}
++
++// ── Montos ──
++const lineasMontos = [["Subtotal", soles(p.subtotal)]];
++if (Number(p.descuento) > 0) lineasMontos.push([`Descuento${p.cupon ? " (" + sinSaltos(p.cupon) + ")" : ""}`, "− " + soles(p.descuento)]);
++lineasMontos.push([
++  "Envío",
++  recojo ? "Recojo sin costo" : p.requiere_cotizar_flete ? "Por confirmar" : soles(p.envio),
++]);
++
++const filaItem = (i) => `
++  <tr>
++    <td style="padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;">${esc(i.titulo)}<br><span style="color:#8a7a6a;font-size:12px;">Cantidad: ${esc(i.cantidad)}</span></td>
++    <td style="padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;text-align:right;white-space:nowrap;">${soles(i.total)}</td>
++  </tr>`;
++const filaMonto = ([k, v]) => `
++  <tr>
++    <td style="padding:4px 0;font-size:14px;color:#6b5a49;">${esc(k)}</td>
++    <td style="padding:4px 0;font-size:14px;color:#6b5a49;text-align:right;">${esc(v)}</td>
++  </tr>`;
++
++const boton = enlaces.cliente_pedidos
++  ? `<p style="margin:24px 0 8px;text-align:center;"><a href="${esc(enlaces.cliente_pedidos)}" style="display:inline-block;background:${COLOR};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:999px;">Ver mi pedido</a></p>`
++  : "";
++
++const html = `<!doctype html>
++<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pedido ${esc(numero)}</title></head><body style="margin:0;padding:0;background:#faf6f0;">
++<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf6f0;padding:24px 12px;">
++<tr><td align="center">
++  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
++    <tr><td style="background:${COLOR};padding:22px 28px;">
++      <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#ffffff;letter-spacing:.5px;">G&amp;M Mueblería</span>
++    </td></tr>
++    <tr><td style="padding:28px;">
++      <h1 style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;color:#2b2118;">¡Gracias por tu compra${nombre ? ", " + esc(nombre) : ""}!</h1>
++      <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#4a3b2d;">Recibimos el pago de tu pedido <strong>${esc(numero)}</strong>. Este es el resumen:</p>
++
++      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items.map(filaItem).join("")}</table>
++      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
++        ${lineasMontos.map(filaMonto).join("")}
++        <tr>
++          <td style="padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;border-top:2px solid ${COLOR};">Total pagado</td>
++          <td style="padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;text-align:right;border-top:2px solid ${COLOR};">${soles(p.total)}</td>
++        </tr>
++      </table>
++
++      <div style="margin-top:24px;padding:16px 18px;background:#faf6f0;border-radius:12px;">
++        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:${COLOR};text-transform:uppercase;letter-spacing:.8px;">${esc(entregaTitulo)}</p>
++        <p style="margin:0;font-size:14px;line-height:1.5;color:#4a3b2d;">${esc(entregaTexto)}</p>
++      </div>
++
++      ${boton}
++      <p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#8a7a6a;">Tu mueble tiene 2 años de garantía en la estructura. Si tienes alguna duda, responde este correo o escríbenos por WhatsApp.</p>
++    </td></tr>
++    <tr><td style="background:#faf6f0;padding:16px 28px;font-size:12px;color:#8a7a6a;text-align:center;">G&amp;M Mueblería · Lima, Perú</td></tr>
++  </table>
++</td></tr></table>
++</body></html>`;
++
++// Versión en texto plano (para clientes de correo que no muestran HTML)
++const texto = [
++  `¡Gracias por tu compra${nombre ? ", " + nombre : ""}!`,
++  `Recibimos el pago de tu pedido ${numero}.`,
++  "",
++  ...items.map((i) => `- ${sinSaltos(i.titulo)} x${i.cantidad}: ${soles(i.total)}`),
++  "",
++  ...lineasMontos.map(([k, v]) => `${k}: ${v}`),
++  `Total pagado: ${soles(p.total)}`,
++  "",
++  `${entregaTitulo}: ${entregaTexto}`,
++  enlaces.cliente_pedidos ? `\nVer mi pedido: ${enlaces.cliente_pedidos}` : "",
++  "\nTu mueble tiene 2 años de garantía en la estructura.",
++  "G&M Mueblería",
++].join("\n");
++
++return [
++  {
++    json: {
++      from: `${REMITENTE_NOMBRE} <${REMITENTE_EMAIL}>`,
++      to,
++      subject: `Recibimos tu pago · Pedido ${numero} — G&M Mueblería`,
++      html,
++      text: texto,
++    },
++  },
++];
+diff --git a/n8n/armar-correo.test.js b/n8n/armar-correo.test.js
+new file mode 100644
+index 0000000..ca292de
+--- /dev/null
++++ b/n8n/armar-correo.test.js
+@@ -0,0 +1,58 @@
++// Ejecutar: node --test n8n/
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import fs from "node:fs";
++
++const src = fs.readFileSync(new URL("./armar-correo.js", import.meta.url), "utf8");
++const correr = (json) => new Function("$input", src)({ first: () => ({ json }) });
++const base = (extra = {}) => ({
++  body: {
++    pedido: { numero: "GM-1", nombre: "Ana Pérez", email: "ana@mail.com", subtotal: 1100, envio: 150, total: 1250, metodo_entrega: "domicilio", direccion: "Av. Larco 123", distrito: "Miraflores", entrega_estimada: "2026-11-05T05:00:00Z", requiere_cotizar_flete: false, ...extra },
++    items: [{ titulo: "Sofá London", cantidad: 1, total: 1100 }],
++    enlaces: { cliente_pedidos: "https://tienda.pe/perfil/pedidos" },
++  },
++});
++
++test("domicilio: asunto, destinatario, montos y entrega estimada", () => {
++  const [{ json }] = correr(base());
++  assert.equal(json.to, "ana@mail.com");
++  assert.equal(json.subject, "Recibimos tu pago · Pedido GM-1 — G&M Mueblería");
++  assert.match(json.html, /Sofá London/);
++  assert.match(json.html, /S\/ 1,250\.00/);
++  assert.match(json.html, /Av\. Larco 123, Miraflores\. Entrega estimada: 5 de noviembre de 2026/);
++  assert.match(json.html, /href="https:\/\/tienda\.pe\/perfil\/pedidos"/);
++  assert.match(json.text, /Total pagado: S\/ 1,250\.00/);
++});
++
++test("provincia por cotizar: flete 'Por confirmar' y aviso de contacto", () => {
++  const [{ json }] = correr(base({ requiere_cotizar_flete: true, envio: 0, provincia: "Arequipa", departamento: "Arequipa" }));
++  assert.match(json.html, /Por confirmar/);
++  assert.match(json.html, /confirmar el costo y la agencia de envío a Arequipa/);
++});
++
++test("recojo en tienda", () => {
++  const [{ json }] = correr(base({ metodo_entrega: "recojo_tienda", envio: 0 }));
++  assert.match(json.html, /Recojo sin costo/);
++  assert.match(json.html, /listo para recoger/);
++});
++
++test("cupón: muestra el descuento", () => {
++  const [{ json }] = correr(base({ descuento: 100, cupon: "BIENVENIDA" }));
++  assert.match(json.html, /Descuento \(BIENVENIDA\)/);
++  assert.match(json.html, /− S\/ 100\.00/);
++});
++
++test("escapa HTML del cliente y no deja saltos de línea en el asunto", () => {
++  const [{ json }] = correr({
++    body: { pedido: { numero: "GM-2\nBcc: x@y.com", nombre: "<script>alert(1)</script>", email: "a@b.com", total: 10 }, items: [{ titulo: "<img src=x onerror=1>", cantidad: 1, total: 10 }] },
++  });
++  assert.doesNotMatch(json.html, /<script>/);
++  assert.doesNotMatch(json.html, /<img src=x/);
++  assert.doesNotMatch(json.subject, /[\r\n]/);
++});
++
++test("sin correo válido no envía nada", () => {
++  assert.deepEqual(correr(base({ email: "" })), []);
++  assert.deepEqual(correr(base({ email: "no-es-correo" })), []);
++  assert.deepEqual(correr(base({ email: "a@b.com, otro@c.com" })), []);
++});
+diff --git a/n8n/pedido-pagado-correo.workflow.json b/n8n/pedido-pagado-correo.workflow.json
+new file mode 100644
+index 0000000..5e7580a
+--- /dev/null
++++ b/n8n/pedido-pagado-correo.workflow.json
+@@ -0,0 +1,113 @@
++{
++  "name": "G&M — Pedido pagado → Correo de confirmación al cliente",
++  "nodes": [
++    {
++      "parameters": {
++        "content": "## Pedido pagado → correo al cliente\nLo dispara el servidor de la tienda (server/notificaciones.js) cuando un pedido queda guardado y pagado.\n\n1. Credencial del webhook: **G&M webhook secret** (Header Auth: `x-webhook-secret`).\n2. Credencial de correo: **Gmail G&M** (SMTP).\n3. En el nodo **Armar correo** cambia `REMITENTE_EMAIL` por tu cuenta Gmail.\n4. Activa el flujo y usa la URL *Production* en Render.\n\nVer n8n/CORREO.md",
++        "height": 280,
++        "width": 420
++      },
++      "id": "b2000000-0000-4000-8000-000000000001",
++      "name": "Léeme",
++      "type": "n8n-nodes-base.stickyNote",
++      "typeVersion": 1,
++      "position": [
++        -120,
++        -200
++      ]
++    },
++    {
++      "parameters": {
++        "httpMethod": "POST",
++        "path": "gm-pedido-pagado",
++        "authentication": "headerAuth",
++        "options": {}
++      },
++      "id": "b2000000-0000-4000-8000-000000000002",
++      "name": "Pedido pagado (webhook)",
++      "type": "n8n-nodes-base.webhook",
++      "typeVersion": 2,
++      "position": [
++        0,
++        140
++      ],
++      "webhookId": "d4a8b1ef-6c2f-4d66-8b63-3b9e5a1b0c22",
++      "credentials": {
++        "httpHeaderAuth": {
++          "id": "",
++          "name": "G&M webhook secret"
++        }
++      }
++    },
++    {
++      "parameters": {
++        "jsCode": "// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════\nconst REMITENTE_NOMBRE = \"G&M Mueblería\";\nconst REMITENTE_EMAIL = \"TU_CUENTA@gmail.com\"; // la MISMA cuenta Gmail de la credencial SMTP (Gmail reescribe el remitente si no coincide)\nconst COLOR = \"#6B4226\";                         // color de marca del correo\n// ══════════════════════════════════════════════════════════════\n\nconst entrada = $input.first().json;\nconst body = entrada.body ?? entrada;\nconst p = body.pedido ?? {};\nconst items = body.items ?? [];\nconst enlaces = body.enlaces ?? {};\n\n// Sin correo válido no hay a quién escribir: el flujo termina sin error.\nconst to = String(p.email ?? \"\").trim();\nif (!/^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]{2,}$/.test(to)) return [];\n\n// Todo lo que viene del cliente se escapa antes de meterlo en el HTML.\nconst esc = (s) =>\n  String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\nconst sinSaltos = (s) => String(s ?? \"\").replace(/[\\r\\n]+/g, \" \").trim();\nconst soles = (n) => \"S/ \" + Number(n || 0).toLocaleString(\"en-US\", { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst fecha = (iso) =>\n  iso ? new Date(iso).toLocaleDateString(\"es-PE\", { day: \"numeric\", month: \"long\", year: \"numeric\", timeZone: \"America/Lima\" }) : null;\n\nconst numero = sinSaltos(p.numero);\nconst nombre = sinSaltos(p.nombre).split(\" \")[0] || \"\";\nconst recojo = p.metodo_entrega === \"recojo_tienda\";\nconst entrega = fecha(p.entrega_estimada);\n\n// ── Qué pasa con la entrega ──\nlet entregaTitulo, entregaTexto;\nif (recojo) {\n  entregaTitulo = \"Recojo en tienda\";\n  entregaTexto = \"Te avisaremos cuando tu pedido esté listo para recoger.\";\n} else if (p.requiere_cotizar_flete) {\n  entregaTitulo = \"Envío a provincia\";\n  entregaTexto = `Te escribiremos para confirmar el costo y la agencia de envío a ${sinSaltos(p.provincia || p.departamento) || \"tu ciudad\"}.`;\n} else {\n  entregaTitulo = \"Entrega a domicilio\";\n  const lugar = [sinSaltos(p.direccion), sinSaltos(p.distrito)].filter(Boolean).join(\", \");\n  entregaTexto = `${lugar ? lugar + \". \" : \"\"}${entrega ? \"Entrega estimada: \" + entrega + \".\" : \"Te contactaremos para coordinar la entrega.\"}`;\n}\n\n// ── Montos ──\nconst lineasMontos = [[\"Subtotal\", soles(p.subtotal)]];\nif (Number(p.descuento) > 0) lineasMontos.push([`Descuento${p.cupon ? \" (\" + sinSaltos(p.cupon) + \")\" : \"\"}`, \"− \" + soles(p.descuento)]);\nlineasMontos.push([\n  \"Envío\",\n  recojo ? \"Recojo sin costo\" : p.requiere_cotizar_flete ? \"Por confirmar\" : soles(p.envio),\n]);\n\nconst filaItem = (i) => `\n  <tr>\n    <td style=\"padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;\">${esc(i.titulo)}<br><span style=\"color:#8a7a6a;font-size:12px;\">Cantidad: ${esc(i.cantidad)}</span></td>\n    <td style=\"padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;text-align:right;white-space:nowrap;\">${soles(i.total)}</td>\n  </tr>`;\nconst filaMonto = ([k, v]) => `\n  <tr>\n    <td style=\"padding:4px 0;font-size:14px;color:#6b5a49;\">${esc(k)}</td>\n    <td style=\"padding:4px 0;font-size:14px;color:#6b5a49;text-align:right;\">${esc(v)}</td>\n  </tr>`;\n\nconst boton = enlaces.cliente_pedidos\n  ? `<p style=\"margin:24px 0 8px;text-align:center;\"><a href=\"${esc(enlaces.cliente_pedidos)}\" style=\"display:inline-block;background:${COLOR};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:999px;\">Ver mi pedido</a></p>`\n  : \"\";\n\nconst html = `<!doctype html>\n<html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Pedido ${esc(numero)}</title></head><body style=\"margin:0;padding:0;background:#faf6f0;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#faf6f0;padding:24px 12px;\">\n<tr><td align=\"center\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;\">\n    <tr><td style=\"background:${COLOR};padding:22px 28px;\">\n      <span style=\"font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#ffffff;letter-spacing:.5px;\">G&amp;M Mueblería</span>\n    </td></tr>\n    <tr><td style=\"padding:28px;\">\n      <h1 style=\"margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;color:#2b2118;\">¡Gracias por tu compra${nombre ? \", \" + esc(nombre) : \"\"}!</h1>\n      <p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;color:#4a3b2d;\">Recibimos el pago de tu pedido <strong>${esc(numero)}</strong>. Este es el resumen:</p>\n\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">${items.map(filaItem).join(\"\")}</table>\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:10px;\">\n        ${lineasMontos.map(filaMonto).join(\"\")}\n        <tr>\n          <td style=\"padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;border-top:2px solid ${COLOR};\">Total pagado</td>\n          <td style=\"padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;text-align:right;border-top:2px solid ${COLOR};\">${soles(p.total)}</td>\n        </tr>\n      </table>\n\n      <div style=\"margin-top:24px;padding:16px 18px;background:#faf6f0;border-radius:12px;\">\n        <p style=\"margin:0 0 4px;font-size:13px;font-weight:700;color:${COLOR};text-transform:uppercase;letter-spacing:.8px;\">${esc(entregaTitulo)}</p>\n        <p style=\"margin:0;font-size:14px;line-height:1.5;color:#4a3b2d;\">${esc(entregaTexto)}</p>\n      </div>\n\n      ${boton}\n      <p style=\"margin:20px 0 0;font-size:13px;line-height:1.5;color:#8a7a6a;\">Tu mueble tiene 2 años de garantía en la estructura. Si tienes alguna duda, responde este correo o escríbenos por WhatsApp.</p>\n    </td></tr>\n    <tr><td style=\"background:#faf6f0;padding:16px 28px;font-size:12px;color:#8a7a6a;text-align:center;\">G&amp;M Mueblería · Lima, Perú</td></tr>\n  </table>\n</td></tr></table>\n</body></html>`;\n\n// Versión en texto plano (para clientes de correo que no muestran HTML)\nconst texto = [\n  `¡Gracias por tu compra${nombre ? \", \" + nombre : \"\"}!`,\n  `Recibimos el pago de tu pedido ${numero}.`,\n  \"\",\n  ...items.map((i) => `- ${sinSaltos(i.titulo)} x${i.cantidad}: ${soles(i.total)}`),\n  \"\",\n  ...lineasMontos.map(([k, v]) => `${k}: ${v}`),\n  `Total pagado: ${soles(p.total)}`,\n  \"\",\n  `${entregaTitulo}: ${entregaTexto}`,\n  enlaces.cliente_pedidos ? `\\nVer mi pedido: ${enlaces.cliente_pedidos}` : \"\",\n  \"\\nTu mueble tiene 2 años de garantía en la estructura.\",\n  \"G&M Mueblería\",\n].join(\"\\n\");\n\nreturn [\n  {\n    json: {\n      from: `${REMITENTE_NOMBRE} <${REMITENTE_EMAIL}>`,\n      to,\n      subject: `Recibimos tu pago · Pedido ${numero} — G&M Mueblería`,\n      html,\n      text: texto,\n    },\n  },\n];\n"
++      },
++      "id": "b2000000-0000-4000-8000-000000000003",
++      "name": "Armar correo",
++      "type": "n8n-nodes-base.code",
++      "typeVersion": 2,
++      "position": [
++        260,
++        140
++      ]
++    },
++    {
++      "parameters": {
++        "fromEmail": "={{ $json.from }}",
++        "toEmail": "={{ $json.to }}",
++        "subject": "={{ $json.subject }}",
++        "emailFormat": "both",
++        "text": "={{ $json.text }}",
++        "html": "={{ $json.html }}",
++        "options": {}
++      },
++      "id": "b2000000-0000-4000-8000-000000000004",
++      "name": "Enviar correo al cliente",
++      "type": "n8n-nodes-base.emailSend",
++      "typeVersion": 2.1,
++      "position": [
++        520,
++        140
++      ],
++      "retryOnFail": true,
++      "maxTries": 3,
++      "waitBetweenTries": 3000,
++      "credentials": {
++        "smtp": {
++          "id": "",
++          "name": "Gmail G&M"
++        }
++      }
++    }
++  ],
++  "connections": {
++    "Pedido pagado (webhook)": {
++      "main": [
++        [
++          {
++            "node": "Armar correo",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "Armar correo": {
++      "main": [
++        [
++          {
++            "node": "Enviar correo al cliente",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    }
++  },
++  "active": false,
++  "settings": {
++    "executionOrder": "v1"
++  },
++  "pinData": {}
++}
+\ No newline at end of file
