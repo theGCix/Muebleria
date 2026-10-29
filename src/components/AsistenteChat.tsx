@@ -2,59 +2,31 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, X, Send, Loader2, Sparkles } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Sparkles, ArrowLeft, ArrowUpRight } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { API_URL as API } from "@/config";
-import { ORIGEN_ENVIO } from "@/lib/envios";
+import { TEMAS_CHAT, type ChatLink, type PreguntaChat, type TemaChat } from "@/lib/chatSugerencias";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 
-type Message = { role: "user" | "assistant"; content: string };
+type ChatResult = { reply: string; cartActions: CartAction[]; links: ChatLink[] };
+type Message = { role: "user" | "assistant"; content: string; links?: ChatLink[] };
 type CartAction = {
   id: string; title: string; price: number;
   image?: string; sku?: string; cantidad: number;
 };
 
-// ── Preguntas frecuentes: respuesta instantánea, sin costo de IA ──
-const PREGUNTAS_RAPIDAS: { label: string; pregunta: string; respuesta: string }[] = [
-  {
-    label: "🚚 ¿Cómo es el envío?",
-    pregunta: "¿Cómo es el envío?",
-    respuesta: `Hacemos envío a domicilio en Lima y Callao — el costo depende de tu distrito y se calcula automáticamente en el checkout. También puedes elegir "Recojo en tienda" sin costo, en nuestra tienda de ${ORIGEN_ENVIO}. Si un producto no está en stock, te avisamos la fecha estimada antes de pagar, así que nunca hay sorpresas.`,
-  },
-  {
-    label: "🛡️ ¿Qué garantía tienen?",
-    pregunta: "¿Qué garantía tienen?",
-    respuesta: "Todos nuestros muebles tienen 2 años de garantía en estructura. Si notas algún defecto de fabricación dentro de ese periodo, lo reparamos o reponemos sin costo.",
-  },
-  {
-    label: "💳 ¿Cómo puedo pagar?",
-    pregunta: "¿Cómo puedo pagar?",
-    respuesta: "Aceptamos tarjetas de crédito y débito (Visa, Mastercard, Amex) mediante Niubiz, con pago 100% seguro y encriptado. Aún no manejamos pago contraentrega ni transferencia directa.",
-  },
-  {
-    label: "📦 Consultar mi pedido",
-    pregunta: "Quiero consultar el estado de mi pedido",
-    respuesta: null, // este sí necesita la IA (requiere número + correo)
-  },
-  {
-    label: "💬 Tengo otra pregunta",
-    pregunta: "",
-    respuesta: null, // traspaso directo a la IA, sin pregunta fija
-  },
-];
-
-async function chatWithAssistant(messages: Message[], sessionId: string): Promise<{ reply: string; cartActions: CartAction[] }> {
+async function chatWithAssistant(messages: Message[], sessionId: string): Promise<ChatResult> {
   const res = await fetch(`${API}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, sessionId }),
+    body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
   });
   if (!res.ok) throw new Error("Error al conectar con el asistente");
   const data = await res.json();
-  return { reply: data.reply ?? "Lo siento, no pude procesar tu consulta.", cartActions: data.cartActions ?? [] };
+  return { reply: data.reply ?? "Lo siento, no pude procesar tu consulta.", cartActions: data.cartActions ?? [], links: data.links ?? [] };
 }
 
-type ChatResult = { reply: string; cartActions: CartAction[] };
 type StreamHandlers = {
   onToken: (t: string) => void;
   onStatus: (t: string) => void;
@@ -74,7 +46,7 @@ async function chatWithAssistantStream(
   const res = await fetch(`${API}/api/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, sessionId }),
+    body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
     signal,
   });
   if (res.status === 404) throw new StreamNoDisponible();
@@ -111,6 +83,7 @@ async function chatWithAssistantStream(
         result = {
           reply: payload.reply ?? "Lo siento, no pude procesar tu consulta.",
           cartActions: payload.cartActions ?? [],
+          links: payload.links ?? [],
         };
       }
     }
@@ -134,6 +107,8 @@ export function AsistenteChat() {
   const abortRef = useRef<AbortController | null>(null);
   // Id de la conversación (se guarda en Supabase para analítica); se renueva al recargar la página
   const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const [tema, setTema] = useState<TemaChat | null>(null);
+  const navigate = useNavigate();
   const addItem = useCartStore((s) => s.addItem);
   const updateQty = useCartStore((s) => s.updateQty);
   const items = useCartStore((s) => s.items);
@@ -157,25 +132,24 @@ export function AsistenteChat() {
     }
   };
 
-  const enviarPreguntaRapida = (item: typeof PREGUNTAS_RAPIDAS[number]) => {
+  const enviarPreguntaRapida = (item: PreguntaChat) => {
     if (loading) return;
     if (item.respuesta) {
-      // Respuesta fija: no gasta tokens de IA, aparece al toque
+      // Respuesta fija: no gasta IA, aparece al toque (con botones a las páginas relacionadas)
       setMessages((m) => [
         ...m,
         { role: "user", content: item.pregunta },
-        { role: "assistant", content: item.respuesta! },
+        { role: "assistant", content: item.respuesta!, links: item.links },
       ]);
-    } else if (item.pregunta) {
-      // Necesita datos reales (ej. consultar pedido): va por la IA
-      setInput(item.pregunta);
     } else {
-      // Traspaso libre: le avisamos al cliente que pasa a la IA, sin asumir la pregunta
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", content: "Claro, cuéntame qué necesitas y te ayudo con eso." },
-      ]);
+      // Necesita datos reales (precio, stock, pedido, envío): va directo a la IA
+      void send(item.pregunta);
     }
+  };
+
+  const irA = (l: ChatLink) => {
+    // navigate() de TanStack es estricto con los tipos de ruta; los enlaces vienen de una lista cerrada
+    void navigate({ to: l.to, params: l.params, search: l.search, hash: l.hash } as never);
   };
 
   // Reemplaza el contenido del último mensaje (el que se está "escribiendo")
@@ -187,10 +161,18 @@ export function AsistenteChat() {
       return copia;
     });
 
-  const send = async () => {
-    const text = input.trim();
+  const ponerEnlacesUltimo = (links: ChatLink[]) =>
+    setMessages((m) => {
+      const copia = [...m];
+      copia[copia.length - 1] = { ...copia[copia.length - 1], links };
+      return copia;
+    });
+
+  const send = async (override?: string) => {
+    const text = (override ?? input).trim();
     if (!text || loading) return;
     setInput("");
+    setTema(null);
 
     const newMessages: Message[] = [...messages, { role: "user", content: text }];
     // Burbuja vacía del asistente que se irá llenando con el stream
@@ -220,6 +202,7 @@ export function AsistenteChat() {
       }
 
       editarUltimo(() => result.reply);
+      if (result.links.length > 0) ponerEnlacesUltimo(result.links);
       if (result.cartActions.length > 0) aplicarAccionesCarrito(result.cartActions);
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
@@ -270,7 +253,7 @@ export function AsistenteChat() {
               (m.role === "assistant" && !m.content) ? null : (
               <div
                 key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
               >
                 <div
                   className="max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed whitespace-pre-wrap"
@@ -282,6 +265,21 @@ export function AsistenteChat() {
                 >
                   {m.content}
                 </div>
+                {m.role === "assistant" && m.links && m.links.length > 0 && (
+                  <div className="mt-1.5 flex max-w-[85%] flex-wrap gap-1.5">
+                    {m.links.map((l) => (
+                      <button
+                        key={`${l.to}${l.label}`}
+                        onClick={() => irA(l)}
+                        className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                        style={{ borderColor: "var(--primary)", color: "var(--primary)" }}
+                      >
+                        {l.label}
+                        <ArrowUpRight className="h-3 w-3" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               )
             ))}
@@ -298,16 +296,42 @@ export function AsistenteChat() {
             )}
             {messages.length > 0 && messages[messages.length - 1].role === "assistant" && !loading && (
               <div className="flex flex-col gap-1.5 pt-1">
-                {PREGUNTAS_RAPIDAS.map((p) => (
-                  <button
-                    key={p.label}
-                    onClick={() => enviarPreguntaRapida(p)}
-                    className="text-left text-xs px-3 py-2 rounded-xl border transition-colors hover:bg-muted"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+                {tema ? (
+                  <>
+                    <button
+                      onClick={() => setTema(null)}
+                      className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <ArrowLeft className="h-3 w-3" /> Otros temas
+                    </button>
+                    {tema.preguntas.map((p) => (
+                      <button
+                        key={p.label}
+                        onClick={() => enviarPreguntaRapida(p)}
+                        className="text-left text-xs px-3 py-2 rounded-xl border transition-colors hover:bg-muted"
+                        style={{ borderColor: "var(--border)" }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">¿Sobre qué tema tienes dudas?</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TEMAS_CHAT.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setTema(t)}
+                          className="text-xs px-3 py-1.5 rounded-full border transition-colors hover:bg-muted"
+                          style={{ borderColor: "var(--border)" }}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <div ref={bottomRef} />
@@ -323,7 +347,7 @@ export function AsistenteChat() {
               onKeyDown={(e) => e.key === "Enter" && send()}
               disabled={loading}
             />
-            <Button size="sm" className="h-9 w-9 p-0 flex-shrink-0" onClick={send} disabled={loading || !input.trim()}>
+            <Button size="sm" className="h-9 w-9 p-0 flex-shrink-0" onClick={() => send()} disabled={loading || !input.trim()}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
