@@ -10,7 +10,7 @@ import type { ResenaDestacada } from "@/lib/resenas.functions";
 const fechaCorta = (iso: string) =>
   new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric" }).format(new Date(iso));
 
-function Estrellas({ valor, size = 16 }: { valor: number; size?: number }) {
+export function Estrellas({ valor, size = 16 }: { valor: number; size?: number }) {
   return (
     <span
       className="inline-flex gap-0.5"
@@ -93,7 +93,7 @@ export function Testimonials() {
   );
 }
 
-function Tarjeta({ r }: { r: ResenaDestacada }) {
+export function Tarjeta({ r }: { r: ResenaDestacada }) {
   const foto = r.fotos?.[0];
   return (
     <article className="flex w-[85%] shrink-0 snap-center flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-soft)] sm:w-[60%] md:mb-5 md:w-auto md:break-inside-avoid">

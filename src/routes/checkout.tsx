@@ -68,6 +68,7 @@ import { API_URL as API } from "@/config";
 import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
+import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 
 async function fetchNiubizSession(payload: {
@@ -95,6 +96,7 @@ async function fetchNiubizSession(payload: {
 function CheckoutPage() {
   const { items, total, clearCart, updateQty, removeItem } = useCartStore();
   const [loading, setLoading] = useState(false);
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -451,6 +453,7 @@ useEffect(() => {
   const handlePagar = (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) { toast.error("Tu carrito está vacío"); return; }
+    if (!aceptaTerminos) { toast.error("Debes aceptar los Términos y condiciones para continuar"); return; }
     if (provinciaIncompleta) { toast.error("Completa departamento, provincia y distrito / localidad"); return; }
     if (metodoEntrega === "domicilio" && !esProvincia && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
     if (metodoEntrega === "domicilio" && distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
@@ -681,9 +684,11 @@ useEffect(() => {
               ))}
             </div>
 
+            <TerminosCheckout aceptado={aceptaTerminos} onChange={setAceptaTerminos} />
+
             <Button
               type="submit" size="lg" className="w-full rounded-full h-12 text-base"
-              disabled={loading || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura || provinciaIncompleta))}
+              disabled={loading || !aceptaTerminos || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura || provinciaIncompleta))}
             >
               {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
             </Button>

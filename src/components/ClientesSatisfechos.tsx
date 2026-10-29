@@ -8,7 +8,7 @@ import { MIN_GALERIA, useGaleriaClientes } from "@/hooks/useGaleriaClientes";
 const MAX_HOME = 8;
 
 /** Versión liviana de la foto si es de Cloudinary. */
-function liviana(url: string, w: number) {
+export function liviana(url: string, w: number) {
   if (!url.includes("res.cloudinary.com") || !url.includes("/upload/") || /\/upload\/[a-z]_/.test(url)) return url;
   return url.replace("/upload/", `/upload/w_${w},q_auto,f_auto/`);
 }
