@@ -8,6 +8,8 @@ import { API_URL as API } from "@/config";
 import { TEMAS_CHAT, type ChatLink, type PreguntaChat, type TemaChat } from "@/lib/chatSugerencias";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthModalStore } from "@/stores/authModalStore";
 
 type ChatResult = { reply: string; cartActions: CartAction[]; links: ChatLink[] };
 type Message = { role: "user" | "assistant"; content: string; links?: ChatLink[] };
@@ -16,10 +18,22 @@ type CartAction = {
   image?: string; sku?: string; cantidad: number;
 };
 
+/** Cabeceras del chat: si hay sesión, el servidor identifica al cliente y consulta SUS pedidos sin pedir número ni correo. */
+async function cabeceras(): Promise<Record<string, string>> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) h.Authorization = `Bearer ${data.session.access_token}`;
+  } catch {
+    /* sin sesión: el chat funciona igual */
+  }
+  return h;
+}
+
 async function chatWithAssistant(messages: Message[], sessionId: string): Promise<ChatResult> {
   const res = await fetch(`${API}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await cabeceras(),
     body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
   });
   if (!res.ok) throw new Error("Error al conectar con el asistente");
@@ -45,7 +59,7 @@ async function chatWithAssistantStream(
 ): Promise<ChatResult> {
   const res = await fetch(`${API}/api/chat/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await cabeceras(),
     body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
     signal,
   });
@@ -148,6 +162,11 @@ export function AsistenteChat() {
   };
 
   const irA = (l: ChatLink) => {
+    setOpen(false); // cierra el panel para que el cliente vea la página
+    if (l.to === "#login") {
+      useAuthModalStore.getState().openLogin();
+      return;
+    }
     // navigate() de TanStack es estricto con los tipos de ruta; los enlaces vienen de una lista cerrada
     void navigate({ to: l.to, params: l.params, search: l.search, hash: l.hash } as never);
   };
