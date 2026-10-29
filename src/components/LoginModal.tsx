@@ -159,7 +159,7 @@ function AuthExperience({
   // al cerrarse se desmonta y todo el estado se reinicia solo.
   const [mode, setMode] = useState<Mode>("login");
   const [stage, setStage] = useState<Stage>("form");
-  const [sentKind, setSentKind] = useState<"signup" | "magic">("magic");
+  const [sentKind, setSentKind] = useState<"signup" | "magic" | "reset">("magic");
   const [email, setEmail] = useState(() => store.get(LAST_EMAIL_KEY) ?? "");
   const [returning] = useState(() => !!store.get(LAST_EMAIL_KEY));
   const [lastMethod] = useState(() => store.get(LAST_METHOD_KEY) as LastMethod | null);
@@ -391,6 +391,29 @@ function AuthExperience({
     } catch (err) {
       const raw = (err as Error).message || "";
       toast.error(AUTH_ERRORS[raw] ?? (raw || "Error de autenticación"));
+      shake();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Recuperar cuenta: envía el correo de Supabase; el enlace lleva a /restablecer para elegir nueva contraseña.
+  const olvideContrasena = async () => {
+    if (!email.trim()) {
+      toast.error("Escribe tu correo arriba y vuelve a tocar \"¿Olvidaste tu contraseña?\"");
+      shake();
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/restablecer`,
+      });
+      if (error) throw error;
+      setSentKind("reset");
+      setStage("sent");
+    } catch (err) {
+      toast.error((err as Error).message || "No pudimos enviar el correo. Intenta de nuevo.");
       shake();
     } finally {
       setLoading(false);
@@ -651,6 +674,16 @@ function AuthExperience({
                 {mode === "login" && (
                   <button
                     type="button"
+                    onClick={olvideContrasena}
+                    disabled={busy}
+                    className="transition-colors hover:text-foreground"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                )}
+                {mode === "login" && (
+                  <button
+                    type="button"
                     onClick={() => switchMode("magic")}
                     className="transition-colors hover:text-foreground"
                   >
@@ -689,7 +722,9 @@ function AuthExperience({
                   Enviamos un enlace a <span className="font-medium text-foreground">{email}</span>.{" "}
                   {sentKind === "signup"
                     ? "Confirma tu cuenta y vuelve a la tienda."
-                    : "Ábrelo desde este dispositivo para entrar."}
+                    : sentKind === "reset"
+                      ? "Ábrelo para elegir tu nueva contraseña."
+                      : "Ábrelo desde este dispositivo para entrar."}
                 </DialogDescription>
               </DialogHeader>
               <Button variant="outline" className="fx mt-6 w-full max-w-xs" onClick={() => setStage("form")}>

@@ -23,6 +23,7 @@ import {
 import { z } from "zod";
 import { calcularEnvioChat } from "./envioChat.js";
 import { enlacesDeTurno } from "./chatNavegacion.js";
+import { normalizar } from "./envioChat.js";
 
 const MAX_TURNOS_HERRAMIENTAS = 4;
 const MAX_MENSAJES_HISTORIAL = 12;
@@ -36,17 +37,17 @@ Información de la tienda:
 - Envío a domicilio en Lima y Callao según distrito, y a provincias con costo estimado según volumen.
 - Recojo en tienda disponible sin costo.
 - Garantía de 2 años en la estructura contra defectos de fabricación (no cubre mal uso, golpes, humedad excesiva, modificaciones de terceros ni desgaste normal). Para usarla, el cliente escribe con fotos y su número de pedido.
-- Pago con tarjeta de crédito/débito (Visa, Mastercard, Amex) vía Niubiz, 100% seguro. No hay pago contraentrega ni transferencia directa.
+- El pago se hace en el checkout y acepta los métodos de pago que la tienda tiene habilitados: tarjeta de crédito/débito (Visa, Mastercard, Amex) vía Niubiz, Yape o Plin, transferencia bancaria, pago en 3 o 6 cuotas sin intereses y efectivo en tienda física. Los disponibles para cada compra se ven al pagar en el checkout.
 - Cada pieza se fabrica a pedido en el taller de Lima (madera tornillo seca y tratada). Entrega en Lima Metropolitana: 5 a 7 días hábiles; provincias: 10 a 15 días hábiles. La fecha exacta se confirma al comprar.
 - No se aceptan cambios una vez confirmado el pedido (son piezas hechas a pedido); si hay defecto de fabricación, se repara o repone dentro de la garantía.
 - Muebles a medida: se pide una cotización indicando tipo de mueble, medidas aproximadas y espacio; el plazo se acuerda en la cotización.
 - Estados del pedido: pago recibido, en producción, control de calidad, listo para despacho, en camino y entregado.
-- Para pagar hay que iniciar sesión en la tienda.
+- Para pagar hay que iniciar sesión en la tienda. Si el cliente olvidó su contraseña, en "Iniciar sesión" toca "¿Olvidaste tu contraseña?", escribe su correo y recibe un enlace para elegir una nueva.
 - La tienda muestra botones con enlaces a las páginas relacionadas con cada respuesta: NO escribas direcciones web ni URLs; si ayuda, di "te dejé el enlace abajo".
 
 Reglas importantes:
 1. NUNCA inventes precios, stock o disponibilidad — usa siempre buscar_productos primero.
-2. Para consultar pedidos: si el cliente tiene la sesión iniciada (el sistema te lo indica al final), usa consultar_pedido de inmediato SIN pedir número ni correo; si NO tiene sesión, dile que inicie sesión para ver sus pedidos, o pídele el número de pedido Y el correo.
+2. Para consultar pedidos: si el cliente tiene la sesión iniciada (el sistema te lo indica al final), usa consultar_pedido de inmediato SIN pedir número ni correo (nunca describas el estado de un pedido sin haber llamado a la herramienta en este turno); si NO tiene sesión, dile que inicie sesión para ver sus pedidos, o pídele el número de pedido Y el correo.
 3. Solo agrega productos al carrito cuando el cliente lo pida o confirme explícitamente.
 4. Si no encuentras algo en el catálogo, dilo con honestidad y sugiere alternativas similares si las hay.
 5. Responde siempre en español, en texto plano (sin markdown ni tablas).
@@ -78,6 +79,73 @@ const ESTADOS_PEDIDO = {
   entregado: "Entregado",
   cancelado: "Cancelado",
 };
+
+
+// ── Respuesta determinista para "mi pedido" ────────────────────
+// Los modelos locales chicos inventan estados de pedido (o "narran" que consultan sin hacerlo).
+// Por eso las consultas de pedido NO pasan por el modelo: se leen de la BD y se redactan aquí.
+
+const PISTAS_PEDIDO = [
+  "mi pedido", "mis pedidos", "mi compra", "mis compras", "mi orden", "ultimo pedido", "ultima compra",
+  "estado de mi", "estado del pedido", "donde esta mi", "cuando llega", "cuando me llega", "cuando llegara",
+  "seguimiento", "rastrear", "cuanto pague", "que compre", "pago de mi", "ya llego", "ya pague", "ya se envio",
+];
+
+/** ¿El cliente pregunta por SU pedido? (ver pistas). Un número tipo GM-1234 también cuenta. */
+export function esConsultaPedido(texto) {
+  const t = ` ${normalizar(String(texto ?? ""))} `;
+  if (/\bgm-?\d{3,}/i.test(t)) return true;
+  return PISTAS_PEDIDO.some((p) => t.includes(` ${p}`));
+}
+
+export function extraerNumeroPedido(texto) {
+  return String(texto ?? "").match(/\bGM-?[A-Z0-9-]{3,}/i)?.[0] ?? null;
+}
+export function extraerCorreo(texto) {
+  return String(texto ?? "").match(/[^\s@]+@[^\s@]+\.[^\s@]+/)?.[0] ?? null;
+}
+
+const fechaLima = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Lima" })
+    : null;
+const soles = (n) => `S/ ${Number(n ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function frasePedido(p) {
+  const recojo = p.metodo_entrega === "recojo_tienda";
+  const entrega = fechaLima(p.entrega_estimada);
+  switch (p.estado_codigo) {
+    case "entregado":
+      return recojo ? "ya fue recogido (completado)" : "ya fue entregado";
+    case "cancelado":
+      return "fue cancelado";
+    case "pendiente":
+      return "está pendiente de pago (aún no registramos el pago)";
+    case "en_agencia":
+      return `llegó a la agencia${p.agencia ? ` ${p.agencia}` : ""} y está listo para recoger${p.guia ? ` (guía ${p.guia})` : ""}`;
+    case "enviado":
+      return recojo ? "está listo para recoger en tienda" : `está en camino${entrega ? ` (entrega estimada: ${entrega})` : ""}`;
+    case "listo_despacho":
+      return recojo ? "está listo para recoger en tienda" : `está listo para despacho${entrega ? ` (entrega estimada: ${entrega})` : ""}`;
+    default:
+      return `está en estado "${String(p.estado).toLowerCase()}"${entrega ? ` (entrega estimada: ${entrega})` : ""}`;
+  }
+}
+
+/** Redacta la respuesta con los datos reales (sin modelo). `pedidos` viene del resultado de consultar_pedido. */
+export function redactarPedidos(pedidos) {
+  const lineas = pedidos.map((p) => {
+    const items = (p.items ?? []).map((i) => `${i.qty ?? 1} × ${i.title}`).join(", ");
+    const partes = [
+      `Tu pedido ${p.numero} ${frasePedido(p)}.`,
+      `Comprado el ${fechaLima(p.fecha) ?? "—"} · Total ${soles(p.total)}.`,
+      items ? `Incluye: ${items}.` : null,
+    ].filter(Boolean);
+    return partes.join(" ");
+  });
+  const cabecera = pedidos.length > 1 ? `Estos son tus últimos ${pedidos.length} pedidos:\n\n` : "";
+  return `${cabecera}${lineas.join("\n\n")}\n\nEl detalle completo, con fotos del avance y tu comprobante, está en Mis pedidos.`;
+}
 
 // ── Utilidades ────────────────────────────────────────────────
 
@@ -295,6 +363,7 @@ export function crearHerramientas({ supabaseAdmin }, ctx) {
           numero: o.order_number,
           fecha: o.created_at,
           estado: enAgencia ? "En agencia (listo para recoger)" : ESTADOS_PEDIDO[o.status] ?? o.status,
+          estado_codigo: enAgencia ? "en_agencia" : o.status,
           entrega_estimada: o.estimated_delivery,
           metodo_entrega: o.metodo_entrega,
           total: o.total,
@@ -477,6 +546,38 @@ export async function ejecutarAgente({
   const conversacion = [new SystemMessage(SYSTEM_PROMPT + estadoSesion), ...normalizarHistorial(messages)];
   if (conversacion.length < 2) {
     return { reply: "Cuéntame qué necesitas y te ayudo.", cartActions: [], links: [] };
+  }
+
+  // Consultas de pedido: respuesta con datos reales, sin pasar por el modelo.
+  const ultimoTexto = [...(Array.isArray(messages) ? messages : [])]
+    .reverse()
+    .find((m) => m?.role === "user" && typeof m.content === "string")?.content;
+  if (esConsultaPedido(ultimoTexto)) {
+    const numero = extraerNumeroPedido(ultimoTexto);
+    const correo = extraerCorreo(ultimoTexto);
+    const puede = usuario?.id || (numero && correo);
+    let reply;
+    let resultado = "ok";
+    if (!puede) {
+      ctx.hallazgos.requiereSesion = true;
+      reply =
+        "Para ver tus pedidos inicia sesión en tu cuenta y te muestro el estado al instante. Si prefieres, también puedes escribirme tu número de pedido (ej. GM-1234) y el correo de la compra.";
+    } else {
+      onStatus?.(ESTADO_HERRAMIENTA.consultar_pedido);
+      const raw = await porNombre.consultar_pedido.invoke({ order_number: numero ?? undefined, email: correo ?? undefined });
+      resultado = clasificarResultado(raw);
+      const r = JSON.parse(raw);
+      reply = r.pedidos?.length
+        ? redactarPedidos(r.pedidos)
+        : r.mensaje ?? "No pude consultar tus pedidos en este momento. Inténtalo de nuevo en unos minutos.";
+    }
+    onToken?.(reply);
+    return {
+      reply,
+      cartActions: [],
+      links: enlacesDeTurno({ texto: "", hallazgos: ctx.hallazgos }),
+      meta: { herramientas: puede ? [{ nombre: "consultar_pedido", resultado }] : [], completado: true },
+    };
   }
 
   let reply = "";

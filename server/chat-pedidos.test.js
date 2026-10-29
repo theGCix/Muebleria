@@ -67,3 +67,39 @@ test("usuarioDeRequest: sin header o token inválido → null; token válido →
   const ok = fakeSupabase({ getUser: async () => ({ data: { user: { id: "u-9", email: "z@z.com" } }, error: null }) });
   assert.deepEqual(await usuarioDeRequest({ headers: { authorization: "Bearer t" } }, ok), { id: "u-9", email: "z@z.com" });
 });
+
+// ── Respuesta determinista (sin modelo) ──────────────────────
+import { esConsultaPedido, redactarPedidos, ejecutarAgente } from "./chat.js";
+
+test("esConsultaPedido reconoce consultas de pedido y no otras", () => {
+  for (const t of ["¿Dónde está mi pedido?", "Quiero consultar el estado de mi pedido", "cuándo llega mi compra", "GM-1793063724675-GHL26", "¿Cuánto pagué en mi último pedido?"])
+    assert.equal(esConsultaPedido(t), true, t);
+  for (const t of ["¿tienen sofás?", "quiero hacer un pedido a medida", "¿cuánto cuesta el envío?"])
+    assert.equal(esConsultaPedido(t), false, t);
+});
+
+test("redactarPedidos: un pedido ENTREGADO se dice entregado (no 'en producción')", () => {
+  const txt = redactarPedidos([
+    { numero: "GM-1", estado: "Entregado", estado_codigo: "entregado", fecha: "2026-10-27T01:16:00Z", total: 1250, entrega_estimada: "2026-11-05", metodo_entrega: "domicilio", items: [{ title: "Sofá London", qty: 1 }] },
+  ]);
+  assert.match(txt, /ya fue entregado/);
+  assert.match(txt, /S\/ 1,250\.00/);
+  assert.match(txt, /1 × Sofá London/);
+  assert.doesNotMatch(txt, /producci/);
+  assert.doesNotMatch(txt, /entrega estimada/);
+});
+
+test("agente: con sesión responde con datos reales y NO llama al modelo", async () => {
+  const sb = fakeSupabase({ orders: [pedido({ status: "entregado" })], items: [{ title: "Sofá", qty: 1 }] });
+  const llm = { bindTools() { return this; }, async invoke() { throw new Error("el modelo no debe usarse"); } };
+  const out = await ejecutarAgente({ messages: [{ role: "user", content: "¿Dónde está mi pedido?" }], supabaseAdmin: sb, llm, usuario: { id: "u-1" } });
+  assert.match(out.reply, /GM-1 ya fue entregado/);
+  assert.ok(out.links.some((l) => l.to === "/perfil/pedidos"));
+});
+
+test("agente: sin sesión pide iniciar sesión y ofrece el botón", async () => {
+  const llm = { bindTools() { return this; }, async invoke() { throw new Error("no"); } };
+  const out = await ejecutarAgente({ messages: [{ role: "user", content: "¿Dónde está mi pedido?" }], supabaseAdmin: fakeSupabase(), llm, usuario: null });
+  assert.match(out.reply, /inicia sesión/i);
+  assert.ok(out.links.some((l) => l.to === "#login"));
+});

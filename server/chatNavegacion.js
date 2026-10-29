@@ -28,6 +28,7 @@ const L = {
   seguridad: { label: "Cambiar contraseña", to: "/perfil/seguridad" },
   perfil: { label: "Mi cuenta", to: "/perfil" },
   checkout: { label: "Ir a pagar", to: "/checkout" },
+  login: { label: "Iniciar sesión", to: "#login" },
 };
 
 const categoria = (slug, label, sub) => ({
@@ -111,6 +112,7 @@ export function enlacesPorHallazgos(h = {}) {
     });
   }
   if (h.carrito) out.push(L.checkout);
+  if (h.requiereSesion) out.push(L.login);
   if (h.pedido) out.push(L.pedidos);
   if (h.envio) out.push(L.envios);
   return out;
