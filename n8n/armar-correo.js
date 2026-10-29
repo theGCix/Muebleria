@@ -1,6 +1,6 @@
 // ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════
 const REMITENTE_NOMBRE = "G&M Mueblería";
-const REMITENTE_EMAIL = "TU_CUENTA@gmail.com"; // la MISMA cuenta Gmail de la credencial SMTP (Gmail reescribe el remitente si no coincide)
+const REMITENTE_EMAIL = "proyectomuebleria1@gmail.com"; // la MISMA cuenta Gmail de la credencial SMTP (Gmail reescribe el remitente si no coincide)
 const COLOR = "#6B4226";                         // color de marca del correo
 // ══════════════════════════════════════════════════════════════
 

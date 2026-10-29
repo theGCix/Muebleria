@@ -19,7 +19,7 @@ Archivos: `pedido-pagado-correo.workflow.json` (flujo para importar), `armar-cor
 2. **Credenciales:**
    - Nodo *Pedido pagado (webhook)*: crea una credencial **Header Auth** llamada `G&M webhook secret` con Name `x-webhook-secret` y Value = una contraseña larga (la misma irá en Render como `N8N_WEBHOOK_SECRET`).
    - Nodo *Enviar correo al cliente*: elige tu credencial SMTP de Gmail.
-3. **Remitente:** en el nodo *Armar correo* cambia `REMITENTE_EMAIL` por tu cuenta Gmail (la misma de la credencial; si no coincide, Gmail cambia el remitente).
+3. **Remitente:** en el nodo *Armar correo* el remitente ya es `proyectomuebleria1@gmail.com` (debe ser la misma cuenta de la credencial SMTP; si no coincide, Gmail cambia el remitente).
 4. **Probar** (PowerShell, con el flujo abierto y *Listen for test event* activado en el webhook; pon tu correo para recibirlo):
    ```powershell
    $body = @{
