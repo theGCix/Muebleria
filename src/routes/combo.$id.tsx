@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN } from "@/lib/pricing";
 import { trackEvent } from "@/hooks/useEventTracking";
-import { useSeo, absolutizar } from "@/lib/seo";
+import { useSeo, absolutizar, migasJsonLd } from "@/lib/seo";
 import { trackShare } from "@/lib/analytics";
 import { urlCompartir } from "@/lib/share";
 
@@ -225,7 +225,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
     image: absolutizar(portada),
     path: `/combo/${combo.id}`,
     type: "product",
-    jsonLd: {
+    jsonLd: [{
       "@context": "https://schema.org",
       "@type": "Product",
       name: combo.nombre,
@@ -241,6 +241,11 @@ function ComboDetail({ combo }: { combo: Combo }) {
         ...(combo.vence_el ? { priceValidUntil: combo.vence_el.slice(0, 10) } : {}),
       },
     },
+    migasJsonLd([
+      { nombre: "Inicio", path: "/" },
+      { nombre: "Combos", path: "/#combos" },
+      { nombre: combo.nombre, path: `/combo/${combo.id}` },
+    ])],
   });
 
   // Recorrido automático: una sola vuelta por las piezas y se detiene.

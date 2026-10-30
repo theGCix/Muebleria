@@ -13,7 +13,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
-import { useSeo, absolutizar } from "@/lib/seo";
+import { useSeo, absolutizar, migasJsonLd } from "@/lib/seo";
 import { trackLead, trackShare } from "@/lib/analytics";
 import { urlCompartir } from "@/lib/share";
 import { getCategoria } from "@/lib/categories";
@@ -704,6 +704,7 @@ function ProductView({ product: base }: { product: ProductData }) {
 
   // SEO: título/description reales, canonical, Open Graph y datos estructurados (JSON-LD Product)
   const seoPath = `/product/${product.id}`;
+  const catProducto = product.categoria ? getCategoria(product.categoria) : undefined;
   useSeo({
     title: [product.nombre, (product.categoria && getCategoria(product.categoria)?.nombre) || product.categoria, product.material_base].filter(Boolean).join(" · "),
     description:
@@ -712,7 +713,7 @@ function ProductView({ product: base }: { product: ProductData }) {
     image: absolutizar(mainImg),
     path: seoPath,
     type: "product",
-    jsonLd: {
+    jsonLd: [{
       "@context": "https://schema.org",
       "@type": "Product",
       name: product.nombre,
@@ -741,6 +742,11 @@ function ProductView({ product: base }: { product: ProductData }) {
           }
         : {}),
     },
+    migasJsonLd([
+      { nombre: "Inicio", path: "/" },
+      ...(catProducto ? [{ nombre: catProducto.nombre, path: `/categoria/${catProducto.slug}` }] : []),
+      { nombre: product.nombre, path: seoPath },
+    ])],
   });
 
   // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
@@ -801,9 +807,14 @@ function ProductView({ product: base }: { product: ProductData }) {
 
         {/* ── breadcrumb ── */}
         <div className="gm-breadcrumb">
-          <Link to="/"><ArrowLeft size={12} style={{ marginRight: 4 }} />Volver al catálogo</Link>
+          <Link to="/"><ArrowLeft size={12} style={{ marginRight: 4 }} />Inicio</Link>
           <ChevronRight size={10} />
-          {product.categoria && <><span>{product.categoria}</span><ChevronRight size={10} /></>}
+          {product.categoria && (
+            <>
+              {catProducto ? <Link to="/categoria/$slug" params={{ slug: catProducto.slug }}>{catProducto.nombre}</Link> : <span>{product.categoria}</span>}
+              <ChevronRight size={10} />
+            </>
+          )}
           <span style={{ color: "var(--gm-dark)" }}>{product.nombre}</span>
         </div>
 

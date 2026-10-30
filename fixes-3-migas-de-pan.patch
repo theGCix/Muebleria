@@ -1,0 +1,318 @@
+diff --git a/index.html b/index.html
+index 88f5948..cc6a221 100644
+--- a/index.html
++++ b/index.html
+@@ -28,6 +28,9 @@
+         "priceRange": "$$"
+       }
+     </script>
++    <script type="application/ld+json">
++      { "@context": "https://schema.org", "@type": "WebSite", "name": "G&M Mueblería", "url": "%VITE_APP_URL_PROD%/" }
++    </script>
+     <link rel="preconnect" href="https://fonts.googleapis.com" />
+     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+diff --git a/scripts/prerender-lib.mjs b/scripts/prerender-lib.mjs
+index df46d41..148b6a6 100644
+--- a/scripts/prerender-lib.mjs
++++ b/scripts/prerender-lib.mjs
+@@ -146,6 +146,15 @@ export function noscriptListado({ titulo, descripcion, productos, categorias = [
+ 
+ /* ───────── datos ───────── */
+ 
++/** JSON-LD BreadcrumbList. items = [{ nombre, path }]; debe coincidir con las migas visibles de la página. */
++export function migasLd(sitio, items) {
++  return {
++    "@context": "https://schema.org",
++    "@type": "BreadcrumbList",
++    itemListElement: items.map((it, i) => ({ "@type": "ListItem", position: i + 1, name: it.nombre, item: `${sitio}${it.path}` })),
++  };
++}
++
+ export function ofertaInfo(p, ahora = Date.now()) {
+   const vence = p.oferta_vence_el ? new Date(p.oferta_vence_el).getTime() : null;
+   const activa = !!p.descuento_porcentaje && p.descuento_porcentaje > 0 && (!vence || vence > ahora);
+@@ -208,6 +217,11 @@ export function paginaProducto(p, { sitio, cloud, categorias }) {
+             seller: { "@type": "Organization", name: "G&M Mueblería" },
+           },
+         },
++        migasLd(sitio, [
++          { nombre: "Inicio", path: "/" },
++          ...(cat ? [{ nombre: cat.nombre, path: `/categoria/${cat.slug}` }] : []),
++          { nombre: p.nombre, path: `/product/${p.id}` },
++        ]),
+       ],
+       noscript: noscriptProducto({
+         nombre: p.nombre, descripcion: p.descripcion, precio: precioFinal, precioOriginal: activa ? p.precio : null,
+@@ -243,6 +257,11 @@ export function paginaCombo(c, { sitio, cloud }) {
+             availability: "https://schema.org/InStock", seller: { "@type": "Organization", name: "G&M Mueblería" },
+           },
+         },
++        migasLd(sitio, [
++          { nombre: "Inicio", path: "/" },
++          { nombre: "Combos", path: "/#combos" },
++          { nombre: c.nombre, path: `/combo/${c.id}` },
++        ]),
+       ],
+       noscript: noscriptCombo({ nombre: c.nombre, descripcion: c.descripcion, precio: c.precio_combo, piezas, imagen: imgs[0] }),
+     },
+diff --git a/scripts/prerender.mjs b/scripts/prerender.mjs
+index d332204..b9dadff 100644
+--- a/scripts/prerender.mjs
++++ b/scripts/prerender.mjs
+@@ -13,7 +13,7 @@
+ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+ import { resolve, dirname } from "node:path";
+ import { fileURLToPath } from "node:url";
+-import { inyectar, leerCategorias, paginaProducto, paginaCombo, noscriptListado } from "./prerender-lib.mjs";
++import { inyectar, leerCategorias, paginaProducto, paginaCombo, noscriptListado, migasLd } from "./prerender-lib.mjs";
+ 
+ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+ const dist = resolve(root, "dist");
+@@ -119,6 +119,7 @@ try {
+         title: `${c.nombre} — G&M Mueblería`,
+         description: c.descripcion,
+         canonical: `${SITE}/categoria/${c.slug}`,
++        jsonLd: [migasLd(SITE, [{ nombre: "Inicio", path: "/" }, { nombre: c.nombre, path: `/categoria/${c.slug}` }])],
+         noscript: noscriptListado({ titulo: c.nombre, descripcion: c.descripcion, productos: propios }),
+       }),
+     );
+@@ -142,6 +143,8 @@ try {
+         title,
+         description,
+         canonical: `${SITE}${ruta}`,
++        // Solo el catálogo muestra migas de pan en pantalla
++        jsonLd: ruta === "/catalogo" ? [migasLd(SITE, [{ nombre: "Inicio", path: "/" }, { nombre: "Catálogo", path: "/catalogo" }])] : [],
+         noscript: noscriptListado({
+           titulo: title.replace(/ — G&M Mueblería$/, ""),
+           descripcion: description,
+diff --git a/scripts/prerender.test.mjs b/scripts/prerender.test.mjs
+index d3b8c0f..dd6fb03 100644
+--- a/scripts/prerender.test.mjs
++++ b/scripts/prerender.test.mjs
+@@ -1,7 +1,7 @@
+ // Ejecutar: node --test scripts/prerender.test.mjs
+ import test from "node:test";
+ import assert from "node:assert/strict";
+-import { inyectar, esc, ofertaInfo, imagenesDe, paginaProducto, paginaCombo, noscriptListado } from "./prerender-lib.mjs";
++import { inyectar, esc, ofertaInfo, imagenesDe, paginaProducto, paginaCombo, noscriptListado, migasLd } from "./prerender-lib.mjs";
+ 
+ const PLANTILLA = `<!DOCTYPE html>
+ <html lang="es-PE">
+@@ -62,8 +62,8 @@ test("las etiquetas nuevas (canonical, og:url, JSON-LD) llevan data-gm-head y no
+   assert.match(html, /<link rel="canonical" href="https:\/\/t\.pe\/product\/1111[^"]*" data-gm-head="1" \/>/);
+   assert.match(html, /<meta property="og:url" content="https:\/\/t\.pe\/product\/[^"]*" data-gm-head="1" \/>/);
+   const lds = html.match(/<script type="application\/ld\+json"[^>]*>/g) ?? [];
+-  assert.equal(lds.length, 2); // el FurnitureStore global + el Product
+-  assert.equal(lds.filter((l) => l.includes("data-gm-head")).length, 1);
++  assert.equal(lds.length, 3); // el FurnitureStore global + el Product + las migas de pan
++  assert.equal(lds.filter((l) => l.includes("data-gm-head")).length, 2);
+ });
+ 
+ test("JSON-LD: precio con descuento, disponibilidad y sin romper el <script>", () => {
+@@ -116,3 +116,27 @@ test("el inicio conserva sus metas: solo añade <noscript>", () => {
+   assert.doesNotMatch(html, /data-gm-orig/);
+   assert.match(html, /<noscript>/);
+ });
++
++test("migas de pan: producto con categoría (Inicio › Categoría › Producto) y sin categoría", () => {
++  const ld = paginaProducto(producto, ctx).page.jsonLd.find((x) => x["@type"] === "BreadcrumbList");
++  assert.deepEqual(
++    ld.itemListElement.map((i) => [i.position, i.name, i.item]),
++    [[1, "Inicio", "https://t.pe/"], [2, "Muebles", "https://t.pe/categoria/muebles"], [3, producto.nombre, `https://t.pe/product/${producto.id}`]],
++  );
++  const sin = paginaProducto({ ...producto, categoria: null }, ctx).page.jsonLd.find((x) => x["@type"] === "BreadcrumbList");
++  assert.deepEqual(sin.itemListElement.map((i) => i.position), [1, 2]);
++});
++
++test("migas de pan: combo, y el JSON-LD del producto sigue siendo el primero", () => {
++  const combo = { id: "c1", nombre: "Combo Sala", precio_combo: 2000, combo_items: [], imagen_url: "https://x.pe/i.jpg" };
++  const ld = paginaCombo(combo, ctx).page.jsonLd;
++  assert.equal(ld[0]["@type"], "Product");
++  assert.equal(ld[1]["@type"], "BreadcrumbList");
++  assert.equal(ld[1].itemListElement[2].item, "https://t.pe/combo/c1");
++});
++
++test("migasLd se inyecta como un <script> marcado y sin romper el HTML", () => {
++  const html = inyectar(PLANTILLA, { title: "T", canonical: "https://t.pe/catalogo", jsonLd: [migasLd("https://t.pe", [{ nombre: "Inicio</script>", path: "/" }])] });
++  assert.match(html, /"@type":"BreadcrumbList"/);
++  assert.equal((html.match(/<\/script>/g) ?? []).length, 3); // FurnitureStore + breadcrumb + módulo
++});
+diff --git a/src/lib/seo.ts b/src/lib/seo.ts
+index a33c3de..09beb0c 100644
+--- a/src/lib/seo.ts
++++ b/src/lib/seo.ts
+@@ -61,5 +61,20 @@ export function useSeo(input: SeoInput | null | undefined) {
+   }, [title, description, image, path, type, json]);
+ }
+ 
++/** JSON-LD BreadcrumbList. Debe reflejar las migas que se ven en la página (Google lo exige). */
++export function migasJsonLd(items: { nombre: string; path: string }[]): Record<string, unknown> {
++  const base = siteBase();
++  return {
++    "@context": "https://schema.org",
++    "@type": "BreadcrumbList",
++    itemListElement: items.map((it, i) => ({
++      "@type": "ListItem",
++      position: i + 1,
++      name: it.nombre,
++      item: `${base}${it.path}`,
++    })),
++  };
++}
++
+ export const absolutizar = (url?: string | null) =>
+   url ? (url.startsWith("http") ? url : `${siteBase()}${url.startsWith("/") ? "" : "/"}${url}`) : undefined;
+diff --git a/src/routes/catalogo.tsx b/src/routes/catalogo.tsx
+index 7d2d8d1..b994f40 100644
+--- a/src/routes/catalogo.tsx
++++ b/src/routes/catalogo.tsx
+@@ -18,6 +18,7 @@ import { useAllProducts, useProductCountsByCategory, type ProductSort, type Prod
+ import { useSearchStore } from "@/stores/searchStore";
+ import { trackEvent } from "@/hooks/useEventTracking";
+ import { trackSearch } from "@/lib/analytics";
++import { useSeo, migasJsonLd } from "@/lib/seo";
+ import { PackageSearch, Search, X, LayoutGrid } from "lucide-react";
+ 
+ interface CatalogoSearch {
+@@ -50,6 +51,17 @@ function CatalogoPage() {
+   const storeQuery = useSearchStore((s) => s.query);
+   const setStoreQuery = useSearchStore((s) => s.setQuery);
+ 
++  // SEO: mismo título/descripción que head() + migas de pan
++  useSeo({
++    title: "Catálogo completo — G&M Mueblería",
++    description: "Explora todos nuestros muebles: salas, comedores, recámaras, separadores de ambiente y accesorios.",
++    path: "/catalogo",
++    jsonLd: migasJsonLd([
++      { nombre: "Inicio", path: "/" },
++      { nombre: "Catálogo", path: "/catalogo" },
++    ]),
++  });
++
+   // El buscador del header (goToCatalogo) escribe en el store global de
+   // búsqueda; si llegamos con un término pendiente ahí, lo adoptamos.
+   const [searchInput, setSearchInput] = useState(q ?? storeQuery ?? "");
+diff --git a/src/routes/categoria.$slug.tsx b/src/routes/categoria.$slug.tsx
+index 541e878..6c4ad06 100644
+--- a/src/routes/categoria.$slug.tsx
++++ b/src/routes/categoria.$slug.tsx
+@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
+ import { CATEGORIAS, getCategoria } from "@/lib/categories";
+ import { useCategoryFacets, useProductsByCategory, type ProductSort } from "@/hooks/useProducts";
+ import { trackEvent } from "@/hooks/useEventTracking";
++import { useSeo, migasJsonLd } from "@/lib/seo";
+ import { PackageSearch, X } from "lucide-react";
+ 
+ interface CategorySearch {
+@@ -95,6 +96,17 @@ function CategoryPage() {
+     sort: activeSort,
+   });
+ 
++  // SEO: mismo título/descripción que head() + migas de pan (la URL canónica ignora los filtros)
++  useSeo({
++    title: `${cat.nombre} — G&M Mueblería`,
++    description: cat.heroDescripcion,
++    path: `/categoria/${cat.slug}`,
++    jsonLd: migasJsonLd([
++      { nombre: "Inicio", path: "/" },
++      { nombre: cat.nombre, path: `/categoria/${cat.slug}` },
++    ]),
++  });
++
+   useEffect(() => {
+     trackEvent({ tipo: "pagina_vista", path: `/categoria/${cat.slug}` });
+   }, [cat.slug]);
+diff --git a/src/routes/combo.$id.tsx b/src/routes/combo.$id.tsx
+index 9e40ab3..a67b7a7 100644
+--- a/src/routes/combo.$id.tsx
++++ b/src/routes/combo.$id.tsx
+@@ -31,7 +31,7 @@ import { toast } from "sonner";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { fmtPEN } from "@/lib/pricing";
+ import { trackEvent } from "@/hooks/useEventTracking";
+-import { useSeo, absolutizar } from "@/lib/seo";
++import { useSeo, absolutizar, migasJsonLd } from "@/lib/seo";
+ import { trackShare } from "@/lib/analytics";
+ import { urlCompartir } from "@/lib/share";
+ 
+@@ -225,7 +225,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
+     image: absolutizar(portada),
+     path: `/combo/${combo.id}`,
+     type: "product",
+-    jsonLd: {
++    jsonLd: [{
+       "@context": "https://schema.org",
+       "@type": "Product",
+       name: combo.nombre,
+@@ -241,6 +241,11 @@ function ComboDetail({ combo }: { combo: Combo }) {
+         ...(combo.vence_el ? { priceValidUntil: combo.vence_el.slice(0, 10) } : {}),
+       },
+     },
++    migasJsonLd([
++      { nombre: "Inicio", path: "/" },
++      { nombre: "Combos", path: "/#combos" },
++      { nombre: combo.nombre, path: `/combo/${combo.id}` },
++    ])],
+   });
+ 
+   // Recorrido automático: una sola vuelta por las piezas y se detiene.
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 0638616..96b6d85 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -13,7 +13,7 @@ import { useCartStore } from "@/stores/cartStore";
+ import { toast } from "sonner";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { trackEvent } from "@/hooks/useEventTracking";
+-import { useSeo, absolutizar } from "@/lib/seo";
++import { useSeo, absolutizar, migasJsonLd } from "@/lib/seo";
+ import { trackLead, trackShare } from "@/lib/analytics";
+ import { urlCompartir } from "@/lib/share";
+ import { getCategoria } from "@/lib/categories";
+@@ -704,6 +704,7 @@ function ProductView({ product: base }: { product: ProductData }) {
+ 
+   // SEO: título/description reales, canonical, Open Graph y datos estructurados (JSON-LD Product)
+   const seoPath = `/product/${product.id}`;
++  const catProducto = product.categoria ? getCategoria(product.categoria) : undefined;
+   useSeo({
+     title: [product.nombre, (product.categoria && getCategoria(product.categoria)?.nombre) || product.categoria, product.material_base].filter(Boolean).join(" · "),
+     description:
+@@ -712,7 +713,7 @@ function ProductView({ product: base }: { product: ProductData }) {
+     image: absolutizar(mainImg),
+     path: seoPath,
+     type: "product",
+-    jsonLd: {
++    jsonLd: [{
+       "@context": "https://schema.org",
+       "@type": "Product",
+       name: product.nombre,
+@@ -741,6 +742,11 @@ function ProductView({ product: base }: { product: ProductData }) {
+           }
+         : {}),
+     },
++    migasJsonLd([
++      { nombre: "Inicio", path: "/" },
++      ...(catProducto ? [{ nombre: catProducto.nombre, path: `/categoria/${catProducto.slug}` }] : []),
++      { nombre: product.nombre, path: seoPath },
++    ])],
+   });
+ 
+   // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
+@@ -801,9 +807,14 @@ function ProductView({ product: base }: { product: ProductData }) {
+ 
+         {/* ── breadcrumb ── */}
+         <div className="gm-breadcrumb">
+-          <Link to="/"><ArrowLeft size={12} style={{ marginRight: 4 }} />Volver al catálogo</Link>
++          <Link to="/"><ArrowLeft size={12} style={{ marginRight: 4 }} />Inicio</Link>
+           <ChevronRight size={10} />
+-          {product.categoria && <><span>{product.categoria}</span><ChevronRight size={10} /></>}
++          {product.categoria && (
++            <>
++              {catProducto ? <Link to="/categoria/$slug" params={{ slug: catProducto.slug }}>{catProducto.nombre}</Link> : <span>{product.categoria}</span>}
++              <ChevronRight size={10} />
++            </>
++          )}
+           <span style={{ color: "var(--gm-dark)" }}>{product.nombre}</span>
+         </div>
+ 

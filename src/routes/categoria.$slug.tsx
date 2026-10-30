@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { useCategoryFacets, useProductsByCategory, type ProductSort } from "@/hooks/useProducts";
 import { trackEvent } from "@/hooks/useEventTracking";
+import { useSeo, migasJsonLd } from "@/lib/seo";
 import { PackageSearch, X } from "lucide-react";
 
 interface CategorySearch {
@@ -93,6 +94,17 @@ function CategoryPage() {
     subcategoria: activeSub,
     materialBase: activeBase,
     sort: activeSort,
+  });
+
+  // SEO: mismo título/descripción que head() + migas de pan (la URL canónica ignora los filtros)
+  useSeo({
+    title: `${cat.nombre} — G&M Mueblería`,
+    description: cat.heroDescripcion,
+    path: `/categoria/${cat.slug}`,
+    jsonLd: migasJsonLd([
+      { nombre: "Inicio", path: "/" },
+      { nombre: cat.nombre, path: `/categoria/${cat.slug}` },
+    ]),
   });
 
   useEffect(() => {

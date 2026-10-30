@@ -146,6 +146,15 @@ export function noscriptListado({ titulo, descripcion, productos, categorias = [
 
 /* ───────── datos ───────── */
 
+/** JSON-LD BreadcrumbList. items = [{ nombre, path }]; debe coincidir con las migas visibles de la página. */
+export function migasLd(sitio, items) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({ "@type": "ListItem", position: i + 1, name: it.nombre, item: `${sitio}${it.path}` })),
+  };
+}
+
 export function ofertaInfo(p, ahora = Date.now()) {
   const vence = p.oferta_vence_el ? new Date(p.oferta_vence_el).getTime() : null;
   const activa = !!p.descuento_porcentaje && p.descuento_porcentaje > 0 && (!vence || vence > ahora);
@@ -208,6 +217,11 @@ export function paginaProducto(p, { sitio, cloud, categorias }) {
             seller: { "@type": "Organization", name: "G&M Mueblería" },
           },
         },
+        migasLd(sitio, [
+          { nombre: "Inicio", path: "/" },
+          ...(cat ? [{ nombre: cat.nombre, path: `/categoria/${cat.slug}` }] : []),
+          { nombre: p.nombre, path: `/product/${p.id}` },
+        ]),
       ],
       noscript: noscriptProducto({
         nombre: p.nombre, descripcion: p.descripcion, precio: precioFinal, precioOriginal: activa ? p.precio : null,
@@ -243,6 +257,11 @@ export function paginaCombo(c, { sitio, cloud }) {
             availability: "https://schema.org/InStock", seller: { "@type": "Organization", name: "G&M Mueblería" },
           },
         },
+        migasLd(sitio, [
+          { nombre: "Inicio", path: "/" },
+          { nombre: "Combos", path: "/#combos" },
+          { nombre: c.nombre, path: `/combo/${c.id}` },
+        ]),
       ],
       noscript: noscriptCombo({ nombre: c.nombre, descripcion: c.descripcion, precio: c.precio_combo, piezas, imagen: imgs[0] }),
     },

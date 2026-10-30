@@ -61,5 +61,20 @@ export function useSeo(input: SeoInput | null | undefined) {
   }, [title, description, image, path, type, json]);
 }
 
+/** JSON-LD BreadcrumbList. Debe reflejar las migas que se ven en la página (Google lo exige). */
+export function migasJsonLd(items: { nombre: string; path: string }[]): Record<string, unknown> {
+  const base = siteBase();
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.nombre,
+      item: `${base}${it.path}`,
+    })),
+  };
+}
+
 export const absolutizar = (url?: string | null) =>
   url ? (url.startsWith("http") ? url : `${siteBase()}${url.startsWith("/") ? "" : "/"}${url}`) : undefined;

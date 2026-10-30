@@ -18,6 +18,7 @@ import { useAllProducts, useProductCountsByCategory, type ProductSort, type Prod
 import { useSearchStore } from "@/stores/searchStore";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { trackSearch } from "@/lib/analytics";
+import { useSeo, migasJsonLd } from "@/lib/seo";
 import { PackageSearch, Search, X, LayoutGrid } from "lucide-react";
 
 interface CatalogoSearch {
@@ -49,6 +50,17 @@ function CatalogoPage() {
   const navigate = Route.useNavigate();
   const storeQuery = useSearchStore((s) => s.query);
   const setStoreQuery = useSearchStore((s) => s.setQuery);
+
+  // SEO: mismo título/descripción que head() + migas de pan
+  useSeo({
+    title: "Catálogo completo — G&M Mueblería",
+    description: "Explora todos nuestros muebles: salas, comedores, recámaras, separadores de ambiente y accesorios.",
+    path: "/catalogo",
+    jsonLd: migasJsonLd([
+      { nombre: "Inicio", path: "/" },
+      { nombre: "Catálogo", path: "/catalogo" },
+    ]),
+  });
 
   // El buscador del header (goToCatalogo) escribe en el store global de
   // búsqueda; si llegamos con un término pendiente ahí, lo adoptamos.

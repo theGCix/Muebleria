@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { inyectar, leerCategorias, paginaProducto, paginaCombo, noscriptListado } from "./prerender-lib.mjs";
+import { inyectar, leerCategorias, paginaProducto, paginaCombo, noscriptListado, migasLd } from "./prerender-lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = resolve(root, "dist");
@@ -119,6 +119,7 @@ try {
         title: `${c.nombre} — G&M Mueblería`,
         description: c.descripcion,
         canonical: `${SITE}/categoria/${c.slug}`,
+        jsonLd: [migasLd(SITE, [{ nombre: "Inicio", path: "/" }, { nombre: c.nombre, path: `/categoria/${c.slug}` }])],
         noscript: noscriptListado({ titulo: c.nombre, descripcion: c.descripcion, productos: propios }),
       }),
     );
@@ -142,6 +143,8 @@ try {
         title,
         description,
         canonical: `${SITE}${ruta}`,
+        // Solo el catálogo muestra migas de pan en pantalla
+        jsonLd: ruta === "/catalogo" ? [migasLd(SITE, [{ nombre: "Inicio", path: "/" }, { nombre: "Catálogo", path: "/catalogo" }])] : [],
         noscript: noscriptListado({
           titulo: title.replace(/ — G&M Mueblería$/, ""),
           descripcion: description,

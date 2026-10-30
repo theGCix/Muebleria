@@ -1,7 +1,7 @@
 // Ejecutar: node --test scripts/prerender.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inyectar, esc, ofertaInfo, imagenesDe, paginaProducto, paginaCombo, noscriptListado } from "./prerender-lib.mjs";
+import { inyectar, esc, ofertaInfo, imagenesDe, paginaProducto, paginaCombo, noscriptListado, migasLd } from "./prerender-lib.mjs";
 
 const PLANTILLA = `<!DOCTYPE html>
 <html lang="es-PE">
@@ -62,8 +62,8 @@ test("las etiquetas nuevas (canonical, og:url, JSON-LD) llevan data-gm-head y no
   assert.match(html, /<link rel="canonical" href="https:\/\/t\.pe\/product\/1111[^"]*" data-gm-head="1" \/>/);
   assert.match(html, /<meta property="og:url" content="https:\/\/t\.pe\/product\/[^"]*" data-gm-head="1" \/>/);
   const lds = html.match(/<script type="application\/ld\+json"[^>]*>/g) ?? [];
-  assert.equal(lds.length, 2); // el FurnitureStore global + el Product
-  assert.equal(lds.filter((l) => l.includes("data-gm-head")).length, 1);
+  assert.equal(lds.length, 3); // el FurnitureStore global + el Product + las migas de pan
+  assert.equal(lds.filter((l) => l.includes("data-gm-head")).length, 2);
 });
 
 test("JSON-LD: precio con descuento, disponibilidad y sin romper el <script>", () => {
@@ -115,4 +115,28 @@ test("el inicio conserva sus metas: solo añade <noscript>", () => {
   assert.match(html, /content="Descripción genérica"/);
   assert.doesNotMatch(html, /data-gm-orig/);
   assert.match(html, /<noscript>/);
+});
+
+test("migas de pan: producto con categoría (Inicio › Categoría › Producto) y sin categoría", () => {
+  const ld = paginaProducto(producto, ctx).page.jsonLd.find((x) => x["@type"] === "BreadcrumbList");
+  assert.deepEqual(
+    ld.itemListElement.map((i) => [i.position, i.name, i.item]),
+    [[1, "Inicio", "https://t.pe/"], [2, "Muebles", "https://t.pe/categoria/muebles"], [3, producto.nombre, `https://t.pe/product/${producto.id}`]],
+  );
+  const sin = paginaProducto({ ...producto, categoria: null }, ctx).page.jsonLd.find((x) => x["@type"] === "BreadcrumbList");
+  assert.deepEqual(sin.itemListElement.map((i) => i.position), [1, 2]);
+});
+
+test("migas de pan: combo, y el JSON-LD del producto sigue siendo el primero", () => {
+  const combo = { id: "c1", nombre: "Combo Sala", precio_combo: 2000, combo_items: [], imagen_url: "https://x.pe/i.jpg" };
+  const ld = paginaCombo(combo, ctx).page.jsonLd;
+  assert.equal(ld[0]["@type"], "Product");
+  assert.equal(ld[1]["@type"], "BreadcrumbList");
+  assert.equal(ld[1].itemListElement[2].item, "https://t.pe/combo/c1");
+});
+
+test("migasLd se inyecta como un <script> marcado y sin romper el HTML", () => {
+  const html = inyectar(PLANTILLA, { title: "T", canonical: "https://t.pe/catalogo", jsonLd: [migasLd("https://t.pe", [{ nombre: "Inicio</script>", path: "/" }])] });
+  assert.match(html, /"@type":"BreadcrumbList"/);
+  assert.equal((html.match(/<\/script>/g) ?? []).length, 3); // FurnitureStore + breadcrumb + módulo
 });
