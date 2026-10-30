@@ -39,7 +39,7 @@ export function ComboCard({ combo }: Props) {
           thumbs.map((src, i) => (
             <div key={i} className="flex-1 overflow-hidden border-r border-background last:border-r-0">
               {src ? (
-                <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img src={src} alt={combo.combo_items[i]?.products.nombre ?? combo.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                   <ImageIcon className="h-8 w-8" />

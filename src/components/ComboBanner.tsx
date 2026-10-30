@@ -153,7 +153,7 @@ export function ComboBanner({ combo, otros }: { combo: Combo; otros: number }) {
               {src ? (
                 <img
                   src={src}
-                  alt=""
+                  alt={combo.combo_items[i]?.products.nombre ?? combo.nombre}
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />

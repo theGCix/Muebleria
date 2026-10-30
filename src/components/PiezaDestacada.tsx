@@ -63,7 +63,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
         {img ? (
           <img
             src={img}
-            alt=""
+            alt={p.nombre}
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
           />

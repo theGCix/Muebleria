@@ -187,7 +187,8 @@ export function HeroSlider() {
             >
               <img
                 src={s.imagen}
-                alt=""
+                // Con título, el texto ya describe la diapositiva; las de solo imagen necesitan su propio alt
+                alt={s.titulo ? "" : "Promoción de G&M Mueblería"}
                 width={1600}
                 height={700}
                 // La primera se carga con prioridad (es lo primero que ve el visitante)

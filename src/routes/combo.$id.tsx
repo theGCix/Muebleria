@@ -394,7 +394,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
                   <div className="grid h-full w-full grid-cols-2 gap-1 p-1">
                     {piezas.slice(0, 4).map((p) => (
                       <div key={p.key} className="overflow-hidden rounded-xl bg-muted/40">
-                        {p.big && <img src={p.big} alt="" className="h-full w-full object-contain" />}
+                        {p.big && <img src={p.big} alt={p.nombre} className="h-full w-full object-contain" />}
                       </div>
                     ))}
                   </div>

@@ -214,7 +214,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
                     {r.fotos?.length > 0 && (
                       <div className="gm-review-photos">
                         {r.fotos.slice(0, 4).map((url, i) => (
-                          <img key={i} src={url} alt="" className="gm-review-photo" />
+                          <img key={i} src={url} alt="Foto enviada por el cliente" className="gm-review-photo" />
                         ))}
                       </div>
                     )}

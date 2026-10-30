@@ -1,0 +1,79 @@
+diff --git a/src/components/ComboBanner.tsx b/src/components/ComboBanner.tsx
+index f31871c..7675642 100644
+--- a/src/components/ComboBanner.tsx
++++ b/src/components/ComboBanner.tsx
+@@ -153,7 +153,7 @@ export function ComboBanner({ combo, otros }: { combo: Combo; otros: number }) {
+               {src ? (
+                 <img
+                   src={src}
+-                  alt=""
++                  alt={combo.combo_items[i]?.products.nombre ?? combo.nombre}
+                   loading="lazy"
+                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                 />
+diff --git a/src/components/ComboCard.tsx b/src/components/ComboCard.tsx
+index 35adbee..8b8a027 100644
+--- a/src/components/ComboCard.tsx
++++ b/src/components/ComboCard.tsx
+@@ -39,7 +39,7 @@ export function ComboCard({ combo }: Props) {
+           thumbs.map((src, i) => (
+             <div key={i} className="flex-1 overflow-hidden border-r border-background last:border-r-0">
+               {src ? (
+-                <img src={src} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
++                <img src={src} alt={combo.combo_items[i]?.products.nombre ?? combo.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+               ) : (
+                 <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                   <ImageIcon className="h-8 w-8" />
+diff --git a/src/components/HeroSlider.tsx b/src/components/HeroSlider.tsx
+index ceaf6fc..5820694 100644
+--- a/src/components/HeroSlider.tsx
++++ b/src/components/HeroSlider.tsx
+@@ -187,7 +187,8 @@ export function HeroSlider() {
+             >
+               <img
+                 src={s.imagen}
+-                alt=""
++                // Con título, el texto ya describe la diapositiva; las de solo imagen necesitan su propio alt
++                alt={s.titulo ? "" : "Promoción de G&M Mueblería"}
+                 width={1600}
+                 height={700}
+                 // La primera se carga con prioridad (es lo primero que ve el visitante)
+diff --git a/src/components/PiezaDestacada.tsx b/src/components/PiezaDestacada.tsx
+index 105cb22..acae7a7 100644
+--- a/src/components/PiezaDestacada.tsx
++++ b/src/components/PiezaDestacada.tsx
+@@ -63,7 +63,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
+         {img ? (
+           <img
+             src={img}
+-            alt=""
++            alt={p.nombre}
+             loading="lazy"
+             className="h-full w-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+           />
+diff --git a/src/routes/combo.$id.tsx b/src/routes/combo.$id.tsx
+index a67b7a7..071ca22 100644
+--- a/src/routes/combo.$id.tsx
++++ b/src/routes/combo.$id.tsx
+@@ -394,7 +394,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
+                   <div className="grid h-full w-full grid-cols-2 gap-1 p-1">
+                     {piezas.slice(0, 4).map((p) => (
+                       <div key={p.key} className="overflow-hidden rounded-xl bg-muted/40">
+-                        {p.big && <img src={p.big} alt="" className="h-full w-full object-contain" />}
++                        {p.big && <img src={p.big} alt={p.nombre} className="h-full w-full object-contain" />}
+                       </div>
+                     ))}
+                   </div>
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 96b6d85..a95ff9f 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -214,7 +214,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
+                     {r.fotos?.length > 0 && (
+                       <div className="gm-review-photos">
+                         {r.fotos.slice(0, 4).map((url, i) => (
+-                          <img key={i} src={url} alt="" className="gm-review-photo" />
++                          <img key={i} src={url} alt="Foto enviada por el cliente" className="gm-review-photo" />
+                         ))}
+                       </div>
+                     )}
