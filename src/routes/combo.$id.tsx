@@ -25,12 +25,15 @@ import {
 } from "@/components/ui/breadcrumb";
 import {
   ShoppingBag, PackageCheck, Image as ImageIcon, ArrowLeft, ArrowUpRight, Check,
-  ShieldCheck, Timer, Flame, ArrowRight, Layers,
+  ShieldCheck, Timer, Flame, ArrowRight, Layers, Share2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN } from "@/lib/pricing";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { useSeo, absolutizar } from "@/lib/seo";
+import { trackShare } from "@/lib/analytics";
+import { urlCompartir } from "@/lib/share";
 
 export const Route = createFileRoute("/combo/$id")({
   component: ComboPage,
@@ -293,6 +296,22 @@ function ComboDetail({ combo }: { combo: Combo }) {
     </>
   );
 
+  // Compartir con vista previa (imagen + precio del combo) vía /share/combo/:id de la API
+  const compartir = async () => {
+    const url = urlCompartir("combo", combo.id);
+    trackShare(combo.id, combo.nombre, "combo");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: combo.nombre, text: `${combo.nombre} — G&M Mueblería`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Enlace copiado", { description: "Pégalo en WhatsApp, Instagram o donde quieras.", position: "top-center" });
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") toast.error("No pudimos copiar el enlace");
+    }
+  };
+
   const botonPrincipal = bloqueado ? (
     <Button size="lg" disabled className="h-12 w-full rounded-full">
       {vencido ? "Este combo ya no está disponible" : "Una pieza del combo está agotada"}
@@ -490,6 +509,9 @@ function ComboDetail({ combo }: { combo: Combo }) {
             {ahorro > 0 && <BarraAhorro normal={precioNormal} combo={combo.precio_combo} />}
 
             <div ref={ctaRef} className="mt-5">{botonPrincipal}</div>
+            <Button type="button" variant="ghost" onClick={compartir} className="mt-2 h-10 w-full rounded-full text-sm text-muted-foreground">
+              <Share2 className="mr-2 h-4 w-4" /> Compartir este combo
+            </Button>
 
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {GARANTIAS.map(({ icon: Icon, titulo, detalle }) => (
