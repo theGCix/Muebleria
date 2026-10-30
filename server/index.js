@@ -7,6 +7,7 @@ import { URLSearchParams } from "url";
 import rateLimit from "express-rate-limit";
 import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
 import { registerCuponSalida } from "./cupon-salida.js";
+import { registerShare } from "./share.js";
 import { registerChat } from "./chat.js";
 import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
@@ -750,6 +751,7 @@ app.get("/api/nubefact/pdf/:sale_id", requireAuth, async (req, res) => {
 // ── Nota de crédito (devoluciones) ────────────────────────────
 registerNotaCreditoRoutes({ app, supabaseAdmin, requireAuth, getNubefactBase });
 registerCuponSalida({ app, supabaseAdmin, rateLimit });
+registerShare({ app, supabaseAdmin, rateLimit }); // Vista previa al compartir (WhatsApp/Facebook): /share/product/:id
 registerChat({ app, supabaseAdmin, rateLimit }); // Chatbot: LangChain + Ollama
 
 // ── Iniciar servidor ──────────────────────────────────────────

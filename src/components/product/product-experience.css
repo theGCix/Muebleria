@@ -196,6 +196,13 @@
   transition: background .2s;
 }
 .gmx-wa:hover { background: #197a42; }
+.gmx-share {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  background: transparent; color: var(--gm-muted); border: 1px solid var(--gm-border); border-radius: 2px;
+  padding: 10px; margin-top: 8px; font-size: 13px; letter-spacing: .03em; cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.gmx-share:hover { color: var(--gm-walnut); border-color: var(--gm-walnut); }
 .gmx-btn-pulse { animation: gmx-btn 2.6s ease-in-out infinite; }
 @keyframes gmx-btn { 0%,100% { box-shadow: 0 0 0 0 rgba(59,43,31,.0); } 50% { box-shadow: 0 6px 22px rgba(59,43,31,.32); } }
 @media (prefers-reduced-motion: reduce) {

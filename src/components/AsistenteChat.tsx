@@ -2,9 +2,10 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, X, Send, Loader2, Sparkles, ArrowLeft, ArrowUpRight } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Sparkles, ArrowLeft, ArrowUpRight, Phone } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
-import { API_URL as API } from "@/config";
+import { API_URL as API, WHATSAPP_NUMBER } from "@/config";
+import { trackLead } from "@/lib/analytics";
 import { TEMAS_CHAT, type ChatLink, type PreguntaChat, type TemaChat } from "@/lib/chatSugerencias";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
@@ -231,6 +232,20 @@ export function AsistenteChat() {
     }
   };
 
+  // Traspaso a una persona: abre WhatsApp con el contexto (página que ve + última consulta al asistente)
+  const abrirWhatsApp = () => {
+    if (!WHATSAPP_NUMBER) return;
+    const path = window.location.pathname;
+    const ultima = [...messages].reverse().find((m) => m.role === "user")?.content;
+    const lineas = ["Hola G&M 👋 Vengo del asistente de la web."];
+    if (/^\/(product|combo)\//.test(path)) {
+      lineas.push(`Estoy viendo: ${document.title.split(" | ")[0]}`, window.location.href);
+    }
+    if (ultima) lineas.push(`Mi consulta: ${ultima.slice(0, 140)}`);
+    trackLead("whatsapp_chat");
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lineas.join("\n"))}`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <>
       {/* Botón flotante */}
@@ -370,6 +385,19 @@ export function AsistenteChat() {
               <Send className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* Traspaso a una persona (solo si hay WhatsApp configurado) */}
+          {WHATSAPP_NUMBER && (
+            <button
+              type="button"
+              onClick={abrirWhatsApp}
+              className="flex items-center justify-center gap-1.5 border-t px-3 py-2 text-xs font-medium transition-colors hover:bg-muted"
+              style={{ borderColor: "var(--border)", color: "#1f8f4e" }}
+            >
+              <Phone className="h-3.5 w-3.5" />
+              ¿Prefieres hablar con una persona? Escríbenos por WhatsApp
+            </button>
+          )}
         </div>
       )}
     </>

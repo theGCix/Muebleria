@@ -8,13 +8,14 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Loader2, ArrowLeft, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { useSeo, absolutizar } from "@/lib/seo";
-import { trackLead } from "@/lib/analytics";
+import { trackLead, trackShare } from "@/lib/analytics";
+import { urlCompartir } from "@/lib/share";
 import { getCategoria } from "@/lib/categories";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
@@ -766,6 +767,22 @@ function ProductView({ product: base }: { product: ProductData }) {
     setTimeout(() => setAdding(false), 1600);
   };
 
+  // Compartir con vista previa (imagen + precio) vía /share/product/:id de la API
+  const compartir = async () => {
+    const url = urlCompartir("product", product.id);
+    trackShare(product.id, product.nombre);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: product.nombre, text: `${product.nombre} — G&M Mueblería`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Enlace copiado", { description: "Pégalo en WhatsApp, Instagram o donde quieras.", position: "top-center" });
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") toast.error("No pudimos copiar el enlace");
+    }
+  };
+
   const waHref = WHATSAPP_NUMBER
     ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
         `Hola G&M 👋 Me interesa "${product.nombre}"${product.sku ? ` (SKU ${product.sku})` : ""}.\n${prefsTexto}\n${window.location.href}`,
@@ -962,6 +979,9 @@ function ProductView({ product: base }: { product: ProductData }) {
                 <MessageCircle size={17} /> Hablar con un asesor por WhatsApp
               </a>
             )}
+            <button type="button" className="gmx-share" onClick={compartir}>
+              <Share2 size={15} /> Compartir este mueble
+            </button>
             <LeadFormDialog
               open={leadOpen}
               onOpenChange={setLeadOpen}

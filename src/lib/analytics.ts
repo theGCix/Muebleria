@@ -173,16 +173,17 @@ export function trackPurchase(orderId: string, value: number) {
 
 /**
  * Intención de compra por canal directo.
- *  - "whatsapp"   → clic al asesor por WhatsApp   (Meta: Contact)
+ *  - "whatsapp"      → clic al asesor por WhatsApp (ficha, checkout)  (Meta: Contact)
+ *  - "whatsapp_chat" → clic a WhatsApp desde el chatbot               (Meta: Contact)
  *  - "cotizacion" → formulario de cotización       (Meta: Lead)
  *  - "cupon"      → correo dejado por el cupón     (Meta: Lead)
  * En GA4 todos van como generate_lead con `lead_source` (márcalo como evento clave en GA4).
  */
-export function trackLead(origen: "whatsapp" | "cotizacion" | "cupon", i?: Partial<Item>) {
+export function trackLead(origen: "whatsapp" | "whatsapp_chat" | "cotizacion" | "cupon", i?: Partial<Item>) {
   const items = i?.id ? gaItems([{ id: i.id, nombre: i.nombre, precio: i.precio, categoria: i.categoria }]) : undefined;
   ga("generate_lead", limpiar({ currency: CURRENCY, value: i?.precio, lead_source: origen, items }));
   fb(
-    origen === "whatsapp" ? "Contact" : "Lead",
+    origen.startsWith("whatsapp") ? "Contact" : "Lead",
     limpiar({
       content_name: i?.nombre,
       content_ids: i?.id ? [i.id] : undefined,
@@ -199,4 +200,9 @@ export function trackSearch(termino: string) {
   if (t.length < 2) return;
   ga("search", { search_term: t });
   fb("Search", { search_string: t });
+}
+
+/** Clic en "Compartir" (GA4 recomienda el evento `share`). */
+export function trackShare(id: string, nombre: string, tipo: "product" | "combo" = "product") {
+  ga("share", { method: "link", content_type: tipo, item_id: id, item_name: nombre });
 }
