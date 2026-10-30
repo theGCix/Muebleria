@@ -17,7 +17,9 @@ export interface HeadLayer {
 
 const MARK = "data-gm-head"; // etiquetas creadas por nosotros
 const ORIG = "data-gm-orig"; // metas estáticas de index.html que modificamos (guarda el valor original)
-const BASE_TITLE = typeof document !== "undefined" ? document.title : "";
+// Título base: el prerenderizado (scripts/prerender.mjs) guarda el título genérico original en <html data-gm-base-title>
+const BASE_TITLE =
+  typeof document !== "undefined" ? (document.documentElement.getAttribute("data-gm-base-title") ?? document.title) : "";
 
 let ruta: HeadLayer & { path: string } = { metas: [], links: [], path: "" };
 let pagina: HeadLayer | null = null;
