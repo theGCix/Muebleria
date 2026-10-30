@@ -1,2 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /perfil
+Disallow: /login
+Disallow: /restablecer
+Disallow: /auth/
+Disallow: /conformidad/
+Disallow: /resena/

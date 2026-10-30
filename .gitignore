@@ -32,3 +32,4 @@ server/.env
 *.njsproj
 *.sln
 *.sw?
+public/sitemap.xml

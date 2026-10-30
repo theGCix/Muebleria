@@ -1,0 +1,718 @@
+diff --git a/.gitignore b/.gitignore
+index 30d02db..7ff29b4 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -32,3 +32,4 @@ server/.env
+ *.njsproj
+ *.sln
+ *.sw?
++public/sitemap.xml
+diff --git a/index.html b/index.html
+index c413693..0fd871f 100644
+--- a/index.html
++++ b/index.html
+@@ -6,6 +6,23 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <title>G&M Mueblería — Muebles artesanales de madera natural</title>
+     <meta name="description" content="Muebles de madera natural hechos a mano. Sala, comedor, recámara y oficina con entrega a domicilio." />
++    <meta property="og:site_name" content="G&M Mueblería" />
++    <meta property="og:locale" content="es_PE" />
++    <meta property="og:type" content="website" />
++    <meta property="og:title" content="G&M Mueblería — Muebles artesanales de madera natural" />
++    <meta property="og:description" content="Muebles de madera natural hechos a mano en Lima. Sala, comedor, recámara y oficina con entrega a domicilio." />
++    <meta name="twitter:card" content="summary" />
++    <script type="application/ld+json">
++      {
++        "@context": "https://schema.org",
++        "@type": "FurnitureStore",
++        "name": "G&M Mueblería",
++        "description": "Fabricación y venta de muebles de madera natural en Lima, Perú, con entrega a domicilio.",
++        "areaServed": "Lima, Perú",
++        "address": { "@type": "PostalAddress", "addressLocality": "Lima", "addressCountry": "PE" },
++        "priceRange": "$$"
++      }
++    </script>
+     <link rel="preconnect" href="https://fonts.googleapis.com" />
+     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+@@ -14,12 +31,4 @@
+     <div id="root"></div>
+     <script type="module" src="/src/main.tsx"></script>
+   </body>
+-
+-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+-<script>
+-  window.dataLayer = window.dataLayer || [];
+-  function gtag(){dataLayer.push(arguments);}
+-  gtag('js', new Date());
+-  gtag('config', 'G-XXXXXXXXXX');
+-</script>
+-</html>
+\ No newline at end of file
++</html>
+diff --git a/package.json b/package.json
+index b2a853c..6a6302b 100644
+--- a/package.json
++++ b/package.json
+@@ -4,7 +4,7 @@
+   "type": "module",
+   "scripts": {
+     "dev": "concurrently -n VITE,API -c cyan,green \"vite\" \"node server/index.js\"",
+-    "build": "vite build",
++    "build": "node scripts/generate-sitemap.mjs && vite build",
+     "preview": "vite preview",
+     "lint": "eslint .",
+     "format": "prettier --write ."
+diff --git a/public/robots.txt b/public/robots.txt
+index 14267e9..2fa6ec7 100644
+--- a/public/robots.txt
++++ b/public/robots.txt
+@@ -1,2 +1,10 @@
+ User-agent: *
+-Allow: /
+\ No newline at end of file
++Allow: /
++Disallow: /admin
++Disallow: /checkout
++Disallow: /perfil
++Disallow: /login
++Disallow: /restablecer
++Disallow: /auth/
++Disallow: /conformidad/
++Disallow: /resena/
+diff --git a/scripts/generate-sitemap.mjs b/scripts/generate-sitemap.mjs
+new file mode 100644
+index 0000000..39f5009
+--- /dev/null
++++ b/scripts/generate-sitemap.mjs
+@@ -0,0 +1,101 @@
++// scripts/generate-sitemap.mjs
++// Se ejecuta antes de `vite build` (ver "build" en package.json) y genera:
++//   public/sitemap.xml  → páginas fijas + categorías + productos activos + combos vigentes
++//   public/robots.txt   → reglas + línea "Sitemap:" con la URL absoluta
++// Variables (en Render, o en .env local):
++//   SITE_URL (o VITE_APP_URL_PROD)  → URL pública del sitio, ej. https://www.gymmuebleria.pe
++//   VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY → para leer productos/combos
++// Nunca rompe el build: si falta algo, avisa y sigue con lo que pueda.
++import { readFileSync, writeFileSync, existsSync } from "node:fs";
++import { resolve, dirname } from "node:path";
++import { fileURLToPath } from "node:url";
++
++const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
++
++// .env local (en Render las variables ya vienen en process.env)
++const envPath = resolve(root, ".env");
++if (existsSync(envPath)) {
++  for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
++    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
++    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
++  }
++}
++
++const SITE = (process.env.SITE_URL || process.env.VITE_APP_URL_PROD || "").trim().replace(/\/+$/, "");
++const SB_URL = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
++const SB_KEY = (process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || "").trim();
++
++if (!/^https:\/\//.test(SITE)) {
++  console.warn("[sitemap] Define SITE_URL (https://...) en el entorno de build. Se omite sitemap.xml.");
++  process.exit(0);
++}
++
++const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
++const entries = [
++  { path: "/", changefreq: "weekly", priority: "1.0" },
++  { path: "/catalogo", changefreq: "daily", priority: "0.9" },
++  { path: "/nosotros", changefreq: "monthly", priority: "0.6" },
++  { path: "/proyectos", changefreq: "weekly", priority: "0.6" },
++  { path: "/testimonios", changefreq: "weekly", priority: "0.6" },
++  { path: "/envios", changefreq: "yearly", priority: "0.3" },
++  { path: "/terminos", changefreq: "yearly", priority: "0.3" },
++  { path: "/privacidad", changefreq: "yearly", priority: "0.3" },
++];
++
++// Categorías: se leen de src/lib/categories.ts para no duplicar la lista
++try {
++  const src = readFileSync(resolve(root, "src/lib/categories.ts"), "utf8");
++  const slugs = new Set([...src.matchAll(/^\s{4}slug:\s*"([a-z0-9-]+)"/gm)].map((m) => m[1]));
++  for (const slug of slugs) entries.push({ path: `/categoria/${slug}`, changefreq: "weekly", priority: "0.8" });
++} catch (e) {
++  console.warn("[sitemap] No pude leer las categorías:", e.message);
++}
++
++async function sb(query) {
++  const res = await fetch(`${SB_URL}/rest/v1/${query}`, {
++    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
++  });
++  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
++  return res.json();
++}
++
++if (SB_URL && SB_KEY) {
++  try {
++    const productos = await sb("products?select=id,created_at&activo=eq.true&order=created_at.desc&limit=5000");
++    for (const p of productos)
++      entries.push({ path: `/product/${p.id}`, lastmod: p.created_at, changefreq: "weekly", priority: "0.8" });
++    console.log(`[sitemap] ${productos.length} productos`);
++  } catch (e) {
++    console.warn("[sitemap] No pude leer productos:", e.message);
++  }
++  try {
++    const now = new Date().toISOString();
++    const combos = await sb(
++      `combos?select=id,created_at,vence_el&activo=eq.true&or=(vence_el.is.null,vence_el.gt.${now})&limit=1000`,
++    );
++    for (const c of combos)
++      entries.push({ path: `/combo/${c.id}`, lastmod: c.created_at, changefreq: "weekly", priority: "0.7" });
++    console.log(`[sitemap] ${combos.length} combos`);
++  } catch (e) {
++    console.warn("[sitemap] No pude leer combos:", e.message);
++  }
++} else {
++  console.warn("[sitemap] Sin credenciales de Supabase: solo páginas fijas y categorías.");
++}
++
++const urls = entries.map(
++  (e) =>
++    `  <url>\n    <loc>${esc(SITE + e.path)}</loc>\n` +
++    (e.lastmod ? `    <lastmod>${new Date(e.lastmod).toISOString().slice(0, 10)}</lastmod>\n` : "") +
++    `    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`,
++);
++writeFileSync(
++  resolve(root, "public/sitemap.xml"),
++  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`,
++);
++
++const robotsPath = resolve(root, "public/robots.txt");
++let robots = existsSync(robotsPath) ? readFileSync(robotsPath, "utf8") : "User-agent: *\nAllow: /\n";
++robots = robots.replace(/^Sitemap:.*\n?/gim, "").trimEnd() + `\n\nSitemap: ${SITE}/sitemap.xml\n`;
++writeFileSync(robotsPath, robots);
++console.log(`[sitemap] ${entries.length} URLs → public/sitemap.xml`);
+diff --git a/src/hooks/useEventTracking.ts b/src/hooks/useEventTracking.ts
+index 9cd0cf5..ebc00cd 100644
+--- a/src/hooks/useEventTracking.ts
++++ b/src/hooks/useEventTracking.ts
+@@ -1,6 +1,7 @@
+ // src/hooks/useEventTracking.ts
+ import { supabase } from "@/integrations/supabase/client";
+ import { getStoredUtm } from "./useUtm";
++import { trackViewItem, trackBeginCheckout, trackPurchase, trackAddToCart } from "@/lib/analytics";
+ 
+ const SESSION_KEY = "gm_session_id";
+ 
+@@ -19,9 +20,40 @@ type EventParams = {
+   product_id?: string;
+   order_id?: string;
+   valor?: number;
++  /** Opcional: nombre/categoría para enriquecer GA4 y Meta Pixel */
++  nombre?: string;
++  categoria?: string | null;
+ };
+ 
++/** Reenvía los eventos de negocio a GA4 y Meta Pixel (page_view se manda desde el router). */
++function reenviarAnalitica(params: EventParams) {
++  try {
++    switch (params.tipo) {
++      case "producto_visto":
++        trackViewItem({
++          id: params.product_id ?? params.path ?? "",
++          nombre: params.nombre,
++          precio: params.valor,
++          categoria: params.categoria,
++        });
++        break;
++      case "carrito_iniciado":
++        trackAddToCart({ id: params.product_id ?? "", nombre: params.nombre, precio: params.valor });
++        break;
++      case "checkout_iniciado":
++        trackBeginCheckout(params.valor ?? 0);
++        break;
++      case "orden_pagada":
++        if (params.order_id) trackPurchase(params.order_id, params.valor ?? 0);
++        break;
++    }
++  } catch {
++    // nunca romper la UX
++  }
++}
++
+ export async function trackEvent(params: EventParams) {
++  reenviarAnalitica(params);
+   const utm = getStoredUtm();
+   try {
+     await supabase.from("eventos_web").insert({
+@@ -41,17 +73,3 @@ export async function trackEvent(params: EventParams) {
+   }
+ }
+ 
+-
+-// if (typeof window.gtag === "function") {
+-//   if (params.tipo === "orden_pagada") {
+-//     window.gtag("event", "purchase", {
+-//       transaction_id: params.order_id,
+-//       value:          params.valor,
+-//       currency:       "PEN",
+-//     });
+-//   } else if (params.tipo === "carrito_iniciado") {
+-//     window.gtag("event", "begin_checkout", { value: params.valor, currency: "PEN" });
+-//   } else if (params.tipo === "producto_visto") {
+-//     window.gtag("event", "view_item", { currency: "PEN", value: params.valor });
+-//   }
+-// }
+\ No newline at end of file
+diff --git a/src/lib/analytics.ts b/src/lib/analytics.ts
+new file mode 100644
+index 0000000..e0c2da3
+--- /dev/null
++++ b/src/lib/analytics.ts
+@@ -0,0 +1,130 @@
++// src/lib/analytics.ts
++// GA4 + Meta Pixel. Se activan solo si defines las variables en Render (o en .env):
++//   VITE_GA_MEASUREMENT_ID = G-XXXXXXXXXX
++//   VITE_META_PIXEL_ID     = 1234567890123456
++// Si no están definidas, no se carga nada y el resto del sitio sigue igual.
++
++declare global {
++  interface Window {
++    dataLayer?: unknown[];
++    gtag?: (...args: unknown[]) => void;
++    fbq?: ((...args: unknown[]) => void) & { callMethod?: (...a: unknown[]) => void; queue?: unknown[][]; loaded?: boolean; version?: string; push?: unknown };
++    _fbq?: unknown;
++  }
++}
++
++const GA_ID = ((import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined) ?? "").trim();
++const PIXEL_ID = ((import.meta.env.VITE_META_PIXEL_ID as string | undefined) ?? "").trim();
++
++const gaActivo = /^G-[A-Z0-9]{4,}$/.test(GA_ID) && GA_ID !== "G-XXXXXXXXXX";
++const pixelActivo = /^\d{6,}$/.test(PIXEL_ID);
++
++export const CURRENCY = "PEN";
++let iniciado = false;
++
++function initGA() {
++  if (!gaActivo) return;
++  window.dataLayer = window.dataLayer || [];
++  window.gtag = function gtag() {
++    // eslint-disable-next-line prefer-rest-params
++    window.dataLayer!.push(arguments);
++  };
++  window.gtag("js", new Date());
++  // send_page_view:false → los page_view los mandamos nosotros en cada cambio de ruta (SPA)
++  window.gtag("config", GA_ID, { send_page_view: false });
++  const s = document.createElement("script");
++  s.async = true;
++  s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
++  document.head.appendChild(s);
++}
++
++function initPixel() {
++  if (!pixelActivo) return;
++  if (window.fbq) return;
++  const fbq = function (...args: unknown[]) {
++    if (fbq.callMethod) fbq.callMethod(...args);
++    else fbq.queue!.push(args);
++  } as NonNullable<Window["fbq"]>;
++  fbq.push = fbq;
++  fbq.loaded = true;
++  fbq.version = "2.0";
++  fbq.queue = [];
++  window.fbq = fbq;
++  window._fbq = fbq;
++  const s = document.createElement("script");
++  s.async = true;
++  s.src = "https://connect.facebook.net/en_US/fbevents.js";
++  document.head.appendChild(s);
++  window.fbq("init", PIXEL_ID);
++}
++
++export function initAnalytics() {
++  if (iniciado || typeof window === "undefined") return;
++  iniciado = true;
++  try {
++    initGA();
++    initPixel();
++  } catch {
++    // la analítica nunca debe romper el sitio
++  }
++}
++
++function ga(event: string, params: Record<string, unknown>) {
++  try { window.gtag?.("event", event, params); } catch { /* noop */ }
++}
++function fb(event: string, params?: Record<string, unknown>, eventID?: string) {
++  try {
++    if (eventID) window.fbq?.("track", event, params ?? {}, { eventID });
++    else window.fbq?.("track", event, params ?? {});
++  } catch { /* noop */ }
++}
++
++let ultimaRuta = "";
++export function trackPageView(path: string) {
++  if (path === ultimaRuta) return;
++  ultimaRuta = path;
++  ga("page_view", {
++    page_path: path,
++    page_location: window.location.href,
++    page_title: document.title,
++  });
++  fb("PageView");
++}
++
++type Item = { id: string; nombre?: string; precio?: number; cantidad?: number; categoria?: string | null };
++
++const gaItems = (items: Item[]) =>
++  items.map((i) => ({
++    item_id: i.id,
++    item_name: i.nombre,
++    item_category: i.categoria ?? undefined,
++    price: i.precio,
++    quantity: i.cantidad ?? 1,
++  }));
++
++export function trackViewItem(i: Item) {
++  ga("view_item", { currency: CURRENCY, value: i.precio ?? 0, items: gaItems([i]) });
++  fb("ViewContent", { content_ids: [i.id], content_type: "product", content_name: i.nombre, value: i.precio ?? 0, currency: CURRENCY });
++}
++
++export function trackAddToCart(i: Item) {
++  const value = (i.precio ?? 0) * (i.cantidad ?? 1);
++  ga("add_to_cart", { currency: CURRENCY, value, items: gaItems([i]) });
++  fb("AddToCart", { content_ids: [i.id], content_type: "product", content_name: i.nombre, value, currency: CURRENCY });
++}
++
++export function trackBeginCheckout(value: number, items?: Item[]) {
++  ga("begin_checkout", { currency: CURRENCY, value, items: items ? gaItems(items) : undefined });
++  fb("InitiateCheckout", { value, currency: CURRENCY, num_items: items?.length });
++}
++
++/** Compra confirmada. Se manda una sola vez por pedido (aunque el efecto corra de nuevo). */
++export function trackPurchase(orderId: string, value: number) {
++  const key = `gm_purchase_${orderId}`;
++  try {
++    if (sessionStorage.getItem(key)) return;
++    sessionStorage.setItem(key, "1");
++  } catch { /* noop */ }
++  ga("purchase", { transaction_id: orderId, value, currency: CURRENCY });
++  fb("Purchase", { value, currency: CURRENCY }, orderId);
++}
+diff --git a/src/lib/seo.ts b/src/lib/seo.ts
+new file mode 100644
+index 0000000..28cfa56
+--- /dev/null
++++ b/src/lib/seo.ts
+@@ -0,0 +1,88 @@
++// src/lib/seo.ts
++// El sitio es una SPA estática: las `head()` de las rutas no se escriben en el HTML.
++// Este hook actualiza título, descripción, canonical, Open Graph y JSON-LD en el <head>
++// (Google ejecuta JS y los lee; WhatsApp/Facebook no, ver nota en el README del SEO).
++import { useEffect } from "react";
++
++const SITE_NAME = "G&M Mueblería";
++
++export type SeoInput = {
++  title: string;
++  description?: string | null;
++  image?: string | null;
++  /** Ruta canónica, ej. "/product/abc". Por defecto la ruta actual. */
++  path?: string;
++  type?: "website" | "product";
++  /** Objeto(s) JSON-LD (schema.org) */
++  jsonLd?: Record<string, unknown> | Record<string, unknown>[] | null;
++};
++
++function upsertMeta(attr: "name" | "property", key: string, content: string | undefined) {
++  const sel = `meta[${attr}="${key}"]`;
++  let el = document.head.querySelector<HTMLMetaElement>(sel);
++  if (!content) { el?.remove(); return; }
++  if (!el) {
++    el = document.createElement("meta");
++    el.setAttribute(attr, key);
++    document.head.appendChild(el);
++  }
++  el.setAttribute("content", content);
++}
++
++function upsertCanonical(href: string) {
++  let el = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
++  if (!el) {
++    el = document.createElement("link");
++    el.rel = "canonical";
++    document.head.appendChild(el);
++  }
++  el.href = href;
++}
++
++const recortar = (t: string, n: number) => {
++  const limpio = t.replace(/\s+/g, " ").trim();
++  return limpio.length > n ? `${limpio.slice(0, n - 1).trimEnd()}…` : limpio;
++};
++
++export function useSeo(input: SeoInput | null | undefined) {
++  const json = input?.jsonLd ? JSON.stringify(input.jsonLd) : "";
++  const { title, description, image, path, type } = input ?? ({} as Partial<SeoInput>);
++
++  useEffect(() => {
++    if (!title) return;
++    const prevTitle = document.title;
++    const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
++    const desc = description ? recortar(description, 160) : undefined;
++    const url = `${window.location.origin}${path ?? window.location.pathname}`;
++
++    document.title = fullTitle;
++    upsertMeta("name", "description", desc);
++    upsertCanonical(url);
++    upsertMeta("property", "og:title", fullTitle);
++    upsertMeta("property", "og:description", desc);
++    upsertMeta("property", "og:type", type ?? "website");
++    upsertMeta("property", "og:url", url);
++    upsertMeta("property", "og:site_name", SITE_NAME);
++    upsertMeta("property", "og:locale", "es_PE");
++    upsertMeta("property", "og:image", image ?? undefined);
++    upsertMeta("name", "twitter:card", image ? "summary_large_image" : "summary");
++
++    let script: HTMLScriptElement | null = null;
++    if (json) {
++      script = document.createElement("script");
++      script.type = "application/ld+json";
++      script.dataset.gmSeo = "1";
++      // evita cerrar el <script> por accidente con "</script>" dentro de textos
++      script.textContent = json.replace(/</g, "\\u003c");
++      document.head.appendChild(script);
++    }
++
++    return () => {
++      script?.remove();
++      document.title = prevTitle;
++    };
++  }, [title, description, image, path, type, json]);
++}
++
++export const absolutizar = (url?: string | null) =>
++  url ? (url.startsWith("http") ? url : `${window.location.origin}${url}`) : undefined;
+diff --git a/src/main.tsx b/src/main.tsx
+index 60ee4e0..da9a50a 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -2,10 +2,18 @@ import ReactDOM from "react-dom/client";
+ import { RouterProvider } from "@tanstack/react-router";
+ import { StrictMode } from "react";
+ import { getRouter } from "./router";
++import { initAnalytics, trackPageView } from "./lib/analytics";
+ import "./styles.css";
+ 
+ const router = getRouter();
+ 
++// GA4 + Meta Pixel (solo si hay IDs en las variables VITE_GA_MEASUREMENT_ID / VITE_META_PIXEL_ID)
++initAnalytics();
++// SPA: un page_view por cada cambio de ruta (la carga inicial también dispara onResolved)
++router.subscribe("onResolved", ({ toLocation }) => {
++  trackPageView(toLocation.pathname);
++});
++
+ ReactDOM.createRoot(document.getElementById("root")!).render(
+   <StrictMode>
+     <RouterProvider router={router} />
+diff --git a/src/routes/combo.$id.tsx b/src/routes/combo.$id.tsx
+index b29927b..655551c 100644
+--- a/src/routes/combo.$id.tsx
++++ b/src/routes/combo.$id.tsx
+@@ -30,9 +30,9 @@ import {
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { fmtPEN } from "@/lib/pricing";
+ import { trackEvent } from "@/hooks/useEventTracking";
++import { useSeo, absolutizar } from "@/lib/seo";
+ 
+ export const Route = createFileRoute("/combo/$id")({
+-  head: () => ({ meta: [{ title: "Combo — G&M Mueblería" }] }),
+   component: ComboPage,
+ });
+ 
+@@ -211,10 +211,35 @@ function ComboDetail({ combo }: { combo: Combo }) {
+   const ctaRef = useRef<HTMLDivElement>(null);
+ 
+   useEffect(() => {
+-    trackEvent({ tipo: "producto_visto", path: `/combo/${combo.id}` });
+-    document.title = `${combo.nombre} — G&M Mueblería`;
++    trackEvent({ tipo: "producto_visto", path: `/combo/${combo.id}`, nombre: combo.nombre, valor: combo.precio_combo });
+   }, [combo.id, combo.nombre]);
+ 
++  useSeo({
++    title: `${combo.nombre} — Combo de muebles`,
++    description:
++      combo.descripcion ||
++      `Combo ${combo.nombre}: ${piezas.map((p) => p.nombre).join(", ")}. Ahorra comprando el conjunto. Fabricado en Lima por G&M Mueblería.`,
++    image: absolutizar(portada),
++    path: `/combo/${combo.id}`,
++    type: "product",
++    jsonLd: {
++      "@context": "https://schema.org",
++      "@type": "Product",
++      name: combo.nombre,
++      description: combo.descripcion || undefined,
++      image: [absolutizar(portada)].filter(Boolean),
++      brand: { "@type": "Brand", name: "G&M Mueblería" },
++      offers: {
++        "@type": "Offer",
++        url: `${window.location.origin}/combo/${combo.id}`,
++        priceCurrency: "PEN",
++        price: Number(combo.precio_combo).toFixed(2),
++        availability: bloqueado ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
++        ...(combo.vence_el ? { priceValidUntil: combo.vence_el.slice(0, 10) } : {}),
++      },
++    },
++  });
++
+   // Recorrido automático: una sola vuelta por las piezas y se detiene.
+   useEffect(() => {
+     if (!tour || piezas.length < 2 || reducedMotion()) return;
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index ec71cdb..3b60de9 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -13,6 +13,7 @@ import { useCartStore } from "@/stores/cartStore";
+ import { toast } from "sonner";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { trackEvent } from "@/hooks/useEventTracking";
++import { useSeo, absolutizar } from "@/lib/seo";
+ import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
+ import { ModelViewer3D } from "@/components/ModelViewer3D";
+ import { ofertaInfo } from "@/lib/pricing";
+@@ -29,9 +30,6 @@ import "@/components/product/product-experience.css";
+ import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
+ 
+ export const Route = createFileRoute("/product/$handle")({
+-  head: ({ params }) => ({
+-    meta: [{ title: `${params.handle} — G&M Mueblería` }],
+-  }),
+   component: ProductPage,
+   errorComponent: ({ error, reset }) => <ProductError error={error} reset={reset} />,
+   notFoundComponent: () => <ProductNotFound />,
+@@ -613,6 +611,8 @@ function ProductView({ product: base }: { product: ProductData }) {
+       path: window.location.pathname,
+       product_id: product.id,
+       valor: product.precio,
++      nombre: product.nombre,
++      categoria: product.categoria,
+     });
+   }, [product.id]);
+ 
+@@ -699,6 +699,47 @@ function ProductView({ product: base }: { product: ProductData }) {
+   const esNuevo = Date.now() - new Date(product.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
+   const tieneLed = profile.key === "tv";
+ 
++  // SEO: título/description reales, canonical, Open Graph y datos estructurados (JSON-LD Product)
++  const seoPath = `/product/${product.id}`;
++  useSeo({
++    title: [product.nombre, product.categoria, product.material_base].filter(Boolean).join(" · "),
++    description:
++      product.descripcion ||
++      `${product.nombre}${product.categoria ? ` — ${product.categoria}` : ""} fabricado a pedido en Lima por G&M Mueblería. Entrega a domicilio y 2 años de garantía en estructura.`,
++    image: absolutizar(mainImg),
++    path: seoPath,
++    type: "product",
++    jsonLd: {
++      "@context": "https://schema.org",
++      "@type": "Product",
++      name: product.nombre,
++      description: product.descripcion || undefined,
++      sku: product.sku || product.id,
++      category: product.categoria || undefined,
++      material: product.material_base || undefined,
++      image: allImgs.map((u) => absolutizar(u)).filter(Boolean),
++      brand: { "@type": "Brand", name: "G&M Mueblería" },
++      offers: {
++        "@type": "Offer",
++        url: `${window.location.origin}${seoPath}`,
++        priceCurrency: "PEN",
++        price: Number(precioMostrado).toFixed(2),
++        availability: outOfStock ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
++        itemCondition: "https://schema.org/NewCondition",
++        seller: { "@type": "Organization", name: "G&M Mueblería" },
++      },
++      ...(hayRating
++        ? {
++            aggregateRating: {
++              "@type": "AggregateRating",
++              ratingValue: Number(rating!.calificacion_promedio).toFixed(1),
++              reviewCount: rating!.total_resenas,
++            },
++          }
++        : {}),
++    },
++  });
++
+   // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
+   const swatches: { name: string; hex: string }[] = hayColoresFoto ? fotoColores : profile.acabados;
+   const swatchSel = hayColoresFoto ? Math.min(fotoColor, fotoColores.length - 1) : finishIdx;
+diff --git a/src/routes/sitemap[.]xml.ts b/src/routes/sitemap[.]xml.ts
+deleted file mode 100644
+index 720313c..0000000
+--- a/src/routes/sitemap[.]xml.ts
++++ /dev/null
+@@ -1,35 +0,0 @@
+-import { createFileRoute } from "@tanstack/react-router";
+-import type {} from "@tanstack/react-start";
+-
+-const BASE_URL = "";
+-
+-export const Route = createFileRoute("/sitemap.xml")({
+-  server: {
+-    handlers: {
+-      GET: async () => {
+-        const entries = [
+-          { path: "/", changefreq: "weekly" as const, priority: "1.0" },
+-          { path: "/nosotros", changefreq: "monthly" as const, priority: "0.6" },
+-          { path: "/proyectos", changefreq: "weekly" as const, priority: "0.6" },
+-          { path: "/testimonios", changefreq: "weekly" as const, priority: "0.6" },
+-          { path: "/envios", changefreq: "yearly" as const, priority: "0.3" },
+-          { path: "/terminos", changefreq: "yearly" as const, priority: "0.3" },
+-          { path: "/privacidad", changefreq: "yearly" as const, priority: "0.3" },
+-        ];
+-        const urls = entries.map(
+-          (e) =>
+-            `  <url>\n    <loc>${BASE_URL}${e.path}</loc>\n    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`,
+-        );
+-        const xml = [
+-          `<?xml version="1.0" encoding="UTF-8"?>`,
+-          `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+-          ...urls,
+-          `</urlset>`,
+-        ].join("\n");
+-        return new Response(xml, {
+-          headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" },
+-        });
+-      },
+-    },
+-  },
+-});
+\ No newline at end of file
+diff --git a/src/stores/cartStore.ts b/src/stores/cartStore.ts
+index 12679ac..640b210 100644
+--- a/src/stores/cartStore.ts
++++ b/src/stores/cartStore.ts
+@@ -1,6 +1,6 @@
+ import { create } from "zustand";
+ import { persist } from "zustand/middleware";
+-import { trackEvent } from "@/hooks/useEventTracking";
++import { trackAddToCart } from "@/lib/analytics";
+ 
+ export interface CartItem {
+   id: string;
+@@ -33,6 +33,7 @@ export const useCartStore = create<CartState>()(
+     (set, get) => ({
+       items: [],
+       addItem: (item) => {
++        trackAddToCart({ id: item.id, nombre: item.title, precio: item.price });
+         set((state) => {
+           const existing = state.items.find((i) => i.id === item.id);
+           if (existing) {
+@@ -48,6 +49,9 @@ export const useCartStore = create<CartState>()(
+         });
+       },
+       addItems: (newItems) => {
++        for (const it of newItems) {
++          trackAddToCart({ id: it.id, nombre: it.title, precio: it.price, cantidad: it.qty ?? 1 });
++        }
+         set((state) => {
+           let items = [...state.items];
+           for (const item of newItems) {

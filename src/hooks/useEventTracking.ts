@@ -1,6 +1,7 @@
 // src/hooks/useEventTracking.ts
 import { supabase } from "@/integrations/supabase/client";
 import { getStoredUtm } from "./useUtm";
+import { trackViewItem, trackBeginCheckout, trackPurchase, trackAddToCart } from "@/lib/analytics";
 
 const SESSION_KEY = "gm_session_id";
 
@@ -19,9 +20,40 @@ type EventParams = {
   product_id?: string;
   order_id?: string;
   valor?: number;
+  /** Opcional: nombre/categoría para enriquecer GA4 y Meta Pixel */
+  nombre?: string;
+  categoria?: string | null;
 };
 
+/** Reenvía los eventos de negocio a GA4 y Meta Pixel (page_view se manda desde el router). */
+function reenviarAnalitica(params: EventParams) {
+  try {
+    switch (params.tipo) {
+      case "producto_visto":
+        trackViewItem({
+          id: params.product_id ?? params.path ?? "",
+          nombre: params.nombre,
+          precio: params.valor,
+          categoria: params.categoria,
+        });
+        break;
+      case "carrito_iniciado":
+        trackAddToCart({ id: params.product_id ?? "", nombre: params.nombre, precio: params.valor });
+        break;
+      case "checkout_iniciado":
+        trackBeginCheckout(params.valor ?? 0);
+        break;
+      case "orden_pagada":
+        if (params.order_id) trackPurchase(params.order_id, params.valor ?? 0);
+        break;
+    }
+  } catch {
+    // nunca romper la UX
+  }
+}
+
 export async function trackEvent(params: EventParams) {
+  reenviarAnalitica(params);
   const utm = getStoredUtm();
   try {
     await supabase.from("eventos_web").insert({
@@ -41,17 +73,3 @@ export async function trackEvent(params: EventParams) {
   }
 }
 
-
-// if (typeof window.gtag === "function") {
-//   if (params.tipo === "orden_pagada") {
-//     window.gtag("event", "purchase", {
-//       transaction_id: params.order_id,
-//       value:          params.valor,
-//       currency:       "PEN",
-//     });
-//   } else if (params.tipo === "carrito_iniciado") {
-//     window.gtag("event", "begin_checkout", { value: params.valor, currency: "PEN" });
-//   } else if (params.tipo === "producto_visto") {
-//     window.gtag("event", "view_item", { currency: "PEN", value: params.valor });
-//   }
-// }

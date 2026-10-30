@@ -13,6 +13,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
+import { useSeo, absolutizar } from "@/lib/seo";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
 import { ofertaInfo } from "@/lib/pricing";
@@ -29,9 +30,6 @@ import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
 
 export const Route = createFileRoute("/product/$handle")({
-  head: ({ params }) => ({
-    meta: [{ title: `${params.handle} — G&M Mueblería` }],
-  }),
   component: ProductPage,
   errorComponent: ({ error, reset }) => <ProductError error={error} reset={reset} />,
   notFoundComponent: () => <ProductNotFound />,
@@ -613,6 +611,8 @@ function ProductView({ product: base }: { product: ProductData }) {
       path: window.location.pathname,
       product_id: product.id,
       valor: product.precio,
+      nombre: product.nombre,
+      categoria: product.categoria,
     });
   }, [product.id]);
 
@@ -698,6 +698,47 @@ function ProductView({ product: base }: { product: ProductData }) {
   const has3D = !!product.modelo_3d_url;
   const esNuevo = Date.now() - new Date(product.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
   const tieneLed = profile.key === "tv";
+
+  // SEO: título/description reales, canonical, Open Graph y datos estructurados (JSON-LD Product)
+  const seoPath = `/product/${product.id}`;
+  useSeo({
+    title: [product.nombre, product.categoria, product.material_base].filter(Boolean).join(" · "),
+    description:
+      product.descripcion ||
+      `${product.nombre}${product.categoria ? ` — ${product.categoria}` : ""} fabricado a pedido en Lima por G&M Mueblería. Entrega a domicilio y 2 años de garantía en estructura.`,
+    image: absolutizar(mainImg),
+    path: seoPath,
+    type: "product",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: product.nombre,
+      description: product.descripcion || undefined,
+      sku: product.sku || product.id,
+      category: product.categoria || undefined,
+      material: product.material_base || undefined,
+      image: allImgs.map((u) => absolutizar(u)).filter(Boolean),
+      brand: { "@type": "Brand", name: "G&M Mueblería" },
+      offers: {
+        "@type": "Offer",
+        url: `${window.location.origin}${seoPath}`,
+        priceCurrency: "PEN",
+        price: Number(precioMostrado).toFixed(2),
+        availability: outOfStock ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
+        itemCondition: "https://schema.org/NewCondition",
+        seller: { "@type": "Organization", name: "G&M Mueblería" },
+      },
+      ...(hayRating
+        ? {
+            aggregateRating: {
+              "@type": "AggregateRating",
+              ratingValue: Number(rating!.calificacion_promedio).toFixed(1),
+              reviewCount: rating!.total_resenas,
+            },
+          }
+        : {}),
+    },
+  });
 
   // Opciones elegidas → viajan en el título del ítem (el checkout no cambia) y en cotización / WhatsApp
   const swatches: { name: string; hex: string }[] = hayColoresFoto ? fotoColores : profile.acabados;

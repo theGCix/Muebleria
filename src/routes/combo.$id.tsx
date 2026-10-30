@@ -30,9 +30,9 @@ import {
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN } from "@/lib/pricing";
 import { trackEvent } from "@/hooks/useEventTracking";
+import { useSeo, absolutizar } from "@/lib/seo";
 
 export const Route = createFileRoute("/combo/$id")({
-  head: () => ({ meta: [{ title: "Combo — G&M Mueblería" }] }),
   component: ComboPage,
 });
 
@@ -211,9 +211,34 @@ function ComboDetail({ combo }: { combo: Combo }) {
   const ctaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    trackEvent({ tipo: "producto_visto", path: `/combo/${combo.id}` });
-    document.title = `${combo.nombre} — G&M Mueblería`;
+    trackEvent({ tipo: "producto_visto", path: `/combo/${combo.id}`, nombre: combo.nombre, valor: combo.precio_combo });
   }, [combo.id, combo.nombre]);
+
+  useSeo({
+    title: `${combo.nombre} — Combo de muebles`,
+    description:
+      combo.descripcion ||
+      `Combo ${combo.nombre}: ${piezas.map((p) => p.nombre).join(", ")}. Ahorra comprando el conjunto. Fabricado en Lima por G&M Mueblería.`,
+    image: absolutizar(portada),
+    path: `/combo/${combo.id}`,
+    type: "product",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: combo.nombre,
+      description: combo.descripcion || undefined,
+      image: [absolutizar(portada)].filter(Boolean),
+      brand: { "@type": "Brand", name: "G&M Mueblería" },
+      offers: {
+        "@type": "Offer",
+        url: `${window.location.origin}/combo/${combo.id}`,
+        priceCurrency: "PEN",
+        price: Number(combo.precio_combo).toFixed(2),
+        availability: bloqueado ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
+        ...(combo.vence_el ? { priceValidUntil: combo.vence_el.slice(0, 10) } : {}),
+      },
+    },
+  });
 
   // Recorrido automático: una sola vuelta por las piezas y se detiene.
   useEffect(() => {
