@@ -47,39 +47,30 @@ const SyncCartSchema = z.object({
 export async function syncCartSnapshot(input: z.infer<typeof SyncCartSchema>) {
   const data = SyncCartSchema.parse(input);
   try {
-    await supabase.from("carritos").upsert(
-      {
-        session_id: data.session_id,
-        items: data.items,
-        subtotal: data.subtotal,
-        nombre: data.nombre || null,
-        email: data.email || null,
-        telefono: data.telefono || null,
-        distrito: data.distrito || null,
-        user_id: data.user_id || null,
-        estado: "activo",
-        last_activity_at: new Date().toISOString(),
-        // Si el cliente vuelve a mover su carrito, el ciclo de recordatorios (n8n) empieza de nuevo.
-        recordatorio_1_at: null,
-        recordatorio_2_at: null,
-      },
-      { onConflict: "session_id" }
-    );
-  } catch {
-    // el tracking de carrito nunca debe romper la UX de compra
+    const { error } = await supabase.rpc("sync_cart_snapshot" as never, {
+      p_session_id: data.session_id,
+      p_items: data.items,
+      p_subtotal: data.subtotal,
+      p_nombre: data.nombre || null,
+      p_email: data.email || null,
+      p_telefono: data.telefono || null,
+      p_distrito: data.distrito || null,
+    } as never);
+    if (error) console.warn("[carrito] no se pudo guardar:", error.message);
+  } catch (e) {
+    console.warn("[carrito] no se pudo guardar:", e);
   }
 }
 
-// Se llama cuando el pedido se completa con éxito: cierra el
-// carrito abandonado como "recuperado" y lo vincula al pedido.
 export async function markCartRecovered(input: { session_id: string; order_id: string }) {
   try {
-    await supabase
-      .from("carritos")
-      .update({ estado: "recuperado", order_id: input.order_id })
-      .eq("session_id", input.session_id);
-  } catch {
-    // idem: nunca debe romper el flujo de compra
+    const { error } = await supabase.rpc("mark_cart_recovered" as never, {
+      p_session_id: input.session_id,
+      p_order_id: input.order_id,
+    } as never);
+    if (error) console.warn("[carrito] no se pudo cerrar:", error.message);
+  } catch (e) {
+    console.warn("[carrito] no se pudo cerrar:", e);
   }
 }
 
