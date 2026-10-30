@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { Check, Copy, Loader2, Tag, X } from "lucide-react";
 import { toast } from "sonner";
+import { trackLead } from "@/lib/analytics";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,6 +136,7 @@ export function ExitCouponDialog() {
         correo?: "enviado" | "en_cola" | "no";
       };
       guardarCuponSalida(datosCupon);
+      trackLead("cupon");
       setCupon(datosCupon);
       setCorreo(estadoCorreo ?? "no");
       setPastillaVisible(true);

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { trackLead } from "@/lib/analytics";
 
 interface LeadFormDialogProps {
   open: boolean;
@@ -52,6 +53,7 @@ export function LeadFormDialog({
         origen: "web",
       }),
     onSuccess: () => {
+      trackLead("cotizacion", { id: productoId ?? undefined, nombre: productoNombre ?? undefined });
       setSent(true);
       toast.success("¡Gracias! Te contactaremos pronto.");
     },

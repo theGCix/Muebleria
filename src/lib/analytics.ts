@@ -4,6 +4,8 @@
 //   VITE_META_PIXEL_ID     = 1234567890123456
 // Si no están definidas, no se carga nada y el resto del sitio sigue igual.
 
+import { esRutaStaff } from "@/lib/rutas";
+
 declare global {
   interface Window {
     dataLayer?: unknown[];
@@ -58,9 +60,27 @@ function initPixel() {
   window.fbq("init", PIXEL_ID);
 }
 
+/**
+ * Excluye TU navegador de las métricas: abre el sitio una vez con ?no_track=1
+ * (y ?no_track=0 para volver a medirte). Útil para no contar tus pruebas ni las del equipo.
+ */
+function excluido(): boolean {
+  try {
+    const q = new URLSearchParams(window.location.search).get("no_track");
+    if (q === "1") localStorage.setItem("gm_no_track", "1");
+    if (q === "0") localStorage.removeItem("gm_no_track");
+    return localStorage.getItem("gm_no_track") === "1";
+  } catch {
+    return false;
+  }
+}
+let omitir = false;
+
 export function initAnalytics() {
   if (iniciado || typeof window === "undefined") return;
   iniciado = true;
+  omitir = excluido();
+  if (omitir) return;
   try {
     initGA();
     initPixel();
@@ -69,10 +89,16 @@ export function initAnalytics() {
   }
 }
 
+// Quita claves undefined para no mandar parámetros vacíos a GA4/Meta
+const limpiar = (o: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null));
+
 function ga(event: string, params: Record<string, unknown>) {
+  if (omitir) return;
   try { window.gtag?.("event", event, params); } catch { /* noop */ }
 }
 function fb(event: string, params?: Record<string, unknown>, eventID?: string) {
+  if (omitir) return;
   try {
     if (eventID) window.fbq?.("track", event, params ?? {}, { eventID });
     else window.fbq?.("track", event, params ?? {});
@@ -80,7 +106,23 @@ function fb(event: string, params?: Record<string, unknown>, eventID?: string) {
 }
 
 let ultimaRuta = "";
+let temporizadorPV: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Programa el page_view de una navegación (SPA). Se espera un instante para que la página
+ * ya haya puesto su título real (page_title correcto) y se ignora el panel interno del negocio.
+ */
+export function programarPageView(path: string) {
+  clearTimeout(temporizadorPV);
+  if (esRutaStaff(path)) {
+    ultimaRuta = "";
+    return;
+  }
+  temporizadorPV = setTimeout(() => trackPageView(window.location.pathname), 400);
+}
+
 export function trackPageView(path: string) {
+  if (esRutaStaff(path)) return;
   if (path === ultimaRuta) return;
   ultimaRuta = path;
   ga("page_view", {
@@ -127,4 +169,34 @@ export function trackPurchase(orderId: string, value: number) {
   } catch { /* noop */ }
   ga("purchase", { transaction_id: orderId, value, currency: CURRENCY });
   fb("Purchase", { value, currency: CURRENCY }, orderId);
+}
+
+/**
+ * Intención de compra por canal directo.
+ *  - "whatsapp"   → clic al asesor por WhatsApp   (Meta: Contact)
+ *  - "cotizacion" → formulario de cotización       (Meta: Lead)
+ *  - "cupon"      → correo dejado por el cupón     (Meta: Lead)
+ * En GA4 todos van como generate_lead con `lead_source` (márcalo como evento clave en GA4).
+ */
+export function trackLead(origen: "whatsapp" | "cotizacion" | "cupon", i?: Partial<Item>) {
+  const items = i?.id ? gaItems([{ id: i.id, nombre: i.nombre, precio: i.precio, categoria: i.categoria }]) : undefined;
+  ga("generate_lead", limpiar({ currency: CURRENCY, value: i?.precio, lead_source: origen, items }));
+  fb(
+    origen === "whatsapp" ? "Contact" : "Lead",
+    limpiar({
+      content_name: i?.nombre,
+      content_ids: i?.id ? [i.id] : undefined,
+      value: i?.precio,
+      currency: i?.precio != null ? CURRENCY : undefined,
+      lead_source: origen,
+    }),
+  );
+}
+
+/** Búsqueda en el catálogo (todas las búsquedas públicas terminan en /catalogo?q=). */
+export function trackSearch(termino: string) {
+  const t = termino.trim();
+  if (t.length < 2) return;
+  ga("search", { search_term: t });
+  fb("Search", { search_string: t });
 }

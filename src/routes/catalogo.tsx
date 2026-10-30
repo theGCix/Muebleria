@@ -17,6 +17,7 @@ import { CATEGORIAS } from "@/lib/categories";
 import { useAllProducts, useProductCountsByCategory, type ProductSort, type Product } from "@/hooks/useProducts";
 import { useSearchStore } from "@/stores/searchStore";
 import { trackEvent } from "@/hooks/useEventTracking";
+import { trackSearch } from "@/lib/analytics";
 import { PackageSearch, Search, X, LayoutGrid } from "lucide-react";
 
 interface CatalogoSearch {
@@ -80,6 +81,11 @@ function CatalogoPage() {
   useEffect(() => {
     trackEvent({ tipo: "pagina_vista", path: "/catalogo" });
   }, []);
+
+  // Búsquedas del cliente (header y catálogo terminan en /catalogo?q=)
+  useEffect(() => {
+    if (q) trackSearch(q);
+  }, [q]);
 
   const setSearch = (patch: Partial<CatalogoSearch>) =>
     navigate({ search: (prev: CatalogoSearch) => ({ ...prev, ...patch }) });

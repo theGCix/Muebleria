@@ -2,7 +2,7 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { getRouter } from "./router";
-import { initAnalytics, trackPageView } from "./lib/analytics";
+import { initAnalytics, programarPageView } from "./lib/analytics";
 import "./styles.css";
 
 const router = getRouter();
@@ -11,7 +11,7 @@ const router = getRouter();
 initAnalytics();
 // SPA: un page_view por cada cambio de ruta (la carga inicial también dispara onResolved)
 router.subscribe("onResolved", ({ toLocation }) => {
-  trackPageView(toLocation.pathname);
+  programarPageView(toLocation.pathname);
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

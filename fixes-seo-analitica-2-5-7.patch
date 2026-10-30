@@ -1,0 +1,624 @@
+diff --git a/src/components/ExitCouponDialog.tsx b/src/components/ExitCouponDialog.tsx
+index 8b4a22e..2ed8bca 100644
+--- a/src/components/ExitCouponDialog.tsx
++++ b/src/components/ExitCouponDialog.tsx
+@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
+ import { useRouterState } from "@tanstack/react-router";
+ import { Check, Copy, Loader2, Tag, X } from "lucide-react";
+ import { toast } from "sonner";
++import { trackLead } from "@/lib/analytics";
+ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+@@ -135,6 +136,7 @@ export function ExitCouponDialog() {
+         correo?: "enviado" | "en_cola" | "no";
+       };
+       guardarCuponSalida(datosCupon);
++      trackLead("cupon");
+       setCupon(datosCupon);
+       setCorreo(estadoCorreo ?? "no");
+       setPastillaVisible(true);
+diff --git a/src/components/HeadManager.tsx b/src/components/HeadManager.tsx
+new file mode 100644
+index 0000000..6bcecbc
+--- /dev/null
++++ b/src/components/HeadManager.tsx
+@@ -0,0 +1,24 @@
++// src/components/HeadManager.tsx
++// Pasa el `head()` de las rutas activas al <head> real (ver src/lib/head.ts).
++import { useEffect } from "react";
++import { useRouterState } from "@tanstack/react-router";
++import { setRouteHead, type Meta } from "@/lib/head";
++
++export function HeadManager() {
++  // Se serializa para que el efecto solo corra cuando el contenido realmente cambia
++  const firma = useRouterState({
++    select: (s) =>
++      JSON.stringify({
++        m: s.matches.flatMap((m) => ((m as { meta?: Meta[] }).meta ?? []).filter(Boolean)),
++        l: s.matches.flatMap((m) => ((m as { links?: Meta[] }).links ?? []).filter(Boolean)),
++        p: s.location.pathname,
++      }),
++  });
++
++  useEffect(() => {
++    const { m, l, p } = JSON.parse(firma) as { m: Meta[]; l: Meta[]; p: string };
++    setRouteHead(m, l, p);
++  }, [firma]);
++
++  return null;
++}
+diff --git a/src/components/LeadFormDialog.tsx b/src/components/LeadFormDialog.tsx
+index ff59a49..dec4b89 100644
+--- a/src/components/LeadFormDialog.tsx
++++ b/src/components/LeadFormDialog.tsx
+@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
+ import { Textarea } from "@/components/ui/textarea";
+ import { Loader2, CheckCircle2 } from "lucide-react";
+ import { toast } from "sonner";
++import { trackLead } from "@/lib/analytics";
+ 
+ interface LeadFormDialogProps {
+   open: boolean;
+@@ -52,6 +53,7 @@ export function LeadFormDialog({
+         origen: "web",
+       }),
+     onSuccess: () => {
++      trackLead("cotizacion", { id: productoId ?? undefined, nombre: productoNombre ?? undefined });
+       setSent(true);
+       toast.success("¡Gracias! Te contactaremos pronto.");
+     },
+diff --git a/src/hooks/useProducts.ts b/src/hooks/useProducts.ts
+index 5efad4a..d0447e0 100644
+--- a/src/hooks/useProducts.ts
++++ b/src/hooks/useProducts.ts
+@@ -115,6 +115,8 @@ export function useOfertas(first = 8) {
+ 
+ export function useProduct(id: string) {
+   return useQuery({
++    // Sin queryKey todos los productos compartían la misma caché (se veía el anterior al cambiar de producto)
++    queryKey: ["product", id],
+     queryFn: async () => {
+       const { data, error } = await supabase
+         .from("products")
+diff --git a/src/lib/analytics.ts b/src/lib/analytics.ts
+index e0c2da3..58ccd7c 100644
+--- a/src/lib/analytics.ts
++++ b/src/lib/analytics.ts
+@@ -4,6 +4,8 @@
+ //   VITE_META_PIXEL_ID     = 1234567890123456
+ // Si no están definidas, no se carga nada y el resto del sitio sigue igual.
+ 
++import { esRutaStaff } from "@/lib/rutas";
++
+ declare global {
+   interface Window {
+     dataLayer?: unknown[];
+@@ -58,9 +60,27 @@ function initPixel() {
+   window.fbq("init", PIXEL_ID);
+ }
+ 
++/**
++ * Excluye TU navegador de las métricas: abre el sitio una vez con ?no_track=1
++ * (y ?no_track=0 para volver a medirte). Útil para no contar tus pruebas ni las del equipo.
++ */
++function excluido(): boolean {
++  try {
++    const q = new URLSearchParams(window.location.search).get("no_track");
++    if (q === "1") localStorage.setItem("gm_no_track", "1");
++    if (q === "0") localStorage.removeItem("gm_no_track");
++    return localStorage.getItem("gm_no_track") === "1";
++  } catch {
++    return false;
++  }
++}
++let omitir = false;
++
+ export function initAnalytics() {
+   if (iniciado || typeof window === "undefined") return;
+   iniciado = true;
++  omitir = excluido();
++  if (omitir) return;
+   try {
+     initGA();
+     initPixel();
+@@ -69,10 +89,16 @@ export function initAnalytics() {
+   }
+ }
+ 
++// Quita claves undefined para no mandar parámetros vacíos a GA4/Meta
++const limpiar = (o: Record<string, unknown>) =>
++  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null));
++
+ function ga(event: string, params: Record<string, unknown>) {
++  if (omitir) return;
+   try { window.gtag?.("event", event, params); } catch { /* noop */ }
+ }
+ function fb(event: string, params?: Record<string, unknown>, eventID?: string) {
++  if (omitir) return;
+   try {
+     if (eventID) window.fbq?.("track", event, params ?? {}, { eventID });
+     else window.fbq?.("track", event, params ?? {});
+@@ -80,7 +106,23 @@ function fb(event: string, params?: Record<string, unknown>, eventID?: string) {
+ }
+ 
+ let ultimaRuta = "";
++let temporizadorPV: ReturnType<typeof setTimeout> | undefined;
++
++/**
++ * Programa el page_view de una navegación (SPA). Se espera un instante para que la página
++ * ya haya puesto su título real (page_title correcto) y se ignora el panel interno del negocio.
++ */
++export function programarPageView(path: string) {
++  clearTimeout(temporizadorPV);
++  if (esRutaStaff(path)) {
++    ultimaRuta = "";
++    return;
++  }
++  temporizadorPV = setTimeout(() => trackPageView(window.location.pathname), 400);
++}
++
+ export function trackPageView(path: string) {
++  if (esRutaStaff(path)) return;
+   if (path === ultimaRuta) return;
+   ultimaRuta = path;
+   ga("page_view", {
+@@ -128,3 +170,33 @@ export function trackPurchase(orderId: string, value: number) {
+   ga("purchase", { transaction_id: orderId, value, currency: CURRENCY });
+   fb("Purchase", { value, currency: CURRENCY }, orderId);
+ }
++
++/**
++ * Intención de compra por canal directo.
++ *  - "whatsapp"   → clic al asesor por WhatsApp   (Meta: Contact)
++ *  - "cotizacion" → formulario de cotización       (Meta: Lead)
++ *  - "cupon"      → correo dejado por el cupón     (Meta: Lead)
++ * En GA4 todos van como generate_lead con `lead_source` (márcalo como evento clave en GA4).
++ */
++export function trackLead(origen: "whatsapp" | "cotizacion" | "cupon", i?: Partial<Item>) {
++  const items = i?.id ? gaItems([{ id: i.id, nombre: i.nombre, precio: i.precio, categoria: i.categoria }]) : undefined;
++  ga("generate_lead", limpiar({ currency: CURRENCY, value: i?.precio, lead_source: origen, items }));
++  fb(
++    origen === "whatsapp" ? "Contact" : "Lead",
++    limpiar({
++      content_name: i?.nombre,
++      content_ids: i?.id ? [i.id] : undefined,
++      value: i?.precio,
++      currency: i?.precio != null ? CURRENCY : undefined,
++      lead_source: origen,
++    }),
++  );
++}
++
++/** Búsqueda en el catálogo (todas las búsquedas públicas terminan en /catalogo?q=). */
++export function trackSearch(termino: string) {
++  const t = termino.trim();
++  if (t.length < 2) return;
++  ga("search", { search_term: t });
++  fb("Search", { search_string: t });
++}
+diff --git a/src/lib/head.ts b/src/lib/head.ts
+new file mode 100644
+index 0000000..d83ea80
+--- /dev/null
++++ b/src/lib/head.ts
+@@ -0,0 +1,148 @@
++// src/lib/head.ts
++// Único dueño de las etiquetas del <head> (título, metas, Open Graph, canonical, JSON-LD).
++//
++// Por qué existe: la app es una SPA con React 18 y <HeadContent/> de TanStack Router no puede
++// escribir en <head> (renderiza dentro del body), así que los `head()` de las rutas no tenían efecto.
++//
++// Capas (la de abajo gana):  index.html (base)  →  head() de la ruta  →  useSeo() de la página.
++// En cada actualización se restaura todo lo anterior, así nunca quedan metas "pegadas" de otra página.
++import { APP_URL } from "@/config";
++import { esRutaNoIndexable } from "@/lib/rutas";
++
++export type Meta = Record<string, unknown>;
++export interface HeadLayer {
++  metas: Meta[];
++  links: Meta[];
++}
++
++const MARK = "data-gm-head"; // etiquetas creadas por nosotros
++const ORIG = "data-gm-orig"; // metas estáticas de index.html que modificamos (guarda el valor original)
++const BASE_TITLE = typeof document !== "undefined" ? document.title : "";
++
++let ruta: HeadLayer & { path: string } = { metas: [], links: [], path: "" };
++let pagina: HeadLayer | null = null;
++let pendiente = false;
++
++/** URL pública del sitio (dominio propio o onrender), sin "/" final. */
++export function siteBase(): string {
++  const base = (APP_URL as string | undefined) || (typeof window !== "undefined" ? window.location.origin : "");
++  return base.replace(/\/+$/, "");
++}
++
++const claveMeta = (m: Meta): string | null =>
++  m.name ? `name:${m.name}` : m.property ? `property:${m.property}` : null;
++
++// "property:og:title" → ["property", "og:title"] (se parte solo en el primer ":")
++const partirClave = (k: string): [string, string] => {
++  const i = k.indexOf(":");
++  return [k.slice(0, i), k.slice(i + 1)];
++};
++
++function programar() {
++  if (pendiente) return;
++  pendiente = true;
++  queueMicrotask(() => {
++    pendiente = false;
++    aplicar();
++  });
++}
++
++export function setRouteHead(metas: Meta[], links: Meta[], path: string) {
++  ruta = { metas, links, path };
++  programar();
++}
++
++export function setPageHead(layer: HeadLayer | null) {
++  pagina = layer;
++  programar();
++}
++
++function aplicar() {
++  if (typeof document === "undefined") return;
++  const head = document.head;
++
++  // 1) deshacer lo anterior
++  head.querySelectorAll(`[${MARK}]`).forEach((el) => el.remove());
++  head.querySelectorAll(`meta[${ORIG}]`).forEach((el) => {
++    el.setAttribute("content", el.getAttribute(ORIG) ?? "");
++    el.removeAttribute(ORIG);
++  });
++
++  // 2) combinar capas: la última (página) gana sobre la ruta
++  const capas: Meta[] = [...ruta.metas, ...(pagina?.metas ?? [])];
++  let titulo: string | undefined;
++  const finales = new Map<string, Meta>();
++  const anonimas: Meta[] = [];
++  const lds: unknown[] = [];
++
++  for (const m of capas) {
++    if (!m) continue;
++    if (m.title) titulo = String(m.title);
++    else if ("script:ld+json" in m) lds.push(m["script:ld+json"]);
++    else {
++      const k = claveMeta(m);
++      if (k) finales.set(k, m);
++      else if (m["http-equiv"] || m.httpEquiv) anonimas.push(m);
++      // otras metas sin name/property (charSet, viewport duplicado…) se ignoran a propósito
++    }
++  }
++
++  // 3) valores por defecto razonables
++  const enlaces = new Map<string, Meta>();
++  for (const l of [...ruta.links, ...(pagina?.links ?? [])]) if (l?.rel) enlaces.set(String(l.rel), l);
++
++  const path = ruta.path || window.location.pathname;
++  if (!enlaces.has("canonical")) enlaces.set("canonical", { rel: "canonical", href: `${siteBase()}${path}` });
++  const canonical = String(enlaces.get("canonical")!.href);
++
++  const poner = (k: string, content: unknown) => {
++    if (!finales.has(k) && content) {
++      const [attr, val] = partirClave(k);
++      finales.set(k, { [attr]: val, content });
++    }
++  };
++  const desc = finales.get("name:description")?.content;
++  poner("property:og:title", titulo);
++  poner("property:og:description", desc);
++  poner("property:og:url", canonical);
++  if (esRutaNoIndexable(path) && !finales.has("name:robots")) {
++    finales.set("name:robots", { name: "robots", content: "noindex, nofollow" });
++  }
++
++  // 4) escribir en el <head>
++  document.title = titulo ?? BASE_TITLE;
++
++  for (const [k, m] of finales) {
++    const [attr, val] = partirClave(k);
++    const existente = head.querySelector<HTMLMetaElement>(`meta[${attr}="${val}"]:not([${MARK}])`);
++    if (existente) {
++      if (!existente.hasAttribute(ORIG)) existente.setAttribute(ORIG, existente.getAttribute("content") ?? "");
++      existente.setAttribute("content", String(m.content ?? ""));
++    } else {
++      const el = document.createElement("meta");
++      Object.entries(m).forEach(([a, v]) => v != null && el.setAttribute(a, String(v)));
++      el.setAttribute(MARK, "1");
++      head.appendChild(el);
++    }
++  }
++  for (const m of anonimas) {
++    const el = document.createElement("meta");
++    Object.entries(m).forEach(([a, v]) => v != null && el.setAttribute(a, String(v)));
++    el.setAttribute(MARK, "1");
++    head.appendChild(el);
++  }
++  for (const l of enlaces.values()) {
++    const el = document.createElement("link");
++    Object.entries(l).forEach(([a, v]) => v != null && el.setAttribute(a, String(v)));
++    el.setAttribute(MARK, "1");
++    head.appendChild(el);
++  }
++  for (const ld of lds) {
++    const s = document.createElement("script");
++    s.type = "application/ld+json";
++    s.setAttribute(MARK, "1");
++    // evita cerrar el <script> por accidente con "</script>" dentro de textos
++    s.textContent = JSON.stringify(ld).replace(/</g, "\\u003c");
++    head.appendChild(s);
++  }
++}
+diff --git a/src/lib/rutas.ts b/src/lib/rutas.ts
+new file mode 100644
+index 0000000..91660a4
+--- /dev/null
++++ b/src/lib/rutas.ts
+@@ -0,0 +1,21 @@
++// src/lib/rutas.ts
++// Rutas internas del negocio (panel, POS, producción…) y rutas privadas del cliente.
++// Se usan para: (1) no medirlas en GA4/Meta Pixel y (2) marcarlas como noindex.
++
++/** Panel de staff (están detrás de login). No cuentan como tráfico de la tienda. */
++export const RUTAS_STAFF = [
++  "/admin", "/analytics", "/caja", "/carritos-abandonados", "/carrusel", "/central", "/clientes",
++  "/combos", "/correos-pedidos", "/crm", "/cupones", "/dashboard", "/despachos", "/devoluciones",
++  "/fotos-clientes", "/gestionar-proyectos", "/insumos", "/leads", "/mi-produccion", "/pedidos",
++  "/pos", "/produccion", "/productos", "/proveedores", "/resenas", "/usuarios", "/ventas",
++];
++
++/** Rutas del cliente sin valor para buscadores (cuenta, pago, enlaces por pedido). */
++const RUTAS_PRIVADAS_CLIENTE = ["/perfil", "/checkout", "/auth", "/restablecer", "/conformidad", "/resena", "/login"];
++
++const coincide = (path: string, lista: string[]) =>
++  lista.some((p) => path === p || path.startsWith(`${p}/`));
++
++export const esRutaStaff = (path: string) => coincide(path, RUTAS_STAFF);
++export const esRutaNoIndexable = (path: string) =>
++  coincide(path, RUTAS_STAFF) || coincide(path, RUTAS_PRIVADAS_CLIENTE);
+diff --git a/src/lib/seo.ts b/src/lib/seo.ts
+index 28cfa56..a33c3de 100644
+--- a/src/lib/seo.ts
++++ b/src/lib/seo.ts
+@@ -1,8 +1,10 @@
+ // src/lib/seo.ts
+-// El sitio es una SPA estática: las `head()` de las rutas no se escriben en el HTML.
+-// Este hook actualiza título, descripción, canonical, Open Graph y JSON-LD en el <head>
+-// (Google ejecuta JS y los lee; WhatsApp/Facebook no, ver nota en el README del SEO).
++// SEO de página: título, descripción, canonical, Open Graph y JSON-LD.
++// El <head> lo administra src/lib/head.ts (que también aplica los `head()` de cada ruta);
++// este hook solo aporta la capa de la página y la retira al salir, sin dejar metas pegadas.
++// Nota: Google ejecuta JS y lo lee; WhatsApp/Facebook no (ver endpoint de compartir en el README del SEO).
+ import { useEffect } from "react";
++import { setPageHead, siteBase, type HeadLayer, type Meta } from "@/lib/head";
+ 
+ const SITE_NAME = "G&M Mueblería";
+ 
+@@ -17,72 +19,47 @@ export type SeoInput = {
+   jsonLd?: Record<string, unknown> | Record<string, unknown>[] | null;
+ };
+ 
+-function upsertMeta(attr: "name" | "property", key: string, content: string | undefined) {
+-  const sel = `meta[${attr}="${key}"]`;
+-  let el = document.head.querySelector<HTMLMetaElement>(sel);
+-  if (!content) { el?.remove(); return; }
+-  if (!el) {
+-    el = document.createElement("meta");
+-    el.setAttribute(attr, key);
+-    document.head.appendChild(el);
+-  }
+-  el.setAttribute("content", content);
+-}
+-
+-function upsertCanonical(href: string) {
+-  let el = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+-  if (!el) {
+-    el = document.createElement("link");
+-    el.rel = "canonical";
+-    document.head.appendChild(el);
+-  }
+-  el.href = href;
+-}
+-
+ const recortar = (t: string, n: number) => {
+   const limpio = t.replace(/\s+/g, " ").trim();
+   return limpio.length > n ? `${limpio.slice(0, n - 1).trimEnd()}…` : limpio;
+ };
+ 
++function capaSeo({ title, description, image, path, type, jsonLd }: SeoInput): HeadLayer {
++  const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
++  const desc = description ? recortar(description, 160) : undefined;
++  const url = `${siteBase()}${path ?? window.location.pathname}`;
++
++  const metas: Meta[] = [
++    { title: fullTitle },
++    { property: "og:title", content: fullTitle },
++    { property: "og:type", content: type ?? "website" },
++    { property: "og:url", content: url },
++    { name: "twitter:card", content: image ? "summary_large_image" : "summary" },
++    { name: "twitter:title", content: fullTitle },
++  ];
++  if (desc) {
++    metas.push(
++      { name: "description", content: desc },
++      { property: "og:description", content: desc },
++      { name: "twitter:description", content: desc },
++    );
++  }
++  if (image) metas.push({ property: "og:image", content: image }, { name: "twitter:image", content: image });
++  for (const ld of Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : []) metas.push({ "script:ld+json": ld });
++
++  return { metas, links: [{ rel: "canonical", href: url }] };
++}
++
+ export function useSeo(input: SeoInput | null | undefined) {
+   const json = input?.jsonLd ? JSON.stringify(input.jsonLd) : "";
+   const { title, description, image, path, type } = input ?? ({} as Partial<SeoInput>);
+ 
+   useEffect(() => {
+     if (!title) return;
+-    const prevTitle = document.title;
+-    const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
+-    const desc = description ? recortar(description, 160) : undefined;
+-    const url = `${window.location.origin}${path ?? window.location.pathname}`;
+-
+-    document.title = fullTitle;
+-    upsertMeta("name", "description", desc);
+-    upsertCanonical(url);
+-    upsertMeta("property", "og:title", fullTitle);
+-    upsertMeta("property", "og:description", desc);
+-    upsertMeta("property", "og:type", type ?? "website");
+-    upsertMeta("property", "og:url", url);
+-    upsertMeta("property", "og:site_name", SITE_NAME);
+-    upsertMeta("property", "og:locale", "es_PE");
+-    upsertMeta("property", "og:image", image ?? undefined);
+-    upsertMeta("name", "twitter:card", image ? "summary_large_image" : "summary");
+-
+-    let script: HTMLScriptElement | null = null;
+-    if (json) {
+-      script = document.createElement("script");
+-      script.type = "application/ld+json";
+-      script.dataset.gmSeo = "1";
+-      // evita cerrar el <script> por accidente con "</script>" dentro de textos
+-      script.textContent = json.replace(/</g, "\\u003c");
+-      document.head.appendChild(script);
+-    }
+-
+-    return () => {
+-      script?.remove();
+-      document.title = prevTitle;
+-    };
++    setPageHead(capaSeo({ title, description, image, path, type, jsonLd: json ? JSON.parse(json) : null }));
++    return () => setPageHead(null);
+   }, [title, description, image, path, type, json]);
+ }
+ 
+ export const absolutizar = (url?: string | null) =>
+-  url ? (url.startsWith("http") ? url : `${window.location.origin}${url}`) : undefined;
++  url ? (url.startsWith("http") ? url : `${siteBase()}${url.startsWith("/") ? "" : "/"}${url}`) : undefined;
+diff --git a/src/main.tsx b/src/main.tsx
+index da9a50a..3000fa7 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -2,7 +2,7 @@ import ReactDOM from "react-dom/client";
+ import { RouterProvider } from "@tanstack/react-router";
+ import { StrictMode } from "react";
+ import { getRouter } from "./router";
+-import { initAnalytics, trackPageView } from "./lib/analytics";
++import { initAnalytics, programarPageView } from "./lib/analytics";
+ import "./styles.css";
+ 
+ const router = getRouter();
+@@ -11,7 +11,7 @@ const router = getRouter();
+ initAnalytics();
+ // SPA: un page_view por cada cambio de ruta (la carga inicial también dispara onResolved)
+ router.subscribe("onResolved", ({ toLocation }) => {
+-  trackPageView(toLocation.pathname);
++  programarPageView(toLocation.pathname);
+ });
+ 
+ ReactDOM.createRoot(document.getElementById("root")!).render(
+diff --git a/src/routes/__root.tsx b/src/routes/__root.tsx
+index 69dac9f..e0ef82d 100644
+--- a/src/routes/__root.tsx
++++ b/src/routes/__root.tsx
+@@ -12,6 +12,7 @@ import { WishlistProvider } from "@/context/WishlistContext";
+ import { AsistenteChat } from "@/components/AsistenteChat";
+ import { ExitCouponDialog } from "@/components/ExitCouponDialog";
+ import { GlobalLoginModal } from "@/components/GlobalLoginModal";
++import { HeadManager } from "@/components/HeadManager";
+ 
+ 
+ 
+@@ -86,6 +87,7 @@ function RootComponent() {
+   return (
+     <QueryClientProvider client={queryClient}>
+       <WishlistProvider>
++        <HeadManager />
+         <Outlet />
+         <AsistenteChat />
+         <ExitCouponDialog />
+diff --git a/src/routes/catalogo.tsx b/src/routes/catalogo.tsx
+index eda22fc..7d2d8d1 100644
+--- a/src/routes/catalogo.tsx
++++ b/src/routes/catalogo.tsx
+@@ -17,6 +17,7 @@ import { CATEGORIAS } from "@/lib/categories";
+ import { useAllProducts, useProductCountsByCategory, type ProductSort, type Product } from "@/hooks/useProducts";
+ import { useSearchStore } from "@/stores/searchStore";
+ import { trackEvent } from "@/hooks/useEventTracking";
++import { trackSearch } from "@/lib/analytics";
+ import { PackageSearch, Search, X, LayoutGrid } from "lucide-react";
+ 
+ interface CatalogoSearch {
+@@ -81,6 +82,11 @@ function CatalogoPage() {
+     trackEvent({ tipo: "pagina_vista", path: "/catalogo" });
+   }, []);
+ 
++  // Búsquedas del cliente (header y catálogo terminan en /catalogo?q=)
++  useEffect(() => {
++    if (q) trackSearch(q);
++  }, [q]);
++
+   const setSearch = (patch: Partial<CatalogoSearch>) =>
+     navigate({ search: (prev: CatalogoSearch) => ({ ...prev, ...patch }) });
+ 
+diff --git a/src/routes/checkout.tsx b/src/routes/checkout.tsx
+index 80357b1..a9c5135 100644
+--- a/src/routes/checkout.tsx
++++ b/src/routes/checkout.tsx
+@@ -66,6 +66,7 @@ interface ModalDatos extends Partial<PagoExitosoDatos> {
+ // const API = import.meta.env.VITE_API_URL ?? "";
+ import { API_URL as API } from "@/config";
+ import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
++import { trackLead } from "@/lib/analytics";
+ import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
+ import { leerCuponSalida } from "@/lib/cupon-salida";
+ import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
+@@ -863,7 +864,7 @@ useEffect(() => {
+                       </p>
+                     )}
+                     {linkFleteWhatsApp && (
+-                      <a href={linkFleteWhatsApp} target="_blank" rel="noreferrer" className="underline font-medium">
++                      <a href={linkFleteWhatsApp} target="_blank" rel="noreferrer" className="underline font-medium" onClick={() => trackLead("whatsapp", { nombre: "Cotizar flete a provincia" })}>
+                         Consultar el flete por WhatsApp
+                       </a>
+                     )}
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 3b60de9..a47efdd 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -14,6 +14,8 @@ import { toast } from "sonner";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { trackEvent } from "@/hooks/useEventTracking";
+ import { useSeo, absolutizar } from "@/lib/seo";
++import { trackLead } from "@/lib/analytics";
++import { getCategoria } from "@/lib/categories";
+ import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
+ import { ModelViewer3D } from "@/components/ModelViewer3D";
+ import { ofertaInfo } from "@/lib/pricing";
+@@ -702,7 +704,7 @@ function ProductView({ product: base }: { product: ProductData }) {
+   // SEO: título/description reales, canonical, Open Graph y datos estructurados (JSON-LD Product)
+   const seoPath = `/product/${product.id}`;
+   useSeo({
+-    title: [product.nombre, product.categoria, product.material_base].filter(Boolean).join(" · "),
++    title: [product.nombre, (product.categoria && getCategoria(product.categoria)?.nombre) || product.categoria, product.material_base].filter(Boolean).join(" · "),
+     description:
+       product.descripcion ||
+       `${product.nombre}${product.categoria ? ` — ${product.categoria}` : ""} fabricado a pedido en Lima por G&M Mueblería. Entrega a domicilio y 2 años de garantía en estructura.`,
+@@ -950,7 +952,13 @@ function ProductView({ product: base }: { product: ProductData }) {
+               <button className="gm-btn-quote" onClick={() => setLeadOpen(true)}>Solicitar cotización personalizada</button>
+             </div>
+             {waHref && (
+-              <a className="gmx-wa" href={waHref} target="_blank" rel="noopener noreferrer">
++              <a
++                className="gmx-wa"
++                href={waHref}
++                target="_blank"
++                rel="noopener noreferrer"
++                onClick={() => trackLead("whatsapp", { id: product.id, nombre: product.nombre, precio: precioMostrado, categoria: product.categoria })}
++              >
+                 <MessageCircle size={17} /> Hablar con un asesor por WhatsApp
+               </a>
+             )}

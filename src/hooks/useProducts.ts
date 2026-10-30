@@ -115,6 +115,8 @@ export function useOfertas(first = 8) {
 
 export function useProduct(id: string) {
   return useQuery({
+    // Sin queryKey todos los productos compartían la misma caché (se veía el anterior al cambiar de producto)
+    queryKey: ["product", id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("products")

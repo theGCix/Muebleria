@@ -12,6 +12,7 @@ import { WishlistProvider } from "@/context/WishlistContext";
 import { AsistenteChat } from "@/components/AsistenteChat";
 import { ExitCouponDialog } from "@/components/ExitCouponDialog";
 import { GlobalLoginModal } from "@/components/GlobalLoginModal";
+import { HeadManager } from "@/components/HeadManager";
 
 
 
@@ -86,6 +87,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <WishlistProvider>
+        <HeadManager />
         <Outlet />
         <AsistenteChat />
         <ExitCouponDialog />

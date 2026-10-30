@@ -66,6 +66,7 @@ interface ModalDatos extends Partial<PagoExitosoDatos> {
 // const API = import.meta.env.VITE_API_URL ?? "";
 import { API_URL as API } from "@/config";
 import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
+import { trackLead } from "@/lib/analytics";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
 import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
@@ -863,7 +864,7 @@ useEffect(() => {
                       </p>
                     )}
                     {linkFleteWhatsApp && (
-                      <a href={linkFleteWhatsApp} target="_blank" rel="noreferrer" className="underline font-medium">
+                      <a href={linkFleteWhatsApp} target="_blank" rel="noreferrer" className="underline font-medium" onClick={() => trackLead("whatsapp", { nombre: "Cotizar flete a provincia" })}>
                         Consultar el flete por WhatsApp
                       </a>
                     )}

@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { useSeo, absolutizar } from "@/lib/seo";
+import { trackLead } from "@/lib/analytics";
+import { getCategoria } from "@/lib/categories";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
 import { ofertaInfo } from "@/lib/pricing";
@@ -702,7 +704,7 @@ function ProductView({ product: base }: { product: ProductData }) {
   // SEO: título/description reales, canonical, Open Graph y datos estructurados (JSON-LD Product)
   const seoPath = `/product/${product.id}`;
   useSeo({
-    title: [product.nombre, product.categoria, product.material_base].filter(Boolean).join(" · "),
+    title: [product.nombre, (product.categoria && getCategoria(product.categoria)?.nombre) || product.categoria, product.material_base].filter(Boolean).join(" · "),
     description:
       product.descripcion ||
       `${product.nombre}${product.categoria ? ` — ${product.categoria}` : ""} fabricado a pedido en Lima por G&M Mueblería. Entrega a domicilio y 2 años de garantía en estructura.`,
@@ -950,7 +952,13 @@ function ProductView({ product: base }: { product: ProductData }) {
               <button className="gm-btn-quote" onClick={() => setLeadOpen(true)}>Solicitar cotización personalizada</button>
             </div>
             {waHref && (
-              <a className="gmx-wa" href={waHref} target="_blank" rel="noopener noreferrer">
+              <a
+                className="gmx-wa"
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackLead("whatsapp", { id: product.id, nombre: product.nombre, precio: precioMostrado, categoria: product.categoria })}
+              >
                 <MessageCircle size={17} /> Hablar con un asesor por WhatsApp
               </a>
             )}
