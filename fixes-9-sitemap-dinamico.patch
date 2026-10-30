@@ -1,0 +1,467 @@
+diff --git a/render.yaml b/render.yaml
+index c7a6704..f34545f 100644
+--- a/render.yaml
++++ b/render.yaml
+@@ -5,6 +5,10 @@ services:
+     buildCommand: npm install && npm run build
+     staticPublishPath: ./dist
+     routes:
++      # El sitemap se genera en vivo en la API (server/sitemap.js); debe ir ANTES de /*
++      - type: rewrite
++        source: /sitemap.xml
++        destination: https://muebleria-q74c.onrender.com/sitemap.xml
+       - type: rewrite
+         source: /*
+         destination: /index.html
+@@ -18,6 +22,8 @@ services:
+     envVars:
+       - key: FRONTEND_URL
+         value: https://muebleria-gm.onrender.com
++      - key: SITE_URL   # URL pública de la tienda para el sitemap; si compras dominio, cámbiala aquí
++        value: https://muebleria-gm.onrender.com
+       - key: NIUBIZ_MERCHANT_ID
+         sync: false
+       - key: NIUBIZ_USER
+diff --git a/scripts/generate-sitemap.mjs b/scripts/generate-sitemap.mjs
+index 39f5009..428e3bc 100644
+--- a/scripts/generate-sitemap.mjs
++++ b/scripts/generate-sitemap.mjs
+@@ -1,7 +1,8 @@
+ // scripts/generate-sitemap.mjs
+-// Se ejecuta antes de `vite build` (ver "build" en package.json) y genera:
+-//   public/sitemap.xml  → páginas fijas + categorías + productos activos + combos vigentes
+-//   public/robots.txt   → reglas + línea "Sitemap:" con la URL absoluta
++// Se ejecuta antes de `vite build` (ver "build" en package.json).
++// Por defecto SOLO actualiza public/robots.txt (línea "Sitemap:" con la URL absoluta): el
++// sitemap.xml lo sirve la API en vivo (server/sitemap.js) y Render lo reenvía (render.yaml).
++// Con SITEMAP_STATIC=1 vuelve al modo anterior y además genera public/sitemap.xml en el build.
+ // Variables (en Render, o en .env local):
+ //   SITE_URL (o VITE_APP_URL_PROD)  → URL pública del sitio, ej. https://www.gymmuebleria.pe
+ //   VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY → para leer productos/combos
+@@ -30,6 +31,19 @@ if (!/^https:\/\//.test(SITE)) {
+   process.exit(0);
+ }
+ 
++const robotsPath = resolve(root, "public/robots.txt");
++function actualizarRobots() {
++  let robots = existsSync(robotsPath) ? readFileSync(robotsPath, "utf8") : "User-agent: *\nAllow: /\n";
++  robots = robots.replace(/^Sitemap:.*\n?/gim, "").trimEnd() + `\n\nSitemap: ${SITE}/sitemap.xml\n`;
++  writeFileSync(robotsPath, robots);
++}
++
++if (process.env.SITEMAP_STATIC !== "1") {
++  actualizarRobots();
++  console.log(`[sitemap] robots.txt → Sitemap: ${SITE}/sitemap.xml (el sitemap lo sirve la API en vivo)`);
++  process.exit(0);
++}
++
+ const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+ const entries = [
+   { path: "/", changefreq: "weekly", priority: "1.0" },
+@@ -94,8 +108,5 @@ writeFileSync(
+   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`,
+ );
+ 
+-const robotsPath = resolve(root, "public/robots.txt");
+-let robots = existsSync(robotsPath) ? readFileSync(robotsPath, "utf8") : "User-agent: *\nAllow: /\n";
+-robots = robots.replace(/^Sitemap:.*\n?/gim, "").trimEnd() + `\n\nSitemap: ${SITE}/sitemap.xml\n`;
+-writeFileSync(robotsPath, robots);
++actualizarRobots();
+ console.log(`[sitemap] ${entries.length} URLs → public/sitemap.xml`);
+diff --git a/server/index.js b/server/index.js
+index 6e032d3..7ceda04 100644
+--- a/server/index.js
++++ b/server/index.js
+@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
+ import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
+ import { registerCuponSalida } from "./cupon-salida.js";
+ import { registerShare } from "./share.js";
++import { registerSitemap } from "./sitemap.js";
+ import { registerChat } from "./chat.js";
+ import { notificarPedidoPagado } from "./notificaciones.js";
+ import { calcularEnvioNacional } from "./envioNacional.js";
+@@ -752,6 +753,7 @@ app.get("/api/nubefact/pdf/:sale_id", requireAuth, async (req, res) => {
+ registerNotaCreditoRoutes({ app, supabaseAdmin, requireAuth, getNubefactBase });
+ registerCuponSalida({ app, supabaseAdmin, rateLimit });
+ registerShare({ app, supabaseAdmin, rateLimit }); // Vista previa al compartir (WhatsApp/Facebook): /share/product/:id
++registerSitemap({ app, supabaseAdmin, rateLimit }); // Sitemap en vivo desde la BD: /sitemap.xml
+ registerChat({ app, supabaseAdmin, rateLimit }); // Chatbot: LangChain + Ollama
+ 
+ // ── Iniciar servidor ──────────────────────────────────────────
+diff --git a/server/sitemap.js b/server/sitemap.js
+new file mode 100644
+index 0000000..5e71205
+--- /dev/null
++++ b/server/sitemap.js
+@@ -0,0 +1,182 @@
++// server/sitemap.js
++// ════════════════════════════════════════════════════════════════
++// SITEMAP DINÁMICO: GET /sitemap.xml se arma en vivo desde la base de datos.
++// Cuando agregas, desactivas o vences un producto/combo, el sitemap lo refleja solo
++// (con una caché corta en memoria), sin volver a desplegar la tienda.
++//
++// Conexión en server/index.js:
++//   import { registerSitemap } from "./sitemap.js";
++//   registerSitemap({ app, supabaseAdmin, rateLimit });   // antes de app.listen()
++//
++// Variables de entorno del servidor (la primera que exista):
++//   SITE_URL  →  VITE_APP_URL_PROD  →  FRONTEND_URL      URL pública de la tienda (https://...)
++//   SITEMAP_TTL_SECONDS                                  caché en memoria (por defecto 600 = 10 min)
++//
++// Si la base de datos falla, sirve la última versión buena en caché; si nunca hubo una,
++// responde solo con páginas fijas y categorías (nunca un 500 al rastreador).
++// ════════════════════════════════════════════════════════════════
++
++// Páginas fijas. Mantén esta lista alineada con scripts/generate-sitemap.mjs y src/lib/rutas.ts.
++const PAGINAS = [
++  { path: "/", changefreq: "weekly", priority: "1.0" },
++  { path: "/catalogo", changefreq: "daily", priority: "0.9" },
++  { path: "/nosotros", changefreq: "monthly", priority: "0.6" },
++  { path: "/proyectos", changefreq: "weekly", priority: "0.6" },
++  { path: "/testimonios", changefreq: "weekly", priority: "0.6" },
++  { path: "/envios", changefreq: "yearly", priority: "0.3" },
++  { path: "/terminos", changefreq: "yearly", priority: "0.3" },
++  { path: "/privacidad", changefreq: "yearly", priority: "0.3" },
++];
++
++// Categorías de primer nivel (src/lib/categories.ts). El servidor se despliega solo con la
++// carpeta server/, así que no puede leer ese archivo: si agregas una categoría, añádela aquí.
++export const CATEGORIAS = ["muebles", "comedores", "recamaras", "separadores", "accesorios"];
++
++const PAGINA_DB = 1000; // Supabase devuelve como máximo 1000 filas por consulta
++const MAX_FILAS = 10000; // tope de seguridad por tabla (el límite de Google es 50 000 URLs por sitemap)
++
++const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
++
++function fechaISO(valor) {
++  if (!valor) return null;
++  const d = new Date(valor);
++  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
++}
++
++export function urlSitio() {
++  const v = (process.env.SITE_URL || process.env.VITE_APP_URL_PROD || process.env.FRONTEND_URL || "").trim();
++  return v.replace(/\/+$/, "");
++}
++
++/** Construye el XML a partir de las entradas { path, lastmod?, changefreq, priority }. Función pura. */
++export function construirSitemap(sitio, entradas) {
++  const urls = entradas.map((e) => {
++    const lastmod = fechaISO(e.lastmod);
++    return (
++      `  <url>\n    <loc>${esc(sitio + e.path)}</loc>\n` +
++      (lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : "") +
++      `    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`
++    );
++  });
++  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
++}
++
++/** Lee todas las filas de una consulta paginando de a 1000. `armar(desde, hasta)` devuelve la consulta. */
++async function leerTodo(armar) {
++  const filas = [];
++  for (let desde = 0; desde < MAX_FILAS; desde += PAGINA_DB) {
++    const { data, error } = await armar(desde, desde + PAGINA_DB - 1);
++    if (error) throw error;
++    filas.push(...(data ?? []));
++    if (!data || data.length < PAGINA_DB) break;
++  }
++  return filas;
++}
++
++const columnaInexistente = (err) => /column|does not exist|42703|PGRST204/i.test(`${err?.code ?? ""} ${err?.message ?? ""}`);
++
++/** Productos activos. Si la tabla aún no tiene `updated_at`, reintenta solo con `created_at`. */
++async function leerProductos(supabase) {
++  const consulta = (columnas) =>
++    leerTodo((a, b) =>
++      supabase.from("products").select(columnas).eq("activo", true).order("created_at", { ascending: false }).range(a, b),
++    );
++  try {
++    return await consulta("id,created_at,updated_at");
++  } catch (err) {
++    if (!columnaInexistente(err)) throw err;
++    return consulta("id,created_at");
++  }
++}
++
++/** Combos activos y no vencidos. */
++async function leerCombos(supabase) {
++  const ahora = new Date().toISOString();
++  const consulta = (columnas) =>
++    leerTodo((a, b) =>
++      supabase
++        .from("combos")
++        .select(columnas)
++        .eq("activo", true)
++        .or(`vence_el.is.null,vence_el.gt.${ahora}`)
++        .order("created_at", { ascending: false })
++        .range(a, b),
++    );
++  try {
++    return await consulta("id,created_at,updated_at");
++  } catch (err) {
++    if (!columnaInexistente(err)) throw err;
++    return consulta("id,created_at");
++  }
++}
++
++/** Arma todas las entradas. Si una tabla falla, la omite y lo informa en `parcial`. */
++export async function reunirEntradas(supabase, log = console) {
++  const entradas = [
++    ...PAGINAS,
++    ...CATEGORIAS.map((slug) => ({ path: `/categoria/${slug}`, changefreq: "weekly", priority: "0.8" })),
++  ];
++  let parcial = false;
++
++  try {
++    for (const p of await leerProductos(supabase))
++      entradas.push({ path: `/product/${p.id}`, lastmod: p.updated_at ?? p.created_at, changefreq: "weekly", priority: "0.8" });
++  } catch (err) {
++    parcial = true;
++    log.warn("[sitemap] No pude leer productos:", err?.message ?? err);
++  }
++  try {
++    for (const c of await leerCombos(supabase))
++      entradas.push({ path: `/combo/${c.id}`, lastmod: c.updated_at ?? c.created_at, changefreq: "weekly", priority: "0.7" });
++  } catch (err) {
++    parcial = true;
++    log.warn("[sitemap] No pude leer combos:", err?.message ?? err);
++  }
++  return { entradas, parcial };
++}
++
++export function registerSitemap({ app, supabaseAdmin, rateLimit }) {
++  const ttl = Math.max(0, Number(process.env.SITEMAP_TTL_SECONDS ?? 600)) * 1000;
++  const limitador = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
++
++  let cache = null; // { xml, expira, completo }
++  let enCurso = null; // promesa compartida: varias peticiones simultáneas = una sola lectura a la BD
++
++  async function generar(sitio) {
++    const { entradas, parcial } = await reunirEntradas(supabaseAdmin);
++    return { xml: construirSitemap(sitio, entradas), completo: !parcial };
++  }
++
++  app.get("/sitemap.xml", limitador, async (_req, res) => {
++    const sitio = urlSitio();
++    if (!/^https?:\/\//.test(sitio)) {
++      return res.status(503).type("text/plain").send("Define SITE_URL (https://...) en el servidor para generar el sitemap.");
++    }
++
++    const ahora = Date.now();
++    if (!cache || cache.expira <= ahora) {
++      if (!enCurso) {
++        enCurso = generar(sitio)
++          .then(({ xml, completo }) => {
++            // Un resultado incompleto (la BD falló) no pisa una versión completa que ya teníamos.
++            if (completo || !cache?.completo) cache = { xml, completo, expira: Date.now() + (completo ? ttl : Math.min(ttl, 60_000)) };
++            else cache.expira = Date.now() + 60_000; // reintentar en 1 min
++          })
++          .catch((err) => console.warn("[sitemap] Error generando:", err?.message ?? err))
++          .finally(() => {
++            enCurso = null;
++          });
++      }
++      await enCurso;
++    }
++
++    if (!cache) return res.status(503).type("text/plain").send("Sitemap no disponible por ahora.");
++    res
++      .status(200)
++      .set({
++        "Content-Type": "application/xml; charset=utf-8",
++        "Cache-Control": `public, max-age=${Math.round(Math.min(ttl, 600_000) / 1000)}`,
++      })
++      .send(cache.xml);
++  });
++}
+diff --git a/server/sitemap.test.js b/server/sitemap.test.js
+new file mode 100644
+index 0000000..80a77e6
+--- /dev/null
++++ b/server/sitemap.test.js
+@@ -0,0 +1,183 @@
++// Ejecutar: node --test server/sitemap.test.js
++import test from "node:test";
++import assert from "node:assert/strict";
++import { construirSitemap, registerSitemap, CATEGORIAS } from "./sitemap.js";
++
++const SITIO = "https://tienda.test";
++
++/** Supabase simulado: cada tabla es una función (columnas, desde, hasta) => { data, error }. */
++function fakeSupabase(tablas, llamadas = []) {
++  return {
++    from(tabla) {
++      const q = { tabla, columnas: "" };
++      const b = {
++        select(c) { q.columnas = c; return b; },
++        eq() { return b; },
++        or() { return b; },
++        order() { return b; },
++        range(a, z) {
++          llamadas.push({ tabla, columnas: q.columnas, a, z });
++          return Promise.resolve(tablas[tabla](q.columnas, a, z));
++        },
++      };
++      return b;
++    },
++  };
++}
++
++const filas = (n, prefijo, extra = {}) =>
++  Array.from({ length: n }, (_, i) => ({ id: `${prefijo}${i}`, created_at: "2026-01-02T00:00:00Z", ...extra }));
++
++/** Monta la ruta con un `app` falso y devuelve una función que simula una petición GET. */
++function montar(supabase) {
++  let handler;
++  const app = { get: (_ruta, _lim, h) => { handler = h; } };
++  registerSitemap({ app, supabaseAdmin: supabase, rateLimit: () => (_q, _s, n) => n() });
++  return async () => {
++    const res = { code: 200, headers: {}, body: "" };
++    res.status = (c) => { res.code = c; return res; };
++    res.set = (h) => { Object.assign(res.headers, h); return res; };
++    res.type = (t) => { res.headers["Content-Type"] = t; return res; };
++    res.send = (b) => { res.body = b; return res; };
++    await handler({}, res);
++    return res;
++  };
++}
++
++function entorno(vars) {
++  const antes = {};
++  for (const k of Object.keys(vars)) { antes[k] = process.env[k]; if (vars[k] === undefined) delete process.env[k]; else process.env[k] = vars[k]; }
++  return () => { for (const k of Object.keys(antes)) { if (antes[k] === undefined) delete process.env[k]; else process.env[k] = antes[k]; } };
++}
++
++test("construirSitemap escapa caracteres XML y omite lastmod inválido", () => {
++  const xml = construirSitemap(SITIO, [
++    { path: "/a?x=1&y=2", lastmod: "2026-03-04T10:00:00Z", changefreq: "weekly", priority: "0.5" },
++    { path: "/b", lastmod: "no-es-fecha", changefreq: "weekly", priority: "0.5" },
++  ]);
++  assert.match(xml, /<loc>https:\/\/tienda\.test\/a\?x=1&amp;y=2<\/loc>/);
++  assert.match(xml, /<lastmod>2026-03-04<\/lastmod>/);
++  assert.equal((xml.match(/<lastmod>/g) ?? []).length, 1);
++});
++
++test("incluye páginas fijas, categorías, productos y combos; pagina más de 1000 filas", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO, SITEMAP_TTL_SECONDS: "600" });
++  const llamadas = [];
++  const sb = fakeSupabase(
++    {
++      products: (_c, a) => ({ data: a === 0 ? filas(1000, "p") : a === 1000 ? filas(1000, "q") : filas(500, "r"), error: null }),
++      combos: () => ({ data: filas(2, "c"), error: null }),
++    },
++    llamadas,
++  );
++  const res = await montar(sb)();
++  restaurar();
++  assert.equal(res.code, 200);
++  assert.match(res.headers["Content-Type"], /application\/xml/);
++  assert.equal((res.body.match(/\/product\//g) ?? []).length, 2500);
++  assert.equal((res.body.match(/\/combo\//g) ?? []).length, 2);
++  for (const slug of CATEGORIAS) assert.match(res.body, new RegExp(`/categoria/${slug}<`));
++  assert.match(res.body, /<loc>https:\/\/tienda\.test\/<\/loc>/);
++  assert.equal(llamadas.filter((l) => l.tabla === "products").length, 3);
++});
++
++test("si falta updated_at, reintenta solo con created_at", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO });
++  const llamadas = [];
++  const sb = fakeSupabase(
++    {
++      products: (cols) =>
++        cols.includes("updated_at")
++          ? { data: null, error: { code: "42703", message: "column products.updated_at does not exist" } }
++          : { data: filas(3, "p"), error: null },
++      combos: () => ({ data: [], error: null }),
++    },
++    llamadas,
++  );
++  const res = await montar(sb)();
++  restaurar();
++  assert.equal((res.body.match(/\/product\//g) ?? []).length, 3);
++  assert.match(res.body, /<lastmod>2026-01-02<\/lastmod>/);
++  assert.ok(llamadas.some((l) => l.tabla === "products" && !l.columnas.includes("updated_at")));
++});
++
++test("usa updated_at como lastmod cuando existe", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO });
++  const sb = fakeSupabase({
++    products: () => ({ data: filas(1, "p", { updated_at: "2026-09-09T00:00:00Z" }), error: null }),
++    combos: () => ({ data: [], error: null }),
++  });
++  const res = await montar(sb)();
++  restaurar();
++  assert.match(res.body, /product\/p0<\/loc>\s*<lastmod>2026-09-09<\/lastmod>/);
++});
++
++test("la caché evita volver a consultar la base de datos", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO, SITEMAP_TTL_SECONDS: "600" });
++  const llamadas = [];
++  const sb = fakeSupabase(
++    { products: () => ({ data: filas(1, "p"), error: null }), combos: () => ({ data: [], error: null }) },
++    llamadas,
++  );
++  const pedir = montar(sb);
++  await pedir();
++  const primeras = llamadas.length;
++  await pedir();
++  restaurar();
++  assert.equal(llamadas.length, primeras);
++});
++
++test("peticiones simultáneas comparten una sola lectura", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO });
++  const llamadas = [];
++  const sb = fakeSupabase(
++    { products: () => ({ data: filas(1, "p"), error: null }), combos: () => ({ data: [], error: null }) },
++    llamadas,
++  );
++  const pedir = montar(sb);
++  await Promise.all([pedir(), pedir(), pedir()]);
++  restaurar();
++  assert.equal(llamadas.filter((l) => l.tabla === "products").length, 1);
++});
++
++test("si la base de datos cae y no hay caché, responde páginas fijas y categorías (200)", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO });
++  const originalWarn = console.warn; console.warn = () => {};
++  const sb = fakeSupabase({
++    products: () => ({ data: null, error: { message: "connection refused" } }),
++    combos: () => ({ data: null, error: { message: "connection refused" } }),
++  });
++  const res = await montar(sb)();
++  console.warn = originalWarn;
++  restaurar();
++  assert.equal(res.code, 200);
++  assert.doesNotMatch(res.body, /\/product\//);
++  assert.match(res.body, /\/catalogo</);
++});
++
++test("si la base cae después de una lectura buena, conserva la versión completa", async () => {
++  const restaurar = entorno({ SITE_URL: SITIO, SITEMAP_TTL_SECONDS: "0" }); // TTL 0 = siempre vence
++  const originalWarn = console.warn; console.warn = () => {};
++  let caida = false;
++  const sb = fakeSupabase({
++    products: () => (caida ? { data: null, error: { message: "boom" } } : { data: filas(2, "p"), error: null }),
++    combos: () => ({ data: [], error: null }),
++  });
++  const pedir = montar(sb);
++  const buena = await pedir();
++  caida = true;
++  const durante = await pedir();
++  console.warn = originalWarn;
++  restaurar();
++  assert.equal((buena.body.match(/\/product\//g) ?? []).length, 2);
++  assert.equal((durante.body.match(/\/product\//g) ?? []).length, 2);
++});
++
++test("sin SITE_URL responde 503 con un mensaje claro", async () => {
++  const restaurar = entorno({ SITE_URL: undefined, VITE_APP_URL_PROD: undefined, FRONTEND_URL: undefined });
++  const sb = fakeSupabase({ products: () => ({ data: [], error: null }), combos: () => ({ data: [], error: null }) });
++  const res = await montar(sb)();
++  restaurar();
++  assert.equal(res.code, 503);
++  assert.match(res.body, /SITE_URL/);
++});

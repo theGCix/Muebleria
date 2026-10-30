@@ -1,7 +1,8 @@
 // scripts/generate-sitemap.mjs
-// Se ejecuta antes de `vite build` (ver "build" en package.json) y genera:
-//   public/sitemap.xml  → páginas fijas + categorías + productos activos + combos vigentes
-//   public/robots.txt   → reglas + línea "Sitemap:" con la URL absoluta
+// Se ejecuta antes de `vite build` (ver "build" en package.json).
+// Por defecto SOLO actualiza public/robots.txt (línea "Sitemap:" con la URL absoluta): el
+// sitemap.xml lo sirve la API en vivo (server/sitemap.js) y Render lo reenvía (render.yaml).
+// Con SITEMAP_STATIC=1 vuelve al modo anterior y además genera public/sitemap.xml en el build.
 // Variables (en Render, o en .env local):
 //   SITE_URL (o VITE_APP_URL_PROD)  → URL pública del sitio, ej. https://www.gymmuebleria.pe
 //   VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY → para leer productos/combos
@@ -27,6 +28,19 @@ const SB_KEY = (process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABAS
 
 if (!/^https:\/\//.test(SITE)) {
   console.warn("[sitemap] Define SITE_URL (https://...) en el entorno de build. Se omite sitemap.xml.");
+  process.exit(0);
+}
+
+const robotsPath = resolve(root, "public/robots.txt");
+function actualizarRobots() {
+  let robots = existsSync(robotsPath) ? readFileSync(robotsPath, "utf8") : "User-agent: *\nAllow: /\n";
+  robots = robots.replace(/^Sitemap:.*\n?/gim, "").trimEnd() + `\n\nSitemap: ${SITE}/sitemap.xml\n`;
+  writeFileSync(robotsPath, robots);
+}
+
+if (process.env.SITEMAP_STATIC !== "1") {
+  actualizarRobots();
+  console.log(`[sitemap] robots.txt → Sitemap: ${SITE}/sitemap.xml (el sitemap lo sirve la API en vivo)`);
   process.exit(0);
 }
 
@@ -94,8 +108,5 @@ writeFileSync(
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`,
 );
 
-const robotsPath = resolve(root, "public/robots.txt");
-let robots = existsSync(robotsPath) ? readFileSync(robotsPath, "utf8") : "User-agent: *\nAllow: /\n";
-robots = robots.replace(/^Sitemap:.*\n?/gim, "").trimEnd() + `\n\nSitemap: ${SITE}/sitemap.xml\n`;
-writeFileSync(robotsPath, robots);
+actualizarRobots();
 console.log(`[sitemap] ${entries.length} URLs → public/sitemap.xml`);
