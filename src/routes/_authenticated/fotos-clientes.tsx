@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, ListSkeleton } from "@/components/states";
 import { uploadImage } from "@/lib/cloudinary";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import {
   eliminarGaleria, guardarGaleria, listGaleriaAdmin, listProductosBasico, moderarGaleria, setPublicadoGaleria,
   type GaleriaEstado, type GaleriaItem,
@@ -63,6 +64,8 @@ function TestimoniosAdminPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "todo", offset: 0 });
 
   const lista = useQuery({ queryKey: ["galeria-admin"], queryFn: listGaleriaAdmin });
   const productos = useQuery({ queryKey: ["productos-basico"], queryFn: listProductosBasico, staleTime: 10 * 60_000 });
@@ -151,7 +154,11 @@ function TestimoniosAdminPage() {
       publicado: g.publicado,
     });
 
-  const todos = lista.data ?? [];
+  // Testimonios del periodo elegido. "Borrar" = todo el historial.
+  const todos = useMemo(
+    () => (lista.data ?? []).filter((g) => rango.enRango(g.created_at)),
+    [lista.data, rango],
+  );
   const cuenta = useMemo(
     () => ({
       pendiente: todos.filter((g) => g.estado === "pendiente").length,
@@ -177,6 +184,9 @@ function TestimoniosAdminPage() {
           <Plus className="mr-1.5 h-4 w-4" /> Agregar testimonio
         </Button>
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (

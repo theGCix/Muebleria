@@ -1,0 +1,876 @@
+diff --git a/src/components/admin/PeriodFilter.tsx b/src/components/admin/PeriodFilter.tsx
+index 2274b72..76e4a3e 100644
+--- a/src/components/admin/PeriodFilter.tsx
++++ b/src/components/admin/PeriodFilter.tsx
+@@ -3,16 +3,16 @@
+ //   Día:    Hoy, Ayer y los días anteriores
+ //   Semana: Esta semana, Semana pasada y las semanas anteriores (lunes a domingo)
+ //   Mes:    Este mes, Mes pasado y los meses anteriores
+-//   Todo:   sin filtro (opcional)
++//   Borrar: botón pequeño que quita el filtro para ver todo el historial
+ import { useMemo, useState } from "react";
+-import { ChevronLeft, ChevronRight } from "lucide-react";
++import { ChevronLeft, ChevronRight, X } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+ import {
+   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+ } from "@/components/ui/select";
+ import {
+-  calcularRango, etiquetaCompleta, LIMITES_POR_DEFECTO,
++  calcularRango, etiquetaCompleta, LIMITES_POR_DEFECTO, textoViendo,
+   type Granularidad, type PeriodoValor,
+ } from "@/lib/periodo";
+ 
+@@ -28,8 +28,12 @@ export function usePeriodo(inicial: PeriodoValor = { granularidad: "dia", offset
+ interface Props {
+   valor: PeriodoValor;
+   onChange: (v: PeriodoValor) => void;
+-  /** Muestra la opción "Todo" (sin filtro). Por defecto sí. */
++  /** Muestra además un botón "Todo" junto a Día/Semana/Mes. Por defecto no: se usa "Borrar". */
+   todo?: boolean;
++  /** Botón pequeño "Borrar" para quitar el filtro y ver todo el historial. Por defecto sí. */
++  borrar?: boolean;
++  /** Línea "Viendo: del … al …" debajo del filtro. Por defecto sí. */
++  viendo?: boolean;
+   /** Cuántos periodos hacia atrás se listan en cada modo. */
+   maxDias?: number;
+   maxSemanas?: number;
+@@ -38,7 +42,7 @@ interface Props {
+ }
+ 
+ export function PeriodFilter({
+-  valor, onChange, todo = true,
++  valor, onChange, todo = false, borrar = true, viendo = true,
+   maxDias = LIMITES_POR_DEFECTO.dia,
+   maxSemanas = LIMITES_POR_DEFECTO.semana,
+   maxMeses = LIMITES_POR_DEFECTO.mes,
+@@ -108,6 +112,20 @@ export function PeriodFilter({
+           </Button>
+         </div>
+       )}
++
++      {borrar && g !== "todo" && (
++        <Button
++          variant="ghost" size="sm" className="h-9 px-2 text-muted-foreground"
++          title="Quitar el filtro y ver todo el historial"
++          onClick={() => onChange({ granularidad: "todo", offset: 0 })}
++        >
++          <X className="mr-1 h-3.5 w-3.5" /> Borrar
++        </Button>
++      )}
++
++      {viendo && (
++        <p className="basis-full text-xs text-muted-foreground">{textoViendo(valor, ahora)}</p>
++      )}
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/lib/periodo.ts b/src/lib/periodo.ts
+index 3c4bd10..b589b48 100644
+--- a/src/lib/periodo.ts
++++ b/src/lib/periodo.ts
+@@ -21,6 +21,9 @@ export interface RangoPeriodo {
+   /** Para filtros de Supabase: .gte("columna", desdeISO).lte("columna", hastaISO). Son null con "todo". */
+   desdeISO: string | null;
+   hastaISO: string | null;
++  /** Para las funciones SQL que reciben fechas (YYYY-MM-DD, hora local). Son null con "todo". */
++  desdeFecha: string | null;
++  hastaFecha: string | null;
+   /** Texto corto del periodo elegido ("Hoy", "Semana pasada", "Septiembre 2026"…). */
+   etiqueta: string;
+   /** Para filtrar listas en el navegador. Con "todo" siempre devuelve true. */
+@@ -79,6 +82,25 @@ export function etiquetaCompleta(v: PeriodoValor, ahora: Date = new Date()): str
+   return detalle ? `${principal} · ${detalle}` : principal;
+ }
+ 
++/** Texto "Viendo: del 1 oct al 31 oct 2026" (o "Viendo: todo el historial"). */
++export function textoViendo(v: PeriodoValor, ahora: Date = new Date()): string {
++  if (v.granularidad === "todo") return "Viendo: todo el historial";
++  const { desde, hasta } = calcularRango(v, ahora);
++  if (!desde || !hasta) return "Viendo: todo el historial";
++  if (v.granularidad === "dia") return `Viendo: ${format(desde, "d MMM yyyy", { locale: es })}`;
++  return `Viendo: del ${format(desde, "d MMM", { locale: es })} al ${format(hasta, "d MMM yyyy", { locale: es })}`;
++}
++
++/** Rango para funciones SQL que piden fechas: con "todo" abarca desde el año 2000 hasta hoy. */
++export function rangoParaSql(r: RangoPeriodo): { desde: string; hasta: string } {
++  const hoy = format(new Date(), "yyyy-MM-dd");
++  return {
++    desde: r.desdeFecha ?? "2000-01-01",
++    // No se piden días futuros (evita gráficos con días vacíos en "Esta semana" / "Este mes").
++    hasta: r.hastaFecha && r.hastaFecha < hoy ? r.hastaFecha : hoy,
++  };
++}
++
+ export function calcularRango(v: PeriodoValor, ahora: Date = new Date()): RangoPeriodo {
+   let desde: Date | null = null;
+   let hasta: Date | null = null;
+@@ -106,6 +128,8 @@ export function calcularRango(v: PeriodoValor, ahora: Date = new Date()): RangoP
+     hasta,
+     desdeISO: desde ? desde.toISOString() : null,
+     hastaISO: hasta ? hasta.toISOString() : null,
++    desdeFecha: desde ? format(desde, "yyyy-MM-dd") : null,
++    hastaFecha: hasta ? format(hasta, "yyyy-MM-dd") : null,
+     etiqueta: etiquetaPeriodo(v, ahora).principal,
+     enRango: (fecha) => {
+       if (ini === null || fin === null) return true;
+diff --git a/src/routes/_authenticated/analytics.tsx b/src/routes/_authenticated/analytics.tsx
+index fd0b7c6..4657a48 100644
+--- a/src/routes/_authenticated/analytics.tsx
++++ b/src/routes/_authenticated/analytics.tsx
+@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
+ import { useState, useMemo } from "react";
+ import { format, startOfMonth, subMonths } from "date-fns";
+ import { es } from "date-fns/locale";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
++import { rangoParaSql } from "@/lib/periodo";
+ 
+ export const Route = createFileRoute("/_authenticated/analytics")({
+   head: () => ({ meta: [{ title: "Analytics — G&M" }] }),
+@@ -26,13 +28,6 @@ const fmtShort = (n: number) =>
+   n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
+ const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
+ 
+-const PERIOD_OPTIONS = [
+-  { key: "mes",       label: "Este mes",        desde: () => format(startOfMonth(new Date()), "yyyy-MM-dd"),        hasta: () => format(new Date(), "yyyy-MM-dd") },
+-  { key: "mes_ant",   label: "Mes anterior",    desde: () => format(startOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd"), hasta: () => format(new Date(new Date().getFullYear(), new Date().getMonth(), 0), "yyyy-MM-dd") },
+-  { key: "trimestre", label: "Este trimestre",  desde: () => format(new Date(new Date().getFullYear(), Math.floor(new Date().getMonth() / 3) * 3, 1), "yyyy-MM-dd"), hasta: () => format(new Date(), "yyyy-MM-dd") },
+-  { key: "anio",      label: "Este año",        desde: () => `${new Date().getFullYear()}-01-01`, hasta: () => format(new Date(), "yyyy-MM-dd") },
+-] as const;
+-
+ const CANAL_COLORS:  Record<string, string> = { POS: "#378ADD", Ecommerce: "#1D9E75" };
+ const SEGMENTO_COLORS: Record<string, string> = { vip: "#854F0B", recurrente: "#1D9E75", nuevo: "#378ADD", inactivo: "#888780" };
+ const BAR_COLORS = ["#378ADD", "#185FA5", "#1D9E75", "#7F77DD", "#854F0B", "#E24B4A", "#0C447C", "#0F6E56", "#534AB7", "#993C1D"];
+@@ -126,12 +121,13 @@ function ConversionFunnel({ funnel }: {
+ 
+ // ── Página ────────────────────────────────────────────────────
+ function AnalyticsPage() {
+-  const [period, setPeriod] = useState<"mes" | "mes_ant" | "trimestre" | "anio">("mes");
+-  const periodOpt = PERIOD_OPTIONS.find((p) => p.key === period)!;
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "mes", offset: 0 });
++  const { desde, hasta } = rangoParaSql(rango);
+ 
+   const { data, isLoading, refetch, isFetching } = useQuery({
+-    queryKey: ["marketing-analytics", period],
+-    queryFn: () => getMarketingAnalytics({ desde: periodOpt.desde(), hasta: periodOpt.hasta() }),
++    queryKey: ["marketing-analytics", desde, hasta],
++    queryFn: () => getMarketingAnalytics({ desde, hasta }),
+     staleTime: 120_000,
+   });
+ 
+@@ -152,14 +148,7 @@ function AnalyticsPage() {
+           <p className="text-muted-foreground text-sm mt-0.5">Datos de marketing y comportamiento de compra</p>
+         </div>
+         <div className="flex gap-2">
+-          <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
+-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+-            <SelectContent>
+-              {PERIOD_OPTIONS.map((p) => (
+-                <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+-              ))}
+-            </SelectContent>
+-          </Select>
++          <PeriodFilter valor={periodo} onChange={setPeriodo} viendo={false} />
+           <Button variant="outline" size="sm" onClick={() => refetch()}>
+             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+           </Button>
+diff --git a/src/routes/_authenticated/carritos-abandonados.tsx b/src/routes/_authenticated/carritos-abandonados.tsx
+index 637b6c0..e7390e7 100644
+--- a/src/routes/_authenticated/carritos-abandonados.tsx
++++ b/src/routes/_authenticated/carritos-abandonados.tsx
+@@ -11,6 +11,8 @@ import { Loader2, RefreshCw, MessageCircle, Mail, Phone, ShoppingCart } from "lu
+ import { formatDistanceToNow } from "date-fns";
+ import { es } from "date-fns/locale";
+ import { toast } from "sonner";
++import { useMemo } from "react";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { CardGridSkeleton, EmptyState } from "@/components/states";
+ 
+ export const Route = createFileRoute("/_authenticated/carritos-abandonados")({
+@@ -121,13 +123,19 @@ function CarritoCard({ carrito }: { carrito: CarritoAbandonado }) {
+ }
+ 
+ function CarritosAbandonadosPage() {
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "mes", offset: 0 });
+   const qc = useQueryClient();
+   const { data, isLoading, isFetching } = useQuery({
+     queryKey: ["carritos-abandonados"],
+     queryFn: () => listCarritosAbandonados({ horasMin: 1 }),
+   });
+ 
+-  const carritos = data?.carritos ?? [];
++  // Carritos cuya última actividad cae en el periodo elegido. "Borrar" = todo el historial.
++  const carritos = useMemo(
++    () => (data?.carritos ?? []).filter((c) => rango.enRango(c.last_activity_at ?? c.created_at)),
++    [data, rango],
++  );
+   const totalPotencial = carritos.reduce((s, c) => s + c.subtotal, 0);
+ 
+   return (
+@@ -147,6 +155,9 @@ function CarritosAbandonadosPage() {
+         </Button>
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+         <div className="bg-card border border-border/50 rounded-xl p-4">
+           <p className="text-xs text-muted-foreground mb-1">Carritos abandonados</p>
+diff --git a/src/routes/_authenticated/central.tsx b/src/routes/_authenticated/central.tsx
+index 83fa55a..3cbbd6b 100644
+--- a/src/routes/_authenticated/central.tsx
++++ b/src/routes/_authenticated/central.tsx
+@@ -4,6 +4,8 @@ import { getDashboardKpis, getDashboardSeries } from "@/lib/pos.functions";
+ import { useEffect, useRef, useState } from "react";
+ import { format, startOfMonth } from "date-fns";
+ import { es } from "date-fns/locale";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
++import { rangoParaSql } from "@/lib/periodo";
+ import {
+   Clock, Hammer, Package, CheckCircle2, Truck,
+   AlertTriangle, Box, ShoppingCart, Globe,
+@@ -182,8 +184,11 @@ function LiveClock({ onRefresh }: { onRefresh: () => void }) {
+ // ── Página ────────────────────────────────────────────────────
+ function CentralPage() {
+   const [refreshKey, setRefreshKey] = useState(0);
+-  const desde = inicioMes();
+-  const hasta = hoy();
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "mes", offset: 0 });
++  const { desde, hasta } = rangoParaSql(rango);
++  // Con "Borrar" (todo el historial) la serie se agrupa por mes.
++  const agrupacion = rango.granularidad === "todo" ? "mes" : "dia";
+ 
+   useEffect(() => {
+     const channel = supabase
+@@ -208,8 +213,8 @@ function CentralPage() {
+   });
+ 
+   const seriesQ = useQuery({
+-    queryKey: ["central-series", desde, hasta, refreshKey],
+-    queryFn: () => getDashboardSeries({ desde, hasta, agrupacion: "dia" }),
++    queryKey: ["central-series", desde, hasta, agrupacion, refreshKey],
++    queryFn: () => getDashboardSeries({ desde, hasta, agrupacion }),
+     staleTime: 0,
+   });
+ 
+@@ -253,12 +258,15 @@ function CentralPage() {
+           </h1>
+           <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>Central de KPIs</span>
+           <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+-            · {format(new Date(), "MMMM yyyy", { locale: es })}
++            · {rango.etiqueta}
+           </span>
+         </div>
+         <LiveClock onRefresh={() => setRefreshKey((k) => k + 1)} />
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       {/* Fila 1: KPIs financieros */}
+       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+         <div className="col-span-2">
+diff --git a/src/routes/_authenticated/clientes.tsx b/src/routes/_authenticated/clientes.tsx
+index bbbc757..c6c5c29 100644
+--- a/src/routes/_authenticated/clientes.tsx
++++ b/src/routes/_authenticated/clientes.tsx
+@@ -22,6 +22,7 @@ import {
+   Loader2, Search, Eye,
+   ShoppingBag, Package, Phone, Mail, MapPin, Users } from "lucide-react";
+ import { useState, useMemo } from "react";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { toast } from "sonner";
+ import { format } from "date-fns";
+ import type { ClienteUnificado } from "@/lib/pos.functions";
+@@ -315,28 +316,36 @@ function ClientesPage() {
+   const [q, setQ] = useState(initialQ ?? "");
+   const [segmentoFilter, setSegmentoFilter] = useState("todos");
+   const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "todo", offset: 0 });
+ 
+   const { data, isLoading } = useQuery({
+     queryKey: ["customers-list", q],
+     queryFn: () => listClientesUnificados({ q }),
+   });
+ 
++  // Clientes registrados dentro del periodo elegido. "Borrar" = todo el historial.
++  const clientesPeriodo = useMemo(
++    () => (data?.clientes ?? []).filter((c: any) => rango.enRango(c.created_at)),
++    [data, rango],
++  );
++
+   const filtered = useMemo(() => {
+-    const list = data?.clientes ?? [];
++    const list = clientesPeriodo;
+     if (segmentoFilter === "todos") return list;
+     return list.filter((c: any) => c.segmento === segmentoFilter);
+-  }, [data, segmentoFilter]);
++  }, [clientesPeriodo, segmentoFilter]);
+ 
+   // KPIs
+   const stats = useMemo(() => {
+-    const all = data?.clientes ?? [];
++    const all = clientesPeriodo;
+     return {
+       total: all.length,
+       vip: all.filter((c: any) => c.segmento === "vip").length,
+       recurrente: all.filter((c: any) => c.segmento === "recurrente").length,
+       nuevo: all.filter((c: any) => c.segmento === "nuevo").length,
+     };
+-  }, [data]);
++  }, [clientesPeriodo]);
+ 
+   return (
+     <div className="space-y-6 max-w-7xl mx-auto">
+@@ -347,6 +356,9 @@ function ClientesPage() {
+         </div>
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       {/* KPIs */}
+       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+         {[
+diff --git a/src/routes/_authenticated/dashboard.tsx b/src/routes/_authenticated/dashboard.tsx
+index a921510..31549f1 100644
+--- a/src/routes/_authenticated/dashboard.tsx
++++ b/src/routes/_authenticated/dashboard.tsx
+@@ -18,6 +18,8 @@ import {
+ import { useState, useMemo } from "react";
+ import { format, subDays, startOfMonth, startOfWeek, subMonths } from "date-fns";
+ import { es } from "date-fns/locale";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
++import { rangoParaSql } from "@/lib/periodo";
+ 
+ 
+ 
+@@ -33,38 +35,6 @@ const fmt = (n: number) =>
+ const fmtShort = (n: number) =>
+   n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
+ 
+-const PERIOD_OPTIONS = [
+-  { key: "hoy",         label: "Hoy" },
+-  { key: "7d",          label: "Últimos 7 días" },
+-  { key: "mes",         label: "Este mes" },
+-  { key: "mes_ant",     label: "Mes anterior" },
+-  { key: "trimestre",   label: "Este trimestre" },
+-  { key: "anio",        label: "Este año" },
+-] as const;
+-
+-type PeriodKey = typeof PERIOD_OPTIONS[number]["key"];
+-
+-function getRange(key: PeriodKey): { desde: string; hasta: string; agrupacion: "dia" | "semana" | "mes" } {
+-  const today = new Date();
+-  const iso = (d: Date) => format(d, "yyyy-MM-dd");
+-  switch (key) {
+-    case "hoy":
+-      return { desde: iso(today), hasta: iso(today), agrupacion: "dia" };
+-    case "7d":
+-      return { desde: iso(subDays(today, 6)), hasta: iso(today), agrupacion: "dia" };
+-    case "mes":
+-      return { desde: iso(startOfMonth(today)), hasta: iso(today), agrupacion: "dia" };
+-    case "mes_ant": {
+-      const ant = subMonths(today, 1);
+-      return { desde: iso(startOfMonth(ant)), hasta: iso(new Date(ant.getFullYear(), ant.getMonth() + 1, 0)), agrupacion: "dia" };
+-    }
+-    case "trimestre":
+-      return { desde: iso(new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1)), hasta: iso(today), agrupacion: "semana" };
+-    case "anio":
+-      return { desde: `${today.getFullYear()}-01-01`, hasta: iso(today), agrupacion: "mes" };
+-  }
+-}
+-
+ // ── KPI Card ─────────────────────────────────────────────────
+ function KpiCard({
+   label, value, sub, icon: Icon, trend, alert, onClick,
+@@ -120,8 +90,13 @@ function CustomTooltip({ active, payload, label }: any) {
+ // ── Página principal ──────────────────────────────────────────
+ function DashboardPage() {
+   const navigate = useNavigate();
+-  const [period, setPeriod] = useState<PeriodKey>("mes");
+-  const range = useMemo(() => getRange(period), [period]);
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "mes", offset: 0 });
++  const range = useMemo(() => ({
++    ...rangoParaSql(rango),
++    // Con "Borrar" (todo el historial) la serie se agrupa por mes para que el gráfico se lea bien.
++    agrupacion: (rango.granularidad === "todo" ? "mes" : "dia") as "dia" | "semana" | "mes",
++  }), [rango]);
+ 
+   const kpisQuery = useQuery({
+     queryKey: ["dashboard-kpis", range.desde, range.hasta],
+@@ -159,17 +134,7 @@ function DashboardPage() {
+           </p>
+         </div>
+         <div className="flex gap-2 items-center">
+-          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
+-            <SelectTrigger className="w-44">
+-              <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+-              <SelectValue />
+-            </SelectTrigger>
+-            <SelectContent>
+-              {PERIOD_OPTIONS.map(({ key, label }) => (
+-                <SelectItem key={key} value={key}>{label}</SelectItem>
+-              ))}
+-            </SelectContent>
+-          </Select>
++          <PeriodFilter valor={periodo} onChange={setPeriodo} viendo={false} />
+           <Button
+             variant="outline" size="sm"
+             onClick={() => { kpisQuery.refetch(); seriesQuery.refetch(); }}
+diff --git a/src/routes/_authenticated/despachos.tsx b/src/routes/_authenticated/despachos.tsx
+index 7d009be..6e4feb1 100644
+--- a/src/routes/_authenticated/despachos.tsx
++++ b/src/routes/_authenticated/despachos.tsx
+@@ -3,6 +3,7 @@
+ import { createFileRoute } from "@tanstack/react-router";
+ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+ import { useMemo, useState } from "react";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { toast } from "sonner";
+ import {
+   Navigation, Plus, Pencil, MessageCircle, Play, CheckCircle2, XCircle, CalendarClock,
+@@ -53,6 +54,8 @@ function DespachosPage() {
+   const [filtro, setFiltro] = useState<Filtro>("activos");
+   const [fecha, setFecha] = useState<string>("");
+   const [q, setQ] = useState("");
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "todo", offset: 0 });
+   const [form, setForm] = useState<{ open: boolean; edit?: Despacho; orderId?: string }>({ open: false });
+   const [accion, setAccion] = useState<{ d: Despacho; tipo: "entregado" | "fallido" | "reprogramar" | "cancelado" } | null>(null);
+ 
+@@ -81,18 +84,23 @@ function DespachosPage() {
+   });
+ 
+   const hoy = hoyISO();
++  // Despachos dentro del periodo elegido (por fecha programada). "Borrar" = todo el historial.
++  const despachosPeriodo = useMemo(
++    () => despachos.filter((d) => rango.enRango(`${d.fecha_programada}T12:00:00`)),
++    [despachos, rango],
++  );
+   const kpis = useMemo(() => ({
+-    hoy: despachos.filter((d) => d.fecha_programada === hoy && ["programado", "en_ruta"].includes(d.estado)).length,
+-    programados: despachos.filter((d) => d.estado === "programado").length,
+-    enRuta: despachos.filter((d) => d.estado === "en_ruta").length,
+-    atencion: despachos.filter(
++    hoy: despachosPeriodo.filter((d) => d.fecha_programada === hoy && ["programado", "en_ruta"].includes(d.estado)).length,
++    programados: despachosPeriodo.filter((d) => d.estado === "programado").length,
++    enRuta: despachosPeriodo.filter((d) => d.estado === "en_ruta").length,
++    atencion: despachosPeriodo.filter(
+       (d) => d.estado === "fallido" || (d.estado === "programado" && d.fecha_programada < hoy),
+     ).length,
+-  }), [despachos, hoy]);
++  }), [despachosPeriodo, hoy]);
+ 
+   const filtrados = useMemo(() => {
+     const term = q.trim().toLowerCase();
+-    return despachos.filter((d) => {
++    return despachosPeriodo.filter((d) => {
+       const okEstado =
+         filtro === "todos" ? true
+         : filtro === "activos" ? ["programado", "en_ruta", "fallido"].includes(d.estado)
+@@ -103,7 +111,7 @@ function DespachosPage() {
+         .some((x) => x?.toLowerCase().includes(term));
+       return okEstado && okFecha && okQ;
+     });
+-  }, [despachos, filtro, fecha, q]);
++  }, [despachosPeriodo, filtro, fecha, q]);
+ 
+   const copiarHojaDeRuta = async () => {
+     const dia = fecha || hoy;
+@@ -183,6 +191,9 @@ function DespachosPage() {
+         </Card>
+       )}
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       {/* Filtros */}
+       <div className="flex flex-wrap items-center gap-2">
+         <Select value={filtro} onValueChange={(v) => setFiltro(v as Filtro)}>
+diff --git a/src/routes/_authenticated/fotos-clientes.tsx b/src/routes/_authenticated/fotos-clientes.tsx
+index e8b5789..eee1511 100644
+--- a/src/routes/_authenticated/fotos-clientes.tsx
++++ b/src/routes/_authenticated/fotos-clientes.tsx
+@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
+ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+ import { EmptyState, ListSkeleton } from "@/components/states";
+ import { uploadImage } from "@/lib/cloudinary";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import {
+   eliminarGaleria, guardarGaleria, listGaleriaAdmin, listProductosBasico, moderarGaleria, setPublicadoGaleria,
+   type GaleriaEstado, type GaleriaItem,
+@@ -63,6 +64,8 @@ function TestimoniosAdminPage() {
+   const [form, setForm] = useState<Form | null>(null);
+   const [subiendo, setSubiendo] = useState(false);
+   const inputRef = useRef<HTMLInputElement>(null);
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "todo", offset: 0 });
+ 
+   const lista = useQuery({ queryKey: ["galeria-admin"], queryFn: listGaleriaAdmin });
+   const productos = useQuery({ queryKey: ["productos-basico"], queryFn: listProductosBasico, staleTime: 10 * 60_000 });
+@@ -151,7 +154,11 @@ function TestimoniosAdminPage() {
+       publicado: g.publicado,
+     });
+ 
+-  const todos = lista.data ?? [];
++  // Testimonios del periodo elegido. "Borrar" = todo el historial.
++  const todos = useMemo(
++    () => (lista.data ?? []).filter((g) => rango.enRango(g.created_at)),
++    [lista.data, rango],
++  );
+   const cuenta = useMemo(
+     () => ({
+       pendiente: todos.filter((g) => g.estado === "pendiente").length,
+@@ -178,6 +185,9 @@ function TestimoniosAdminPage() {
+         </Button>
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       <div className="flex flex-wrap gap-2">
+         {TABS.map((t) => (
+           <button
+diff --git a/src/routes/_authenticated/leads.tsx b/src/routes/_authenticated/leads.tsx
+index e4ddae6..3ab7a4c 100644
+--- a/src/routes/_authenticated/leads.tsx
++++ b/src/routes/_authenticated/leads.tsx
+@@ -19,6 +19,7 @@ import {
+ } from "@/components/ui/dialog";
+ import { Loader2, Search, Phone, Mail, Package, RefreshCw, UserCheck, Inbox } from "lucide-react";
+ import { useState, useMemo } from "react";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { toast } from "sonner";
+ import { format } from "date-fns";
+ import { es } from "date-fns/locale";
+@@ -194,6 +195,8 @@ function LeadDetail({ lead, asesores, onClose }: {
+ function LeadsPage() {
+   const [q, setQ] = useState("");
+   const [selected, setSelected] = useState<Lead | null>(null);
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "todo", offset: 0 });
+   const qc = useQueryClient();
+ 
+   const { data, isLoading, isFetching } = useQuery({
+@@ -214,8 +217,14 @@ function LeadsPage() {
+     onError: (e: any) => toast.error(e.message),
+   });
+ 
++  // Leads creados dentro del periodo elegido. "Borrar" = todo el historial.
++  const leadsPeriodo = useMemo(
++    () => (data?.leads ?? []).filter((l) => rango.enRango(l.created_at)),
++    [data, rango],
++  );
++
+   const filtered = useMemo(() => {
+-    const list = data?.leads ?? [];
++    const list = leadsPeriodo;
+     if (!q.trim()) return list;
+     const needle = q.toLowerCase();
+     return list.filter((l) =>
+@@ -224,7 +233,7 @@ function LeadsPage() {
+       l.email?.toLowerCase().includes(needle) ||
+       l.producto_nombre?.toLowerCase().includes(needle)
+     );
+-  }, [data, q]);
++  }, [leadsPeriodo, q]);
+ 
+   const byEstado = useMemo(() => {
+     const map = {} as Record<LeadEstado, Lead[]>;
+@@ -234,7 +243,7 @@ function LeadsPage() {
+   }, [filtered]);
+ 
+   const stats = useMemo(() => {
+-    const all = data?.leads ?? [];
++    const all = leadsPeriodo;
+     const ganados = all.filter((l) => l.estado === "ganado").length;
+     const cerrados = all.filter((l) => l.estado === "ganado" || l.estado === "perdido").length;
+     return {
+@@ -243,7 +252,7 @@ function LeadsPage() {
+       enProceso: all.filter((l) => !["nuevo", "ganado", "perdido"].includes(l.estado)).length,
+       conversion: cerrados > 0 ? Math.round((ganados / cerrados) * 100) : 0,
+     };
+-  }, [data]);
++  }, [leadsPeriodo]);
+ 
+   return (
+     <div className="space-y-6 max-w-[1400px] mx-auto">
+@@ -260,6 +269,9 @@ function LeadsPage() {
+         </Button>
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       {/* KPIs */}
+       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+         {[
+diff --git a/src/routes/_authenticated/pedidos.tsx b/src/routes/_authenticated/pedidos.tsx
+index f51dd38..be1f8d3 100644
+--- a/src/routes/_authenticated/pedidos.tsx
++++ b/src/routes/_authenticated/pedidos.tsx
+@@ -26,6 +26,7 @@ import { cambiarEstadoPedido } from "@/lib/pos.functions";
+ import { whatsappLink } from "@/lib/despachos.functions";
+ import { enlaceResena, mensajeResena } from "@/lib/resena-link";
+ import { EmptyState, TableSkeleton } from "@/components/states";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { EvidenciasPedido } from "@/components/admin/EvidenciasPedido";
+ 
+ 
+@@ -140,6 +141,8 @@ function PedidosPage() {
+   const [search, setSearch] = useState(initialQ ?? "");
+   const [statusFilter, setStatusFilter] = useState<string>("todos");
+   const [selectedId, setSelectedId] = useState<string | null>(null);
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "todo", offset: 0 });
+ 
+   const { data: orders = [], isLoading, refetch } = useQuery({
+     queryKey: ["orders"],
+@@ -181,8 +184,14 @@ function PedidosPage() {
+     onError: (err: Error) => toast.error(err.message),
+   });
+ 
++  // Pedidos dentro del periodo elegido (por fecha de creación). "Borrar" = todo el historial.
++  const ordersPeriodo = useMemo(
++    () => orders.filter((o) => rango.enRango(o.created_at)),
++    [orders, rango],
++  );
++
+   const filtered = useMemo(() => {
+-    return orders.filter((o) => {
++    return ordersPeriodo.filter((o) => {
+       const matchStatus = statusFilter === "todos" || o.status === statusFilter;
+       const q = search.toLowerCase();
+       const matchSearch =
+@@ -193,18 +202,18 @@ function PedidosPage() {
+         o.telefono?.includes(q);
+       return matchStatus && matchSearch;
+     });
+-  }, [orders, search, statusFilter]);
++  }, [ordersPeriodo, search, statusFilter]);
+ 
+   // KPIs rápidos
+   const stats = useMemo(() => {
+-    const total = orders.reduce((s, o) => s + Number(o.total), 0);
++    const total = ordersPeriodo.reduce((s, o) => s + Number(o.total), 0);
+     return {
+       total,
+-      enProduccion: orders.filter((o) => o.status === "en_produccion" || o.status === "control_calidad").length,
+-      pendientes:   orders.filter((o) => o.status === "pendiente" || o.status === "pagado").length,
+-      count:        orders.length,
++      enProduccion: ordersPeriodo.filter((o) => o.status === "en_produccion" || o.status === "control_calidad").length,
++      pendientes:   ordersPeriodo.filter((o) => o.status === "pendiente" || o.status === "pagado").length,
++      count:        ordersPeriodo.length,
+     };
+-  }, [orders]);
++  }, [ordersPeriodo]);
+ 
+   const selected = orders.find((o) => o.id === selectedId);
+ 
+@@ -242,7 +251,7 @@ function PedidosPage() {
+         <div className="flex items-center gap-1 min-w-max">
+           {PIPELINE_ORDER.map((status, i) => {
+             const cfg = STATUS_CONFIG[status];
+-            const count = orders.filter((o) => o.status === status).length;
++            const count = ordersPeriodo.filter((o) => o.status === status).length;
+             const Icon = cfg.icon;
+             return (
+               <div key={status} className="flex items-center gap-1">
+@@ -284,13 +293,16 @@ function PedidosPage() {
+                 <span className="text-xs font-medium">Cancelado</span>
+               </div>
+               <span className="text-sm font-semibold rounded-full w-6 h-6 flex items-center justify-center bg-red-50 text-red-700">
+-                {orders.filter((o) => o.status === "cancelado").length}
++                {ordersPeriodo.filter((o) => o.status === "cancelado").length}
+               </span>
+             </button>
+           </div>
+         </div>
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       {/* Filtros */}
+       <div className="flex gap-3 flex-wrap">
+         <div className="relative flex-1 min-w-48">
+diff --git a/src/routes/_authenticated/productos.tsx b/src/routes/_authenticated/productos.tsx
+index b761e31..3406d24 100644
+--- a/src/routes/_authenticated/productos.tsx
++++ b/src/routes/_authenticated/productos.tsx
+@@ -107,6 +107,22 @@ async function upsertProduct(product: any) {
+   return data;
+ }
+ 
++// SKU autoincremental: GM-0001, GM-0002… (toma el número más alto existente y suma 1).
++const SKU_PREFIJO = "GM-";
++async function siguienteSku(): Promise<string> {
++  const { data, error } = await supabase
++    .from("products")
++    .select("sku")
++    .ilike("sku", `${SKU_PREFIJO}%`);
++  if (error) throw new Error(error.message);
++  let max = 0;
++  for (const r of data ?? []) {
++    const m = /^GM-(\d+)$/i.exec((r.sku ?? "").trim());
++    if (m) max = Math.max(max, parseInt(m[1], 10));
++  }
++  return `${SKU_PREFIJO}${String(max + 1).padStart(4, "0")}`;
++}
++
+ async function deleteProduct(id: string) {
+   const { error } = await supabase.from("products").delete().eq("id", id);
+   if (error) throw new Error(error.message);
+@@ -123,6 +139,23 @@ function ProductFormModal({
+   const qc = useQueryClient();
+   const [form, setForm] = useState<ProductForm>(initial ?? emptyForm());
+   const [uploading, setUploading] = useState(false);
++  // true mientras el SKU sea el sugerido automáticamente (si el admin lo edita, se respeta)
++  const skuAuto = useRef(false);
++
++  // Producto nuevo: propone el siguiente SKU.
++  useEffect(() => {
++    if (form.id || form.sku) return;
++    let vivo = true;
++    siguienteSku()
++      .then((s) => {
++        if (!vivo) return;
++        skuAuto.current = true;
++        setForm((f) => (f.sku ? f : { ...f, sku: s }));
++      })
++      .catch(() => {});
++    return () => { vivo = false; };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
+   const fileRef = useRef<HTMLInputElement>(null);
+   const [ubicacionId, setUbicacionId] = useState<string>("");
+   const [cantidadUbicacion, setCantidadUbicacion] = useState<string>("0");
+@@ -254,8 +287,14 @@ function ProductFormModal({
+ 
+   const saveMut = useMutation({
+     mutationFn: async () => {
++      // Producto nuevo: si el SKU es el sugerido (o está vacío), se recalcula al guardar
++      // por si otro producto se creó mientras tenías el formulario abierto.
++      const sku = !form.id && (skuAuto.current || !form.sku.trim())
++        ? await siguienteSku()
++        : form.sku;
+       const savedProduct = await upsertProduct({
+         ...form,
++        sku,
+         precio: parseFloat(form.precio),
+         descuento_porcentaje: form.descuento_porcentaje
+           ? parseInt(form.descuento_porcentaje, 10)
+@@ -430,7 +469,15 @@ function ProductFormModal({
+         <div className="grid grid-cols-2 gap-3">
+           <div>
+             <Label htmlFor="sku">SKU</Label>
+-            <Input id="sku" value={form.sku} onChange={set("sku")} />
++            <Input
++              id="sku"
++              value={form.sku}
++              placeholder={form.id ? "" : "Automático"}
++              onChange={(e) => { skuAuto.current = false; set("sku")(e); }}
++            />
++            {!form.id && (
++              <p className="mt-1 text-[11px] text-muted-foreground">Se asigna solo; puedes cambiarlo.</p>
++            )}
+           </div>
+           <div>
+             <Label htmlFor="categoria">Categoría</Label>
+diff --git a/src/routes/_authenticated/resenas.tsx b/src/routes/_authenticated/resenas.tsx
+index 3cb6c0d..ae71b46 100644
+--- a/src/routes/_authenticated/resenas.tsx
++++ b/src/routes/_authenticated/resenas.tsx
+@@ -13,6 +13,7 @@ import {
+   Star, Loader2, Search, RefreshCw, Check, X, MessageSquare, ImageIcon,
+ } from "lucide-react";
+ import { useState, useMemo } from "react";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { toast } from "sonner";
+ import { format } from "date-fns";
+ import { es } from "date-fns/locale";
+@@ -199,6 +200,8 @@ function ResenaCard({ r }: { r: ResenaAdmin }) {
+ function ResenasPage() {
+   const [tab, setTab] = useState<ResenaEstado | "todas">("pendiente");
+   const [q, setQ] = useState("");
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "todo", offset: 0 });
+   const qc = useQueryClient();
+ 
+   const { data, isLoading, isFetching } = useQuery({
+@@ -206,7 +209,11 @@ function ResenasPage() {
+     queryFn: () => listResenasAdmin({ estado: tab, q }),
+   });
+ 
+-  const resenas = data?.resenas ?? [];
++  // Reseñas del periodo elegido. "Borrar" = todo el historial.
++  const resenas = useMemo(
++    () => (data?.resenas ?? []).filter((r) => rango.enRango(r.created_at)),
++    [data, rango],
++  );
+ 
+   const counts = useMemo(() => {
+     const all = resenas;
+@@ -228,6 +235,9 @@ function ResenasPage() {
+         </Button>
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       <div className="flex items-center justify-between gap-4 flex-wrap">
+         <div className="flex gap-1 bg-muted/40 rounded-full p-1">
+           {TABS.map((t) => (
+diff --git a/src/routes/_authenticated/ventas.tsx b/src/routes/_authenticated/ventas.tsx
+index e6df62f..2390be3 100644
+--- a/src/routes/_authenticated/ventas.tsx
++++ b/src/routes/_authenticated/ventas.tsx
+@@ -27,6 +27,7 @@ import {
+ import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
+ import { useNubefact } from "@/hooks/useNubefact";
+ import { EmptyState, TableSkeleton } from "@/components/states";
++import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ 
+ export const Route = createFileRoute("/_authenticated/ventas")({
+   head: () => ({ meta: [{ title: "Ventas y comprobantes — G&M" }] }),
+@@ -369,13 +370,19 @@ function DescargaPeriodo({ sales }: { sales: any[] }) {
+ 
+ // ── Página principal ──────────────────────────────────────────
+ function VentasPage() {
++  const { valor: periodo, setValor: setPeriodo, rango } =
++    usePeriodo({ granularidad: "mes", offset: 0 });
+   const { data, isLoading } = useQuery({
+     queryKey: ["sales"],
+     queryFn: () => listSales(),
+   });
+   const { data: dataUnificada, isLoading: isLoadingUnificada } = useQuery({
+-    queryKey: ["ventas-unificadas"],
+-    queryFn: () => listVentasUnificadas(),
++    // El periodo se filtra en el servidor; "Borrar" quita desde/hasta (todo el historial).
++    queryKey: ["ventas-unificadas", rango.desdeISO, rango.hastaISO],
++    queryFn: () => listVentasUnificadas({
++      desde: rango.desdeISO ?? undefined,
++      hasta: rango.hastaISO ?? undefined,
++    }),
+   });
+   const [openId, setOpenId] = useState<string | null>(null);
+   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+@@ -420,6 +427,9 @@ function VentasPage() {
+         {data?.sales && <DescargaPeriodo sales={data.sales} />}
+       </div>
+ 
++      {/* Periodo */}
++      <PeriodFilter valor={periodo} onChange={setPeriodo} />
++
+       {/* Filtros */}
+       <div className="flex gap-3 flex-wrap items-center">
+         <Input

@@ -26,6 +26,7 @@ import { cambiarEstadoPedido } from "@/lib/pos.functions";
 import { whatsappLink } from "@/lib/despachos.functions";
 import { enlaceResena, mensajeResena } from "@/lib/resena-link";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { EvidenciasPedido } from "@/components/admin/EvidenciasPedido";
 
 
@@ -140,6 +141,8 @@ function PedidosPage() {
   const [search, setSearch] = useState(initialQ ?? "");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "todo", offset: 0 });
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ["orders"],
@@ -181,8 +184,14 @@ function PedidosPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // Pedidos dentro del periodo elegido (por fecha de creación). "Borrar" = todo el historial.
+  const ordersPeriodo = useMemo(
+    () => orders.filter((o) => rango.enRango(o.created_at)),
+    [orders, rango],
+  );
+
   const filtered = useMemo(() => {
-    return orders.filter((o) => {
+    return ordersPeriodo.filter((o) => {
       const matchStatus = statusFilter === "todos" || o.status === statusFilter;
       const q = search.toLowerCase();
       const matchSearch =
@@ -193,18 +202,18 @@ function PedidosPage() {
         o.telefono?.includes(q);
       return matchStatus && matchSearch;
     });
-  }, [orders, search, statusFilter]);
+  }, [ordersPeriodo, search, statusFilter]);
 
   // KPIs rápidos
   const stats = useMemo(() => {
-    const total = orders.reduce((s, o) => s + Number(o.total), 0);
+    const total = ordersPeriodo.reduce((s, o) => s + Number(o.total), 0);
     return {
       total,
-      enProduccion: orders.filter((o) => o.status === "en_produccion" || o.status === "control_calidad").length,
-      pendientes:   orders.filter((o) => o.status === "pendiente" || o.status === "pagado").length,
-      count:        orders.length,
+      enProduccion: ordersPeriodo.filter((o) => o.status === "en_produccion" || o.status === "control_calidad").length,
+      pendientes:   ordersPeriodo.filter((o) => o.status === "pendiente" || o.status === "pagado").length,
+      count:        ordersPeriodo.length,
     };
-  }, [orders]);
+  }, [ordersPeriodo]);
 
   const selected = orders.find((o) => o.id === selectedId);
 
@@ -242,7 +251,7 @@ function PedidosPage() {
         <div className="flex items-center gap-1 min-w-max">
           {PIPELINE_ORDER.map((status, i) => {
             const cfg = STATUS_CONFIG[status];
-            const count = orders.filter((o) => o.status === status).length;
+            const count = ordersPeriodo.filter((o) => o.status === status).length;
             const Icon = cfg.icon;
             return (
               <div key={status} className="flex items-center gap-1">
@@ -284,12 +293,15 @@ function PedidosPage() {
                 <span className="text-xs font-medium">Cancelado</span>
               </div>
               <span className="text-sm font-semibold rounded-full w-6 h-6 flex items-center justify-center bg-red-50 text-red-700">
-                {orders.filter((o) => o.status === "cancelado").length}
+                {ordersPeriodo.filter((o) => o.status === "cancelado").length}
               </span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* Filtros */}
       <div className="flex gap-3 flex-wrap">

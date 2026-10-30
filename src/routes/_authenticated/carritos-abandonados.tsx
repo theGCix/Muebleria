@@ -11,6 +11,8 @@ import { Loader2, RefreshCw, MessageCircle, Mail, Phone, ShoppingCart } from "lu
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
+import { useMemo } from "react";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { CardGridSkeleton, EmptyState } from "@/components/states";
 
 export const Route = createFileRoute("/_authenticated/carritos-abandonados")({
@@ -121,13 +123,19 @@ function CarritoCard({ carrito }: { carrito: CarritoAbandonado }) {
 }
 
 function CarritosAbandonadosPage() {
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "mes", offset: 0 });
   const qc = useQueryClient();
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["carritos-abandonados"],
     queryFn: () => listCarritosAbandonados({ horasMin: 1 }),
   });
 
-  const carritos = data?.carritos ?? [];
+  // Carritos cuya última actividad cae en el periodo elegido. "Borrar" = todo el historial.
+  const carritos = useMemo(
+    () => (data?.carritos ?? []).filter((c) => rango.enRango(c.last_activity_at ?? c.created_at)),
+    [data, rango],
+  );
   const totalPotencial = carritos.reduce((s, c) => s + c.subtotal, 0);
 
   return (
@@ -146,6 +154,9 @@ function CarritosAbandonadosPage() {
           <RefreshCw className={`h-4 w-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} /> Actualizar
         </Button>
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-card border border-border/50 rounded-xl p-4">

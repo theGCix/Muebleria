@@ -3,6 +3,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { toast } from "sonner";
 import {
   Navigation, Plus, Pencil, MessageCircle, Play, CheckCircle2, XCircle, CalendarClock,
@@ -53,6 +54,8 @@ function DespachosPage() {
   const [filtro, setFiltro] = useState<Filtro>("activos");
   const [fecha, setFecha] = useState<string>("");
   const [q, setQ] = useState("");
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "todo", offset: 0 });
   const [form, setForm] = useState<{ open: boolean; edit?: Despacho; orderId?: string }>({ open: false });
   const [accion, setAccion] = useState<{ d: Despacho; tipo: "entregado" | "fallido" | "reprogramar" | "cancelado" } | null>(null);
 
@@ -81,18 +84,23 @@ function DespachosPage() {
   });
 
   const hoy = hoyISO();
+  // Despachos dentro del periodo elegido (por fecha programada). "Borrar" = todo el historial.
+  const despachosPeriodo = useMemo(
+    () => despachos.filter((d) => rango.enRango(`${d.fecha_programada}T12:00:00`)),
+    [despachos, rango],
+  );
   const kpis = useMemo(() => ({
-    hoy: despachos.filter((d) => d.fecha_programada === hoy && ["programado", "en_ruta"].includes(d.estado)).length,
-    programados: despachos.filter((d) => d.estado === "programado").length,
-    enRuta: despachos.filter((d) => d.estado === "en_ruta").length,
-    atencion: despachos.filter(
+    hoy: despachosPeriodo.filter((d) => d.fecha_programada === hoy && ["programado", "en_ruta"].includes(d.estado)).length,
+    programados: despachosPeriodo.filter((d) => d.estado === "programado").length,
+    enRuta: despachosPeriodo.filter((d) => d.estado === "en_ruta").length,
+    atencion: despachosPeriodo.filter(
       (d) => d.estado === "fallido" || (d.estado === "programado" && d.fecha_programada < hoy),
     ).length,
-  }), [despachos, hoy]);
+  }), [despachosPeriodo, hoy]);
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return despachos.filter((d) => {
+    return despachosPeriodo.filter((d) => {
       const okEstado =
         filtro === "todos" ? true
         : filtro === "activos" ? ["programado", "en_ruta", "fallido"].includes(d.estado)
@@ -103,7 +111,7 @@ function DespachosPage() {
         .some((x) => x?.toLowerCase().includes(term));
       return okEstado && okFecha && okQ;
     });
-  }, [despachos, filtro, fecha, q]);
+  }, [despachosPeriodo, filtro, fecha, q]);
 
   const copiarHojaDeRuta = async () => {
     const dia = fecha || hoy;
@@ -182,6 +190,9 @@ function DespachosPage() {
           </div>
         </Card>
       )}
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">

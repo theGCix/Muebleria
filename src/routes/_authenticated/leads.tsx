@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, Search, Phone, Mail, Package, RefreshCw, UserCheck, Inbox } from "lucide-react";
 import { useState, useMemo } from "react";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -194,6 +195,8 @@ function LeadDetail({ lead, asesores, onClose }: {
 function LeadsPage() {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "todo", offset: 0 });
   const qc = useQueryClient();
 
   const { data, isLoading, isFetching } = useQuery({
@@ -214,8 +217,14 @@ function LeadsPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Leads creados dentro del periodo elegido. "Borrar" = todo el historial.
+  const leadsPeriodo = useMemo(
+    () => (data?.leads ?? []).filter((l) => rango.enRango(l.created_at)),
+    [data, rango],
+  );
+
   const filtered = useMemo(() => {
-    const list = data?.leads ?? [];
+    const list = leadsPeriodo;
     if (!q.trim()) return list;
     const needle = q.toLowerCase();
     return list.filter((l) =>
@@ -224,7 +233,7 @@ function LeadsPage() {
       l.email?.toLowerCase().includes(needle) ||
       l.producto_nombre?.toLowerCase().includes(needle)
     );
-  }, [data, q]);
+  }, [leadsPeriodo, q]);
 
   const byEstado = useMemo(() => {
     const map = {} as Record<LeadEstado, Lead[]>;
@@ -234,7 +243,7 @@ function LeadsPage() {
   }, [filtered]);
 
   const stats = useMemo(() => {
-    const all = data?.leads ?? [];
+    const all = leadsPeriodo;
     const ganados = all.filter((l) => l.estado === "ganado").length;
     const cerrados = all.filter((l) => l.estado === "ganado" || l.estado === "perdido").length;
     return {
@@ -243,7 +252,7 @@ function LeadsPage() {
       enProceso: all.filter((l) => !["nuevo", "ganado", "perdido"].includes(l.estado)).length,
       conversion: cerrados > 0 ? Math.round((ganados / cerrados) * 100) : 0,
     };
-  }, [data]);
+  }, [leadsPeriodo]);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -259,6 +268,9 @@ function LeadsPage() {
           <RefreshCw className={`h-4 w-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} /> Actualizar
         </Button>
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

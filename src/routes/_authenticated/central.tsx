@@ -4,6 +4,8 @@ import { getDashboardKpis, getDashboardSeries } from "@/lib/pos.functions";
 import { useEffect, useRef, useState } from "react";
 import { format, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+import { rangoParaSql } from "@/lib/periodo";
 import {
   Clock, Hammer, Package, CheckCircle2, Truck,
   AlertTriangle, Box, ShoppingCart, Globe,
@@ -182,8 +184,11 @@ function LiveClock({ onRefresh }: { onRefresh: () => void }) {
 // ── Página ────────────────────────────────────────────────────
 function CentralPage() {
   const [refreshKey, setRefreshKey] = useState(0);
-  const desde = inicioMes();
-  const hasta = hoy();
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "mes", offset: 0 });
+  const { desde, hasta } = rangoParaSql(rango);
+  // Con "Borrar" (todo el historial) la serie se agrupa por mes.
+  const agrupacion = rango.granularidad === "todo" ? "mes" : "dia";
 
   useEffect(() => {
     const channel = supabase
@@ -208,8 +213,8 @@ function CentralPage() {
   });
 
   const seriesQ = useQuery({
-    queryKey: ["central-series", desde, hasta, refreshKey],
-    queryFn: () => getDashboardSeries({ desde, hasta, agrupacion: "dia" }),
+    queryKey: ["central-series", desde, hasta, agrupacion, refreshKey],
+    queryFn: () => getDashboardSeries({ desde, hasta, agrupacion }),
     staleTime: 0,
   });
 
@@ -253,11 +258,14 @@ function CentralPage() {
           </h1>
           <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>Central de KPIs</span>
           <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            · {format(new Date(), "MMMM yyyy", { locale: es })}
+            · {rango.etiqueta}
           </span>
         </div>
         <LiveClock onRefresh={() => setRefreshKey((k) => k + 1)} />
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* Fila 1: KPIs financieros */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

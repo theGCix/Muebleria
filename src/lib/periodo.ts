@@ -21,6 +21,9 @@ export interface RangoPeriodo {
   /** Para filtros de Supabase: .gte("columna", desdeISO).lte("columna", hastaISO). Son null con "todo". */
   desdeISO: string | null;
   hastaISO: string | null;
+  /** Para las funciones SQL que reciben fechas (YYYY-MM-DD, hora local). Son null con "todo". */
+  desdeFecha: string | null;
+  hastaFecha: string | null;
   /** Texto corto del periodo elegido ("Hoy", "Semana pasada", "Septiembre 2026"…). */
   etiqueta: string;
   /** Para filtrar listas en el navegador. Con "todo" siempre devuelve true. */
@@ -79,6 +82,25 @@ export function etiquetaCompleta(v: PeriodoValor, ahora: Date = new Date()): str
   return detalle ? `${principal} · ${detalle}` : principal;
 }
 
+/** Texto "Viendo: del 1 oct al 31 oct 2026" (o "Viendo: todo el historial"). */
+export function textoViendo(v: PeriodoValor, ahora: Date = new Date()): string {
+  if (v.granularidad === "todo") return "Viendo: todo el historial";
+  const { desde, hasta } = calcularRango(v, ahora);
+  if (!desde || !hasta) return "Viendo: todo el historial";
+  if (v.granularidad === "dia") return `Viendo: ${format(desde, "d MMM yyyy", { locale: es })}`;
+  return `Viendo: del ${format(desde, "d MMM", { locale: es })} al ${format(hasta, "d MMM yyyy", { locale: es })}`;
+}
+
+/** Rango para funciones SQL que piden fechas: con "todo" abarca desde el año 2000 hasta hoy. */
+export function rangoParaSql(r: RangoPeriodo): { desde: string; hasta: string } {
+  const hoy = format(new Date(), "yyyy-MM-dd");
+  return {
+    desde: r.desdeFecha ?? "2000-01-01",
+    // No se piden días futuros (evita gráficos con días vacíos en "Esta semana" / "Este mes").
+    hasta: r.hastaFecha && r.hastaFecha < hoy ? r.hastaFecha : hoy,
+  };
+}
+
 export function calcularRango(v: PeriodoValor, ahora: Date = new Date()): RangoPeriodo {
   let desde: Date | null = null;
   let hasta: Date | null = null;
@@ -106,6 +128,8 @@ export function calcularRango(v: PeriodoValor, ahora: Date = new Date()): RangoP
     hasta,
     desdeISO: desde ? desde.toISOString() : null,
     hastaISO: hasta ? hasta.toISOString() : null,
+    desdeFecha: desde ? format(desde, "yyyy-MM-dd") : null,
+    hastaFecha: hasta ? format(hasta, "yyyy-MM-dd") : null,
     etiqueta: etiquetaPeriodo(v, ahora).principal,
     enRango: (fecha) => {
       if (ini === null || fin === null) return true;

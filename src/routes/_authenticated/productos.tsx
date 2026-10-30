@@ -107,6 +107,22 @@ async function upsertProduct(product: any) {
   return data;
 }
 
+// SKU autoincremental: GM-0001, GM-0002… (toma el número más alto existente y suma 1).
+const SKU_PREFIJO = "GM-";
+async function siguienteSku(): Promise<string> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("sku")
+    .ilike("sku", `${SKU_PREFIJO}%`);
+  if (error) throw new Error(error.message);
+  let max = 0;
+  for (const r of data ?? []) {
+    const m = /^GM-(\d+)$/i.exec((r.sku ?? "").trim());
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${SKU_PREFIJO}${String(max + 1).padStart(4, "0")}`;
+}
+
 async function deleteProduct(id: string) {
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -123,6 +139,23 @@ function ProductFormModal({
   const qc = useQueryClient();
   const [form, setForm] = useState<ProductForm>(initial ?? emptyForm());
   const [uploading, setUploading] = useState(false);
+  // true mientras el SKU sea el sugerido automáticamente (si el admin lo edita, se respeta)
+  const skuAuto = useRef(false);
+
+  // Producto nuevo: propone el siguiente SKU.
+  useEffect(() => {
+    if (form.id || form.sku) return;
+    let vivo = true;
+    siguienteSku()
+      .then((s) => {
+        if (!vivo) return;
+        skuAuto.current = true;
+        setForm((f) => (f.sku ? f : { ...f, sku: s }));
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   const [ubicacionId, setUbicacionId] = useState<string>("");
   const [cantidadUbicacion, setCantidadUbicacion] = useState<string>("0");
@@ -254,8 +287,14 @@ function ProductFormModal({
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      // Producto nuevo: si el SKU es el sugerido (o está vacío), se recalcula al guardar
+      // por si otro producto se creó mientras tenías el formulario abierto.
+      const sku = !form.id && (skuAuto.current || !form.sku.trim())
+        ? await siguienteSku()
+        : form.sku;
       const savedProduct = await upsertProduct({
         ...form,
+        sku,
         precio: parseFloat(form.precio),
         descuento_porcentaje: form.descuento_porcentaje
           ? parseInt(form.descuento_porcentaje, 10)
@@ -430,7 +469,15 @@ function ProductFormModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="sku">SKU</Label>
-            <Input id="sku" value={form.sku} onChange={set("sku")} />
+            <Input
+              id="sku"
+              value={form.sku}
+              placeholder={form.id ? "" : "Automático"}
+              onChange={(e) => { skuAuto.current = false; set("sku")(e); }}
+            />
+            {!form.id && (
+              <p className="mt-1 text-[11px] text-muted-foreground">Se asigna solo; puedes cambiarlo.</p>
+            )}
           </div>
           <div>
             <Label htmlFor="categoria">Categoría</Label>

@@ -22,6 +22,7 @@ import {
   Loader2, Search, Eye,
   ShoppingBag, Package, Phone, Mail, MapPin, Users } from "lucide-react";
 import { useState, useMemo } from "react";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { ClienteUnificado } from "@/lib/pos.functions";
@@ -315,28 +316,36 @@ function ClientesPage() {
   const [q, setQ] = useState(initialQ ?? "");
   const [segmentoFilter, setSegmentoFilter] = useState("todos");
   const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "todo", offset: 0 });
 
   const { data, isLoading } = useQuery({
     queryKey: ["customers-list", q],
     queryFn: () => listClientesUnificados({ q }),
   });
 
+  // Clientes registrados dentro del periodo elegido. "Borrar" = todo el historial.
+  const clientesPeriodo = useMemo(
+    () => (data?.clientes ?? []).filter((c: any) => rango.enRango(c.created_at)),
+    [data, rango],
+  );
+
   const filtered = useMemo(() => {
-    const list = data?.clientes ?? [];
+    const list = clientesPeriodo;
     if (segmentoFilter === "todos") return list;
     return list.filter((c: any) => c.segmento === segmentoFilter);
-  }, [data, segmentoFilter]);
+  }, [clientesPeriodo, segmentoFilter]);
 
   // KPIs
   const stats = useMemo(() => {
-    const all = data?.clientes ?? [];
+    const all = clientesPeriodo;
     return {
       total: all.length,
       vip: all.filter((c: any) => c.segmento === "vip").length,
       recurrente: all.filter((c: any) => c.segmento === "recurrente").length,
       nuevo: all.filter((c: any) => c.segmento === "nuevo").length,
     };
-  }, [data]);
+  }, [clientesPeriodo]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -346,6 +355,9 @@ function ClientesPage() {
           <p className="text-muted-foreground mt-0.5">Directorio y CRM</p>
         </div>
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

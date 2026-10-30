@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { useState, useMemo } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+import { rangoParaSql } from "@/lib/periodo";
 
 export const Route = createFileRoute("/_authenticated/analytics")({
   head: () => ({ meta: [{ title: "Analytics — G&M" }] }),
@@ -25,13 +27,6 @@ const fmt = (n: number) =>
 const fmtShort = (n: number) =>
   n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
 const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
-
-const PERIOD_OPTIONS = [
-  { key: "mes",       label: "Este mes",        desde: () => format(startOfMonth(new Date()), "yyyy-MM-dd"),        hasta: () => format(new Date(), "yyyy-MM-dd") },
-  { key: "mes_ant",   label: "Mes anterior",    desde: () => format(startOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd"), hasta: () => format(new Date(new Date().getFullYear(), new Date().getMonth(), 0), "yyyy-MM-dd") },
-  { key: "trimestre", label: "Este trimestre",  desde: () => format(new Date(new Date().getFullYear(), Math.floor(new Date().getMonth() / 3) * 3, 1), "yyyy-MM-dd"), hasta: () => format(new Date(), "yyyy-MM-dd") },
-  { key: "anio",      label: "Este año",        desde: () => `${new Date().getFullYear()}-01-01`, hasta: () => format(new Date(), "yyyy-MM-dd") },
-] as const;
 
 const CANAL_COLORS:  Record<string, string> = { POS: "#378ADD", Ecommerce: "#1D9E75" };
 const SEGMENTO_COLORS: Record<string, string> = { vip: "#854F0B", recurrente: "#1D9E75", nuevo: "#378ADD", inactivo: "#888780" };
@@ -126,12 +121,13 @@ function ConversionFunnel({ funnel }: {
 
 // ── Página ────────────────────────────────────────────────────
 function AnalyticsPage() {
-  const [period, setPeriod] = useState<"mes" | "mes_ant" | "trimestre" | "anio">("mes");
-  const periodOpt = PERIOD_OPTIONS.find((p) => p.key === period)!;
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "mes", offset: 0 });
+  const { desde, hasta } = rangoParaSql(rango);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["marketing-analytics", period],
-    queryFn: () => getMarketingAnalytics({ desde: periodOpt.desde(), hasta: periodOpt.hasta() }),
+    queryKey: ["marketing-analytics", desde, hasta],
+    queryFn: () => getMarketingAnalytics({ desde, hasta }),
     staleTime: 120_000,
   });
 
@@ -152,14 +148,7 @@ function AnalyticsPage() {
           <p className="text-muted-foreground text-sm mt-0.5">Datos de marketing y comportamiento de compra</p>
         </div>
         <div className="flex gap-2">
-          <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map((p) => (
-                <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PeriodFilter valor={periodo} onChange={setPeriodo} viendo={false} />
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           </Button>

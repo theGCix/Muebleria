@@ -18,6 +18,8 @@ import {
 import { useState, useMemo } from "react";
 import { format, subDays, startOfMonth, startOfWeek, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+import { rangoParaSql } from "@/lib/periodo";
 
 
 
@@ -32,38 +34,6 @@ const fmt = (n: number) =>
 
 const fmtShort = (n: number) =>
   n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
-
-const PERIOD_OPTIONS = [
-  { key: "hoy",         label: "Hoy" },
-  { key: "7d",          label: "Últimos 7 días" },
-  { key: "mes",         label: "Este mes" },
-  { key: "mes_ant",     label: "Mes anterior" },
-  { key: "trimestre",   label: "Este trimestre" },
-  { key: "anio",        label: "Este año" },
-] as const;
-
-type PeriodKey = typeof PERIOD_OPTIONS[number]["key"];
-
-function getRange(key: PeriodKey): { desde: string; hasta: string; agrupacion: "dia" | "semana" | "mes" } {
-  const today = new Date();
-  const iso = (d: Date) => format(d, "yyyy-MM-dd");
-  switch (key) {
-    case "hoy":
-      return { desde: iso(today), hasta: iso(today), agrupacion: "dia" };
-    case "7d":
-      return { desde: iso(subDays(today, 6)), hasta: iso(today), agrupacion: "dia" };
-    case "mes":
-      return { desde: iso(startOfMonth(today)), hasta: iso(today), agrupacion: "dia" };
-    case "mes_ant": {
-      const ant = subMonths(today, 1);
-      return { desde: iso(startOfMonth(ant)), hasta: iso(new Date(ant.getFullYear(), ant.getMonth() + 1, 0)), agrupacion: "dia" };
-    }
-    case "trimestre":
-      return { desde: iso(new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1)), hasta: iso(today), agrupacion: "semana" };
-    case "anio":
-      return { desde: `${today.getFullYear()}-01-01`, hasta: iso(today), agrupacion: "mes" };
-  }
-}
 
 // ── KPI Card ─────────────────────────────────────────────────
 function KpiCard({
@@ -120,8 +90,13 @@ function CustomTooltip({ active, payload, label }: any) {
 // ── Página principal ──────────────────────────────────────────
 function DashboardPage() {
   const navigate = useNavigate();
-  const [period, setPeriod] = useState<PeriodKey>("mes");
-  const range = useMemo(() => getRange(period), [period]);
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "mes", offset: 0 });
+  const range = useMemo(() => ({
+    ...rangoParaSql(rango),
+    // Con "Borrar" (todo el historial) la serie se agrupa por mes para que el gráfico se lea bien.
+    agrupacion: (rango.granularidad === "todo" ? "mes" : "dia") as "dia" | "semana" | "mes",
+  }), [rango]);
 
   const kpisQuery = useQuery({
     queryKey: ["dashboard-kpis", range.desde, range.hasta],
@@ -159,17 +134,7 @@ function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2 items-center">
-          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
-            <SelectTrigger className="w-44">
-              <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map(({ key, label }) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PeriodFilter valor={periodo} onChange={setPeriodo} viendo={false} />
           <Button
             variant="outline" size="sm"
             onClick={() => { kpisQuery.refetch(); seriesQuery.refetch(); }}

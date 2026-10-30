@@ -27,6 +27,7 @@ import {
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 import { useNubefact } from "@/hooks/useNubefact";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
   head: () => ({ meta: [{ title: "Ventas y comprobantes — G&M" }] }),
@@ -369,13 +370,19 @@ function DescargaPeriodo({ sales }: { sales: any[] }) {
 
 // ── Página principal ──────────────────────────────────────────
 function VentasPage() {
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "mes", offset: 0 });
   const { data, isLoading } = useQuery({
     queryKey: ["sales"],
     queryFn: () => listSales(),
   });
   const { data: dataUnificada, isLoading: isLoadingUnificada } = useQuery({
-    queryKey: ["ventas-unificadas"],
-    queryFn: () => listVentasUnificadas(),
+    // El periodo se filtra en el servidor; "Borrar" quita desde/hasta (todo el historial).
+    queryKey: ["ventas-unificadas", rango.desdeISO, rango.hastaISO],
+    queryFn: () => listVentasUnificadas({
+      desde: rango.desdeISO ?? undefined,
+      hasta: rango.hastaISO ?? undefined,
+    }),
   });
   const [openId, setOpenId] = useState<string | null>(null);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
@@ -419,6 +426,9 @@ function VentasPage() {
         </div>
         {data?.sales && <DescargaPeriodo sales={data.sales} />}
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* Filtros */}
       <div className="flex gap-3 flex-wrap items-center">

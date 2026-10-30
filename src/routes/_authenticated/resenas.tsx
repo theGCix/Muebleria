@@ -13,6 +13,7 @@ import {
   Star, Loader2, Search, RefreshCw, Check, X, MessageSquare, ImageIcon,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -199,6 +200,8 @@ function ResenaCard({ r }: { r: ResenaAdmin }) {
 function ResenasPage() {
   const [tab, setTab] = useState<ResenaEstado | "todas">("pendiente");
   const [q, setQ] = useState("");
+  const { valor: periodo, setValor: setPeriodo, rango } =
+    usePeriodo({ granularidad: "todo", offset: 0 });
   const qc = useQueryClient();
 
   const { data, isLoading, isFetching } = useQuery({
@@ -206,7 +209,11 @@ function ResenasPage() {
     queryFn: () => listResenasAdmin({ estado: tab, q }),
   });
 
-  const resenas = data?.resenas ?? [];
+  // Reseñas del periodo elegido. "Borrar" = todo el historial.
+  const resenas = useMemo(
+    () => (data?.resenas ?? []).filter((r) => rango.enRango(r.created_at)),
+    [data, rango],
+  );
 
   const counts = useMemo(() => {
     const all = resenas;
@@ -227,6 +234,9 @@ function ResenasPage() {
           <RefreshCw className={`h-4 w-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} /> Actualizar
         </Button>
       </div>
+
+      {/* Periodo */}
+      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex gap-1 bg-muted/40 rounded-full p-1">

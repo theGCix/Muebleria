@@ -3,16 +3,16 @@
 //   Día:    Hoy, Ayer y los días anteriores
 //   Semana: Esta semana, Semana pasada y las semanas anteriores (lunes a domingo)
 //   Mes:    Este mes, Mes pasado y los meses anteriores
-//   Todo:   sin filtro (opcional)
+//   Borrar: botón pequeño que quita el filtro para ver todo el historial
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  calcularRango, etiquetaCompleta, LIMITES_POR_DEFECTO,
+  calcularRango, etiquetaCompleta, LIMITES_POR_DEFECTO, textoViendo,
   type Granularidad, type PeriodoValor,
 } from "@/lib/periodo";
 
@@ -28,8 +28,12 @@ export function usePeriodo(inicial: PeriodoValor = { granularidad: "dia", offset
 interface Props {
   valor: PeriodoValor;
   onChange: (v: PeriodoValor) => void;
-  /** Muestra la opción "Todo" (sin filtro). Por defecto sí. */
+  /** Muestra además un botón "Todo" junto a Día/Semana/Mes. Por defecto no: se usa "Borrar". */
   todo?: boolean;
+  /** Botón pequeño "Borrar" para quitar el filtro y ver todo el historial. Por defecto sí. */
+  borrar?: boolean;
+  /** Línea "Viendo: del … al …" debajo del filtro. Por defecto sí. */
+  viendo?: boolean;
   /** Cuántos periodos hacia atrás se listan en cada modo. */
   maxDias?: number;
   maxSemanas?: number;
@@ -38,7 +42,7 @@ interface Props {
 }
 
 export function PeriodFilter({
-  valor, onChange, todo = true,
+  valor, onChange, todo = false, borrar = true, viendo = true,
   maxDias = LIMITES_POR_DEFECTO.dia,
   maxSemanas = LIMITES_POR_DEFECTO.semana,
   maxMeses = LIMITES_POR_DEFECTO.mes,
@@ -107,6 +111,20 @@ export function PeriodFilter({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {borrar && g !== "todo" && (
+        <Button
+          variant="ghost" size="sm" className="h-9 px-2 text-muted-foreground"
+          title="Quitar el filtro y ver todo el historial"
+          onClick={() => onChange({ granularidad: "todo", offset: 0 })}
+        >
+          <X className="mr-1 h-3.5 w-3.5" /> Borrar
+        </Button>
+      )}
+
+      {viendo && (
+        <p className="basis-full text-xs text-muted-foreground">{textoViendo(valor, ahora)}</p>
       )}
     </div>
   );
