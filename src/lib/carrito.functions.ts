@@ -59,6 +59,9 @@ export async function syncCartSnapshot(input: z.infer<typeof SyncCartSchema>) {
         user_id: data.user_id || null,
         estado: "activo",
         last_activity_at: new Date().toISOString(),
+        // Si el cliente vuelve a mover su carrito, el ciclo de recordatorios (n8n) empieza de nuevo.
+        recordatorio_1_at: null,
+        recordatorio_2_at: null,
       },
       { onConflict: "session_id" }
     );

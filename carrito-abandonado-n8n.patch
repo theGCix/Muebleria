@@ -1,0 +1,688 @@
+diff --git a/n8n/CARRITO-ABANDONADO.md b/n8n/CARRITO-ABANDONADO.md
+new file mode 100644
+index 0000000..34ce956
+--- /dev/null
++++ b/n8n/CARRITO-ABANDONADO.md
+@@ -0,0 +1,61 @@
++# Carrito abandonado con n8n (sin túnel)
++
++Mismo patrón que el correo de confirmación de pago: **n8n consulta a Supabase** (todo es de "salida" desde tu PC, no se expone nada).
++
++```
++Cliente deja su carrito → la web lo guarda en `carritos` (ya existe: syncCartSnapshot)
++                              ▲
++                              │  cada 10 min
++                         n8n: ¿carritos con correo y sin actividad? → (cupón) → correo (Gmail) → los marca
++```
++
++## Qué recibe el cliente
++
++| Cuándo | Correo |
++|---|---|
++| ≈ 1 h sin actividad | **Paso 1** — recordatorio con sus productos y botón "Completar mi pedido" |
++| ≥ 24 h sin actividad (y ≥ 12 h después del paso 1) | **Paso 2** — mismo carrito + cupón `VUELVE-XXXXXXXX` de 5 %, 48 h, un solo uso |
++
++- Solo se escribe a carritos con **correo válido** (el correo se captura en el checkout). Los carritos sin correo se pueden seguir contactando por WhatsApp desde *Carritos abandonados*.
++- Si el cliente compra, `markCartRecovered` ya cierra el carrito (`recuperado`) y n8n lo ignora.
++- Si el cliente vuelve a mover su carrito, los avisos se reinician (cambio en `syncCartSnapshot`).
++- Si tu PC estuvo apagada, al volver n8n envía lo pendiente (hasta 3 días atrás).
++- Los enlaces llevan `utm_source=n8n&utm_medium=email&utm_campaign=carrito_abandonado&utm_content=pasoN`, así los ves en GA4 y en `eventos_web`.
++- En el panel admin, el carrito pasa a **Contactado** y `recordatorio_enviado = true`.
++
++## Puesta en marcha (en este orden)
++
++### 1. Base de datos — antes de desplegar la web
++Supabase → *SQL Editor* → ejecuta `supabase/migrations/20261030_carrito_abandonado_n8n.sql`.
++Agrega `recordatorio_1_at` y `recordatorio_2_at`, y **marca los carritos actuales como ya atendidos** para no escribirles a visitantes antiguos.
++
++> Despliega el frontend **después** de este SQL: `syncCartSnapshot` ahora escribe esas dos columnas y, si no existen, el guardado de carritos falla en silencio.
++
++### 2. Importar el flujo
++n8n → *Import from file* → `n8n/carrito-abandonado.workflow.json`.
++
++### 3. Credenciales
++Las mismas del correo de pago: **Supabase G&M** (Header Auth, `apikey` = service_role) en *Carritos por avisar*, *Crear cupón* y *Marcar como avisado*; **Gmail G&M** (SMTP) en *Enviar correo al cliente*.
++
++### 4. Editar
++- `TU_PROYECTO` en los 3 nodos de Supabase.
++- En *Armar correos*: `SITE_URL` (ya viene con `https://muebleria-q74c.onrender.com`; cámbiala si usas otro dominio), y si quieres `CUPON_PORCENTAJE`, `CUPON_HORAS`, `HORAS_PASO_2`.
++
++### 5. Probar
++1. Con una ventana de incógnito, agrega un producto, pon tu correo en el checkout y no pagues.
++2. En Supabase: `update carritos set last_activity_at = now() - interval '2 hours' where email = 'tu@correo.com';`
++3. En n8n: **Execute workflow** → debe llegar el paso 1 y el carrito quedar `contactado`.
++4. Para el paso 2: `update carritos set last_activity_at = now() - interval '30 hours', recordatorio_1_at = now() - interval '20 hours' where email = 'tu@correo.com';` → Execute workflow → llega con cupón y aparece en *Cupones* (origen `carrito_abandonado`).
++5. Activa el flujo (*Active*).
++
++## Si algo falla
++- **401/403 en "Carritos por avisar":** la clave no es la service_role.
++- **Error en "Crear cupón" (400):** la tabla `cupones` tiene alguna columna obligatoria distinta a las del formulario del admin; revisa el mensaje y ajusta el objeto `cupon` en *Armar correos*.
++- **No llega nada:** el carrito no tiene correo válido, tiene < 1 h de inactividad, o ya fue marcado.
++- **Llegan correos repetidos:** falló el nodo *Marcar como avisado* (revisa `TU_PROYECTO`).
++
++## No lo mezcles con la Edge Function
++`supabase/functions/recordatorios-carrito` hace lo mismo por otra vía y depende de una vista (`v_carritos_pendientes_paso`) que no está en las migraciones del repo. **No la programes** si usas este flujo, o el cliente recibiría recordatorios duplicados.
++
++## Tests
++`node --test n8n/*.test.js`
+diff --git a/n8n/armar-correo-carrito.js b/n8n/armar-correo-carrito.js
+new file mode 100644
+index 0000000..848390f
+--- /dev/null
++++ b/n8n/armar-correo-carrito.js
+@@ -0,0 +1,158 @@
++// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════
++const REMITENTE_NOMBRE = "G&M Mueblería";
++const REMITENTE_EMAIL = "proyectomuebleria1@gmail.com"; // la MISMA cuenta Gmail de la credencial SMTP
++const SITE_URL = "https://muebleria-q74c.onrender.com"; // dirección pública de tu tienda (sin / al final)
++const COLOR = "#6B4226";
++const CUPON_PORCENTAJE = 5;      // descuento del paso 2
++const CUPON_HORAS = 48;          // vigencia del cupón
++const HORAS_PASO_2 = 24;         // sin actividad hace al menos X h para el 2.º correo
++const HORAS_ENTRE_PASOS = 12;    // mínimo entre el 1.er y el 2.º correo
++// ══════════════════════════════════════════════════════════════
++
++const H = 3600 * 1000;
++const ahora = Date.now();
++const esc = (s) =>
++  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
++const sinSaltos = (s) => String(s ?? "").replace(/[\r\n]+/g, " ").trim();
++const soles = (n) => "S/ " + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
++const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/;
++
++function enlace(paso) {
++  const base = SITE_URL.replace(/\/$/, "");
++  return `${base}/checkout?utm_source=n8n&utm_medium=email&utm_campaign=carrito_abandonado&utm_content=paso${paso}`;
++}
++
++function construir(c, paso, cuponCodigo) {
++  const nombre = sinSaltos(c.nombre).split(" ")[0] || "";
++  const items = c.items;
++  const total = items.reduce((a, i) => a + Number(i.price || 0) * Number(i.qty || 1), 0);
++  const url = enlace(paso);
++
++  const titulo = paso === 1
++    ? `${nombre ? esc(nombre) + ", t" : "T"}us productos te están esperando`
++    : `${nombre ? esc(nombre) + ", u" : "U"}n regalo para completar tu pedido`;
++  const intro = paso === 1
++    ? "Dejaste estos muebles en tu carrito. Siguen guardados; si tienes dudas de medidas, materiales o tiempos de entrega, responde este correo o escríbenos por WhatsApp."
++    : "Son piezas hechas a mano y el stock es limitado. Para ayudarte a decidir, te dejamos un cupón exclusivo para este carrito.";
++
++  const fila = (i) => {
++    const img = /^https:\/\//.test(String(i.image ?? ""))
++      ? `<img src="${esc(i.image)}" width="56" height="56" alt="" style="border-radius:8px;object-fit:cover;display:block;">`
++      : "";
++    return `
++    <tr>
++      <td width="68" style="padding:10px 0;border-bottom:1px solid #eadfd2;">${img}</td>
++      <td style="padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;">${esc(i.title)}<br><span style="color:#8a7a6a;font-size:12px;">Cantidad: ${esc(i.qty)}</span></td>
++      <td style="padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;text-align:right;white-space:nowrap;">${soles(Number(i.price || 0) * Number(i.qty || 1))}</td>
++    </tr>`;
++  };
++
++  const cupon = paso === 2 && cuponCodigo
++    ? `<div style="margin:22px 0 0;padding:16px 18px;background:#faf6f0;border:1px dashed ${COLOR};border-radius:12px;text-align:center;">
++        <p style="margin:0 0 6px;font-size:13px;color:#6b5a49;">${CUPON_PORCENTAJE}% de descuento · válido ${CUPON_HORAS} horas · un solo uso</p>
++        <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:2px;color:${COLOR};">${esc(cuponCodigo)}</p>
++        <p style="margin:6px 0 0;font-size:12px;color:#8a7a6a;">Ingrésalo al pagar en el checkout.</p>
++      </div>`
++    : "";
++
++  const html = `<!doctype html>
++  <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tu carrito</title></head><body style="margin:0;padding:0;background:#faf6f0;">
++  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf6f0;padding:24px 12px;">
++  <tr><td align="center">
++    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
++      <tr><td style="background:${COLOR};padding:22px 28px;">
++        <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#ffffff;letter-spacing:.5px;">G&amp;M Mueblería</span>
++      </td></tr>
++      <tr><td style="padding:28px;">
++        <h1 style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;color:#2b2118;">${titulo}</h1>
++        <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#4a3b2d;">${esc(intro)}</p>
++        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items.slice(0, 5).map(fila).join("")}</table>
++        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
++          <tr>
++            <td style="padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;border-top:2px solid ${COLOR};">Total</td>
++            <td style="padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;text-align:right;border-top:2px solid ${COLOR};">${soles(total)}</td>
++          </tr>
++        </table>
++        ${cupon}
++        <p style="margin:24px 0 8px;text-align:center;"><a href="${esc(url)}" style="display:inline-block;background:${COLOR};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:999px;">Completar mi pedido</a></p>
++        <p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#8a7a6a;">Tu mueble tiene 2 años de garantía en la estructura. Entregamos a domicilio en Lima y enviamos a provincias.</p>
++      </td></tr>
++      <tr><td style="background:#faf6f0;padding:16px 28px;font-size:12px;line-height:1.5;color:#8a7a6a;text-align:center;">G&amp;M Mueblería · Lima, Perú<br>Recibes este correo porque dejaste productos en tu carrito. Si no quieres más recordatorios, responde «NO».</td></tr>
++    </table>
++  </td></tr></table>
++  </body></html>`;
++
++  const texto = [
++    nombre ? `Hola ${nombre},` : "Hola,",
++    intro,
++    "",
++    ...items.slice(0, 5).map((i) => `- ${sinSaltos(i.title)} x${i.qty}: ${soles(Number(i.price || 0) * Number(i.qty || 1))}`),
++    `Total: ${soles(total)}`,
++    cuponCodigo && paso === 2 ? `\nCupón ${CUPON_PORCENTAJE}% (${CUPON_HORAS} h, un solo uso): ${cuponCodigo}` : "",
++    `\nCompletar mi pedido: ${url}`,
++    "\nG&M Mueblería · Si no quieres más recordatorios, responde NO.",
++  ].join("\n");
++
++  return {
++    from: `${REMITENTE_NOMBRE} <${REMITENTE_EMAIL}>`,
++    subject: paso === 1
++      ? `${nombre ? nombre + ", tu" : "Tu"} carrito te está esperando — G&M Mueblería`
++      : `${nombre ? nombre + ", un" : "Un"} ${CUPON_PORCENTAJE}% de descuento para tu carrito — G&M Mueblería`,
++    html,
++    text: texto,
++  };
++}
++
++const salida = [];
++for (const fila of $input.all()) {
++  const c = fila.json;
++  const iso = new Date(ahora).toISOString();
++  const t = (v) => (v ? new Date(v).getTime() : null);
++  const ultima = t(c.last_activity_at);
++  const r1 = t(c.recordatorio_1_at);
++  const r2 = t(c.recordatorio_2_at);
++
++  // ¿Qué paso toca? (null = todavía no)
++  let paso = null;
++  if (!r1 && ultima && ahora - ultima >= 1 * H) paso = 1;
++  else if (r1 && !r2 && ultima && ahora - ultima >= HORAS_PASO_2 * H && ahora - r1 >= HORAS_ENTRE_PASOS * H) paso = 2;
++  if (!paso) continue;
++
++  const items = Array.isArray(c.items) ? c.items.filter((i) => i && i.title) : [];
++  const to = String(c.email ?? "").trim();
++
++  // Sin correo válido o sin productos: se cierra el seguimiento para no reintentarlo siempre.
++  if (!EMAIL_RE.test(to) || items.length === 0) {
++    salida.push({ json: { carrito_id: c.id, enviar: false, paso, marca: { recordatorio_1_at: iso, recordatorio_2_at: iso } } });
++    continue;
++  }
++
++  const cuponCodigo = paso === 2 ? "VUELVE-" + String(c.id).replace(/-/g, "").slice(0, 8).toUpperCase() : null;
++  const correo = construir({ ...c, items }, paso, cuponCodigo);
++
++  const marca = paso === 1
++    ? { recordatorio_1_at: iso, recordatorio_enviado: true, estado: "contactado" }
++    : { recordatorio_2_at: iso, recordatorio_enviado: true, estado: "contactado" };
++
++  const cupon = cuponCodigo
++    ? {
++        codigo: cuponCodigo,
++        descripcion: `Recuperación de carrito abandonado (${CUPON_PORCENTAJE}%)`,
++        tipo_descuento: "porcentaje",
++        valor: CUPON_PORCENTAJE,
++        monto_minimo_compra: 0,
++        aplica_a: "todo",
++        solo_primera_compra: false,
++        uso_maximo_total: 1,
++        uso_maximo_por_cliente: 1,
++        vigente_desde: iso,
++        vence_el: new Date(ahora + CUPON_HORAS * H).toISOString(),
++        activo: true,
++        origen: "carrito_abandonado",
++        notas: `Generado por n8n para el carrito ${c.id}`,
++      }
++    : null;
++
++  salida.push({ json: { carrito_id: c.id, enviar: true, paso, to, ...correo, marca, cupon } });
++}
++return salida;
+diff --git a/n8n/armar-correo-carrito.test.js b/n8n/armar-correo-carrito.test.js
+new file mode 100644
+index 0000000..64f0f95
+--- /dev/null
++++ b/n8n/armar-correo-carrito.test.js
+@@ -0,0 +1,62 @@
++// Ejecutar: node --test n8n/
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import fs from "node:fs";
++
++const src = fs.readFileSync(new URL("./armar-correo-carrito.js", import.meta.url), "utf8");
++const correr = (...filas) => new Function("$input", src)({ all: () => filas.map((json) => ({ json })) }).map((x) => x.json);
++const hace = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
++const fila = (extra = {}) => ({
++  id: "a1b2c3d4-0000-4000-8000-000000000000", nombre: "Ana Pérez", email: "ana@mail.com", estado: "activo",
++  last_activity_at: hace(2), recordatorio_1_at: null, recordatorio_2_at: null,
++  items: [{ id: "p1", title: "Sofá London", price: 1100, qty: 1, image: "https://res.cloudinary.com/x/a.jpg" }], ...extra,
++});
++
++test("2 h sin actividad y sin avisos → paso 1, sin cupón", () => {
++  const [r] = correr(fila());
++  assert.equal(r.enviar, true);
++  assert.equal(r.paso, 1);
++  assert.equal(r.to, "ana@mail.com");
++  assert.equal(r.cupon, null);
++  assert.match(r.html, /Sofá London/);
++  assert.match(r.html, /S\/ 1,100\.00/);
++  assert.match(r.html, /utm_content=paso1/);
++  assert.deepEqual(Object.keys(r.marca).sort(), ["estado", "recordatorio_1_at", "recordatorio_enviado"]);
++});
++
++test("menos de 1 h sin actividad → no sale nada", () => {
++  assert.deepEqual(correr(fila({ last_activity_at: hace(0.5) })), []);
++});
++
++test("paso 2: 30 h sin actividad, aviso 1 hace 20 h → cupón VUELVE-XXXXXXXX", () => {
++  const [r] = correr(fila({ last_activity_at: hace(30), recordatorio_1_at: hace(20) }));
++  assert.equal(r.paso, 2);
++  assert.equal(r.cupon.codigo, "VUELVE-A1B2C3D4");
++  assert.equal(r.cupon.origen, "carrito_abandonado");
++  assert.match(r.html, /VUELVE-A1B2C3D4/);
++  assert.ok(r.marca.recordatorio_2_at);
++  assert.ok(new Date(r.cupon.vence_el) > new Date());
++});
++
++test("paso 2 no sale pegado al paso 1 ni antes de 24 h de inactividad", () => {
++  assert.deepEqual(correr(fila({ last_activity_at: hace(30), recordatorio_1_at: hace(2) })), []);
++  assert.deepEqual(correr(fila({ last_activity_at: hace(10), recordatorio_1_at: hace(9) })), []);
++});
++
++test("ya tuvo los 2 avisos → nada", () => {
++  assert.deepEqual(correr(fila({ last_activity_at: hace(60), recordatorio_1_at: hace(50), recordatorio_2_at: hace(30) })), []);
++});
++
++test("sin correo válido o sin productos → enviar:false y se cierra el seguimiento", () => {
++  for (const extra of [{ email: "no-es-correo" }, { items: [] }, { items: null }]) {
++    const [r] = correr(fila(extra));
++    assert.equal(r.enviar, false);
++    assert.ok(r.marca.recordatorio_1_at && r.marca.recordatorio_2_at);
++  }
++});
++
++test("el HTML escapa lo que escribe el cliente", () => {
++  const [r] = correr(fila({ nombre: "<b>Ana</b>", items: [{ id: "p", title: "<script>x</script>", price: 10, qty: 1 }] }));
++  assert.ok(!r.html.includes("<script>"));
++  assert.ok(!r.html.includes("<b>Ana"));
++});
+diff --git a/n8n/carrito-abandonado.workflow.json b/n8n/carrito-abandonado.workflow.json
+new file mode 100644
+index 0000000..7212b86
+--- /dev/null
++++ b/n8n/carrito-abandonado.workflow.json
+@@ -0,0 +1,343 @@
++{
++  "name": "G&M — Carrito abandonado (sin túnel)",
++  "nodes": [
++    {
++      "parameters": {
++        "content": "## Carrito abandonado\nCada 10 min n8n pregunta a Supabase por carritos con correo y sin actividad: 1 h → correo 1; 24 h → correo 2 con cupón del 5 % (48 h, un solo uso).\nSi tu PC estuvo apagada, al volver envía lo pendiente (hasta 3 días atrás).\n\n1. Ejecuta primero la migración SQL (marca los carritos antiguos como ya atendidos).\n2. Credenciales: **Supabase G&M** (Header Auth: `apikey` = service_role key) y tu SMTP de Gmail.\n3. Cambia `TU_PROYECTO` en los 3 nodos de Supabase y revisa `SITE_URL` en *Armar correos*.\n\nVer n8n/CARRITO-ABANDONADO.md",
++        "height": 320,
++        "width": 460
++      },
++      "id": "c4000000-0000-4000-8000-000000000001",
++      "name": "Léeme",
++      "type": "n8n-nodes-base.stickyNote",
++      "typeVersion": 1,
++      "position": [
++        -160,
++        -260
++      ]
++    },
++    {
++      "parameters": {
++        "rule": {
++          "interval": [
++            {
++              "field": "minutes",
++              "minutesInterval": 10
++            }
++          ]
++        }
++      },
++      "id": "c4000000-0000-4000-8000-000000000002",
++      "name": "Cada 10 minutos",
++      "type": "n8n-nodes-base.scheduleTrigger",
++      "typeVersion": 1.2,
++      "position": [
++        0,
++        140
++      ]
++    },
++    {
++      "parameters": {
++        "method": "GET",
++        "url": "={{ \"https://TU_PROYECTO.supabase.co/rest/v1/carritos?select=*&estado=in.(activo,contactado)&email=not.is.null&last_activity_at=gte.\" + new Date(Date.now() - 3*24*3600*1000).toISOString() + \"&last_activity_at=lt.\" + new Date(Date.now() - 3600*1000).toISOString() + \"&or=(recordatorio_1_at.is.null,and(recordatorio_2_at.is.null,last_activity_at.lt.\" + new Date(Date.now() - 24*3600*1000).toISOString() + \"))&order=last_activity_at.asc&limit=20\" }}",
++        "authentication": "genericCredentialType",
++        "genericAuthType": "httpHeaderAuth",
++        "options": {}
++      },
++      "id": "c4000000-0000-4000-8000-000000000003",
++      "name": "Carritos por avisar",
++      "type": "n8n-nodes-base.httpRequest",
++      "typeVersion": 4.2,
++      "position": [
++        240,
++        140
++      ],
++      "credentials": {
++        "httpHeaderAuth": {
++          "id": "",
++          "name": "Supabase G&M"
++        }
++      }
++    },
++    {
++      "parameters": {
++        "jsCode": "// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════\nconst REMITENTE_NOMBRE = \"G&M Mueblería\";\nconst REMITENTE_EMAIL = \"proyectomuebleria1@gmail.com\"; // la MISMA cuenta Gmail de la credencial SMTP\nconst SITE_URL = \"https://muebleria-q74c.onrender.com\"; // dirección pública de tu tienda (sin / al final)\nconst COLOR = \"#6B4226\";\nconst CUPON_PORCENTAJE = 5;      // descuento del paso 2\nconst CUPON_HORAS = 48;          // vigencia del cupón\nconst HORAS_PASO_2 = 24;         // sin actividad hace al menos X h para el 2.º correo\nconst HORAS_ENTRE_PASOS = 12;    // mínimo entre el 1.er y el 2.º correo\n// ══════════════════════════════════════════════════════════════\n\nconst H = 3600 * 1000;\nconst ahora = Date.now();\nconst esc = (s) =>\n  String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\nconst sinSaltos = (s) => String(s ?? \"\").replace(/[\\r\\n]+/g, \" \").trim();\nconst soles = (n) => \"S/ \" + Number(n || 0).toLocaleString(\"en-US\", { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst EMAIL_RE = /^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]{2,}$/;\n\nfunction enlace(paso) {\n  const base = SITE_URL.replace(/\\/$/, \"\");\n  return `${base}/checkout?utm_source=n8n&utm_medium=email&utm_campaign=carrito_abandonado&utm_content=paso${paso}`;\n}\n\nfunction construir(c, paso, cuponCodigo) {\n  const nombre = sinSaltos(c.nombre).split(\" \")[0] || \"\";\n  const items = c.items;\n  const total = items.reduce((a, i) => a + Number(i.price || 0) * Number(i.qty || 1), 0);\n  const url = enlace(paso);\n\n  const titulo = paso === 1\n    ? `${nombre ? esc(nombre) + \", t\" : \"T\"}us productos te están esperando`\n    : `${nombre ? esc(nombre) + \", u\" : \"U\"}n regalo para completar tu pedido`;\n  const intro = paso === 1\n    ? \"Dejaste estos muebles en tu carrito. Siguen guardados; si tienes dudas de medidas, materiales o tiempos de entrega, responde este correo o escríbenos por WhatsApp.\"\n    : \"Son piezas hechas a mano y el stock es limitado. Para ayudarte a decidir, te dejamos un cupón exclusivo para este carrito.\";\n\n  const fila = (i) => {\n    const img = /^https:\\/\\//.test(String(i.image ?? \"\"))\n      ? `<img src=\"${esc(i.image)}\" width=\"56\" height=\"56\" alt=\"\" style=\"border-radius:8px;object-fit:cover;display:block;\">`\n      : \"\";\n    return `\n    <tr>\n      <td width=\"68\" style=\"padding:10px 0;border-bottom:1px solid #eadfd2;\">${img}</td>\n      <td style=\"padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;\">${esc(i.title)}<br><span style=\"color:#8a7a6a;font-size:12px;\">Cantidad: ${esc(i.qty)}</span></td>\n      <td style=\"padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;text-align:right;white-space:nowrap;\">${soles(Number(i.price || 0) * Number(i.qty || 1))}</td>\n    </tr>`;\n  };\n\n  const cupon = paso === 2 && cuponCodigo\n    ? `<div style=\"margin:22px 0 0;padding:16px 18px;background:#faf6f0;border:1px dashed ${COLOR};border-radius:12px;text-align:center;\">\n        <p style=\"margin:0 0 6px;font-size:13px;color:#6b5a49;\">${CUPON_PORCENTAJE}% de descuento · válido ${CUPON_HORAS} horas · un solo uso</p>\n        <p style=\"margin:0;font-size:22px;font-weight:700;letter-spacing:2px;color:${COLOR};\">${esc(cuponCodigo)}</p>\n        <p style=\"margin:6px 0 0;font-size:12px;color:#8a7a6a;\">Ingrésalo al pagar en el checkout.</p>\n      </div>`\n    : \"\";\n\n  const html = `<!doctype html>\n  <html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Tu carrito</title></head><body style=\"margin:0;padding:0;background:#faf6f0;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#faf6f0;padding:24px 12px;\">\n  <tr><td align=\"center\">\n    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;\">\n      <tr><td style=\"background:${COLOR};padding:22px 28px;\">\n        <span style=\"font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#ffffff;letter-spacing:.5px;\">G&amp;M Mueblería</span>\n      </td></tr>\n      <tr><td style=\"padding:28px;\">\n        <h1 style=\"margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;color:#2b2118;\">${titulo}</h1>\n        <p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;color:#4a3b2d;\">${esc(intro)}</p>\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">${items.slice(0, 5).map(fila).join(\"\")}</table>\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:10px;\">\n          <tr>\n            <td style=\"padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;border-top:2px solid ${COLOR};\">Total</td>\n            <td style=\"padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;text-align:right;border-top:2px solid ${COLOR};\">${soles(total)}</td>\n          </tr>\n        </table>\n        ${cupon}\n        <p style=\"margin:24px 0 8px;text-align:center;\"><a href=\"${esc(url)}\" style=\"display:inline-block;background:${COLOR};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:999px;\">Completar mi pedido</a></p>\n        <p style=\"margin:20px 0 0;font-size:13px;line-height:1.5;color:#8a7a6a;\">Tu mueble tiene 2 años de garantía en la estructura. Entregamos a domicilio en Lima y enviamos a provincias.</p>\n      </td></tr>\n      <tr><td style=\"background:#faf6f0;padding:16px 28px;font-size:12px;line-height:1.5;color:#8a7a6a;text-align:center;\">G&amp;M Mueblería · Lima, Perú<br>Recibes este correo porque dejaste productos en tu carrito. Si no quieres más recordatorios, responde «NO».</td></tr>\n    </table>\n  </td></tr></table>\n  </body></html>`;\n\n  const texto = [\n    nombre ? `Hola ${nombre},` : \"Hola,\",\n    intro,\n    \"\",\n    ...items.slice(0, 5).map((i) => `- ${sinSaltos(i.title)} x${i.qty}: ${soles(Number(i.price || 0) * Number(i.qty || 1))}`),\n    `Total: ${soles(total)}`,\n    cuponCodigo && paso === 2 ? `\\nCupón ${CUPON_PORCENTAJE}% (${CUPON_HORAS} h, un solo uso): ${cuponCodigo}` : \"\",\n    `\\nCompletar mi pedido: ${url}`,\n    \"\\nG&M Mueblería · Si no quieres más recordatorios, responde NO.\",\n  ].join(\"\\n\");\n\n  return {\n    from: `${REMITENTE_NOMBRE} <${REMITENTE_EMAIL}>`,\n    subject: paso === 1\n      ? `${nombre ? nombre + \", tu\" : \"Tu\"} carrito te está esperando — G&M Mueblería`\n      : `${nombre ? nombre + \", un\" : \"Un\"} ${CUPON_PORCENTAJE}% de descuento para tu carrito — G&M Mueblería`,\n    html,\n    text: texto,\n  };\n}\n\nconst salida = [];\nfor (const fila of $input.all()) {\n  const c = fila.json;\n  const iso = new Date(ahora).toISOString();\n  const t = (v) => (v ? new Date(v).getTime() : null);\n  const ultima = t(c.last_activity_at);\n  const r1 = t(c.recordatorio_1_at);\n  const r2 = t(c.recordatorio_2_at);\n\n  // ¿Qué paso toca? (null = todavía no)\n  let paso = null;\n  if (!r1 && ultima && ahora - ultima >= 1 * H) paso = 1;\n  else if (r1 && !r2 && ultima && ahora - ultima >= HORAS_PASO_2 * H && ahora - r1 >= HORAS_ENTRE_PASOS * H) paso = 2;\n  if (!paso) continue;\n\n  const items = Array.isArray(c.items) ? c.items.filter((i) => i && i.title) : [];\n  const to = String(c.email ?? \"\").trim();\n\n  // Sin correo válido o sin productos: se cierra el seguimiento para no reintentarlo siempre.\n  if (!EMAIL_RE.test(to) || items.length === 0) {\n    salida.push({ json: { carrito_id: c.id, enviar: false, paso, marca: { recordatorio_1_at: iso, recordatorio_2_at: iso } } });\n    continue;\n  }\n\n  const cuponCodigo = paso === 2 ? \"VUELVE-\" + String(c.id).replace(/-/g, \"\").slice(0, 8).toUpperCase() : null;\n  const correo = construir({ ...c, items }, paso, cuponCodigo);\n\n  const marca = paso === 1\n    ? { recordatorio_1_at: iso, recordatorio_enviado: true, estado: \"contactado\" }\n    : { recordatorio_2_at: iso, recordatorio_enviado: true, estado: \"contactado\" };\n\n  const cupon = cuponCodigo\n    ? {\n        codigo: cuponCodigo,\n        descripcion: `Recuperación de carrito abandonado (${CUPON_PORCENTAJE}%)`,\n        tipo_descuento: \"porcentaje\",\n        valor: CUPON_PORCENTAJE,\n        monto_minimo_compra: 0,\n        aplica_a: \"todo\",\n        solo_primera_compra: false,\n        uso_maximo_total: 1,\n        uso_maximo_por_cliente: 1,\n        vigente_desde: iso,\n        vence_el: new Date(ahora + CUPON_HORAS * H).toISOString(),\n        activo: true,\n        origen: \"carrito_abandonado\",\n        notas: `Generado por n8n para el carrito ${c.id}`,\n      }\n    : null;\n\n  salida.push({ json: { carrito_id: c.id, enviar: true, paso, to, ...correo, marca, cupon } });\n}\nreturn salida;\n"
++      },
++      "id": "c4000000-0000-4000-8000-000000000004",
++      "name": "Armar correos",
++      "type": "n8n-nodes-base.code",
++      "typeVersion": 2,
++      "position": [
++        480,
++        140
++      ]
++    },
++    {
++      "parameters": {
++        "conditions": {
++          "options": {
++            "caseSensitive": true,
++            "leftValue": "",
++            "typeValidation": "strict"
++          },
++          "conditions": [
++            {
++              "id": "cond-5",
++              "leftValue": "={{ $json.enviar }}",
++              "rightValue": "",
++              "operator": {
++                "type": "boolean",
++                "operation": "true",
++                "singleValue": true
++              }
++            }
++          ],
++          "combinator": "and"
++        },
++        "options": {}
++      },
++      "id": "c4000000-0000-4000-8000-000000000005",
++      "name": "¿Se puede enviar?",
++      "type": "n8n-nodes-base.if",
++      "typeVersion": 2.2,
++      "position": [
++        720,
++        140
++      ]
++    },
++    {
++      "parameters": {
++        "conditions": {
++          "options": {
++            "caseSensitive": true,
++            "leftValue": "",
++            "typeValidation": "strict"
++          },
++          "conditions": [
++            {
++              "id": "cond-6",
++              "leftValue": "={{ $json.paso }}",
++              "rightValue": 2,
++              "operator": {
++                "type": "number",
++                "operation": "equals"
++              }
++            }
++          ],
++          "combinator": "and"
++        },
++        "options": {}
++      },
++      "id": "c4000000-0000-4000-8000-000000000006",
++      "name": "¿Es el paso 2?",
++      "type": "n8n-nodes-base.if",
++      "typeVersion": 2.2,
++      "position": [
++        960,
++        60
++      ]
++    },
++    {
++      "parameters": {
++        "method": "POST",
++        "url": "https://TU_PROYECTO.supabase.co/rest/v1/cupones?on_conflict=codigo",
++        "authentication": "genericCredentialType",
++        "genericAuthType": "httpHeaderAuth",
++        "sendHeaders": true,
++        "headerParameters": {
++          "parameters": [
++            {
++              "name": "Prefer",
++              "value": "resolution=ignore-duplicates,return=minimal"
++            }
++          ]
++        },
++        "sendBody": true,
++        "specifyBody": "json",
++        "jsonBody": "={{ JSON.stringify($json.cupon) }}",
++        "options": {}
++      },
++      "id": "c4000000-0000-4000-8000-000000000007",
++      "name": "Crear cupón",
++      "type": "n8n-nodes-base.httpRequest",
++      "typeVersion": 4.2,
++      "position": [
++        1200,
++        -20
++      ],
++      "retryOnFail": true,
++      "maxTries": 3,
++      "waitBetweenTries": 2000,
++      "credentials": {
++        "httpHeaderAuth": {
++          "id": "",
++          "name": "Supabase G&M"
++        }
++      }
++    },
++    {
++      "parameters": {
++        "fromEmail": "={{ $('Armar correos').item.json.from }}",
++        "toEmail": "={{ $('Armar correos').item.json.to }}",
++        "subject": "={{ $('Armar correos').item.json.subject }}",
++        "emailFormat": "both",
++        "text": "={{ $('Armar correos').item.json.text }}",
++        "html": "={{ $('Armar correos').item.json.html }}",
++        "options": {}
++      },
++      "id": "c4000000-0000-4000-8000-000000000008",
++      "name": "Enviar correo al cliente",
++      "type": "n8n-nodes-base.emailSend",
++      "typeVersion": 2.1,
++      "position": [
++        1440,
++        60
++      ],
++      "retryOnFail": true,
++      "maxTries": 2,
++      "waitBetweenTries": 3000,
++      "credentials": {
++        "smtp": {
++          "id": "",
++          "name": "Gmail G&M"
++        }
++      }
++    },
++    {
++      "parameters": {
++        "method": "PATCH",
++        "url": "={{ \"https://TU_PROYECTO.supabase.co/rest/v1/carritos?estado=in.(activo,contactado)&id=eq.\" + $('Armar correos').item.json.carrito_id }}",
++        "authentication": "genericCredentialType",
++        "genericAuthType": "httpHeaderAuth",
++        "sendHeaders": true,
++        "headerParameters": {
++          "parameters": [
++            {
++              "name": "Prefer",
++              "value": "return=minimal"
++            }
++          ]
++        },
++        "sendBody": true,
++        "specifyBody": "json",
++        "jsonBody": "={{ JSON.stringify($('Armar correos').item.json.marca) }}",
++        "options": {}
++      },
++      "id": "c4000000-0000-4000-8000-000000000009",
++      "name": "Marcar como avisado",
++      "type": "n8n-nodes-base.httpRequest",
++      "typeVersion": 4.2,
++      "position": [
++        1680,
++        140
++      ],
++      "retryOnFail": true,
++      "maxTries": 3,
++      "waitBetweenTries": 2000,
++      "credentials": {
++        "httpHeaderAuth": {
++          "id": "",
++          "name": "Supabase G&M"
++        }
++      }
++    }
++  ],
++  "connections": {
++    "Cada 10 minutos": {
++      "main": [
++        [
++          {
++            "node": "Carritos por avisar",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "Carritos por avisar": {
++      "main": [
++        [
++          {
++            "node": "Armar correos",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "Armar correos": {
++      "main": [
++        [
++          {
++            "node": "¿Se puede enviar?",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "¿Se puede enviar?": {
++      "main": [
++        [
++          {
++            "node": "¿Es el paso 2?",
++            "type": "main",
++            "index": 0
++          }
++        ],
++        [
++          {
++            "node": "Marcar como avisado",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "¿Es el paso 2?": {
++      "main": [
++        [
++          {
++            "node": "Crear cupón",
++            "type": "main",
++            "index": 0
++          }
++        ],
++        [
++          {
++            "node": "Enviar correo al cliente",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "Crear cupón": {
++      "main": [
++        [
++          {
++            "node": "Enviar correo al cliente",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    },
++    "Enviar correo al cliente": {
++      "main": [
++        [
++          {
++            "node": "Marcar como avisado",
++            "type": "main",
++            "index": 0
++          }
++        ]
++      ]
++    }
++  },
++  "active": false,
++  "settings": {
++    "executionOrder": "v1"
++  },
++  "pinData": {}
++}
+\ No newline at end of file
+diff --git a/src/lib/carrito.functions.ts b/src/lib/carrito.functions.ts
+index 43f4498..22b6338 100644
+--- a/src/lib/carrito.functions.ts
++++ b/src/lib/carrito.functions.ts
+@@ -59,6 +59,9 @@ export async function syncCartSnapshot(input: z.infer<typeof SyncCartSchema>) {
+         user_id: data.user_id || null,
+         estado: "activo",
+         last_activity_at: new Date().toISOString(),
++        // Si el cliente vuelve a mover su carrito, el ciclo de recordatorios (n8n) empieza de nuevo.
++        recordatorio_1_at: null,
++        recordatorio_2_at: null,
+       },
+       { onConflict: "session_id" }
+     );
+diff --git a/supabase/migrations/20261030_carrito_abandonado_n8n.sql b/supabase/migrations/20261030_carrito_abandonado_n8n.sql
+new file mode 100644
+index 0000000..ddbf7a2
+--- /dev/null
++++ b/supabase/migrations/20261030_carrito_abandonado_n8n.sql
+@@ -0,0 +1,19 @@
++-- Recordatorios de carrito abandonado con n8n.
++-- n8n busca carritos con correo, sin actividad hace más de 1 h, y envía hasta 2 correos:
++--   paso 1 (≈1 h sin actividad) y paso 2 (≈24 h sin actividad, con cupón).
++-- Cada paso deja su marca de tiempo para no repetirse.
++ALTER TABLE public.carritos
++  ADD COLUMN IF NOT EXISTS recordatorio_1_at timestamptz,
++  ADD COLUMN IF NOT EXISTS recordatorio_2_at timestamptz;
++
++-- MUY IMPORTANTE: marca todos los carritos que ya existen como "atendidos".
++-- Sin esto, al activar el flujo se escribiría a visitantes antiguos.
++UPDATE public.carritos
++   SET recordatorio_1_at = COALESCE(recordatorio_1_at, now()),
++       recordatorio_2_at = COALESCE(recordatorio_2_at, now())
++ WHERE recordatorio_1_at IS NULL OR recordatorio_2_at IS NULL;
++
++-- Índice parcial: el sondeo de n8n solo mira carritos aún abiertos.
++CREATE INDEX IF NOT EXISTS carritos_recordatorio_pendiente_idx
++  ON public.carritos (last_activity_at)
++  WHERE estado IN ('activo', 'contactado') AND recordatorio_2_at IS NULL;

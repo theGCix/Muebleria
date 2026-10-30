@@ -1,0 +1,343 @@
+{
+  "name": "G&M — Carrito abandonado (sin túnel)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Carrito abandonado\nCada 10 min n8n pregunta a Supabase por carritos con correo y sin actividad: 1 h → correo 1; 24 h → correo 2 con cupón del 5 % (48 h, un solo uso).\nSi tu PC estuvo apagada, al volver envía lo pendiente (hasta 3 días atrás).\n\n1. Ejecuta primero la migración SQL (marca los carritos antiguos como ya atendidos).\n2. Credenciales: **Supabase G&M** (Header Auth: `apikey` = service_role key) y tu SMTP de Gmail.\n3. Cambia `TU_PROYECTO` en los 3 nodos de Supabase y revisa `SITE_URL` en *Armar correos*.\n\nVer n8n/CARRITO-ABANDONADO.md",
+        "height": 320,
+        "width": 460
+      },
+      "id": "c4000000-0000-4000-8000-000000000001",
+      "name": "Léeme",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "c4000000-0000-4000-8000-000000000002",
+      "name": "Cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ \"https://TU_PROYECTO.supabase.co/rest/v1/carritos?select=*&estado=in.(activo,contactado)&email=not.is.null&last_activity_at=gte.\" + new Date(Date.now() - 3*24*3600*1000).toISOString() + \"&last_activity_at=lt.\" + new Date(Date.now() - 3600*1000).toISOString() + \"&or=(recordatorio_1_at.is.null,and(recordatorio_2_at.is.null,last_activity_at.lt.\" + new Date(Date.now() - 24*3600*1000).toISOString() + \"))&order=last_activity_at.asc&limit=20\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "c4000000-0000-4000-8000-000000000003",
+      "name": "Carritos por avisar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        140
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════\nconst REMITENTE_NOMBRE = \"G&M Mueblería\";\nconst REMITENTE_EMAIL = \"proyectomuebleria1@gmail.com\"; // la MISMA cuenta Gmail de la credencial SMTP\nconst SITE_URL = \"https://muebleria-q74c.onrender.com\"; // dirección pública de tu tienda (sin / al final)\nconst COLOR = \"#6B4226\";\nconst CUPON_PORCENTAJE = 5;      // descuento del paso 2\nconst CUPON_HORAS = 48;          // vigencia del cupón\nconst HORAS_PASO_2 = 24;         // sin actividad hace al menos X h para el 2.º correo\nconst HORAS_ENTRE_PASOS = 12;    // mínimo entre el 1.er y el 2.º correo\n// ══════════════════════════════════════════════════════════════\n\nconst H = 3600 * 1000;\nconst ahora = Date.now();\nconst esc = (s) =>\n  String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\nconst sinSaltos = (s) => String(s ?? \"\").replace(/[\\r\\n]+/g, \" \").trim();\nconst soles = (n) => \"S/ \" + Number(n || 0).toLocaleString(\"en-US\", { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst EMAIL_RE = /^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]{2,}$/;\n\nfunction enlace(paso) {\n  const base = SITE_URL.replace(/\\/$/, \"\");\n  return `${base}/checkout?utm_source=n8n&utm_medium=email&utm_campaign=carrito_abandonado&utm_content=paso${paso}`;\n}\n\nfunction construir(c, paso, cuponCodigo) {\n  const nombre = sinSaltos(c.nombre).split(\" \")[0] || \"\";\n  const items = c.items;\n  const total = items.reduce((a, i) => a + Number(i.price || 0) * Number(i.qty || 1), 0);\n  const url = enlace(paso);\n\n  const titulo = paso === 1\n    ? `${nombre ? esc(nombre) + \", t\" : \"T\"}us productos te están esperando`\n    : `${nombre ? esc(nombre) + \", u\" : \"U\"}n regalo para completar tu pedido`;\n  const intro = paso === 1\n    ? \"Dejaste estos muebles en tu carrito. Siguen guardados; si tienes dudas de medidas, materiales o tiempos de entrega, responde este correo o escríbenos por WhatsApp.\"\n    : \"Son piezas hechas a mano y el stock es limitado. Para ayudarte a decidir, te dejamos un cupón exclusivo para este carrito.\";\n\n  const fila = (i) => {\n    const img = /^https:\\/\\//.test(String(i.image ?? \"\"))\n      ? `<img src=\"${esc(i.image)}\" width=\"56\" height=\"56\" alt=\"\" style=\"border-radius:8px;object-fit:cover;display:block;\">`\n      : \"\";\n    return `\n    <tr>\n      <td width=\"68\" style=\"padding:10px 0;border-bottom:1px solid #eadfd2;\">${img}</td>\n      <td style=\"padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;\">${esc(i.title)}<br><span style=\"color:#8a7a6a;font-size:12px;\">Cantidad: ${esc(i.qty)}</span></td>\n      <td style=\"padding:10px 0;border-bottom:1px solid #eadfd2;font-size:14px;color:#2b2118;text-align:right;white-space:nowrap;\">${soles(Number(i.price || 0) * Number(i.qty || 1))}</td>\n    </tr>`;\n  };\n\n  const cupon = paso === 2 && cuponCodigo\n    ? `<div style=\"margin:22px 0 0;padding:16px 18px;background:#faf6f0;border:1px dashed ${COLOR};border-radius:12px;text-align:center;\">\n        <p style=\"margin:0 0 6px;font-size:13px;color:#6b5a49;\">${CUPON_PORCENTAJE}% de descuento · válido ${CUPON_HORAS} horas · un solo uso</p>\n        <p style=\"margin:0;font-size:22px;font-weight:700;letter-spacing:2px;color:${COLOR};\">${esc(cuponCodigo)}</p>\n        <p style=\"margin:6px 0 0;font-size:12px;color:#8a7a6a;\">Ingrésalo al pagar en el checkout.</p>\n      </div>`\n    : \"\";\n\n  const html = `<!doctype html>\n  <html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Tu carrito</title></head><body style=\"margin:0;padding:0;background:#faf6f0;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#faf6f0;padding:24px 12px;\">\n  <tr><td align=\"center\">\n    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;\">\n      <tr><td style=\"background:${COLOR};padding:22px 28px;\">\n        <span style=\"font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#ffffff;letter-spacing:.5px;\">G&amp;M Mueblería</span>\n      </td></tr>\n      <tr><td style=\"padding:28px;\">\n        <h1 style=\"margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;color:#2b2118;\">${titulo}</h1>\n        <p style=\"margin:0 0 20px;font-size:15px;line-height:1.5;color:#4a3b2d;\">${esc(intro)}</p>\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">${items.slice(0, 5).map(fila).join(\"\")}</table>\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:10px;\">\n          <tr>\n            <td style=\"padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;border-top:2px solid ${COLOR};\">Total</td>\n            <td style=\"padding:10px 0 0;font-size:17px;font-weight:700;color:#2b2118;text-align:right;border-top:2px solid ${COLOR};\">${soles(total)}</td>\n          </tr>\n        </table>\n        ${cupon}\n        <p style=\"margin:24px 0 8px;text-align:center;\"><a href=\"${esc(url)}\" style=\"display:inline-block;background:${COLOR};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:999px;\">Completar mi pedido</a></p>\n        <p style=\"margin:20px 0 0;font-size:13px;line-height:1.5;color:#8a7a6a;\">Tu mueble tiene 2 años de garantía en la estructura. Entregamos a domicilio en Lima y enviamos a provincias.</p>\n      </td></tr>\n      <tr><td style=\"background:#faf6f0;padding:16px 28px;font-size:12px;line-height:1.5;color:#8a7a6a;text-align:center;\">G&amp;M Mueblería · Lima, Perú<br>Recibes este correo porque dejaste productos en tu carrito. Si no quieres más recordatorios, responde «NO».</td></tr>\n    </table>\n  </td></tr></table>\n  </body></html>`;\n\n  const texto = [\n    nombre ? `Hola ${nombre},` : \"Hola,\",\n    intro,\n    \"\",\n    ...items.slice(0, 5).map((i) => `- ${sinSaltos(i.title)} x${i.qty}: ${soles(Number(i.price || 0) * Number(i.qty || 1))}`),\n    `Total: ${soles(total)}`,\n    cuponCodigo && paso === 2 ? `\\nCupón ${CUPON_PORCENTAJE}% (${CUPON_HORAS} h, un solo uso): ${cuponCodigo}` : \"\",\n    `\\nCompletar mi pedido: ${url}`,\n    \"\\nG&M Mueblería · Si no quieres más recordatorios, responde NO.\",\n  ].join(\"\\n\");\n\n  return {\n    from: `${REMITENTE_NOMBRE} <${REMITENTE_EMAIL}>`,\n    subject: paso === 1\n      ? `${nombre ? nombre + \", tu\" : \"Tu\"} carrito te está esperando — G&M Mueblería`\n      : `${nombre ? nombre + \", un\" : \"Un\"} ${CUPON_PORCENTAJE}% de descuento para tu carrito — G&M Mueblería`,\n    html,\n    text: texto,\n  };\n}\n\nconst salida = [];\nfor (const fila of $input.all()) {\n  const c = fila.json;\n  const iso = new Date(ahora).toISOString();\n  const t = (v) => (v ? new Date(v).getTime() : null);\n  const ultima = t(c.last_activity_at);\n  const r1 = t(c.recordatorio_1_at);\n  const r2 = t(c.recordatorio_2_at);\n\n  // ¿Qué paso toca? (null = todavía no)\n  let paso = null;\n  if (!r1 && ultima && ahora - ultima >= 1 * H) paso = 1;\n  else if (r1 && !r2 && ultima && ahora - ultima >= HORAS_PASO_2 * H && ahora - r1 >= HORAS_ENTRE_PASOS * H) paso = 2;\n  if (!paso) continue;\n\n  const items = Array.isArray(c.items) ? c.items.filter((i) => i && i.title) : [];\n  const to = String(c.email ?? \"\").trim();\n\n  // Sin correo válido o sin productos: se cierra el seguimiento para no reintentarlo siempre.\n  if (!EMAIL_RE.test(to) || items.length === 0) {\n    salida.push({ json: { carrito_id: c.id, enviar: false, paso, marca: { recordatorio_1_at: iso, recordatorio_2_at: iso } } });\n    continue;\n  }\n\n  const cuponCodigo = paso === 2 ? \"VUELVE-\" + String(c.id).replace(/-/g, \"\").slice(0, 8).toUpperCase() : null;\n  const correo = construir({ ...c, items }, paso, cuponCodigo);\n\n  const marca = paso === 1\n    ? { recordatorio_1_at: iso, recordatorio_enviado: true, estado: \"contactado\" }\n    : { recordatorio_2_at: iso, recordatorio_enviado: true, estado: \"contactado\" };\n\n  const cupon = cuponCodigo\n    ? {\n        codigo: cuponCodigo,\n        descripcion: `Recuperación de carrito abandonado (${CUPON_PORCENTAJE}%)`,\n        tipo_descuento: \"porcentaje\",\n        valor: CUPON_PORCENTAJE,\n        monto_minimo_compra: 0,\n        aplica_a: \"todo\",\n        solo_primera_compra: false,\n        uso_maximo_total: 1,\n        uso_maximo_por_cliente: 1,\n        vigente_desde: iso,\n        vence_el: new Date(ahora + CUPON_HORAS * H).toISOString(),\n        activo: true,\n        origen: \"carrito_abandonado\",\n        notas: `Generado por n8n para el carrito ${c.id}`,\n      }\n    : null;\n\n  salida.push({ json: { carrito_id: c.id, enviar: true, paso, to, ...correo, marca, cupon } });\n}\nreturn salida;\n"
+      },
+      "id": "c4000000-0000-4000-8000-000000000004",
+      "name": "Armar correos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-5",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c4000000-0000-4000-8000-000000000005",
+      "name": "¿Se puede enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-6",
+              "leftValue": "={{ $json.paso }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c4000000-0000-4000-8000-000000000006",
+      "name": "¿Es el paso 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU_PROYECTO.supabase.co/rest/v1/cupones?on_conflict=codigo",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cupon) }}",
+        "options": {}
+      },
+      "id": "c4000000-0000-4000-8000-000000000007",
+      "name": "Crear cupón",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Armar correos').item.json.from }}",
+        "toEmail": "={{ $('Armar correos').item.json.to }}",
+        "subject": "={{ $('Armar correos').item.json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $('Armar correos').item.json.text }}",
+        "html": "={{ $('Armar correos').item.json.html }}",
+        "options": {}
+      },
+      "id": "c4000000-0000-4000-8000-000000000008",
+      "name": "Enviar correo al cliente",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "Gmail G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ \"https://TU_PROYECTO.supabase.co/rest/v1/carritos?estado=in.(activo,contactado)&id=eq.\" + $('Armar correos').item.json.carrito_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Armar correos').item.json.marca) }}",
+        "options": {}
+      },
+      "id": "c4000000-0000-4000-8000-000000000009",
+      "name": "Marcar como avisado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        140
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Carritos por avisar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carritos por avisar": {
+      "main": [
+        [
+          {
+            "node": "Armar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar correos": {
+      "main": [
+        [
+          {
+            "node": "¿Se puede enviar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se puede enviar?": {
+      "main": [
+        [
+          {
+            "node": "¿Es el paso 2?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar como avisado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es el paso 2?": {
+      "main": [
+        [
+          {
+            "node": "Crear cupón",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar correo al cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear cupón": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo al cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo al cliente": {
+      "main": [
+        [
+          {
+            "node": "Marcar como avisado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
