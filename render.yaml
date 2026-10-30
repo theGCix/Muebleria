@@ -9,6 +9,10 @@ services:
       - type: rewrite
         source: /sitemap.xml
         destination: https://muebleria-q74c.onrender.com/sitemap.xml
+      # Feed de productos para Google Merchant Center y el catálogo de Meta (también en la API)
+      - type: rewrite
+        source: /feed/productos.xml
+        destination: https://muebleria-q74c.onrender.com/feed/productos.xml
       - type: rewrite
         source: /*
         destination: /index.html

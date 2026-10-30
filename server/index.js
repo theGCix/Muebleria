@@ -9,6 +9,7 @@ import { registerNotaCreditoRoutes } from "./nubefact-nc.js";
 import { registerCuponSalida } from "./cupon-salida.js";
 import { registerShare } from "./share.js";
 import { registerSitemap } from "./sitemap.js";
+import { registerFeed } from "./feed.js";
 import { registerChat } from "./chat.js";
 import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
@@ -754,6 +755,7 @@ registerNotaCreditoRoutes({ app, supabaseAdmin, requireAuth, getNubefactBase });
 registerCuponSalida({ app, supabaseAdmin, rateLimit });
 registerShare({ app, supabaseAdmin, rateLimit }); // Vista previa al compartir (WhatsApp/Facebook): /share/product/:id
 registerSitemap({ app, supabaseAdmin, rateLimit }); // Sitemap en vivo desde la BD: /sitemap.xml
+registerFeed({ app, supabaseAdmin, rateLimit }); // Feed de productos (Google Merchant / Meta): /feed/productos.xml
 registerChat({ app, supabaseAdmin, rateLimit }); // Chatbot: LangChain + Ollama
 
 // ── Iniciar servidor ──────────────────────────────────────────
