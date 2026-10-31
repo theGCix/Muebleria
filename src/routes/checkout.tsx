@@ -13,7 +13,7 @@ import {
 import { useCartStore } from "@/stores/cartStore";
 import {
   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
-  CheckCircle2, XCircle, LogIn, Minus, Plus, X,
+  LogIn, Minus, Plus, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -59,9 +59,11 @@ function generateOrderId() {
 }
 
 type ModalTipo = "exitoso" | "error" | null;
-// Para "exitoso" se usa el detalle completo del pedido (PagoExitoso); para "error", solo actionDesc.
+// Para "exitoso" se usa el detalle completo del pedido (PagoExitoso); para "error", PagoRechazado.
 interface ModalDatos extends Partial<PagoExitosoDatos> {
   actionDesc?: string;
+  actionCode?: string | number;
+  sinConfirmar?: boolean;
 }
 
 // const API = import.meta.env.VITE_API_URL ?? "";
@@ -72,6 +74,7 @@ import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
 import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
+import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
 
 async function fetchNiubizSession(payload: {
   amount: number;
@@ -110,6 +113,7 @@ function CheckoutPage() {
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [modalDatos, setModalDatos] = useState<ModalDatos>({});
+  const navigate = useNavigate();
 
   const [form, setForm] = useState({
     nombre: "", email: "", telefono: "", dni: "",
@@ -342,7 +346,18 @@ useEffect(() => {
   .then(({ ok, data }) => {
     // El servidor autoriza el cobro con Niubiz: solo si responde success hay pedido pagado.
     if (!ok || !data?.success) {
-      setModalDatos({ actionDesc: data?.error ?? "No pudimos confirmar tu pago. Si te llegó un cargo, escríbenos por WhatsApp." });
+      // Con error/actionCode el servidor sí obtuvo respuesta (rechazo); sin ellos no se pudo confirmar.
+      const rechazo = Boolean(data?.error || data?.actionCode);
+      setModalDatos({
+        actionDesc:   data?.error,
+        actionCode:   data?.actionCode,
+        sinConfirmar: !rechazo,
+        purchase:     purchaseNumber,
+        date:         new Date().toLocaleString("es-PE"),
+        amount:       (saved.total ?? totalFinal).toFixed(2),
+        nombre:       saved.nombre,
+        items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
+      });
       setModalTipo("error");
       return;
     }
@@ -378,7 +393,14 @@ useEffect(() => {
   })
   .catch((err) => {
     console.error("Error guardando pedido:", err);
-    setModalDatos({ actionDesc: "No pudimos confirmar tu pago por un problema de conexión. Si te llegó un cargo, escríbenos por WhatsApp." });
+    setModalDatos({
+      sinConfirmar: true,
+      purchase:     purchaseNumber,
+      date:         new Date().toLocaleString("es-PE"),
+      amount:       (saved.total ?? totalFinal).toFixed(2),
+      nombre:       saved.nombre,
+      items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
+    });
     setModalTipo("error");
   });
 }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -902,7 +924,13 @@ useEffect(() => {
       {modalTipo === "exitoso" ? (
         <PagoExitoso datos={{ purchase: "—", date: "", amount: "0", ...modalDatos }} />
       ) : (
-        modalTipo && <PagoModal tipo={modalTipo} datos={modalDatos} onCerrar={() => setModalTipo(null)} />
+        modalTipo === "error" && (
+          <PagoRechazado
+            datos={modalDatos as PagoRechazadoDatos}
+            onReintentar={() => setModalTipo(null)}
+            onVolver={() => navigate({ to: "/" })}
+          />
+        )
       )}
 
       <LoginModal
@@ -926,84 +954,4 @@ function injectNiubizScript(url: string): Promise<void> {
     script.onerror = () => reject(new Error("No se pudo cargar el script de Niubiz"));
     document.body.appendChild(script);
   });
-}
-
-function PagoModal({ tipo, datos, onCerrar }: { tipo: "exitoso" | "error"; datos: ModalDatos; onCerrar: () => void }) {
-  const navigate = useNavigate();
-  const exitoso  = tipo === "exitoso";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.65)" }}>
-      <div className="relative bg-background rounded-2xl px-10 py-12 max-w-[440px] w-[90%] text-center shadow-2xl" style={{ paddingTop: "56px" }}>
-
-        <div className="absolute -top-11 left-1/2 -translate-x-1/2">
-          <div className="w-[88px] h-[88px] rounded-full border-[5px] border-background flex items-center justify-center" style={{ background: "#1a2e5a" }}>
-            {exitoso
-              ? <CheckCircle2 className="h-11 w-11" style={{ color: "#f0a020" }} />
-              : <XCircle      className="h-11 w-11" style={{ color: "#e24b4a" }} />}
-          </div>
-        </div>
-
-        <p className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: exitoso ? "#f0a020" : "#e24b4a" }}>
-          {exitoso ? "Compra confirmada" : "Pago no procesado"}
-        </p>
-        <h2 className="text-2xl font-semibold mb-3" style={{ color: "#1a2e5a" }}>
-          {exitoso ? "¡Gracias por tu compra!" : "Hubo un problema"}
-        </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-          {exitoso
-            ? "Tu pago fue procesado exitosamente.\nNos pondremos en contacto para coordinar la entrega de tus muebles."
-            : "No pudimos procesar tu pago.\nPor favor verifica tus datos e intenta nuevamente."}
-        </p>
-
-        <div className="rounded-xl p-4 mb-6 text-left space-y-2" style={{ background: "#f7f8fa" }}>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Estado</span>
-            {exitoso
-              ? <span className="text-xs font-medium px-2.5 py-0.5 rounded-full" style={{ background: "#eaf3de", color: "#3b6d11" }}>✓ Aprobado</span>
-              : <span className="text-xs font-medium px-2.5 py-0.5 rounded-full" style={{ background: "#fcebeb", color: "#a32d2d" }}>✗ Rechazado</span>}
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Tienda</span>
-            <span className="text-xs font-medium" style={{ color: "#1a2e5a" }}>G&amp;M Mueblería</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Método</span>
-            <span className="text-xs text-muted-foreground">Tarjeta · Niubiz</span>
-          </div>
-          {datos.purchase && datos.purchase !== "—" && (
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">N° de pedido</span>
-              <span className="text-xs text-muted-foreground">{datos.purchase}</span>
-            </div>
-          )}
-          {datos.date && datos.date !== "—" && (
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Fecha y hora</span>
-              <span className="text-xs text-muted-foreground">{datos.date}</span>
-            </div>
-          )}
-          {exitoso && datos.amount && (
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Importe</span>
-              <span className="text-xs font-semibold" style={{ color: "#1a2e5a" }}>{datos.currency ?? "PEN"} {datos.amount}</span>
-            </div>
-          )}
-          {!exitoso && datos.actionDesc && (
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Motivo</span>
-              <span className="text-xs" style={{ color: "#a32d2d" }}>{datos.actionDesc}</span>
-            </div>
-          )}
-        </div>
-
-        <button onClick={() => navigate({ to: "/" })} className="w-full py-3.5 rounded-xl text-sm font-medium text-white mb-3 cursor-pointer border-none" style={{ background: "#1a2e5a" }}>
-          Volver a la tienda
-        </button>
-        <button onClick={onCerrar} className="w-full py-3.5 rounded-xl text-sm border cursor-pointer bg-transparent" style={{ color: "#1a2e5a", borderColor: "#1a2e5a" }}>
-          {exitoso ? "Ver mi pedido" : "Intentar de nuevo"}
-        </button>
-      </div>
-    </div>
-  );
 }

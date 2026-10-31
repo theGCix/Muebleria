@@ -1,0 +1,39 @@
+/* src/components/checkout/pago-rechazado.css
+   Pantalla de "pago no aprobado". Reutiliza el lienzo de pago-exitoso.css (gmp-root, gmp-hero,
+   gmp-card, gmp-rise, gmp-badge); aquí solo lo propio del rechazo. Sin confeti: tono sereno. */
+
+.gmr-root { --gmr-clay: #c8553d; --gmr-clay-soft: #f6d9d1; }
+
+.gmr-root .gmp-pulse { border-color: var(--gmr-clay); }
+.gmr-x { fill: none; stroke: var(--gmr-clay); stroke-width: 4.4; stroke-linecap: round; stroke-dasharray: 60; stroke-dashoffset: 0; }
+
+.gmr-eyebrow { color: #f2a28f; }
+
+/* Pasos "qué puedes hacer" */
+.gmr-tip { display: flex; gap: 12px; align-items: flex-start; }
+.gmr-tip-n {
+  flex: none; width: 26px; height: 26px; border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--gmr-clay-soft); color: #8f3a27; font-size: 12px; font-weight: 700;
+}
+
+/* Avisos */
+.gmr-safe, .gmr-warn {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 14px; border-radius: .9rem;
+  font-size: 13px; line-height: 1.45;
+}
+.gmr-safe { background: #eef5ea; color: #355a1d; }
+.gmr-warn { background: #fff4dc; color: #7a5200; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .gmr-x { stroke-dashoffset: 60; animation: gmp-draw .5s ease-out .85s forwards; }
+  .gmr-root .gmp-badge { animation: gmr-shake .55s ease-in-out 1.25s; }
+}
+@keyframes gmr-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
+}

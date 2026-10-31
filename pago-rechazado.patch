@@ -1,0 +1,516 @@
+diff --git a/src/components/checkout/PagoRechazado.tsx b/src/components/checkout/PagoRechazado.tsx
+new file mode 100644
+index 0000000..a5bd4d5
+--- /dev/null
++++ b/src/components/checkout/PagoRechazado.tsx
+@@ -0,0 +1,287 @@
++// src/components/checkout/PagoRechazado.tsx
++// Pantalla de "pago no aprobado": hermana de PagoExitoso (mismo lienzo nogal/ámbar).
++// Objetivo: que el cliente NO sienta que perdió la compra. Hace cuatro cosas:
++//   1) dice con calma qué pasó, en lenguaje claro (traduce el código de Niubiz),
++//   2) tranquiliza: no hubo cargo y el carrito sigue guardado,
++//   3) da pasos concretos según el motivo,
++//   4) deja reintentar en un toque o hablar con un asesor por WhatsApp.
++import { useEffect, useMemo, useRef } from "react";
++import { ArrowLeft, CreditCard, Info, MessageCircle, RefreshCw, ShieldCheck, ShoppingBag } from "lucide-react";
++import { fmtPEN } from "@/lib/pricing";
++import { WHATSAPP_NUMBER } from "@/config";
++import "./pago-exitoso.css";
++import "./pago-rechazado.css";
++
++export interface PagoRechazadoItem {
++  id: string;
++  title: string;
++  image?: string | null;
++  qty: number;
++  price: number;
++}
++
++export interface PagoRechazadoDatos {
++  /** Texto que devolvió Niubiz o el servidor (ACTION_DESCRIPTION). */
++  actionDesc?: string;
++  /** Código de acción de Niubiz (p. ej. "116") o del servidor ("401", "406"). */
++  actionCode?: string | number;
++  /** true cuando no pudimos confirmar el resultado (sin respuesta del servidor). */
++  sinConfirmar?: boolean;
++  purchase?: string;
++  date?: string;
++  amount?: string;
++  nombre?: string;
++  items?: PagoRechazadoItem[];
++}
++
++interface Motivo {
++  titulo: string;
++  detalle: string;
++  tips: string[];
++  /** Si el problema es de la tienda/pasarela y no de la tarjeta del cliente. */
++  nuestro?: boolean;
++}
++
++const VERIFICA = "Revisa que el número, la fecha de vencimiento y el código de seguridad estén bien escritos.";
++const BANCO = "Llama al número que figura detrás de tu tarjeta para que tu banco libere la operación.";
++const OTRA = "Prueba con otra tarjeta de crédito o débito.";
++
++/** Traduce el código de Niubiz a algo que un cliente entienda y pueda accionar. */
++function describirMotivo(code: string, desc?: string): Motivo {
++  switch (code) {
++    case "101":
++      return { titulo: "Tu tarjeta está vencida", detalle: "El banco indica que la fecha de vencimiento ya pasó.", tips: ["Confirma la fecha de vencimiento impresa en la tarjeta.", OTRA, "Si tienes una tarjeta renovada, usa esa."] };
++    case "102":
++    case "113":
++      return { titulo: "Tu banco no permitió esta compra", detalle: "La tarjeta no está habilitada para esta operación o este monto.", tips: [BANCO, "Pídele que habilite compras por internet y el monto de tu pedido.", OTRA] };
++    case "116":
++      return { titulo: "Fondos insuficientes", detalle: "El saldo o la línea disponible no alcanza para este pedido.", tips: ["Revisa tu saldo disponible.", OTRA, "Si prefieres, escríbenos y vemos cómo ayudarte con tu compra."] };
++    case "118":
++    case "129":
++    case "180":
++      return { titulo: "No pudimos validar tu tarjeta", detalle: "Algún dato de la tarjeta no coincide con el que tiene el banco.", tips: [VERIFICA, "Verifica que la tarjeta esté activa y habilitada para compras online.", OTRA] };
++    case "191":
++      return { titulo: "Tu banco necesita confirmar la compra", detalle: "El banco emisor pide que lo contactes para liberar la operación.", tips: [BANCO, "Cuando te confirmen, vuelve a intentar.", OTRA] };
++    case "208":
++    case "209":
++      return { titulo: "Tu tarjeta está bloqueada", detalle: "El banco reporta la tarjeta como bloqueada y no puede usarse.", tips: [BANCO, OTRA] };
++    case "670":
++      return { titulo: "Tu banco frenó la compra por seguridad", detalle: "Su sistema antifraude detuvo la operación para protegerte.", tips: [BANCO, "Confirma que la compra es tuya y vuelve a intentar.", OTRA] };
++    case "678":
++      return { titulo: "No se completó la verificación de tu tarjeta", detalle: "El paso de autenticación con tu banco no terminó bien.", tips: ["Vuelve a intentar y completa la verificación de tu banco si te la piden.", BANCO, OTRA] };
++    case "666":
++      return { titulo: "Hubo un problema de comunicación", detalle: "No pudimos hablar con tu banco en este momento.", tips: ["Espera unos minutos y vuelve a intentar.", OTRA], nuestro: true };
++    case "754":
++    case "476":
++    case "207":
++      return { titulo: "Estamos resolviendo un tema con la pasarela", detalle: "Esto no tiene que ver con tu tarjeta: es un ajuste nuestro con el proveedor de pagos.", tips: ["Intenta de nuevo en unos minutos.", "Si persiste, escríbenos por WhatsApp y cerramos tu compra contigo."], nuestro: true };
++    case "401":
++      return { titulo: "No pudimos confirmar tu pago", detalle: "Tuvimos un problema al validar la operación con la pasarela de pagos.", tips: ["Intenta de nuevo en unos minutos.", "Si persiste, escríbenos por WhatsApp y cerramos tu compra contigo."], nuestro: true };
++    case "406":
++      return { titulo: "Esta operación ya se envió", detalle: "Detectamos un intento de pago idéntico hace instantes.", tips: ["Revisa en «Mis pedidos» si tu pedido ya aparece.", "Espera un par de minutos antes de reintentar."] };
++    case "MONTO":
++      return { titulo: "El monto no coincide", detalle: "El importe del pedido cambió mientras pagabas (por ejemplo, una oferta que terminó).", tips: ["Vuelve al pago: verás el total actualizado.", "Si el precio te parece raro, escríbenos."], nuestro: true };
++    default:
++      return {
++        titulo: desc && desc.length < 60 ? desc : "El pago no fue aprobado",
++        detalle: "Tu banco o la pasarela no aprobaron esta operación.",
++        tips: [VERIFICA, "Vuelve a intentarlo en unos minutos.", OTRA],
++      };
++  }
++}
++
++export function PagoRechazado({
++  datos, onReintentar, onVolver,
++}: {
++  datos: PagoRechazadoDatos;
++  /** Cierra la pantalla y deja al cliente de nuevo en el checkout con su carrito intacto. */
++  onReintentar: () => void;
++  onVolver: () => void;
++}) {
++  const tituloRef = useRef<HTMLHeadingElement | null>(null);
++  const code = String(datos.actionCode ?? "").trim();
++  const motivo = useMemo(() => describirMotivo(code, datos.actionDesc), [code, datos.actionDesc]);
++  const items = datos.items ?? [];
++  const total = Number(datos.amount) || items.reduce((s, i) => s + i.price * i.qty, 0);
++  const nombre = (() => {
++    const n = (datos.nombre ?? "").trim().split(/\s+/)[0];
++    return !n || n === "—" ? "" : n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
++  })();
++
++  // Bloquea el scroll de atrás, enfoca el título y deja salir con Escape
++  useEffect(() => {
++    const prev = document.body.style.overflow;
++    document.body.style.overflow = "hidden";
++    tituloRef.current?.focus();
++    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onReintentar(); };
++    window.addEventListener("keydown", onKey);
++    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
++  }, [onReintentar]);
++
++  const mensajeAsesor = encodeURIComponent(
++    `Hola G&M Mueblería, soy ${nombre || "cliente"}. Intenté pagar mi pedido${total ? ` de ${fmtPEN(total)}` : ""} y el pago no se aprobó` +
++    `${code ? ` (código ${code})` : ""}. ¿Me ayudan a completarlo?`,
++  );
++  const linkAsesor = WHATSAPP_NUMBER ? `https://wa.me/${WHATSAPP_NUMBER}?text=${mensajeAsesor}` : null;
++
++  return (
++    <div className="gmp-root gmr-root" role="alertdialog" aria-modal="true" aria-labelledby="gmr-titulo">
++      {/* ───────── Hero ───────── */}
++      <header className="gmp-hero">
++        <div className="relative mx-auto flex max-w-3xl flex-col items-center px-5 pb-24 pt-14 text-center sm:pb-28 sm:pt-18">
++          <div className="gmp-badge" aria-hidden>
++            <span className="gmp-pulse" />
++            <span className="gmp-badge-disc" />
++            <svg viewBox="0 0 52 52">
++              <circle className="gmp-ring" cx="26" cy="26" r="24" />
++              <path className="gmr-x" d="M17 17 L35 35 M35 17 L17 35" />
++            </svg>
++          </div>
++
++          <p className="gmp-rise gmr-eyebrow mt-7 text-xs font-semibold uppercase tracking-[0.28em]" style={{ ["--gmp-d" as string]: "0.5s" }}>
++            Pago no aprobado
++          </p>
++          <h1
++            id="gmr-titulo"
++            ref={tituloRef}
++            tabIndex={-1}
++            className="gmp-rise font-display mt-2 text-3xl font-semibold leading-tight outline-none sm:text-5xl"
++            style={{ ["--gmp-d" as string]: "0.6s" }}
++          >
++            {nombre ? `${nombre}, no pudimos completar tu pago` : "No pudimos completar tu pago"}
++          </h1>
++          <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "0.7s" }}>
++            {datos.sinConfirmar
++              ? "No recibimos la confirmación del pago. Tu pedido sigue guardado y lo resolvemos contigo."
++              : "Tu pedido sigue esperándote. Con un pequeño ajuste lo cerramos en un minuto."}
++          </p>
++        </div>
++      </header>
++
++      {/* ───────── Contenido ───────── */}
++      <main className="relative mx-auto -mt-14 w-full max-w-4xl px-4 pb-32 sm:-mt-16 lg:pb-16">
++        <div className="grid gap-5 lg:grid-cols-5">
++          {/* Qué pasó + qué hacer */}
++          <section className="gmp-rise lg:col-span-3" style={{ ["--gmp-d" as string]: "0.85s" }} aria-label="Qué pasó">
++            <div className="gmp-card h-full p-5 sm:p-6">
++              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">¿Qué pasó?</p>
++              <h2 className="font-display mt-1 text-2xl font-semibold leading-tight sm:text-3xl">
++                {datos.sinConfirmar ? "No pudimos confirmar tu pago" : motivo.titulo}
++              </h2>
++              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
++                {datos.sinConfirmar
++                  ? "Hubo un corte de conexión justo al confirmar. Puede que el pago sí se haya procesado."
++                  : motivo.detalle}
++              </p>
++
++              <div className="mt-4">
++                {datos.sinConfirmar ? (
++                  <p className="gmr-warn">
++                    <Info className="mt-px h-4 w-4 shrink-0" />
++                    <span>Antes de reintentar, revisa «Mis pedidos». <b>Si ves un cargo en tu banco y no hay pedido, escríbenos</b> y lo verificamos de inmediato.</span>
++                  </p>
++                ) : (
++                  <p className="gmr-safe">
++                    <ShieldCheck className="mt-px h-4 w-4 shrink-0" />
++                    <span><b>No se hizo ningún cargo</b> a tu tarjeta y tu carrito sigue guardado.</span>
++                  </p>
++                )}
++              </div>
++
++              {!datos.sinConfirmar && (
++                <>
++                  <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
++                    {motivo.nuestro ? "Qué puedes hacer" : "Cómo resolverlo"}
++                  </p>
++                  <ol className="mt-3 space-y-3">
++                    {motivo.tips.map((t, i) => (
++                      <li key={i} className="gmr-tip">
++                        <span className="gmr-tip-n">{i + 1}</span>
++                        <p className="pt-0.5 text-sm leading-relaxed">{t}</p>
++                      </li>
++                    ))}
++                  </ol>
++                </>
++              )}
++
++              {(code || datos.date) && (
++                <p className="mt-6 border-t border-dashed border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
++                  Referencia para soporte{code ? ` · código ${code}` : ""}{datos.date ? ` · ${datos.date}` : ""}
++                </p>
++              )}
++            </div>
++          </section>
++
++          {/* Tu pedido sigue aquí */}
++          <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1s" }} aria-label="Tu pedido">
++            <div className="gmp-card h-full p-5 sm:p-6">
++              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido sigue aquí</p>
++              <h2 className="font-display mt-1 mb-4 text-xl font-semibold leading-tight">Nada se perdió</h2>
++
++              {items.length > 0 ? (
++                <ul className="space-y-3">
++                  {items.map((it) => (
++                    <li key={it.id} className="flex items-center gap-3">
++                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-[#f6efe4]">
++                        {it.image
++                          ? <img src={it.image} alt="" className="h-full w-full object-cover mix-blend-multiply" loading="lazy" />
++                          : <ShoppingBag className="m-auto mt-4 h-5 w-5 text-muted-foreground" />}
++                        {it.qty > 1 && <span className="absolute right-0 top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">×{it.qty}</span>}
++                      </div>
++                      <p className="font-display min-w-0 flex-1 text-[15px] font-semibold leading-snug line-clamp-2">{it.title}</p>
++                      <p className="shrink-0 text-sm font-semibold tabular-nums">{fmtPEN(it.price * it.qty)}</p>
++                    </li>
++                  ))}
++                </ul>
++              ) : (
++                <p className="text-sm text-muted-foreground">Tus productos siguen en el carrito.</p>
++              )}
++
++              {total > 0 && (
++                <div className="mt-4 flex items-baseline justify-between border-t border-dashed border-border pt-3">
++                  <span className="text-sm text-muted-foreground">Total a pagar</span>
++                  <span className="font-display text-2xl font-semibold tabular-nums">{fmtPEN(total)}</span>
++                </div>
++              )}
++              <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
++                <CreditCard className="h-3.5 w-3.5" /> Tarjeta · Niubiz · Pago seguro
++              </p>
++            </div>
++          </section>
++        </div>
++
++        {/* Acciones (escritorio) */}
++        <section className="gmp-rise mt-5 hidden flex-wrap items-center gap-3 lg:flex" style={{ ["--gmp-d" as string]: "1.15s" }} aria-label="Acciones">
++          <button type="button" onClick={onReintentar} className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
++            <RefreshCw className="h-4 w-4" /> Intentar de nuevo
++          </button>
++          {linkAsesor && (
++            <a href={linkAsesor} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-medium transition-colors hover:border-primary/40 hover:text-primary">
++              <MessageCircle className="h-4 w-4" /> Hablar con un asesor
++            </a>
++          )}
++          <button type="button" onClick={onVolver} className="ml-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline">
++            <ArrowLeft className="h-4 w-4" /> Volver a la tienda
++          </button>
++        </section>
++      </main>
++
++      {/* Barra fija en móvil */}
++      <div className="gmp-bar lg:hidden">
++        <div className="mx-auto flex max-w-md items-center gap-2">
++          <button type="button" onClick={onReintentar} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-medium text-primary-foreground">
++            <RefreshCw className="h-4 w-4" /> Intentar de nuevo
++          </button>
++          {linkAsesor && (
++            <a href={linkAsesor} target="_blank" rel="noreferrer" aria-label="Hablar con un asesor" className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white">
++              <MessageCircle className="h-[18px] w-[18px]" />
++            </a>
++          )}
++          <button type="button" onClick={onVolver} aria-label="Volver a la tienda" className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white">
++            <ArrowLeft className="h-[18px] w-[18px]" />
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/checkout/pago-rechazado.css b/src/components/checkout/pago-rechazado.css
+new file mode 100644
+index 0000000..a6890fe
+--- /dev/null
++++ b/src/components/checkout/pago-rechazado.css
+@@ -0,0 +1,39 @@
++/* src/components/checkout/pago-rechazado.css
++   Pantalla de "pago no aprobado". Reutiliza el lienzo de pago-exitoso.css (gmp-root, gmp-hero,
++   gmp-card, gmp-rise, gmp-badge); aquí solo lo propio del rechazo. Sin confeti: tono sereno. */
++
++.gmr-root { --gmr-clay: #c8553d; --gmr-clay-soft: #f6d9d1; }
++
++.gmr-root .gmp-pulse { border-color: var(--gmr-clay); }
++.gmr-x { fill: none; stroke: var(--gmr-clay); stroke-width: 4.4; stroke-linecap: round; stroke-dasharray: 60; stroke-dashoffset: 0; }
++
++.gmr-eyebrow { color: #f2a28f; }
++
++/* Pasos "qué puedes hacer" */
++.gmr-tip { display: flex; gap: 12px; align-items: flex-start; }
++.gmr-tip-n {
++  flex: none; width: 26px; height: 26px; border-radius: 9999px;
++  display: flex; align-items: center; justify-content: center;
++  background: var(--gmr-clay-soft); color: #8f3a27; font-size: 12px; font-weight: 700;
++}
++
++/* Avisos */
++.gmr-safe, .gmr-warn {
++  display: flex; gap: 10px; align-items: flex-start;
++  padding: 10px 14px; border-radius: .9rem;
++  font-size: 13px; line-height: 1.45;
++}
++.gmr-safe { background: #eef5ea; color: #355a1d; }
++.gmr-warn { background: #fff4dc; color: #7a5200; }
++
++@media (prefers-reduced-motion: no-preference) {
++  .gmr-x { stroke-dashoffset: 60; animation: gmp-draw .5s ease-out .85s forwards; }
++  .gmr-root .gmp-badge { animation: gmr-shake .55s ease-in-out 1.25s; }
++}
++@keyframes gmr-shake {
++  0%, 100% { transform: translateX(0); }
++  20% { transform: translateX(-7px); }
++  40% { transform: translateX(6px); }
++  60% { transform: translateX(-4px); }
++  80% { transform: translateX(2px); }
++}
+diff --git a/src/routes/checkout.tsx b/src/routes/checkout.tsx
+index a6a5642..a600683 100644
+--- a/src/routes/checkout.tsx
++++ b/src/routes/checkout.tsx
+@@ -13,7 +13,7 @@ import {
+ import { useCartStore } from "@/stores/cartStore";
+ import {
+   ArrowLeft, ShoppingBag, Truck, Shield, CreditCard,
+-  CheckCircle2, XCircle, LogIn, Minus, Plus, X,
++  LogIn, Minus, Plus, X,
+ } from "lucide-react";
+ import { useEffect, useRef, useState } from "react";
+ import { toast } from "sonner";
+@@ -59,9 +59,11 @@ function generateOrderId() {
+ }
+ 
+ type ModalTipo = "exitoso" | "error" | null;
+-// Para "exitoso" se usa el detalle completo del pedido (PagoExitoso); para "error", solo actionDesc.
++// Para "exitoso" se usa el detalle completo del pedido (PagoExitoso); para "error", PagoRechazado.
+ interface ModalDatos extends Partial<PagoExitosoDatos> {
+   actionDesc?: string;
++  actionCode?: string | number;
++  sinConfirmar?: boolean;
+ }
+ 
+ // const API = import.meta.env.VITE_API_URL ?? "";
+@@ -72,6 +74,7 @@ import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
+ import { leerCuponSalida } from "@/lib/cupon-salida";
+ import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
+ import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
++import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
+ 
+ async function fetchNiubizSession(payload: {
+   amount: number;
+@@ -110,6 +113,7 @@ function CheckoutPage() {
+ 
+   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
+   const [modalDatos, setModalDatos] = useState<ModalDatos>({});
++  const navigate = useNavigate();
+ 
+   const [form, setForm] = useState({
+     nombre: "", email: "", telefono: "", dni: "",
+@@ -342,7 +346,18 @@ useEffect(() => {
+   .then(({ ok, data }) => {
+     // El servidor autoriza el cobro con Niubiz: solo si responde success hay pedido pagado.
+     if (!ok || !data?.success) {
+-      setModalDatos({ actionDesc: data?.error ?? "No pudimos confirmar tu pago. Si te llegó un cargo, escríbenos por WhatsApp." });
++      // Con error/actionCode el servidor sí obtuvo respuesta (rechazo); sin ellos no se pudo confirmar.
++      const rechazo = Boolean(data?.error || data?.actionCode);
++      setModalDatos({
++        actionDesc:   data?.error,
++        actionCode:   data?.actionCode,
++        sinConfirmar: !rechazo,
++        purchase:     purchaseNumber,
++        date:         new Date().toLocaleString("es-PE"),
++        amount:       (saved.total ?? totalFinal).toFixed(2),
++        nombre:       saved.nombre,
++        items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
++      });
+       setModalTipo("error");
+       return;
+     }
+@@ -378,7 +393,14 @@ useEffect(() => {
+   })
+   .catch((err) => {
+     console.error("Error guardando pedido:", err);
+-    setModalDatos({ actionDesc: "No pudimos confirmar tu pago por un problema de conexión. Si te llegó un cargo, escríbenos por WhatsApp." });
++    setModalDatos({
++      sinConfirmar: true,
++      purchase:     purchaseNumber,
++      date:         new Date().toLocaleString("es-PE"),
++      amount:       (saved.total ?? totalFinal).toFixed(2),
++      nombre:       saved.nombre,
++      items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
++    });
+     setModalTipo("error");
+   });
+ }, []); // eslint-disable-line react-hooks/exhaustive-deps
+@@ -902,7 +924,13 @@ useEffect(() => {
+       {modalTipo === "exitoso" ? (
+         <PagoExitoso datos={{ purchase: "—", date: "", amount: "0", ...modalDatos }} />
+       ) : (
+-        modalTipo && <PagoModal tipo={modalTipo} datos={modalDatos} onCerrar={() => setModalTipo(null)} />
++        modalTipo === "error" && (
++          <PagoRechazado
++            datos={modalDatos as PagoRechazadoDatos}
++            onReintentar={() => setModalTipo(null)}
++            onVolver={() => navigate({ to: "/" })}
++          />
++        )
+       )}
+ 
+       <LoginModal
+@@ -927,83 +955,3 @@ function injectNiubizScript(url: string): Promise<void> {
+     document.body.appendChild(script);
+   });
+ }
+-
+-function PagoModal({ tipo, datos, onCerrar }: { tipo: "exitoso" | "error"; datos: ModalDatos; onCerrar: () => void }) {
+-  const navigate = useNavigate();
+-  const exitoso  = tipo === "exitoso";
+-
+-  return (
+-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.65)" }}>
+-      <div className="relative bg-background rounded-2xl px-10 py-12 max-w-[440px] w-[90%] text-center shadow-2xl" style={{ paddingTop: "56px" }}>
+-
+-        <div className="absolute -top-11 left-1/2 -translate-x-1/2">
+-          <div className="w-[88px] h-[88px] rounded-full border-[5px] border-background flex items-center justify-center" style={{ background: "#1a2e5a" }}>
+-            {exitoso
+-              ? <CheckCircle2 className="h-11 w-11" style={{ color: "#f0a020" }} />
+-              : <XCircle      className="h-11 w-11" style={{ color: "#e24b4a" }} />}
+-          </div>
+-        </div>
+-
+-        <p className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: exitoso ? "#f0a020" : "#e24b4a" }}>
+-          {exitoso ? "Compra confirmada" : "Pago no procesado"}
+-        </p>
+-        <h2 className="text-2xl font-semibold mb-3" style={{ color: "#1a2e5a" }}>
+-          {exitoso ? "¡Gracias por tu compra!" : "Hubo un problema"}
+-        </h2>
+-        <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+-          {exitoso
+-            ? "Tu pago fue procesado exitosamente.\nNos pondremos en contacto para coordinar la entrega de tus muebles."
+-            : "No pudimos procesar tu pago.\nPor favor verifica tus datos e intenta nuevamente."}
+-        </p>
+-
+-        <div className="rounded-xl p-4 mb-6 text-left space-y-2" style={{ background: "#f7f8fa" }}>
+-          <div className="flex justify-between items-center">
+-            <span className="text-xs text-muted-foreground">Estado</span>
+-            {exitoso
+-              ? <span className="text-xs font-medium px-2.5 py-0.5 rounded-full" style={{ background: "#eaf3de", color: "#3b6d11" }}>✓ Aprobado</span>
+-              : <span className="text-xs font-medium px-2.5 py-0.5 rounded-full" style={{ background: "#fcebeb", color: "#a32d2d" }}>✗ Rechazado</span>}
+-          </div>
+-          <div className="flex justify-between items-center">
+-            <span className="text-xs text-muted-foreground">Tienda</span>
+-            <span className="text-xs font-medium" style={{ color: "#1a2e5a" }}>G&amp;M Mueblería</span>
+-          </div>
+-          <div className="flex justify-between items-center">
+-            <span className="text-xs text-muted-foreground">Método</span>
+-            <span className="text-xs text-muted-foreground">Tarjeta · Niubiz</span>
+-          </div>
+-          {datos.purchase && datos.purchase !== "—" && (
+-            <div className="flex justify-between items-center">
+-              <span className="text-xs text-muted-foreground">N° de pedido</span>
+-              <span className="text-xs text-muted-foreground">{datos.purchase}</span>
+-            </div>
+-          )}
+-          {datos.date && datos.date !== "—" && (
+-            <div className="flex justify-between items-center">
+-              <span className="text-xs text-muted-foreground">Fecha y hora</span>
+-              <span className="text-xs text-muted-foreground">{datos.date}</span>
+-            </div>
+-          )}
+-          {exitoso && datos.amount && (
+-            <div className="flex justify-between items-center">
+-              <span className="text-xs text-muted-foreground">Importe</span>
+-              <span className="text-xs font-semibold" style={{ color: "#1a2e5a" }}>{datos.currency ?? "PEN"} {datos.amount}</span>
+-            </div>
+-          )}
+-          {!exitoso && datos.actionDesc && (
+-            <div className="flex justify-between items-center">
+-              <span className="text-xs text-muted-foreground">Motivo</span>
+-              <span className="text-xs" style={{ color: "#a32d2d" }}>{datos.actionDesc}</span>
+-            </div>
+-          )}
+-        </div>
+-
+-        <button onClick={() => navigate({ to: "/" })} className="w-full py-3.5 rounded-xl text-sm font-medium text-white mb-3 cursor-pointer border-none" style={{ background: "#1a2e5a" }}>
+-          Volver a la tienda
+-        </button>
+-        <button onClick={onCerrar} className="w-full py-3.5 rounded-xl text-sm border cursor-pointer bg-transparent" style={{ color: "#1a2e5a", borderColor: "#1a2e5a" }}>
+-          {exitoso ? "Ver mi pedido" : "Intentar de nuevo"}
+-        </button>
+-      </div>
+-    </div>
+-  );
+-}
+\ No newline at end of file
