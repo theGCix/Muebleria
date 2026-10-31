@@ -27,6 +27,9 @@ import {
 } from "@/lib/envioNacional";
 import { useVolumenCarrito } from "@/hooks/useVolumenCarrito";
 import { WHATSAPP_NUMBER } from "@/config";
+import { useCheckoutPrefill, elegirDireccion, distritoDeTarifa } from "@/hooks/useCheckoutPrefill";
+import { DireccionesGuardadas } from "@/components/checkout/DireccionesGuardadas";
+import type { Address } from "@/lib/perfil.functions";
 
 
 
@@ -126,6 +129,44 @@ function CheckoutPage() {
       return DISTRITOS_ENVIO.some((d) => d.destino === g) ? g : "";
     })(),
   });
+
+  // ── Autocompletar con "Mis datos" y "Mis direcciones" de la cuenta ──────────
+  // Solo rellena campos VACÍOS (nunca pisa lo que el cliente ya escribió) y una sola vez por sesión.
+  const { listo: prefillListo, perfil, direcciones } = useCheckoutPrefill(user?.id);
+  const prefillRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user || !prefillListo || prefillRef.current === user.id) return;
+    prefillRef.current = user.id;
+    const nombreCompleto = [perfil?.nombre, perfil?.apellido].filter(Boolean).join(" ").trim();
+    // El campo DNI/RUC del checkout solo acepta 8 u 11 dígitos; CE/pasaporte se escriben a mano
+    const doc = /^\d{8}(\d{3})?$/.test(perfil?.doc_numero ?? "") ? (perfil?.doc_numero as string) : "";
+    setForm((f) => {
+      const dir = f.direccion ? null : elegirDireccion(direcciones, f.distrito);
+      return {
+        ...f,
+        nombre:   f.nombre   || nombreCompleto,
+        email:    f.email    || (user.email ?? ""),
+        telefono: f.telefono || (perfil?.telefono_principal ?? ""),
+        dni:      f.dni      || doc,
+        ...(dir ? {
+          direccion: dir.direccion,
+          distrito:  f.distrito || distritoDeTarifa(dir.distrito),
+          ciudad:    dir.ciudad || f.ciudad,
+          notas:     f.notas || (dir.referencia ?? ""),
+        } : {}),
+      };
+    });
+  }, [user, prefillListo, perfil, direcciones]);
+
+  // Cambiar de dirección guardada con un toque (la referencia solo reemplaza notas vacías o también autocompletadas)
+  const aplicarDireccion = (a: Address) =>
+    setForm((f) => ({
+      ...f,
+      direccion: a.direccion,
+      distrito:  distritoDeTarifa(a.distrito),
+      ciudad:    a.ciudad || "Lima",
+      notas:     !f.notas || direcciones.some((x) => x.referencia && x.referencia === f.notas) ? (a.referencia ?? "") : f.notas,
+    }));
 
   // ── Cupón de descuento ─────────────────────────────────────
   const [cuponCodigo, setCuponCodigo] = useState("");
@@ -595,6 +636,14 @@ useEffect(() => {
                       </button>
                     ))}
                   </div>
+                  {user && !esProvincia && (
+                    <DireccionesGuardadas
+                      direcciones={direcciones}
+                      direccionActual={form.direccion}
+                      distritoActual={form.distrito}
+                      onElegir={aplicarDireccion}
+                    />
+                  )}
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="direccion">Dirección</Label>
                     <Input id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
