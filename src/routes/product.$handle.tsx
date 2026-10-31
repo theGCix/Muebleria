@@ -8,7 +8,7 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Loader2, ArrowLeft, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
+import { Loader2, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -29,6 +29,7 @@ import { SignatureModule } from "@/components/product/SignatureModules";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar } from "@/components/product/StickyBuyBar";
 import { ProductGallery } from "@/components/product/ProductGallery";
+import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
 import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
 
@@ -283,16 +284,6 @@ const PAGE_CSS = `
         }
         .gm-container { max-width: 1300px; margin: 0 auto; padding: 0 48px; }
         @media(max-width:768px){ .gm-container{ padding: 0 20px; } }
-
-        /* breadcrumb */
-        .gm-breadcrumb {
-          display: flex; align-items: center; gap: 8px;
-          padding: 16px 48px; font-size: 12px;
-          color: var(--gm-muted); letter-spacing: .04em;
-        }
-        .gm-breadcrumb a { color: var(--gm-muted); text-decoration: none; transition: color .2s; }
-        .gm-breadcrumb a:hover { color: var(--gm-walnut); }
-        @media(max-width:768px){ .gm-breadcrumb{ padding: 12px 20px; flex-wrap:wrap; row-gap:2px; } }
 
         /* product layout */
         .gm-product-layout {
@@ -805,18 +796,8 @@ function ProductView({ product: base }: { product: ProductData }) {
       >
         <Header />
 
-        {/* ── breadcrumb ── */}
-        <div className="gm-breadcrumb">
-          <Link to="/"><ArrowLeft size={12} style={{ marginRight: 4 }} />Inicio</Link>
-          <ChevronRight size={10} />
-          {product.categoria && (
-            <>
-              {catProducto ? <Link to="/categoria/$slug" params={{ slug: catProducto.slug }}>{catProducto.nombre}</Link> : <span>{product.categoria}</span>}
-              <ChevronRight size={10} />
-            </>
-          )}
-          <span style={{ color: "var(--gm-dark)" }}>{product.nombre}</span>
-        </div>
+        {/* ── ruta de compra (migas de pan) ── */}
+        <ProductBreadcrumb productId={product.id} productName={product.nombre} categoria={product.categoria} />
 
         {/* ── product layout ── */}
         <div className="gm-product-layout">

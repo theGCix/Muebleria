@@ -1,0 +1,404 @@
+diff --git a/src/components/product/ProductBreadcrumb.tsx b/src/components/product/ProductBreadcrumb.tsx
+new file mode 100644
+index 0000000..88acc3d
+--- /dev/null
++++ b/src/components/product/ProductBreadcrumb.tsx
+@@ -0,0 +1,180 @@
++// src/components/product/ProductBreadcrumb.tsx
++// "Ruta de compra" de la ficha de producto. Reemplaza la migaja de texto plano por una barra
++// que además de ubicar al cliente le sirve para seguir explorando sin volver atrás:
++//   1) Inicio › Categoría › Producto, con áreas táctiles de 36 px y el producto actual marcado,
++//   2) la categoría abre un menú para saltar a otro ambiente (sala, comedor, recámara…),
++//   3) "Pieza 3 de 8": flechas para pasar a la pieza anterior/siguiente de la MISMA categoría,
++//      con vista previa (foto, nombre y precio) al pasar el mouse o enfocar con teclado,
++//   4) en móvil colapsa a una sola línea: casa · categoría ▾ · ‹ 3/8 ›.
++// Mantiene <nav aria-label> + <ol> + aria-current, y el JSON-LD de migas sigue saliendo de seo.ts.
++import { useEffect, useMemo, useRef, useState } from "react";
++import { Link } from "@tanstack/react-router";
++import { Check, ChevronDown, ChevronLeft, ChevronRight, Home } from "lucide-react";
++import { CATEGORIAS, getCategoria } from "@/lib/categories";
++import { useProductsByCategory, type Product } from "@/hooks/useProducts";
++import { cloudinaryUrl } from "@/lib/cloudinary";
++import { fmtPEN, ofertaInfo } from "@/lib/pricing";
++import "./product-breadcrumb.css";
++
++function miniatura(p: Product): string | null {
++  if (p.imagen_public_id) return cloudinaryUrl(p.imagen_public_id, { w: 160, h: 160 });
++  return p.imagen_url ?? null;
++}
++
++function Vecino({ p, sentido }: { p: Product; sentido: "anterior" | "siguiente" }) {
++  const img = miniatura(p);
++  const precio = ofertaInfo(p).precioFinal;
++  return (
++    <Link
++      to="/product/$handle"
++      params={{ handle: p.id }}
++      className="gmb-step"
++      aria-label={`Pieza ${sentido}: ${p.nombre}`}
++    >
++      {sentido === "anterior" ? <ChevronLeft size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
++      <span className="gmb-peek" aria-hidden data-lado={sentido}>
++        <span className="gmb-peek-img">{img && <img src={img} alt="" loading="lazy" />}</span>
++        <span className="gmb-peek-txt">
++          <span className="gmb-peek-eyebrow">{sentido === "anterior" ? "Pieza anterior" : "Pieza siguiente"}</span>
++          <span className="gmb-peek-name">{p.nombre}</span>
++          <span className="gmb-peek-price">{fmtPEN(precio)}</span>
++        </span>
++      </span>
++    </Link>
++  );
++}
++
++/** "Pieza 3 de 8": navegación entre las piezas de la misma categoría (misma consulta/caché que /categoria/$slug). */
++function PiezasPager({ productId, categoria, nombreCategoria }: { productId: string; categoria: string; nombreCategoria?: string }) {
++  const { data: piezas } = useProductsByCategory({ categoria });
++  const { pos, total, anterior, siguiente } = useMemo(() => {
++    const lista = piezas ?? [];
++    const i = lista.findIndex((p) => p.id === productId);
++    if (i < 0 || lista.length < 2) return { pos: 0, total: 0, anterior: null, siguiente: null };
++    return {
++      pos: i + 1,
++      total: lista.length,
++      anterior: lista[(i - 1 + lista.length) % lista.length],
++      siguiente: lista[(i + 1) % lista.length],
++    };
++  }, [piezas, productId]);
++
++  if (!anterior || !siguiente) return null;
++  return (
++    <div className="gmb-pager" role="group" aria-label={`Más piezas de ${nombreCategoria ?? "esta categoría"}`}>
++      <Vecino p={anterior} sentido="anterior" />
++      <span className="gmb-count" aria-live="polite">
++        <span className="gmb-hide-sm">Pieza </span><b>{pos}</b> de {total}
++      </span>
++      <Vecino p={siguiente} sentido="siguiente" />
++    </div>
++  );
++}
++
++export function ProductBreadcrumb({
++  productId, productName, categoria,
++}: {
++  productId: string;
++  productName: string;
++  /** Valor de products.categoria (slug) */
++  categoria?: string | null;
++}) {
++  const cat = categoria ? getCategoria(categoria) : undefined;
++  const [abierto, setAbierto] = useState(false);
++  const raiz = useRef<HTMLDivElement | null>(null);
++
++  // Cierra el menú al hacer clic fuera, con Escape o al cambiar de producto
++  useEffect(() => { setAbierto(false); }, [productId]);
++  useEffect(() => {
++    if (!abierto) return;
++    const fuera = (e: MouseEvent) => { if (!raiz.current?.contains(e.target as Node)) setAbierto(false); };
++    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") setAbierto(false); };
++    document.addEventListener("mousedown", fuera);
++    document.addEventListener("keydown", tecla);
++    return () => { document.removeEventListener("mousedown", fuera); document.removeEventListener("keydown", tecla); };
++  }, [abierto]);
++
++  const CatIcon = cat?.icon;
++
++  return (
++    <div className="gmb" ref={raiz}>
++      <nav className="gmb-nav" aria-label="Migas de pan">
++        <ol className="gmb-trail">
++          <li>
++            <Link to="/" className="gmb-chip" aria-label="Inicio">
++              <Home size={15} aria-hidden />
++              <span className="gmb-hide-sm">Inicio</span>
++            </Link>
++          </li>
++
++          {categoria && (
++            <>
++              <li className="gmb-sep" aria-hidden />
++              <li className="gmb-cat">
++                {cat ? (
++                  <span className="gmb-split">
++                    <Link to="/categoria/$slug" params={{ slug: cat.slug }} className="gmb-chip gmb-chip-cat">
++                      {CatIcon && <CatIcon size={15} aria-hidden />}
++                      <span className="gmb-cut">{cat.nombre}</span>
++                    </Link>
++                    <button
++                      type="button"
++                      className="gmb-caret"
++                      aria-haspopup="true"
++                      aria-expanded={abierto}
++                      aria-controls="gmb-menu"
++                      aria-label="Explorar otros ambientes"
++                      onClick={() => setAbierto((v) => !v)}
++                    >
++                      <ChevronDown size={14} aria-hidden data-abierto={abierto} />
++                    </button>
++                  </span>
++                ) : (
++                  <span className="gmb-chip gmb-chip-plain">{categoria}</span>
++                )}
++
++                {abierto && (
++                  <div className="gmb-menu" id="gmb-menu">
++                    <p className="gmb-menu-title">Seguir explorando</p>
++                    <ul>
++                      {CATEGORIAS.map((c) => {
++                        const Icono = c.icon;
++                        const actual = c.slug === cat?.slug;
++                        return (
++                          <li key={c.slug}>
++                            <Link
++                              to="/categoria/$slug"
++                              params={{ slug: c.slug }}
++                              className="gmb-opt"
++                              aria-current={actual ? "true" : undefined}
++                              onClick={() => setAbierto(false)}
++                            >
++                              <Icono size={16} aria-hidden />
++                              <span>{c.nombre}</span>
++                              {actual && <Check size={14} aria-hidden className="gmb-opt-ok" />}
++                            </Link>
++                          </li>
++                        );
++                      })}
++                    </ul>
++                    <Link to="/catalogo" className="gmb-all" onClick={() => setAbierto(false)}>
++                      Ver todo el catálogo
++                    </Link>
++                  </div>
++                )}
++              </li>
++            </>
++          )}
++
++          <li className="gmb-sep gmb-sep-now" aria-hidden />
++          <li className="gmb-now" aria-current="page">
++            <span className="gmb-dot" aria-hidden />
++            <span className="gmb-cut gmb-now-name">{productName}</span>
++          </li>
++        </ol>
++      </nav>
++
++      {categoria && <PiezasPager productId={productId} categoria={categoria} nombreCategoria={cat?.nombre} />}
++    </div>
++  );
++}
+diff --git a/src/components/product/product-breadcrumb.css b/src/components/product/product-breadcrumb.css
+new file mode 100644
+index 0000000..6861887
+--- /dev/null
++++ b/src/components/product/product-breadcrumb.css
+@@ -0,0 +1,153 @@
++/* src/components/product/product-breadcrumb.css
++   Ruta de compra de la ficha de producto. Usa los tokens --gm-* de la página (con respaldo). */
++
++.gmb {
++  --b-walnut: var(--gm-walnut, #3b2b1f);
++  --b-mid: var(--gm-mid, #5a4035);
++  --b-gold: var(--gm-gold, #c9a96e);
++  --b-line: var(--gm-border, rgba(59, 43, 31, .12));
++  --b-hover: rgba(59, 43, 31, .07);
++  max-width: 1300px;
++  margin: 0 auto;
++  padding: 14px 48px 4px;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 14px;
++  font-size: 13px;
++  line-height: 1;
++}
++
++.gmb-nav { min-width: 0; flex: 1 1 auto; }
++
++/* ───────── Recorrido ───────── */
++.gmb-trail {
++  list-style: none; margin: 0; padding: 3px;
++  display: inline-flex; align-items: center; max-width: 100%;
++  background: rgba(255, 253, 249, .85);
++  border: 1px solid var(--b-line);
++  border-radius: 9999px;
++  box-shadow: 0 8px 22px -18px rgba(60, 35, 15, .5);
++}
++.gmb-trail > li { display: flex; align-items: center; position: relative; min-width: 0; }
++
++.gmb-chip {
++  display: inline-flex; align-items: center; gap: 7px;
++  height: 36px; padding: 0 13px; border-radius: 9999px;
++  color: var(--b-mid); text-decoration: none; font-weight: 500;
++  transition: background-color .18s, color .18s;
++}
++.gmb-chip:hover { background: var(--b-hover); color: var(--b-walnut); }
++.gmb-chip-plain { cursor: default; }
++.gmb-chip-plain:hover { background: none; }
++.gmb-chip svg { flex: none; }
++
++.gmb-cut { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++
++/* Separador: una pequeña diagonal en lugar de un chevron */
++.gmb-sep { width: 1px; height: 16px; margin: 0 2px; flex: none; background: var(--b-line); transform: rotate(18deg); }
++
++/* Categoría = enlace + botón de menú pegados */
++.gmb-split { display: inline-flex; align-items: center; min-width: 0; }
++.gmb-chip-cat { padding-right: 6px; min-width: 0; }
++.gmb-caret {
++  display: inline-flex; align-items: center; justify-content: center;
++  width: 30px; height: 30px; margin-right: 3px; flex: none;
++  border: 0; border-radius: 9999px; background: none; color: var(--b-mid); cursor: pointer;
++  transition: background-color .18s, color .18s;
++}
++.gmb-caret:hover, .gmb-caret[aria-expanded="true"] { background: var(--b-hover); color: var(--b-walnut); }
++.gmb-caret svg { transition: transform .2s; }
++.gmb-caret svg[data-abierto="true"] { transform: rotate(180deg); }
++
++/* Pieza actual */
++.gmb-now { gap: 9px; padding: 0 14px 0 10px; height: 36px; color: var(--b-walnut); font-weight: 600; }
++.gmb-now-name { max-width: 34ch; }
++.gmb-dot { flex: none; width: 7px; height: 7px; border-radius: 9999px; background: var(--b-gold); box-shadow: 0 0 0 3px rgba(201, 169, 110, .22); }
++
++/* ───────── Menú "Seguir explorando" ───────── */
++.gmb-menu {
++  position: absolute; z-index: 30; left: 0; top: calc(100% + 10px);
++  width: 270px; padding: 8px;
++  background: #fffdf9; border: 1px solid var(--b-line); border-radius: 18px;
++  box-shadow: 0 24px 48px -20px rgba(60, 35, 15, .45);
++  transform-origin: 24px -6px;
++  animation: gmb-open .16s ease-out;
++}
++.gmb-menu ul { list-style: none; margin: 0; padding: 0; }
++.gmb-menu-title { margin: 6px 10px 6px; font-size: 12px; font-weight: 600; color: var(--b-mid); }
++.gmb-opt {
++  display: flex; align-items: center; gap: 10px; padding: 11px 10px; border-radius: 12px;
++  color: var(--b-walnut); text-decoration: none; font-weight: 500;
++  transition: background-color .15s;
++}
++.gmb-opt:hover { background: var(--b-hover); }
++.gmb-opt[aria-current="true"] { background: rgba(201, 169, 110, .18); }
++.gmb-opt-ok { margin-left: auto; color: var(--b-walnut); }
++.gmb-all {
++  display: block; margin-top: 4px; padding: 12px 10px 8px; border-top: 1px solid var(--b-line);
++  color: var(--b-mid); text-decoration: none; font-weight: 500; text-align: center;
++}
++.gmb-all:hover { color: var(--b-walnut); text-decoration: underline; text-underline-offset: 3px; }
++
++@keyframes gmb-open { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
++
++/* ───────── Pieza 3 de 8 ───────── */
++.gmb-pager {
++  flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 3px;
++  background: rgba(255, 253, 249, .85); border: 1px solid var(--b-line); border-radius: 9999px;
++  box-shadow: 0 8px 22px -18px rgba(60, 35, 15, .5);
++}
++.gmb-count { padding: 0 6px; color: var(--b-mid); font-variant-numeric: tabular-nums; white-space: nowrap; }
++.gmb-count b { color: var(--b-walnut); font-weight: 700; }
++
++.gmb-step {
++  position: relative; display: inline-flex; align-items: center; justify-content: center;
++  width: 36px; height: 36px; border-radius: 9999px; color: var(--b-walnut); text-decoration: none;
++  transition: background-color .18s;
++}
++.gmb-step:hover, .gmb-step:focus-visible { background: var(--b-walnut); color: #fffdf9; }
++
++/* Vista previa de la pieza vecina */
++.gmb-peek {
++  position: absolute; z-index: 30; top: calc(100% + 10px); width: 250px; padding: 8px;
++  display: none; gap: 12px; align-items: center; text-align: left; line-height: 1.25;
++  background: #fffdf9; color: var(--b-walnut);
++  border: 1px solid var(--b-line); border-radius: 16px;
++  box-shadow: 0 24px 48px -20px rgba(60, 35, 15, .45);
++  pointer-events: none;
++}
++.gmb-peek[data-lado="anterior"] { right: -40px; }
++.gmb-peek[data-lado="siguiente"] { right: 0; }
++.gmb-step:hover .gmb-peek, .gmb-step:focus-visible .gmb-peek { display: flex; animation: gmb-open .16s ease-out; }
++.gmb-peek-img { flex: none; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; background: #f3eadc; }
++.gmb-peek-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
++.gmb-peek-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
++.gmb-peek-eyebrow { font-size: 11px; color: var(--b-mid); }
++.gmb-peek-name { font-size: 13px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
++.gmb-peek-price { font-size: 13px; color: var(--b-mid); font-variant-numeric: tabular-nums; }
++
++/* Foco visible para teclado */
++.gmb-chip:focus-visible, .gmb-caret:focus-visible, .gmb-opt:focus-visible, .gmb-all:focus-visible, .gmb-step:focus-visible {
++  outline: 2px solid var(--b-gold); outline-offset: 2px;
++}
++
++/* ───────── Móvil: una sola línea ───────── */
++@media (hover: none) { .gmb-peek { display: none !important; } }
++
++@media (max-width: 768px) {
++  .gmb { padding: 12px 16px 2px; gap: 8px; }
++  .gmb-hide-sm { display: none; }
++  .gmb-chip { padding: 0 11px; }
++  .gmb-chip[aria-label="Inicio"] { width: 36px; padding: 0; justify-content: center; }
++  .gmb-chip-cat { max-width: calc(100vw - 235px); }
++  /* El nombre del producto ya es el título de la página: se queda para lectores de pantalla */
++  .gmb-trail > .gmb-sep-now { display: none; }
++  .gmb-trail > .gmb-now { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
++  .gmb-menu { width: min(270px, calc(100vw - 32px)); }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .gmb-menu, .gmb-peek { animation: none !important; }
++  .gmb-caret svg { transition: none; }
++}
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 4a92ecd..7c4eabb 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -8,7 +8,7 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
+ import { supabase } from "@/integrations/supabase/client";
+ import { Header } from "@/components/Header";
+ import { Footer } from "@/components/Footer";
+-import { Loader2, ArrowLeft, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
++import { Loader2, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
+ import { useCartStore } from "@/stores/cartStore";
+ import { toast } from "sonner";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+@@ -29,6 +29,7 @@ import { SignatureModule } from "@/components/product/SignatureModules";
+ import { BundleBuilder } from "@/components/product/BundleBuilder";
+ import { StickyBuyBar } from "@/components/product/StickyBuyBar";
+ import { ProductGallery } from "@/components/product/ProductGallery";
++import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
+ import "@/components/product/product-experience.css";
+ import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
+ 
+@@ -284,16 +285,6 @@ const PAGE_CSS = `
+         .gm-container { max-width: 1300px; margin: 0 auto; padding: 0 48px; }
+         @media(max-width:768px){ .gm-container{ padding: 0 20px; } }
+ 
+-        /* breadcrumb */
+-        .gm-breadcrumb {
+-          display: flex; align-items: center; gap: 8px;
+-          padding: 16px 48px; font-size: 12px;
+-          color: var(--gm-muted); letter-spacing: .04em;
+-        }
+-        .gm-breadcrumb a { color: var(--gm-muted); text-decoration: none; transition: color .2s; }
+-        .gm-breadcrumb a:hover { color: var(--gm-walnut); }
+-        @media(max-width:768px){ .gm-breadcrumb{ padding: 12px 20px; flex-wrap:wrap; row-gap:2px; } }
+-
+         /* product layout */
+         .gm-product-layout {
+           display: grid; grid-template-columns: 1fr 1fr;
+@@ -805,18 +796,8 @@ function ProductView({ product: base }: { product: ProductData }) {
+       >
+         <Header />
+ 
+-        {/* ── breadcrumb ── */}
+-        <div className="gm-breadcrumb">
+-          <Link to="/"><ArrowLeft size={12} style={{ marginRight: 4 }} />Inicio</Link>
+-          <ChevronRight size={10} />
+-          {product.categoria && (
+-            <>
+-              {catProducto ? <Link to="/categoria/$slug" params={{ slug: catProducto.slug }}>{catProducto.nombre}</Link> : <span>{product.categoria}</span>}
+-              <ChevronRight size={10} />
+-            </>
+-          )}
+-          <span style={{ color: "var(--gm-dark)" }}>{product.nombre}</span>
+-        </div>
++        {/* ── ruta de compra (migas de pan) ── */}
++        <ProductBreadcrumb productId={product.id} productName={product.nombre} categoria={product.categoria} />
+ 
+         {/* ── product layout ── */}
+         <div className="gm-product-layout">
