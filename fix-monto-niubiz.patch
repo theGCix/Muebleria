@@ -1,0 +1,156 @@
+diff --git a/server/index.js b/server/index.js
+index 9fbf069..8529321 100644
+--- a/server/index.js
++++ b/server/index.js
+@@ -137,3 +137,3 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
+   try {
+-    const { amount, orderId, email } = req.body;
++    const { amount, orderId, email, items, order, cupon_codigo, user_id } = req.body;
+     if (!(Number(amount) > 0) || !orderId) {
+@@ -141,2 +141,41 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
+     }
++
++    // El monto de la sesión DEBE ser el mismo que luego se autoriza (/api/orders lo recalcula desde la BD).
++    // Si Niubiz recibe dos montos distintos rechaza con "AMOUNT does not match". Por eso aquí se calcula
++    // igual que al cobrar; si el navegador tenía precios viejos (carrito guardado, oferta que cambió,
++    // cupón que dejó de valer) se le avisa ANTES de abrir la pasarela, con los valores correctos.
++    let monto = Number(amount);
++    if (Array.isArray(items) && items.length > 0 && order) {
++      const itemsCalculo = items.map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, sku: i.sku, title: i.title, image: i.image }));
++      let descuento = 0;
++      if (cupon_codigo) {
++        const rc = await validarCupon({
++          codigo: cupon_codigo,
++          items: itemsCalculo.map((i) => ({ product_id: i.product_id, qty: i.qty })),
++          customer_id: null,
++          user_id: user_id ?? null,
++        });
++        if (rc.valid) descuento = rc.descuento;
++      }
++      const calculo = await calcularPedido({
++        supabase: supabaseAdmin,
++        order: {
++          metodo_entrega: order.metodo_entrega, modo_entrega: order.modo_entrega,
++          destino: order.destino, distrito: order.distrito,
++        },
++        items: itemsCalculo,
++        descuento,
++      });
++      if (Math.abs(calculo.total - monto) > 0.01) {
++        console.warn(`⚠️ Total del navegador (${monto}) ≠ total del servidor (${calculo.total}) al abrir la sesión ${orderId}`);
++        return res.status(409).json({
++          code: "PRECIO_CAMBIO",
++          error: "Los precios de tu pedido cambiaron. Actualizamos tu carrito con el total correcto.",
++          total: calculo.total,
++          descuento,
++          lineas: calculo.lineas.map((l) => ({ product_id: l.product_id, unit_price: l.unit_price })),
++        });
++      }
++      monto = calculo.total;
++    }
+     const merchantId = process.env.NIUBIZ_MERCHANT_ID;
+@@ -148,3 +187,3 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
+       body: JSON.stringify({
+-        amount: Number(amount).toFixed(2),
++        amount: monto.toFixed(2),
+         antifraud: {
+@@ -168,2 +207,3 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
+   } catch (err) {
++    if (err instanceof PagoError) return res.status(err.status).json({ error: err.message });
+     res.status(500).json({ error: err.message });
+diff --git a/src/components/checkout/PagoRechazado.tsx b/src/components/checkout/PagoRechazado.tsx
+index a5bd4d5..b2ffe06 100644
+--- a/src/components/checkout/PagoRechazado.tsx
++++ b/src/components/checkout/PagoRechazado.tsx
+@@ -50,2 +50,4 @@ const OTRA = "Prueba con otra tarjeta de crédito o débito.";
+ function describirMotivo(code: string, desc?: string): Motivo {
++  // Niubiz responde "AMOUNT does not match" cuando el monto de la sesión y el de la autorización difieren
++  if (code !== "MONTO" && /amount.*match/i.test(desc ?? "")) code = "MONTO";
+   switch (code) {
+@@ -85,3 +87,3 @@ function describirMotivo(code: string, desc?: string): Motivo {
+       return {
+-        titulo: desc && desc.length < 60 ? desc : "El pago no fue aprobado",
++        titulo: "El pago no fue aprobado",
+         detalle: "Tu banco o la pasarela no aprobaron esta operación.",
+@@ -208,3 +210,3 @@ export function PagoRechazado({
+                 <p className="mt-6 border-t border-dashed border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
+-                  Referencia para soporte{code ? ` · código ${code}` : ""}{datos.date ? ` · ${datos.date}` : ""}
++                  Referencia para soporte{code ? ` · código ${code}` : ""}{datos.actionDesc ? ` · ${datos.actionDesc}` : ""}{datos.date ? ` · ${datos.date}` : ""}
+                 </p>
+diff --git a/src/routes/checkout.tsx b/src/routes/checkout.tsx
+index aef05f4..da8cb31 100644
+--- a/src/routes/checkout.tsx
++++ b/src/routes/checkout.tsx
+@@ -81,2 +81,12 @@ import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/Pa
+ 
++/** El servidor recalculó el pedido y el total del navegador estaba desactualizado. */
++class PrecioCambioError extends Error {
++  constructor(
++    message: string,
++    public total: number,
++    public descuento: number,
++    public lineas: { product_id: string; unit_price: number }[],
++  ) { super(message); }
++}
++
+ async function fetchNiubizSession(payload: {
+@@ -85,2 +95,7 @@ async function fetchNiubizSession(payload: {
+   email?: string;
++  /** Para que el servidor abra la sesión con el MISMO total que luego autoriza */
++  items?: { product_id: string; qty: number; sku?: string | null; title?: string; comboId?: string | null }[];
++  order?: { metodo_entrega: string; modo_entrega: string | null; destino: string; distrito: string };
++  cupon_codigo?: string | null;
++  user_id?: string | null;
+ }) {
+@@ -93,2 +108,5 @@ async function fetchNiubizSession(payload: {
+     const err = await res.json().catch(() => ({ error: res.statusText }));
++    if (res.status === 409 && err.code === "PRECIO_CAMBIO") {
++      throw new PrecioCambioError(err.error, Number(err.total), Number(err.descuento) || 0, err.lineas ?? []);
++    }
+     throw new Error(err.error ?? "Error al conectar con Niubiz");
+@@ -104,3 +122,3 @@ async function fetchNiubizSession(payload: {
+ function CheckoutPage() {
+-  const { items, total, clearCart, updateQty, removeItem } = useCartStore();
++  const { items, total, clearCart, updateQty, removeItem, actualizarPrecios } = useCartStore();
+   const [loading, setLoading] = useState(false);
+@@ -473,2 +491,11 @@ useEffect(() => {
+         email:   form.email,
++        items: items.map((i) => ({ product_id: i.id, qty: i.qty, sku: i.sku ?? null, title: i.title, comboId: i.comboId ?? null })),
++        order: {
++          metodo_entrega: metodoEntrega,
++          modo_entrega:   requiereEleccion ? modoEntrega : null,
++          destino:        esProvincia ? "provincia" : "lima",
++          distrito:       form.distrito,
++        },
++        cupon_codigo: cuponAplicado?.codigo ?? null,
++        user_id:      user?.id ?? null,
+       });
+@@ -517,2 +544,12 @@ useEffect(() => {
+     } catch (err) {
++      if (err instanceof PrecioCambioError) {
++        // Precios guardados en el carrito desactualizados: se corrigen y el cliente confirma el nuevo total
++        actualizarPrecios(Object.fromEntries(err.lineas.map((l) => [l.product_id, l.unit_price])));
++        if (cuponAplicado) {
++          if (err.descuento > 0) setCuponAplicado({ codigo: cuponAplicado.codigo, descuento: err.descuento });
++          else { setCuponAplicado(null); setCuponCodigo(""); setErrorCupon("El cupón ya no aplica a tu pedido"); }
++        }
++        toast.error(`Actualizamos los precios de tu pedido. El total correcto es ${fmt(err.total)}; revísalo y vuelve a pagar.`, { duration: 8000 });
++        return;
++      }
+       console.error("Error Niubiz:", err);
+diff --git a/src/stores/cartStore.ts b/src/stores/cartStore.ts
+index e3d84cb..6f4eec7 100644
+--- a/src/stores/cartStore.ts
++++ b/src/stores/cartStore.ts
+@@ -26,2 +26,4 @@ interface CartState {
+   updateQty: (id: string, qty: number) => void;
++  /** Sustituye el precio unitario de cada producto por el que calculó el servidor ({ [product_id]: precio }). */
++  actualizarPrecios: (precios: Record<string, number>) => void;
+   clearCart: () => void;
+@@ -83,2 +85,6 @@ export const useCartStore = create<CartState>()(
+       },
++      actualizarPrecios: (precios) =>
++        set((state) => ({
++          items: state.items.map((i) => (precios[i.id] !== undefined ? { ...i, price: precios[i.id] } : i)),
++        })),
+       clearCart: () => set({ items: [] }),

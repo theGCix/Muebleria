@@ -31,6 +31,11 @@
       "precio": 220
     },
     {
+      "destino": "Cercado de lima",
+      "precio": 120
+    },
+    
+    {
       "destino": "Cieneguilla",
       "precio": 300
     },
