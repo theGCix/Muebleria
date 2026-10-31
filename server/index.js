@@ -349,9 +349,12 @@ app.post("/api/orders", async (req, res) => {
       return res.status(400).json({ error: "Falta el token de la transacción de Niubiz" });
     }
 
-    const orderNumber = (order.orderNumber?.trim())
-      ? order.orderNumber
-      : `GM-${Date.now()}-${(order.transactionToken ?? "").slice(-6).toUpperCase()}`;
+    // Niubiz exige un purchaseNumber NUMÉRICO de máximo 12 dígitos. El número que ve el
+    // cliente y se guarda en la BD es "GM-" + esos dígitos.
+    const purchaseNumber = /^\d{1,12}$/.test(String(order.orderNumber ?? "").trim())
+      ? String(order.orderNumber).trim()
+      : String(Date.now()).slice(-12);
+    const orderNumber = `GM-${purchaseNumber}`;
 
     const { data: existing } = await supabaseAdmin
       .from("orders")
@@ -434,7 +437,7 @@ app.post("/api/orders", async (req, res) => {
       securityToken:    await getSecurityToken(),
       merchantId:       process.env.NIUBIZ_MERCHANT_ID,
       transactionToken: order.transactionToken,
-      purchaseNumber:   orderNumber,
+      purchaseNumber,
       amount:           totalConDescuento,
     });
     if (!autorizacion.aprobado) {

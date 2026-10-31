@@ -54,7 +54,8 @@ const CARGO_ENVIO_PARCIAL = 25;
 
 function generateOrderId() {
   
-  return `GM-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  // Niubiz exige purchaseNumber numérico de máximo 12 dígitos
+  return String(Date.now()).slice(-12);
 }
 
 type ModalTipo = "exitoso" | "error" | null;
@@ -287,7 +288,7 @@ useEffect(() => {
 
   const allParams = Object.fromEntries(new URLSearchParams(window.location.search).entries());
   const purchaseNumber =
-    allParams.purchaseNumber || orderIdRef.current || saved.orderNumber || `GM-${Date.now()}`;
+    allParams.purchaseNumber || orderIdRef.current || saved.orderNumber || generateOrderId();
 
   const utmData = getStoredUtm();
   fetch(`${API}/api/orders`, {

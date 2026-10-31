@@ -73,6 +73,13 @@ test("Niubiz: aprobado solo con ACTION_CODE 000", async () => {
   assert.equal(no.actionDesc, "Tarjeta vencida");
 });
 
+test("Niubiz: STATUS Not Authorized, 401 y 406 no son aprobados", async () => {
+  const st = await autorizarNiubiz({ ...args, fetchFn: resp(200, { dataMap: { ACTION_CODE: "000", STATUS: "Not Authorized" } }) });
+  assert.equal(st.aprobado, false);
+  assert.equal((await autorizarNiubiz({ ...args, fetchFn: resp(401, {}) })).aprobado, false);
+  assert.equal((await autorizarNiubiz({ ...args, fetchFn: resp(406, {}) })).actionCode, "406");
+});
+
 test("Niubiz: monto autorizado distinto = no aprobado; 5xx lanza error", async () => {
   const m = await autorizarNiubiz({ ...args, fetchFn: resp(200, { order: { status: "Authorized", authorizedAmount: 1 }, dataMap: { ACTION_CODE: "000" } }) });
   assert.equal(m.aprobado, false);

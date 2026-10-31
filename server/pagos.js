@@ -141,11 +141,20 @@ export async function autorizarNiubiz({ url, securityToken, merchantId, transact
   let data = {};
   try { data = await res.json(); } catch { /* respuesta sin JSON */ }
   if (res.status >= 500) throw new PagoError(`Niubiz no respondió (${res.status}).`, 502);
+  if (res.status === 401) {
+    return { aprobado: false, actionCode: "401", actionDesc: "Credenciales de Niubiz no válidas para autorizar", httpStatus: 401 };
+  }
+  if (res.status === 406) {
+    return { aprobado: false, actionCode: "406", actionDesc: "Pago duplicado: no repitas la operación, revisa tus pedidos", httpStatus: 406 };
+  }
 
   const map = data.dataMap ?? data.data ?? {};
   const estado = data.order?.status;
+  // Niubiz pide evaluar dataMap.STATUS: solo "Authorized" es venta aprobada
+  // (Not Authorized y Voided cuentan como rechazo).
+  const status = map.STATUS ?? estado;
   const aprobado =
-    res.ok && map.ACTION_CODE === "000" && (estado === undefined || estado === "Authorized");
+    res.ok && map.ACTION_CODE === "000" && (status === undefined || status === "Authorized");
   const monto = Number(data.order?.authorizedAmount ?? data.order?.amount);
 
   if (aprobado && Number.isFinite(monto) && Math.abs(monto - amount) > 0.01) {
