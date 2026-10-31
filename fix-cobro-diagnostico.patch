@@ -1,0 +1,29 @@
+diff --git a/server/index.js b/server/index.js
+index 6b33d35..76dc174 100644
+--- a/server/index.js
++++ b/server/index.js
+@@ -438,10 +438,11 @@ app.post("/api/orders", async (req, res) => {
+       amount:           totalConDescuento,
+     });
+     if (!autorizacion.aprobado) {
+-      console.warn(`⚠️ Pago no aprobado (${orderNumber}): ${autorizacion.actionCode} ${autorizacion.actionDesc}`);
++      console.warn(`⚠️ Pago no aprobado (${orderNumber}, S/ ${totalConDescuento}, HTTP ${autorizacion.httpStatus}): ${autorizacion.actionCode} ${autorizacion.actionDesc} | ${autorizacion.detalle}`);
+       return res.status(402).json({
+         error:      autorizacion.actionDesc || "El pago no fue aprobado",
+         actionCode: autorizacion.actionCode,
++        detalle:    autorizacion.detalle,   // temporal: quitar cuando el cobro funcione
+       });
+     }
+ 
+diff --git a/server/pagos.js b/server/pagos.js
+index 404f6b8..8ccc520 100644
+--- a/server/pagos.js
++++ b/server/pagos.js
+@@ -158,5 +158,7 @@ export async function autorizarNiubiz({ url, securityToken, merchantId, transact
+     actionDesc: map.ACTION_DESCRIPTION ?? data.errorMessage,
+     authCode: map.AUTHORIZATION_CODE,
+     monto,
++    httpStatus: res.status,
++    detalle: aprobado ? undefined : JSON.stringify(data).slice(0, 600),
+   };
+ }

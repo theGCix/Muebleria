@@ -1,5 +1,5 @@
 diff --git a/server/index.js b/server/index.js
-index c5f4d07..6b33d35 100644
+index c5f4d07..76dc174 100644
 --- a/server/index.js
 +++ b/server/index.js
 @@ -13,6 +13,7 @@ import { registerFeed } from "./feed.js";
@@ -89,7 +89,7 @@ index c5f4d07..6b33d35 100644
          console.warn(`⚠️ Cupón ${order.cupon_codigo} inválido al crear la orden: ${resultado.motivo}`);
        }
      }
-@@ -396,8 +412,38 @@ app.post("/api/orders", async (req, res) => {
+@@ -396,8 +412,39 @@ app.post("/api/orders", async (req, res) => {
            : "flete por cotizar")
        : null;
  
@@ -121,16 +121,17 @@ index c5f4d07..6b33d35 100644
 +      amount:           totalConDescuento,
 +    });
 +    if (!autorizacion.aprobado) {
-+      console.warn(`⚠️ Pago no aprobado (${orderNumber}): ${autorizacion.actionCode} ${autorizacion.actionDesc}`);
++      console.warn(`⚠️ Pago no aprobado (${orderNumber}, S/ ${totalConDescuento}, HTTP ${autorizacion.httpStatus}): ${autorizacion.actionCode} ${autorizacion.actionDesc} | ${autorizacion.detalle}`);
 +      return res.status(402).json({
 +        error:      autorizacion.actionDesc || "El pago no fue aprobado",
 +        actionCode: autorizacion.actionCode,
++        detalle:    autorizacion.detalle,   // temporal: quitar cuando el cobro funcione
 +      });
 +    }
  
      const { data: newOrder, error: orderError } = await supabaseAdmin
        .from("orders")
-@@ -413,7 +459,7 @@ app.post("/api/orders", async (req, res) => {
+@@ -413,7 +460,7 @@ app.post("/api/orders", async (req, res) => {
          ciudad:             order.ciudad    ?? null,
          notas:              [order.notas, notaEnvio].filter(Boolean).join(" | ") || null,
          subtotal:           subtotalReal,
@@ -139,7 +140,7 @@ index c5f4d07..6b33d35 100644
          total:              totalConDescuento,
          cupon_id:           cuponAplicado?.cupon_id ?? null,
          cupon_codigo:       cuponAplicado?.codigo ?? null,
-@@ -423,6 +469,7 @@ app.post("/api/orders", async (req, res) => {
+@@ -423,6 +470,7 @@ app.post("/api/orders", async (req, res) => {
          currency:           "PEN",
          niubiz_session_key: order.sessionKey       ?? null,
          niubiz_token:       order.transactionToken ?? null,
@@ -147,7 +148,7 @@ index c5f4d07..6b33d35 100644
          status:             "pagado",
          paid_at:            new Date().toISOString(),
          // Solo en pedidos a provincia: así los pedidos de Lima no dependen de la migración nueva
-@@ -456,15 +503,15 @@ app.post("/api/orders", async (req, res) => {
+@@ -456,15 +504,15 @@ app.post("/api/orders", async (req, res) => {
        }
      }
  
@@ -171,7 +172,7 @@ index c5f4d07..6b33d35 100644
      }));
  
      if (orderItems.length > 0) {
-@@ -488,7 +535,7 @@ app.post("/api/orders", async (req, res) => {
+@@ -488,7 +536,7 @@ app.post("/api/orders", async (req, res) => {
      void notificarPedidoPagado({ supabaseAdmin, orderId: newOrder.id });
    } catch (err) {
      console.error("Error guardando orden:", err.message);
@@ -180,7 +181,7 @@ index c5f4d07..6b33d35 100644
    }
  });
  
-@@ -805,105 +852,3 @@ app.post("/api/staff/create-user", async (req, res) => {
+@@ -805,105 +853,3 @@ app.post("/api/staff/create-user", async (req, res) => {
      res.status(500).json({ error: err.message });
    }
  });
@@ -289,10 +290,10 @@ index c5f4d07..6b33d35 100644
 \ No newline at end of file
 diff --git a/server/pagos.js b/server/pagos.js
 new file mode 100644
-index 0000000..404f6b8
+index 0000000..8ccc520
 --- /dev/null
 +++ b/server/pagos.js
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,164 @@
 +// server/pagos.js
 +// Cobro seguro: (1) el total se calcula AQUÍ desde la base de datos, nunca con lo que
 +// manda el navegador; (2) la tarjeta se autoriza AQUÍ con Niubiz y solo si responde
@@ -453,6 +454,8 @@ index 0000000..404f6b8
 +    actionDesc: map.ACTION_DESCRIPTION ?? data.errorMessage,
 +    authCode: map.AUTHORIZATION_CODE,
 +    monto,
++    httpStatus: res.status,
++    detalle: aprobado ? undefined : JSON.stringify(data).slice(0, 600),
 +  };
 +}
 diff --git a/server/pagos.test.js b/server/pagos.test.js

@@ -438,10 +438,11 @@ app.post("/api/orders", async (req, res) => {
       amount:           totalConDescuento,
     });
     if (!autorizacion.aprobado) {
-      console.warn(`⚠️ Pago no aprobado (${orderNumber}): ${autorizacion.actionCode} ${autorizacion.actionDesc}`);
+      console.warn(`⚠️ Pago no aprobado (${orderNumber}, S/ ${totalConDescuento}, HTTP ${autorizacion.httpStatus}): ${autorizacion.actionCode} ${autorizacion.actionDesc} | ${autorizacion.detalle}`);
       return res.status(402).json({
         error:      autorizacion.actionDesc || "El pago no fue aprobado",
         actionCode: autorizacion.actionCode,
+        detalle:    autorizacion.detalle,   // temporal: quitar cuando el cobro funcione
       });
     }
 

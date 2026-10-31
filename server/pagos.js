@@ -158,5 +158,7 @@ export async function autorizarNiubiz({ url, securityToken, merchantId, transact
     actionDesc: map.ACTION_DESCRIPTION ?? data.errorMessage,
     authCode: map.AUTHORIZATION_CODE,
     monto,
+    httpStatus: res.status,
+    detalle: aprobado ? undefined : JSON.stringify(data).slice(0, 600),
   };
 }
