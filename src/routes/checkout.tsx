@@ -79,10 +79,25 @@ import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
 
+/** El servidor recalculó el pedido y el total del navegador estaba desactualizado. */
+class PrecioCambioError extends Error {
+  constructor(
+    message: string,
+    public total: number,
+    public descuento: number,
+    public lineas: { product_id: string; unit_price: number }[],
+  ) { super(message); }
+}
+
 async function fetchNiubizSession(payload: {
   amount: number;
   orderId: string;
   email?: string;
+  /** Para que el servidor abra la sesión con el MISMO total que luego autoriza */
+  items?: { product_id: string; qty: number; sku?: string | null; title?: string; comboId?: string | null }[];
+  order?: { metodo_entrega: string; modo_entrega: string | null; destino: string; distrito: string };
+  cupon_codigo?: string | null;
+  user_id?: string | null;
 }) {
   const res = await fetch(`${API}/api/niubiz/session`, {
     method: "POST",
@@ -91,6 +106,9 @@ async function fetchNiubizSession(payload: {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
+    if (res.status === 409 && err.code === "PRECIO_CAMBIO") {
+      throw new PrecioCambioError(err.error, Number(err.total), Number(err.descuento) || 0, err.lineas ?? []);
+    }
     throw new Error(err.error ?? "Error al conectar con Niubiz");
   }
   return res.json() as Promise<{
@@ -102,7 +120,7 @@ async function fetchNiubizSession(payload: {
 }
 
 function CheckoutPage() {
-  const { items, total, clearCart, updateQty, removeItem } = useCartStore();
+  const { items, total, clearCart, updateQty, removeItem, actualizarPrecios } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const { user, loading: authLoading } = useAuth();
@@ -471,6 +489,15 @@ useEffect(() => {
         amount:  totalFinal,
         orderId,
         email:   form.email,
+        items: items.map((i) => ({ product_id: i.id, qty: i.qty, sku: i.sku ?? null, title: i.title, comboId: i.comboId ?? null })),
+        order: {
+          metodo_entrega: metodoEntrega,
+          modo_entrega:   requiereEleccion ? modoEntrega : null,
+          destino:        esProvincia ? "provincia" : "lima",
+          distrito:       form.distrito,
+        },
+        cupon_codigo: cuponAplicado?.codigo ?? null,
+        user_id:      user?.id ?? null,
       });
       niubizRef.current = niubiz;
 
@@ -515,6 +542,16 @@ useEffect(() => {
 
       window.VisanetCheckout.open();
     } catch (err) {
+      if (err instanceof PrecioCambioError) {
+        // Precios guardados en el carrito desactualizados: se corrigen y el cliente confirma el nuevo total
+        actualizarPrecios(Object.fromEntries(err.lineas.map((l) => [l.product_id, l.unit_price])));
+        if (cuponAplicado) {
+          if (err.descuento > 0) setCuponAplicado({ codigo: cuponAplicado.codigo, descuento: err.descuento });
+          else { setCuponAplicado(null); setCuponCodigo(""); setErrorCupon("El cupón ya no aplica a tu pedido"); }
+        }
+        toast.error(`Actualizamos los precios de tu pedido. El total correcto es ${fmt(err.total)}; revísalo y vuelve a pagar.`, { duration: 8000 });
+        return;
+      }
       console.error("Error Niubiz:", err);
       toast.error(err instanceof Error ? err.message : "Error al conectar con la pasarela de pago.");
     } finally {

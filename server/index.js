@@ -135,9 +135,48 @@ const niubizLimiter = rateLimit({
 // ── POST /api/niubiz/session ──────────────────────────────────
 app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
   try {
-    const { amount, orderId, email } = req.body;
+    const { amount, orderId, email, items, order, cupon_codigo, user_id } = req.body;
     if (!(Number(amount) > 0) || !orderId) {
       return res.status(400).json({ error: "Monto u orden inválidos" });
+    }
+
+    // El monto de la sesión DEBE ser el mismo que luego se autoriza (/api/orders lo recalcula desde la BD).
+    // Si Niubiz recibe dos montos distintos rechaza con "AMOUNT does not match". Por eso aquí se calcula
+    // igual que al cobrar; si el navegador tenía precios viejos (carrito guardado, oferta que cambió,
+    // cupón que dejó de valer) se le avisa ANTES de abrir la pasarela, con los valores correctos.
+    let monto = Number(amount);
+    if (Array.isArray(items) && items.length > 0 && order) {
+      const itemsCalculo = items.map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, sku: i.sku, title: i.title, image: i.image }));
+      let descuento = 0;
+      if (cupon_codigo) {
+        const rc = await validarCupon({
+          codigo: cupon_codigo,
+          items: itemsCalculo.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+          customer_id: null,
+          user_id: user_id ?? null,
+        });
+        if (rc.valid) descuento = rc.descuento;
+      }
+      const calculo = await calcularPedido({
+        supabase: supabaseAdmin,
+        order: {
+          metodo_entrega: order.metodo_entrega, modo_entrega: order.modo_entrega,
+          destino: order.destino, distrito: order.distrito,
+        },
+        items: itemsCalculo,
+        descuento,
+      });
+      if (Math.abs(calculo.total - monto) > 0.01) {
+        console.warn(`⚠️ Total del navegador (${monto}) ≠ total del servidor (${calculo.total}) al abrir la sesión ${orderId}`);
+        return res.status(409).json({
+          code: "PRECIO_CAMBIO",
+          error: "Los precios de tu pedido cambiaron. Actualizamos tu carrito con el total correcto.",
+          total: calculo.total,
+          descuento,
+          lineas: calculo.lineas.map((l) => ({ product_id: l.product_id, unit_price: l.unit_price })),
+        });
+      }
+      monto = calculo.total;
     }
     const merchantId = process.env.NIUBIZ_MERCHANT_ID;
     const token      = await getSecurityToken();
@@ -146,7 +185,7 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
       method:  "POST",
       headers: { "Content-Type": "application/json", Authorization: token },
       body: JSON.stringify({
-        amount: Number(amount).toFixed(2),
+        amount: monto.toFixed(2),
         antifraud: {
           clientIp: String(req.headers["x-forwarded-for"] ?? req.ip ?? "").split(",")[0].trim() || "127.0.0.1",
           merchantDefineData: {
@@ -166,6 +205,7 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
       currency:   "PEN",
     });
   } catch (err) {
+    if (err instanceof PagoError) return res.status(err.status).json({ error: err.message });
     res.status(500).json({ error: err.message });
   }
 });

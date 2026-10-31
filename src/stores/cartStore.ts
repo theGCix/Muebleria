@@ -24,6 +24,8 @@ interface CartState {
   /** Quita del carrito todas las piezas que entraron con ese combo. */
   removeCombo: (comboId: string) => void;
   updateQty: (id: string, qty: number) => void;
+  /** Sustituye el precio unitario de cada producto por el que calculó el servidor ({ [product_id]: precio }). */
+  actualizarPrecios: (precios: Record<string, number>) => void;
   clearCart: () => void;
   total: () => number;
 }
@@ -81,6 +83,10 @@ export const useCartStore = create<CartState>()(
           items: state.items.map((i) => (i.id === id ? { ...i, qty } : i)),
         }));
       },
+      actualizarPrecios: (precios) =>
+        set((state) => ({
+          items: state.items.map((i) => (precios[i.id] !== undefined ? { ...i, price: precios[i.id] } : i)),
+        })),
       clearCart: () => set({ items: [] }),
       total: () => get().items.reduce((s, i) => s + i.price * i.qty, 0),
     }),

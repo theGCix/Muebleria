@@ -48,6 +48,8 @@ const OTRA = "Prueba con otra tarjeta de crédito o débito.";
 
 /** Traduce el código de Niubiz a algo que un cliente entienda y pueda accionar. */
 function describirMotivo(code: string, desc?: string): Motivo {
+  // Niubiz responde "AMOUNT does not match" cuando el monto de la sesión y el de la autorización difieren
+  if (code !== "MONTO" && /amount.*match/i.test(desc ?? "")) code = "MONTO";
   switch (code) {
     case "101":
       return { titulo: "Tu tarjeta está vencida", detalle: "El banco indica que la fecha de vencimiento ya pasó.", tips: ["Confirma la fecha de vencimiento impresa en la tarjeta.", OTRA, "Si tienes una tarjeta renovada, usa esa."] };
@@ -83,7 +85,7 @@ function describirMotivo(code: string, desc?: string): Motivo {
       return { titulo: "El monto no coincide", detalle: "El importe del pedido cambió mientras pagabas (por ejemplo, una oferta que terminó).", tips: ["Vuelve al pago: verás el total actualizado.", "Si el precio te parece raro, escríbenos."], nuestro: true };
     default:
       return {
-        titulo: desc && desc.length < 60 ? desc : "El pago no fue aprobado",
+        titulo: "El pago no fue aprobado",
         detalle: "Tu banco o la pasarela no aprobaron esta operación.",
         tips: [VERIFICA, "Vuelve a intentarlo en unos minutos.", OTRA],
       };
@@ -206,7 +208,7 @@ export function PagoRechazado({
 
               {(code || datos.date) && (
                 <p className="mt-6 border-t border-dashed border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
-                  Referencia para soporte{code ? ` · código ${code}` : ""}{datos.date ? ` · ${datos.date}` : ""}
+                  Referencia para soporte{code ? ` · código ${code}` : ""}{datos.actionDesc ? ` · ${datos.actionDesc}` : ""}{datos.date ? ` · ${datos.date}` : ""}
                 </p>
               )}
             </div>
