@@ -13,6 +13,7 @@ import { registerFeed } from "./feed.js";
 import { registerChat } from "./chat.js";
 import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
+import { calcularPedido, autorizarNiubiz, PagoError } from "./pagos.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -46,21 +47,29 @@ const supabaseAdmin = createClient(
 // ── URLs de Niubiz según ambiente ─────────────────────────────
 // En .env pon: NIUBIZ_AMBIENTE=integracion  o  NIUBIZ_AMBIENTE=produccion
 function getNiubizUrls() {
-  const amb = process.env.NIUBIZ_AMBIENTE ?? "integracion";
+  // Si la variable falta o tiene un error de tipeo NO se cae en silencio al sandbox:
+  // en Render (variable RENDER presente) es obligatoria y solo vale integracion|produccion.
+  const amb = process.env.NIUBIZ_AMBIENTE ?? (process.env.RENDER ? undefined : "integracion");
   const defaults = {
     integracion: {
+      authorization: "https://apitestenv.vnforapps.com/api.authorization/v3/authorization/ecommerce",
       security: "https://apitestenv.vnforapps.com/api.security/v1/security",
       session:  "https://apitestenv.vnforapps.com/api.ecommerce/v2/ecommerce/token/session",
       js:       "https://static-content-qas.vnforapps.com/v2/js/checkout.js",
     },
     produccion: {
+      authorization: "https://apiprod.vnforapps.com/api.authorization/v3/authorization/ecommerce",
       security: "https://apiprod.vnforapps.com/api.security/v1/security",
       session:  "https://apiprod.vnforapps.com/api.ecommerce/v2/ecommerce/token/session",
       js:       "https://static-content.vnforapps.com/v2/js/checkout.js",
     },
   };
-  const base = defaults[amb] ?? defaults.integracion;
+  if (!defaults[amb]) {
+    throw new Error("NIUBIZ_AMBIENTE debe ser 'integracion' o 'produccion' (valor actual: " + String(amb) + ")");
+  }
+  const base = defaults[amb];
   return {
+    authorization: process.env.NIUBIZ_URL_AUTHORIZATION ?? base.authorization,
     security: process.env.NIUBIZ_URL_SECURITY ?? base.security,
     session:  process.env.NIUBIZ_URL_SESSION  ?? base.session,
     js:       process.env.NIUBIZ_URL_JS       ?? base.js,
@@ -124,9 +133,12 @@ const niubizLimiter = rateLimit({
   message: { error: "Demasiadas solicitudes. Espera un momento." },
 });
 // ── POST /api/niubiz/session ──────────────────────────────────
-app.post("/api/niubiz/session", async (req, res) => {
+app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
   try {
     const { amount, orderId, email } = req.body;
+    if (!(Number(amount) > 0) || !orderId) {
+      return res.status(400).json({ error: "Monto u orden inválidos" });
+    }
     const merchantId = process.env.NIUBIZ_MERCHANT_ID;
     const token      = await getSecurityToken();
 
@@ -136,7 +148,7 @@ app.post("/api/niubiz/session", async (req, res) => {
       body: JSON.stringify({
         amount: Number(amount).toFixed(2),
         antifraud: {
-          clientIp: "127.0.0.1",
+          clientIp: String(req.headers["x-forwarded-for"] ?? req.ip ?? "").split(",")[0].trim() || "127.0.0.1",
           merchantDefineData: {
             MDD4: email ?? "", MDD32: merchantId, MDD75: "Ecommerce", MDD77: "0",
           },
@@ -333,6 +345,9 @@ app.post("/api/orders", async (req, res) => {
   try {
     const { order, items } = req.body;
     console.log("📦 Orden recibida:", order?.orderNumber);
+    if (!order?.transactionToken) {
+      return res.status(400).json({ error: "Falta el token de la transacción de Niubiz" });
+    }
 
     const orderNumber = (order.orderNumber?.trim())
       ? order.orderNumber
@@ -366,9 +381,10 @@ app.post("/api/orders", async (req, res) => {
         descuento = resultado.descuento;
       } else {
         // El cupón dejó de ser válido entre que se aplicó y se pagó
-        // (ej. venció, o alguien más lo usó). No bloqueamos el pedido
-        // — ya se cobró en Niubiz — pero lo dejamos en el log para
-        // revisión manual y no aplicamos descuento fantasma.
+        // (ej. venció, o alguien más lo usó). No aplicamos descuento fantasma:
+        // el total del servidor queda sin descuento y, como la sesión de Niubiz
+        // se abrió con el monto rebajado, el cobro será rechazado (sin cargo)
+        // y el cliente podrá reintentar sin el cupón.
         console.warn(`⚠️ Cupón ${order.cupon_codigo} inválido al crear la orden: ${resultado.motivo}`);
       }
     }
@@ -396,8 +412,38 @@ app.post("/api/orders", async (req, res) => {
           : "flete por cotizar")
       : null;
 
-    const subtotalReal = order.subtotal ?? 0; // ver nota: idealmente esto también se recalcula desde `items`, ya es así hoy sin cupón
-    const totalConDescuento = subtotalReal + (order.envio ?? 0) - descuento;
+    // ── Total calculado en el SERVIDOR (precios, ofertas, combos y envío desde la BD) ──
+    // Nada de lo que mande el navegador (subtotal, envío, total, precios) se usa para cobrar.
+    const calculo = await calcularPedido({
+      supabase: supabaseAdmin,
+      order: { ...order, distrito: order.distrito },
+      items: (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, sku: i.sku, title: i.title, image: i.image })),
+      descuento,
+    });
+    const subtotalReal      = calculo.subtotal;
+    const envioReal         = calculo.envio;
+    const totalConDescuento = calculo.total;
+    if (Math.abs((order.total ?? 0) - totalConDescuento) > 0.01) {
+      console.warn(`⚠️ Total del navegador (${order.total}) ≠ total del servidor (${totalConDescuento}) en ${orderNumber}`);
+    }
+
+    // ── Cobro real: autorizar la tarjeta con Niubiz por el monto del servidor ──
+    // Si Niubiz no aprueba (o el monto de la sesión no coincide), NO se crea pedido pagado.
+    const autorizacion = await autorizarNiubiz({
+      url:              getNiubizUrls().authorization,
+      securityToken:    await getSecurityToken(),
+      merchantId:       process.env.NIUBIZ_MERCHANT_ID,
+      transactionToken: order.transactionToken,
+      purchaseNumber:   orderNumber,
+      amount:           totalConDescuento,
+    });
+    if (!autorizacion.aprobado) {
+      console.warn(`⚠️ Pago no aprobado (${orderNumber}): ${autorizacion.actionCode} ${autorizacion.actionDesc}`);
+      return res.status(402).json({
+        error:      autorizacion.actionDesc || "El pago no fue aprobado",
+        actionCode: autorizacion.actionCode,
+      });
+    }
 
     const { data: newOrder, error: orderError } = await supabaseAdmin
       .from("orders")
@@ -413,7 +459,7 @@ app.post("/api/orders", async (req, res) => {
         ciudad:             order.ciudad    ?? null,
         notas:              [order.notas, notaEnvio].filter(Boolean).join(" | ") || null,
         subtotal:           subtotalReal,
-        envio:              order.envio     ?? 0,
+        envio:              envioReal,
         total:              totalConDescuento,
         cupon_id:           cuponAplicado?.cupon_id ?? null,
         cupon_codigo:       cuponAplicado?.codigo ?? null,
@@ -423,6 +469,7 @@ app.post("/api/orders", async (req, res) => {
         currency:           "PEN",
         niubiz_session_key: order.sessionKey       ?? null,
         niubiz_token:       order.transactionToken ?? null,
+        niubiz_auth_code:   autorizacion.authCode ?? null,
         status:             "pagado",
         paid_at:            new Date().toISOString(),
         // Solo en pedidos a provincia: así los pedidos de Lima no dependen de la migración nueva
@@ -456,15 +503,15 @@ app.post("/api/orders", async (req, res) => {
       }
     }
 
-    const orderItems = (items ?? []).map((item) => ({
+    const orderItems = calculo.lineas.map((l) => ({
       order_id:   newOrder.id,
-      product_id: item.product_id ?? null,
-      sku:        item.sku        ?? null,
-      title:      item.title,
-      qty:        item.qty,
-      unit_price: item.price,
-      total:      item.price * item.qty,
-      image_url:  item.image ?? null,
+      product_id: l.product_id,
+      sku:        l.sku        ?? null,
+      title:      l.title,
+      qty:        l.qty,
+      unit_price: l.unit_price,   // precio de la BD, no el del navegador
+      total:      l.line_total,
+      image_url:  l.image ?? null,
     }));
 
     if (orderItems.length > 0) {
@@ -488,7 +535,7 @@ app.post("/api/orders", async (req, res) => {
     void notificarPedidoPagado({ supabaseAdmin, orderId: newOrder.id });
   } catch (err) {
     console.error("Error guardando orden:", err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err instanceof PagoError ? err.status : 500).json({ error: err.message });
   }
 });
 
@@ -802,108 +849,6 @@ app.post("/api/staff/create-user", async (req, res) => {
 
     res.json({ success: true, userId: newUser.user.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-
-
-
-
-
-
-
-
-
-
-// server/index.js — añadir función de verificación
-
-async function verificarTransaccionNiubiz(transactionToken, purchaseNumber) {
-  const token = await getSecurityToken();
-  const merchantId = process.env.NIUBIZ_MERCHANT_ID;
-
-  // URL de autorización/consulta de Niubiz
-  const baseUrl = process.env.NIUBIZ_AMBIENTE === "produccion"
-    ? "https://apiprod.vnforapps.com"
-    : "https://apitestenv.vnforapps.com";
-
-  const url = `${baseUrl}/api.authorization/v3/authorization/ecommerce/${merchantId}`;
-
-  const res = await fetch(url, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", Authorization: token },
-    body: JSON.stringify({
-      channel:           "web",
-      captureType:       "manual",
-      countable:         true,
-      order: {
-        purchaseNumber,
-        tokenId:  transactionToken,
-        currency: "PEN",
-      },
-    }),
-  });
-
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Verificación Niubiz fallida: ${res.status} ${txt}`);
-  }
-
-  const data = await res.json();
-  // data.order.status: "Authorized" | "Denied" | etc.
-  // data.dataMap.ACTION_CODE: "000" = aprobado
-  return {
-    aprobado:       data.dataMap?.ACTION_CODE === "000",
-    actionCode:     data.dataMap?.ACTION_CODE,
-    actionDesc:     data.dataMap?.ACTION_DESCRIPTION,
-    authCode:       data.dataMap?.AUTHORIZATION_CODE,
-    amount:         data.order?.amount,
-    purchaseNumber: data.order?.purchaseNumber,
-  };
-}
-
-// ── Actualizar POST /api/orders para verificar antes de guardar ──
-app.post("/api/orders", async (req, res) => {
-  try {
-    const { order, items } = req.body;
-
-    // ✅ VERIFICAR con Niubiz antes de guardar
-    if (order.transactionToken) {
-      const verificacion = await verificarTransaccionNiubiz(
-        order.transactionToken,
-        order.orderNumber
-      );
-
-      if (!verificacion.aprobado) {
-        console.warn("⚠️  Transacción no aprobada:", verificacion.actionDesc);
-        // Guardar la orden como cancelada para trazabilidad
-        await supabaseAdmin.from("orders").insert({
-          order_number:  order.orderNumber ?? `GM-FAIL-${Date.now()}`,
-          nombre:        order.nombre || "—",
-          email:         order.email  || "—",
-          subtotal:      order.subtotal ?? 0,
-          envio:         order.envio ?? 0,
-          total:         order.total ?? 0,
-          currency:      "PEN",
-          niubiz_token:  order.transactionToken,
-          niubiz_auth_code: order.authCode ?? null,
-          status:        "cancelado",
-        });
-        return res.status(402).json({
-          error: "Pago no aprobado",
-          actionCode: verificacion.actionCode,
-          actionDesc: verificacion.actionDesc,
-        });
-      }
-
-      // Guardar el código de autorización
-      order.authCode = verificacion.authCode;
-    }
-
-    // ... resto del código de guardado (igual que antes) ...
-  } catch (err) {
-    console.error("Error guardando orden:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

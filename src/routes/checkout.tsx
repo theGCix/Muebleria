@@ -333,27 +333,29 @@ useEffect(() => {
         qty:        item.qty,
         price:      item.price,
         image:      item.image ?? null,
+        comboId:    item.comboId ?? null,   // el servidor recalcula el precio del combo
       })),
     }),
   })
-  .then((res) => res.json())
-  .then((data) => {
+  .then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => ({})) }))
+  .then(({ ok, data }) => {
+    // El servidor autoriza el cobro con Niubiz: solo si responde success hay pedido pagado.
+    if (!ok || !data?.success) {
+      setModalDatos({ actionDesc: data?.error ?? "No pudimos confirmar tu pago. Si te llegó un cargo, escríbenos por WhatsApp." });
+      setModalTipo("error");
+      return;
+    }
     // Evento de compra exitosa
-  trackEvent({
-    tipo: "orden_pagada",
-    order_id: purchaseNumber,
-    valor: saved.total ?? totalFinal,
-  });
-  if (data?.orderId) {
-    markCartRecovered({ session_id: getSessionId(), order_id: data.orderId });
-  }
-  })
-  .catch((err) => console.error("Error guardando pedido:", err));
-
-   
+    trackEvent({
+      tipo: "orden_pagada",
+      order_id: purchaseNumber,
+      valor: saved.total ?? totalFinal,
+    });
+    if (data?.orderId) {
+      markCartRecovered({ session_id: getSessionId(), order_id: data.orderId });
+    }
 
     clearCart();
-    // Redirigir directo al perfil después de 1.5s para que vean el modal brevemente
     setModalDatos({
       purchase: purchaseNumber,
       date:     new Date().toLocaleString("es-PE"),
@@ -372,6 +374,12 @@ useEffect(() => {
     });
     setModalTipo("exitoso");
     // Sin redirección automática: la pantalla de éxito tiene sus propios botones ("Ver mi pedido", etc.)
+  })
+  .catch((err) => {
+    console.error("Error guardando pedido:", err);
+    setModalDatos({ actionDesc: "No pudimos confirmar tu pago por un problema de conexión. Si te llegó un cargo, escríbenos por WhatsApp." });
+    setModalTipo("error");
+  });
 }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Lógica real de pago (Niubiz) — se llama tras validar y, si hace falta, loguearse ──
