@@ -13,6 +13,8 @@ import { ShoppingBag, Minus, Plus, Trash2, PackageCheck } from "lucide-react";
 import { useCartStore, type CartItem } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
+import { useValidarCarrito } from "@/hooks/useValidarCarrito";
+import { CarritoAvisos } from "./CarritoAvisos";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -72,6 +74,8 @@ export const CartDrawer = () => {
   const [loginOpen, setLoginOpen] = useState(false);
   const { items, updateQty, removeItem, removeCombo, total, clearCart } = useCartStore();
   const { user } = useAuth();
+  // Al abrir el carrito se revisa contra el servidor (precios vigentes, stock, combos)
+  const { avisos, entendido } = useValidarCarrito(isOpen);
 
   // Las piezas que entraron con un combo se agrupan en una sola tarjeta; el resto queda igual.
   const grupos = useMemo<Grupo[]>(() => {
@@ -134,6 +138,7 @@ export const CartDrawer = () => {
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto pr-2 min-h-0">
+                  <CarritoAvisos avisos={avisos} onEntendido={entendido} className="mb-4" />
                   <div className="space-y-4">
                     {grupos.map((g) =>
                       g.tipo === "combo" ? (

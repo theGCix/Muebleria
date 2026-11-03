@@ -13,7 +13,7 @@ import { registerFeed } from "./feed.js";
 import { registerChat } from "./chat.js";
 import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
-import { calcularPedido, autorizarNiubiz, PagoError } from "./pagos.js";
+import { calcularPedido, validarCarrito, autorizarNiubiz, PagoError } from "./pagos.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -207,6 +207,22 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
   } catch (err) {
     if (err instanceof PagoError) return res.status(err.status).json({ error: err.message });
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/carrito/validar ─────────────────────────────────
+// Solo lectura: compara el carrito del navegador con precios/stock/combos reales de la BD.
+// No cobra ni crea nada. El cliente lo llama al abrir el carrito y al entrar al checkout.
+app.post("/api/carrito/validar", niubizLimiter, async (req, res) => {
+  try {
+    const items = Array.isArray(req.body?.items)
+      ? req.body.items.map((i) => ({ product_id: i?.product_id, qty: i?.qty, price: i?.price, comboId: i?.comboId ?? null }))
+      : [];
+    const r = await validarCarrito({ supabase: supabaseAdmin, items });
+    res.json(r);
+  } catch (err) {
+    if (err instanceof PagoError) return res.status(err.status).json({ error: err.message });
+    res.status(500).json({ error: "No se pudo validar el carrito" });
   }
 });
 

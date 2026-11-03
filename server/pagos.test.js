@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calcularPedido, autorizarNiubiz, precioConOferta, PagoError } from "./pagos.js";
+import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError } from "./pagos.js";
 
 // Supabase de mentira: devuelve tablas fijas
 function fakeSupabase({ products = [], combos = [] }) {
@@ -84,4 +84,68 @@ test("Niubiz: monto autorizado distinto = no aprobado; 5xx lanza error", async (
   const m = await autorizarNiubiz({ ...args, fetchFn: resp(200, { order: { status: "Authorized", authorizedAmount: 1 }, dataMap: { ACTION_CODE: "000" } }) });
   assert.equal(m.aprobado, false);
   await assert.rejects(autorizarNiubiz({ ...args, fetchFn: resp(503, {}) }), PagoError);
+});
+
+// ── validarCarrito ─────────────────────────────────────────────
+const V = (o) => ({ activo: true, stock: null, ...o });
+
+test("validarCarrito: precio igual = ok; con oferta compara contra el precio con descuento", async () => {
+  const sb = fakeSupabase({ products: [V(P1), V(P2)] });
+  const r = await validarCarrito({ supabase: sb, items: [
+    { product_id: "p1", qty: 1, price: 1000 },
+    { product_id: "p2", qty: 1, price: 450 },
+  ] });
+  assert.deepEqual(r.lineas.map((l) => l.estado), ["ok", "ok"]);
+  assert.equal(r.cambios, 0);
+});
+
+test("validarCarrito: precio viejo del navegador => precio_cambio con el precio actual", async () => {
+  const sb = fakeSupabase({ products: [V(P2)] });
+  const r = await validarCarrito({ supabase: sb, items: [{ product_id: "p2", qty: 1, price: 500 }] });
+  assert.equal(r.lineas[0].estado, "precio_cambio");
+  assert.equal(r.lineas[0].precio_actual, 450);
+  assert.equal(r.lineas[0].precio_cliente, 500);
+  assert.equal(r.cambios, 1);
+});
+
+test("validarCarrito: producto inexistente/inactivo, sin stock y stock insuficiente", async () => {
+  const sb = fakeSupabase({ products: [
+    V({ ...P1, id: "inactivo", activo: false }),
+    V({ ...P1, id: "agotado", stock: 0 }),
+    V({ ...P1, id: "poco", stock: 2 }),
+  ] });
+  const r = await validarCarrito({ supabase: sb, items: [
+    { product_id: "zzz", qty: 1, price: 1000 },
+    { product_id: "inactivo", qty: 1, price: 1000 },
+    { product_id: "agotado", qty: 1, price: 1000 },
+    { product_id: "poco", qty: 3, price: 1000 },
+  ] });
+  assert.deepEqual(r.lineas.map((l) => l.estado), ["no_disponible", "no_disponible", "sin_stock", "stock_insuficiente"]);
+});
+
+test("validarCarrito: combo vencido => combo_no_disponible; combo vigente usa el reparto del combo", async () => {
+  const mk = (vence_el) => ({ id: "c1", precio_combo: 1200, activo: true, vence_el, combo_items: [
+    { cantidad: 1, product_id: "p1", products: { precio: 1000 } },
+    { cantidad: 1, product_id: "p2", products: { precio: 500 } },
+  ] });
+  const items = [{ product_id: "p1", qty: 1, price: 800, comboId: "c1" }];
+  const vig = await validarCarrito({ supabase: fakeSupabase({ products: [V(P1), V(P2)], combos: [mk(null)] }), items });
+  assert.equal(vig.lineas[0].estado, "ok");      // 1000 * 1200/1500 = 800
+  const ven = await validarCarrito({ supabase: fakeSupabase({ products: [V(P1), V(P2)], combos: [mk("2000-01-01")] }), items });
+  assert.equal(ven.lineas[0].estado, "combo_no_disponible");
+});
+
+test("validarCarrito: lo que avisa coincide con lo que cobra calcularPedido", async () => {
+  const sb = fakeSupabase({ products: [V(P1), V(P2)] });
+  const items = [{ product_id: "p1", qty: 2, price: 1 }, { product_id: "p2", qty: 3, price: 1 }];
+  const v = await validarCarrito({ supabase: sb, items });
+  const c = await calcularPedido({ supabase: sb, order: { metodo_entrega: "recojo_tienda" }, items });
+  assert.deepEqual(v.lineas.map((l) => l.precio_actual), c.lineas.map((l) => l.unit_price));
+});
+
+test("validarCarrito: entradas inválidas lanzan PagoError", async () => {
+  const sb = fakeSupabase({ products: [V(P1)] });
+  await assert.rejects(validarCarrito({ supabase: sb, items: [] }), PagoError);
+  await assert.rejects(validarCarrito({ supabase: sb, items: [{ product_id: "p1", qty: 0, price: 1 }] }), PagoError);
+  await assert.rejects(validarCarrito({ supabase: sb, items: [{ qty: 1, price: 1 }] }), PagoError);
 });

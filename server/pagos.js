@@ -43,6 +43,39 @@ export function precioConOferta(p, ahora = Date.now()) {
 }
 
 /**
+ * Precio unitario vigente de UNA línea (producto suelto o pieza de combo).
+ * Única fuente de esta regla: la usan calcularPedido() (cobro) y validarCarrito() (aviso previo),
+ * así lo que se avisa y lo que se cobra no pueden divergir.
+ * Devuelve { unit } o { error: "combo_no_disponible" | "combo_no_coincide" }.
+ */
+export function precioUnitarioLinea({ it, prod, combos, ahora = Date.now() }) {
+  if (!it.comboId) return { unit: precioConOferta(prod, ahora) };
+  const combo = combos.get(it.comboId);
+  const vigente = combo && combo.activo && (!combo.vence_el || new Date(combo.vence_el).getTime() > ahora);
+  if (!vigente) return { error: "combo_no_disponible" };
+  const dentro = combo.combo_items.some((ci) => ci.product_id === it.product_id);
+  if (!dentro) return { error: "combo_no_coincide" };
+  // Mismo reparto que src/hooks/useAgregarCombo.ts
+  const normal = combo.combo_items.reduce((s, ci) => s + Number(ci.products.precio) * ci.cantidad, 0);
+  const factor = normal > 0 ? Number(combo.precio_combo) / normal : 1;
+  return { unit: r2(Number(prod.precio) * factor) };
+}
+
+async function leerCombos(supabase, items) {
+  const comboIds = [...new Set(items.map((i) => i.comboId).filter(Boolean))];
+  const combos = new Map();
+  if (comboIds.length) {
+    const { data, error } = await supabase
+      .from("combos")
+      .select("id, precio_combo, activo, vence_el, combo_items(cantidad, product_id, products(precio))")
+      .in("id", comboIds);
+    if (error) throw new PagoError(`No se pudieron leer los combos: ${error.message}`, 500);
+    for (const c of data ?? []) combos.set(c.id, c);
+  }
+  return combos;
+}
+
+/**
  * Recalcula el pedido completo desde la BD.
  * items: [{ product_id, qty, comboId?, ...lo demás se ignora }]
  * order: { metodo_entrega, modo_entrega, destino, distrito }
@@ -67,36 +100,15 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
   if (pErr) throw new PagoError(`No se pudieron leer los precios: ${pErr.message}`, 500);
   const porId = new Map((prods ?? []).map((p) => [p.id, p]));
 
-  const comboIds = [...new Set(items.map((i) => i.comboId).filter(Boolean))];
-  const combos = new Map();
-  if (comboIds.length) {
-    const { data, error } = await supabase
-      .from("combos")
-      .select("id, precio_combo, activo, vence_el, combo_items(cantidad, product_id, products(precio))")
-      .in("id", comboIds);
-    if (error) throw new PagoError(`No se pudieron leer los combos: ${error.message}`, 500);
-    for (const c of data ?? []) combos.set(c.id, c);
-  }
+  const combos = await leerCombos(supabase, items);
 
   const lineas = items.map((it) => {
     const prod = porId.get(it.product_id);
     if (!prod) throw new PagoError("Un producto del carrito ya no existe. Actualiza tu carrito.", 409);
-
-    let unit;
-    if (it.comboId) {
-      const combo = combos.get(it.comboId);
-      const vigente = combo && combo.activo && (!combo.vence_el || new Date(combo.vence_el).getTime() > ahora);
-      if (!vigente) throw new PagoError("Un combo del carrito ya no está disponible. Actualiza tu carrito.", 409);
-      const dentro = combo.combo_items.some((ci) => ci.product_id === it.product_id);
-      if (!dentro) throw new PagoError("El carrito no coincide con el combo. Actualiza tu carrito.", 409);
-      // Mismo reparto que src/hooks/useAgregarCombo.ts
-      const normal = combo.combo_items.reduce((s, ci) => s + Number(ci.products.precio) * ci.cantidad, 0);
-      const factor = normal > 0 ? Number(combo.precio_combo) / normal : 1;
-      unit = r2(Number(prod.precio) * factor);
-    } else {
-      unit = precioConOferta(prod, ahora);
-    }
-    return { ...it, unit_price: unit, line_total: r2(unit * it.qty) };
+    const r = precioUnitarioLinea({ it, prod, combos, ahora });
+    if (r.error === "combo_no_disponible") throw new PagoError("Un combo del carrito ya no está disponible. Actualiza tu carrito.", 409);
+    if (r.error === "combo_no_coincide") throw new PagoError("El carrito no coincide con el combo. Actualiza tu carrito.", 409);
+    return { ...it, unit_price: r.unit, line_total: r2(r.unit * it.qty) };
   });
 
   const subtotal = r2(lineas.reduce((s, l) => s + l.line_total, 0));
@@ -114,6 +126,51 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
   const total = r2(subtotal + envio - descuento);
   if (!(total > 0)) throw new PagoError("El total del pedido no es válido.");
   return { lineas, subtotal, envio, descuento, total };
+}
+
+/**
+ * Revisa el carrito contra la BD SIN lanzar error por precios/stock: solo informa.
+ * items: [{ product_id, qty, price (lo que el navegador muestra), comboId? }]
+ * Estados por línea: "ok" | "precio_cambio" | "no_disponible" | "sin_stock" | "stock_insuficiente"
+ *   | "combo_no_disponible".
+ * stock null = sin dato (no se limita, igual que ProductCard).
+ * Devuelve { lineas: [{ product_id, comboId, estado, precio_actual, precio_cliente, stock }], cambios }.
+ * Usa precioUnitarioLinea(), la misma regla que calcularPedido(), para que el aviso y el cobro coincidan.
+ */
+export async function validarCarrito({ supabase, items, ahora = Date.now() }) {
+  if (!Array.isArray(items) || items.length === 0 || items.length > 100) {
+    throw new PagoError("Carrito inválido.");
+  }
+  for (const it of items) {
+    if (typeof it?.product_id !== "string" || !it.product_id) throw new PagoError("Hay un producto sin identificar.");
+    if (!Number.isInteger(it.qty) || it.qty < 1 || it.qty > 99) throw new PagoError("Cantidad inválida.");
+  }
+
+  const ids = [...new Set(items.map((i) => i.product_id))];
+  const { data: prods, error } = await supabase
+    .from("products")
+    .select("id, precio, descuento_porcentaje, oferta_vence_el, activo, stock")
+    .in("id", ids);
+  if (error) throw new PagoError(`No se pudieron leer los precios: ${error.message}`, 500);
+  const porId = new Map((prods ?? []).map((p) => [p.id, p]));
+  const combos = await leerCombos(supabase, items);
+
+  const lineas = items.map((it) => {
+    const base = { product_id: it.product_id, comboId: it.comboId ?? null, precio_cliente: Number(it.price) };
+    const prod = porId.get(it.product_id);
+    if (!prod || prod.activo === false) return { ...base, estado: "no_disponible", precio_actual: null, stock: null };
+
+    const stock = prod.stock ?? null;
+    const r = precioUnitarioLinea({ it, prod, combos, ahora });
+    if (r.error) return { ...base, estado: "combo_no_disponible", precio_actual: null, stock };
+
+    let estado = "ok";
+    if (stock !== null && stock <= 0) estado = "sin_stock";
+    else if (stock !== null && it.qty > stock) estado = "stock_insuficiente";
+    else if (!Number.isFinite(base.precio_cliente) || Math.abs(r.unit - base.precio_cliente) > 0.009) estado = "precio_cambio";
+    return { ...base, estado, precio_actual: r.unit, stock };
+  });
+  return { lineas, cambios: lineas.filter((l) => l.estado !== "ok").length };
 }
 
 /**

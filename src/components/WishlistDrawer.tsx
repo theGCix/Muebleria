@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { toast } from "sonner";
+import { ofertaInfo } from "@/lib/pricing";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -40,7 +41,7 @@ export function WishlistDrawer() {
     addItem({
       id: item.product.id,
       title: item.product.nombre,
-      price: item.product.precio,
+      price: ofertaInfo(item.product).precioFinal,
       image: imgSrc ?? "",
       sku: item.product.sku ?? undefined,
     });
@@ -155,7 +156,17 @@ export function WishlistDrawer() {
                               {item.product.categoria}
                             </p>
                           )}
-                          <p className="font-semibold mt-1">{fmt(item.product.precio)}</p>
+                          {(() => {
+                            const o = ofertaInfo(item.product);
+                            return o.activa ? (
+                              <p className="mt-1 flex items-baseline gap-2">
+                                <span className="font-semibold">{fmt(o.precioFinal)}</span>
+                                <span className="text-xs text-muted-foreground line-through">{fmt(item.product.precio)}</span>
+                              </p>
+                            ) : (
+                              <p className="font-semibold mt-1">{fmt(item.product.precio)}</p>
+                            );
+                          })()}
                         </div>
 
                         {/* Acciones */}
