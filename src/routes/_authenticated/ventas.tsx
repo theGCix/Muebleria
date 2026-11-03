@@ -20,6 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   printComprobante, downloadComprobanteHtml, downloadComprobanteXml,
   whatsappShare, emailShare, type ComprobanteParaPDF,
@@ -102,19 +103,7 @@ function saleToXmlData(sale: any): ComprobanteData {
       razonSocial: sale.customers?.nombre ?? "Consumidor final",
       email: sale.customers?.email,
     },
-    lineas: (sale.sale_items ?? []).map((it: any) => {
-      const subtotalLinea = Number(it.total) / 1.18;
-      const igvLinea = Number(it.total) - subtotalLinea;
-      return {
-        codigo: it.sku ?? "PROD",
-        descripcion: it.title,
-        unidad: "NIU",
-        cantidad: Number(it.qty),
-        valorUnitario: Number(it.unit_price) / 1.18,
-        igvLinea: round2(igvLinea),
-        totalLinea: round2(subtotalLinea),
-      };
-    }),
+    lineas: lineasConEnvioResidual(sale),
     subtotal: Number(sale.subtotal),
     igv: Number(sale.igv),
     total: Number(sale.total),
@@ -122,6 +111,33 @@ function saleToXmlData(sale: any): ComprobanteData {
   };
 }
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// B1: líneas del XML. Cada producto se calcula como siempre (total/1.18). Si hay línea de envío (sku "ENVIO"),
+// esta es el residuo: base e IGV de cabecera menos lo de los productos, para que líneas y cabecera cuadren al centavo.
+function lineasConEnvioResidual(sale: any) {
+  const items: any[] = sale.sale_items ?? [];
+  const lineas = items.map((it: any) => {
+    const subtotalLinea = Number(it.total) / 1.18;
+    const igvLinea = Number(it.total) - subtotalLinea;
+    return {
+      codigo: it.sku ?? "PROD",
+      descripcion: it.title,
+      unidad: "NIU",
+      cantidad: Number(it.qty),
+      valorUnitario: Number(it.unit_price) / 1.18,
+      igvLinea: round2(igvLinea),
+      totalLinea: round2(subtotalLinea),
+    };
+  });
+  const iEnvio = items.findIndex((it: any) => it.sku === "ENVIO");
+  if (iEnvio >= 0) {
+    const otras = lineas.filter((_, i) => i !== iEnvio);
+    const baseEnvio = round2(Number(sale.subtotal) - otras.reduce((a, l) => a + l.totalLinea, 0));
+    const igvEnvio = round2(Number(sale.igv) - otras.reduce((a, l) => a + l.igvLinea, 0));
+    lineas[iEnvio] = { ...lineas[iEnvio], valorUnitario: baseEnvio, totalLinea: baseEnvio, igvLinea: igvEnvio };
+  }
+  return lineas;
+}
 
 // ── Badge de estado Nubefact ──────────────────────────────────
 function NubefactBadge({ sale }: { sale: any }) {
@@ -397,6 +413,8 @@ function VentasPage() {
     enabled: !!openId,
   });
 
+  const qc = useQueryClient();
+  const [asignandoBoleta, setAsignandoBoleta] = useState(false);
   const { data: orderDetail, isLoading: loadingOrderDetail } = useQuery({
     queryKey: ["order-detalle", openOrderId],
     queryFn: () => (openOrderId ? getOrderDetalle({ id: openOrderId }) : null),
@@ -715,7 +733,30 @@ function VentasPage() {
                 </div>
               </div>
 
-              <ComprobanteActions sale={orderToSale(orderDetail.order)} />
+              {orderDetail.order.comprobante_numero ? (
+                <>
+                  <p className="text-sm">
+                    <span className="text-muted-foreground">Boleta:</span>{" "}
+                    <strong>{orderDetail.order.comprobante_numero}</strong>
+                  </p>
+                  <ComprobanteActions sale={orderToSale(orderDetail.order)} />
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  disabled={asignandoBoleta || ["pendiente", "cancelado"].includes(orderDetail.order.status)}
+                  onClick={async () => {
+                    setAsignandoBoleta(true);
+                    const { error } = await supabase.rpc("asignar_boleta_pedido" as any, { _order_id: orderDetail.order.id });
+                    setAsignandoBoleta(false);
+                    if (error) { toast.error(error.message); return; }
+                    qc.invalidateQueries({ queryKey: ["order-detalle", openOrderId] });
+                    toast.success("Número de boleta asignado");
+                  }}
+                >
+                  {asignandoBoleta ? "Asignando…" : "Emitir boleta (asignar número)"}
+                </Button>
+              )}
             </div>
           ) : (
             <p className="text-muted-foreground">No se pudo cargar el pedido.</p>
@@ -728,15 +769,22 @@ function VentasPage() {
 
 // ── Adapta un order online al shape que espera ComprobanteActions ──
 function orderToSale(order: any) {
+  // B1: los precios ya incluyen IGV, así que la base y el IGV salen del TOTAL cobrado
+  // (base = total / 1.18; IGV = total − base). El envío va como línea aparte y, en el XML,
+  // absorbe el residuo de redondeo (ver saleToXmlData).
+  const total = Number(order.total);
+  const base = round2(total / 1.18);
+  const envio = Number(order.envio) || 0;
   return {
     id: order.id,
-    numero: order.order_number,
+    // B1: la boleta usa el correlativo B001-xxxxxxxx; order_number (GM-…) es solo el número de pedido interno.
+    numero: order.comprobante_numero ?? order.order_number,
     tipo: "boleta" as const,
     created_at: order.created_at,
     estado: order.status === "cancelado" ? "anulada" : order.status,
-    subtotal: Number(order.subtotal),
-    igv: Math.round(Number(order.subtotal) * 0.18 * 100) / 100,
-    total: Number(order.total),
+    subtotal: base,
+    igv: round2(total - base),
+    total,
     notas: order.notas,
     nubefact_estado: order.nubefact_estado,
     nubefact_enlace: order.nubefact_enlace,
@@ -756,6 +804,10 @@ function orderToSale(order: any) {
       qty: it.qty,
       unit_price: it.unit_price,
       total: it.total,
-    })),
+    })).concat(
+      envio > 0
+        ? [{ id: "envio", sku: "ENVIO", title: "Servicio de envío", qty: 1, unit_price: envio, total: envio }]
+        : [],
+    ),
   };
 }
