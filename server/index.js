@@ -13,6 +13,7 @@ import { registerFeed } from "./feed.js";
 import { registerChat } from "./chat.js";
 import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
+import { registrarPagoHuerfano } from "./pagosHuerfanos.js";
 import { calcularPedido, validarCarrito, autorizarNiubiz, PagoError } from "./pagos.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
@@ -546,7 +547,23 @@ app.post("/api/orders", async (req, res) => {
       .select("id")
       .single();
 
-    if (orderError) throw new Error(orderError.message);
+    if (orderError) {
+      // El índice único sobre niubiz_token garantiza un solo pedido por cobro: si otra petición
+      // idéntica ganó la carrera, devolvemos ese pedido en vez de fallar.
+      if (orderError.code === "23505") {
+        const { data: ganador } = await supabaseAdmin
+          .from("orders").select("id").eq("niubiz_token", order.transactionToken).maybeSingle();
+        if (ganador) return res.json({ success: true, orderId: ganador.id, alreadyExists: true });
+      }
+      // Niubiz YA cobró: no mostramos "rechazado". Queda registrado para regularizarlo y el
+      // cliente ve "no pudimos confirmar" (sinConfirmar), no un error de pago.
+      await registrarPagoHuerfano({
+        supabase: supabaseAdmin, motivo: "pedido_no_guardado", order, items,
+        orderNumber, purchaseNumber, monto: totalConDescuento,
+        authCode: autorizacion.authCode, error: orderError.message,
+      });
+      return res.status(500).json({ success: false, sinConfirmar: true });
+    }
 
     // ── Registrar el uso del cupón (dispara la validación atómica final) ──
     if (cuponAplicado) {
@@ -578,7 +595,18 @@ app.post("/api/orders", async (req, res) => {
       const { error: itemsError } = await supabaseAdmin
         .from("order_items")
         .insert(orderItems);
-      if (itemsError) throw new Error(itemsError.message);
+      if (itemsError) {
+        // El pedido pagado ya existe: no lo perdemos ni le decimos al cliente que falló.
+        // Queda marcado para completar los ítems a mano.
+        await registrarPagoHuerfano({
+          supabase: supabaseAdmin, motivo: "items_no_guardados", order, items,
+          orderNumber, purchaseNumber, monto: totalConDescuento,
+          authCode: autorizacion.authCode, orderId: newOrder.id, error: itemsError.message,
+        });
+        res.json({ success: true, orderId: newOrder.id, descuentoAplicado: descuento });
+        void notificarPedidoPagado({ supabaseAdmin, orderId: newOrder.id });
+        return;
+      }
 
       const { error: procesarErr } = await supabaseAdmin.rpc(
         "procesar_pago_pedido",

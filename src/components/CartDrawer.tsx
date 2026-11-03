@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
 import { useValidarCarrito } from "@/hooks/useValidarCarrito";
 import { CarritoAvisos } from "./CarritoAvisos";
+import { precalentarServidor } from "@/lib/precalentar";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -76,6 +77,8 @@ export const CartDrawer = () => {
   const { user } = useAuth();
   // Al abrir el carrito se revisa contra el servidor (precios vigentes, stock, combos)
   const { avisos, entendido } = useValidarCarrito(isOpen);
+  // Despierta Render al abrir el carrito, antes de llegar al checkout
+  useEffect(() => { if (isOpen) precalentarServidor(); }, [isOpen]);
 
   // Las piezas que entraron con un combo se agrupan en una sola tarjeta; el resto queda igual.
   const grupos = useMemo<Grupo[]>(() => {

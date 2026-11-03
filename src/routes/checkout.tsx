@@ -75,6 +75,8 @@ interface ModalDatos extends Partial<PagoExitosoDatos> {
 import { API_URL as API } from "@/config";
 import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
 import { trackLead } from "@/lib/analytics";
+import { precalentarServidor } from "@/lib/precalentar";
+import { ConfirmandoPagoOverlay } from "@/components/ConfirmandoPagoOverlay";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
 import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
@@ -126,6 +128,10 @@ function CheckoutPage() {
   // Revisión contra el servidor al entrar: si algo cambió se corrige y Pagar espera a que el cliente lo confirme
   const { avisos: avisosCarrito, pendiente: avisoPendiente, entendido: avisoEntendido } = useValidarCarrito(true);
   const [loading, setLoading] = useState(false);
+  const [confirmandoPago, setConfirmandoPago] = useState(false);
+
+  // Despierta Render (si está dormido) apenas el cliente entra al checkout
+  useEffect(() => { precalentarServidor(); }, []);
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -358,6 +364,7 @@ useEffect(() => {
     allParams.purchaseNumber || orderIdRef.current || saved.orderNumber || generateOrderId();
 
   const utmData = getStoredUtm();
+  setConfirmandoPago(true);
   fetch(`${API}/api/orders`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -465,7 +472,8 @@ useEffect(() => {
       items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
     });
     setModalTipo("error");
-  });
+  })
+  .finally(() => setConfirmandoPago(false));
 }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Lógica real de pago (Niubiz) — se llama tras validar y, si hace falta, loguearse ──
@@ -1013,6 +1021,7 @@ useEffect(() => {
       </main>
       <Footer />
 
+      <ConfirmandoPagoOverlay visible={confirmandoPago} />
       {modalTipo === "exitoso" ? (
         <PagoExitoso datos={{ purchase: "—", date: "", amount: "0", ...modalDatos }} />
       ) : (
