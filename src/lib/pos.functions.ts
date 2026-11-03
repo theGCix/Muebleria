@@ -496,6 +496,7 @@ export async function getDashboardSeries(input?: {
 export async function createStaffUser(input: {
   email: string; password: string; fullName: string;
   role: "admin" | "vendedor" | "carpintero";
+  confirmacion?: string;
 }) {
   const { supabase } = await getAuthenticatedClient();
   const session = await supabase.auth.getSession();
@@ -525,30 +526,52 @@ export async function listUsers() {
   return { profiles: profiles ?? [], roles: roles ?? [] };
 }
 
+// Cada usuario tiene un solo rol. Para subir a "admin" se exige escribir ADMIN.
+// La seguridad real está en RLS (solo admin escribe user_roles); cada cambio queda en audit_log.
 export async function setUserRole(input: {
   user_id: string;
   role: "admin" | "vendedor" | "carpintero" | "cliente";
-  action: "add" | "remove";
+  confirmacion?: string;
 }) {
   const data = z.object({
     user_id: z.string().uuid(),
     role: z.enum(["admin", "vendedor", "carpintero", "cliente"]),
-    action: z.enum(["add", "remove"]),
+    confirmacion: z.string().optional(),
   }).parse(input);
+
+  if (data.role === "admin" && data.confirmacion !== "ADMIN") {
+    throw new Error('Para asignar el rol de administrador escribe ADMIN para confirmar');
+  }
 
   const { supabase, userId } = await getAuthenticatedClient();
   const { data: adminCheck } = await supabase
     .from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle();
   if (!adminCheck) throw new Error("Solo administradores pueden cambiar roles");
 
-  if (data.action === "add") {
-    const { error } = await supabase.from("user_roles").insert({ user_id: data.user_id, role: data.role });
-    if (error && !error.message.includes("duplicate")) throw new Error(error.message);
-  } else {
-    const { error } = await supabase.from("user_roles").delete().eq("user_id", data.user_id).eq("role", data.role);
-    if (error) throw new Error(error.message);
-  }
+  // Primero se agrega el rol nuevo y después se quitan los demás: así el usuario nunca queda sin rol.
+  const { error: insErr } = await supabase
+    .from("user_roles").insert({ user_id: data.user_id, role: data.role });
+  if (insErr && !insErr.message.toLowerCase().includes("duplicate")) throw new Error(insErr.message);
+
+  const { error: delErr } = await supabase
+    .from("user_roles").delete().eq("user_id", data.user_id).neq("role", data.role);
+  if (delErr) throw new Error(delErr.message);
+
   return { ok: true };
+}
+
+// Últimos cambios de rol (quién, cuándo y qué), desde audit_log.
+export async function listRoleAudit(limit = 30) {
+  const n = z.number().int().min(1).max(200).parse(limit);
+  const { supabase } = await getAuthenticatedClient();
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select("id, created_at, operacion, usuario, antes, despues")
+    .eq("tabla", "user_roles")
+    .order("created_at", { ascending: false })
+    .limit(n);
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 export async function anularVenta(input: { data: { id: string } }) {
