@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageCircle, X, Send, Loader2, Sparkles, ArrowLeft, ArrowUpRight, Phone } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { API_URL as API, WHATSAPP_NUMBER } from "@/config";
 import { trackLead } from "@/lib/analytics";
 import { TEMAS_CHAT, type ChatLink, type PreguntaChat, type TemaChat } from "@/lib/chatSugerencias";
@@ -107,7 +107,13 @@ async function chatWithAssistantStream(
   return result;
 }
 
+// Rutas del panel interno que en móvil tienen la barra de navegación inferior (MobileBottomBar):
+// ahí el botón del chat se sube para no taparla. (POS y Central no la muestran.)
+const RUTAS_CON_BARRA_INFERIOR =
+  /^\/(analytics|caja|carritos-abandonados|carrusel|clientes|combos|correos-pedidos|crm|cupones|dashboard|despachos|devoluciones|fotos-clientes|gestionar-proyectos|insumos|leads|mi-produccion|pedidos|produccion|productos|proveedores|resenas|usuarios|ventas)(\/|$)/;
+
 export function AsistenteChat() {
+  const pathname = useRouterState({ select: (r) => r.location.pathname });
   const [open, setOpen]       = useState(false);
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
@@ -246,12 +252,20 @@ export function AsistenteChat() {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lineas.join("\n"))}`, "_blank", "noopener,noreferrer");
   };
 
+  // E2/T2/D9: en el checkout el chat no se muestra (taparía campos, términos, la fila de confianza y la barra de pago).
+  if (pathname.startsWith("/checkout")) return null;
+
+  // En el panel interno (móvil) se sube sobre la barra inferior; en el resto queda abajo a la derecha.
+  const elevado = RUTAS_CON_BARRA_INFERIOR.test(pathname);
+  const posBoton = elevado ? "bottom-20 md:bottom-6" : "bottom-6";
+  const posPanel = elevado ? "bottom-36 md:bottom-24" : "bottom-24";
+
   return (
     <>
       {/* Botón flotante */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+        className={`fixed ${posBoton} right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95`}
         style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
         aria-label="Asistente de compra"
       >
@@ -261,7 +275,7 @@ export function AsistenteChat() {
       {/* Panel de chat */}
       {open && (
         <div
-          className="fixed bottom-24 right-4 z-50 rounded-2xl shadow-2xl border overflow-hidden flex flex-col"
+          className={`fixed ${posPanel} right-4 z-50 rounded-2xl shadow-2xl border overflow-hidden flex flex-col`}
           style={{
             background: "var(--background)",
             borderColor: "var(--border)",

@@ -605,7 +605,8 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 py-10 max-w-6xl">
+      {/* pb-32 en móvil: deja espacio para la barra de pago fija */}
+      <main className="container mx-auto px-4 pt-10 pb-32 lg:pb-10 max-w-6xl">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8">
           <ArrowLeft className="h-4 w-4" /> Seguir comprando
         </Link>
@@ -614,7 +615,7 @@ useEffect(() => {
 
         <div className="grid lg:grid-cols-[1fr_420px] gap-10 min-w-0">
           {/* ── Formulario ── */}
-          <form onSubmit={handlePagar} className="space-y-8 min-w-0">
+          <form id="form-checkout" onSubmit={handlePagar} className="space-y-8 min-w-0">
             <CarritoAvisos avisos={avisosCarrito} onEntendido={avisoEntendido} />
 
             <section className="bg-card border border-border/50 rounded-xl p-6 space-y-4">
@@ -818,16 +819,19 @@ useEffect(() => {
 
             <TerminosCheckout aceptado={aceptaTerminos} onChange={setAceptaTerminos} />
 
-            <Button
-              type="submit" size="lg" className="w-full rounded-full h-12 text-base"
-              disabled={loading || avisoPendiente || !aceptaTerminos || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura || provinciaIncompleta))}
-            >
-              {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
-            </Button>
+            {/* En móvil el botón de pagar vive en la barra fija inferior; este es el de escritorio */}
+            <div className="hidden lg:block">
+              <Button
+                type="submit" size="lg" className="w-full rounded-full h-12 text-base"
+                disabled={loading || avisoPendiente || !aceptaTerminos || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura || provinciaIncompleta))}
+              >
+                {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
+              </Button>
+            </div>
           </form>
 
           {/* ── Resumen ── */}
-          <aside className="min-w-0">
+          <aside id="resumen-pedido" className="min-w-0 scroll-mt-4">
             <div className="bg-card border border-border/50 rounded-xl p-6 sticky top-6">
               <h2 className="font-display text-xl font-semibold mb-4">Resumen del pedido</h2>
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
@@ -1020,6 +1024,38 @@ useEffect(() => {
         </div>
       </main>
       <Footer />
+
+      {/* E1: barra fija inferior (solo móvil) con total + Pagar. Los motivos por los que aún no se puede
+          pagar (términos, distrito, avisos del carrito) los explica handlePagar con un mensaje. */}
+      {modalTipo === null && !confirmandoPago && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur px-4 pt-3 lg:hidden"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="mx-auto flex max-w-6xl items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground leading-tight">Total (IGV incluido)</p>
+              <p className="font-display text-xl font-semibold leading-tight">{fmt(totalFinal)}</p>
+              <button
+                type="button"
+                className="-ml-1 inline-flex min-h-[44px] items-center px-1 text-xs font-medium text-primary underline underline-offset-2"
+                onClick={() => document.getElementById("resumen-pedido")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                Ver resumen del pedido
+              </button>
+            </div>
+            <Button
+              type="submit"
+              form="form-checkout"
+              size="lg"
+              className="h-12 min-w-[140px] rounded-full px-6 text-base"
+              disabled={loading}
+            >
+              {loading ? "Conectando…" : "Pagar"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <ConfirmandoPagoOverlay visible={confirmandoPago} />
       {modalTipo === "exitoso" ? (

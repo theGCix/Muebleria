@@ -24,6 +24,7 @@ import { z } from "zod";
 import { calcularEnvioChat } from "./envioChat.js";
 import { enlacesDeTurno } from "./chatNavegacion.js";
 import { normalizar } from "./envioChat.js";
+import { precioConOferta } from "./pagos.js";
 
 const MAX_TURNOS_HERRAMIENTAS = 4;
 const MAX_MENSAJES_HISTORIAL = 12;
@@ -46,7 +47,7 @@ Información de la tienda:
 - La tienda muestra botones con enlaces a las páginas relacionadas con cada respuesta: NO escribas direcciones web ni URLs; si ayuda, di "te dejé el enlace abajo".
 
 Reglas importantes:
-1. NUNCA inventes precios, stock o disponibilidad — usa siempre buscar_productos primero.
+1. NUNCA inventes precios, stock o disponibilidad — usa siempre buscar_productos primero. El campo "precio" ya es el precio vigente que se cobra; si trae "en_oferta", menciona también "precio_lista" como precio anterior.
 2. Para consultar pedidos: si el cliente tiene la sesión iniciada (el sistema te lo indica al final), usa consultar_pedido de inmediato SIN pedir número ni correo (nunca describas el estado de un pedido sin haber llamado a la herramienta en este turno); si NO tiene sesión, dile que inicie sesión para ver sus pedidos, o pídele el número de pedido Y el correo.
 3. Solo agrega productos al carrito cuando el cliente lo pida o confirme explícitamente.
 4. Si no encuentras algo en el catálogo, dilo con honestidad y sugiere alternativas similares si las hay.
@@ -157,6 +158,34 @@ function escapeLike(valor) {
 const SELECT_PRODUCTO =
   "id, nombre, categoria, subcategoria, precio, stock, tipo_gestion, sku, descripcion";
 
+/**
+ * R1: el chat debe decir y agregar al carrito el MISMO precio que la tienda cobra.
+ * La búsqueda devuelve el precio de lista; aquí se aplica la oferta vigente con la misma regla
+ * del servidor (precioConOferta). Si algo falla, devuelve los productos tal cual.
+ */
+async function conPrecioVigente(supabaseAdmin, productos) {
+  try {
+    const ids = (productos ?? []).map((p) => p?.id).filter(Boolean);
+    if (!ids.length) return productos;
+    const { data, error } = await supabaseAdmin
+      .from("products")
+      .select("id, precio, descuento_porcentaje, oferta_vence_el")
+      .in("id", ids);
+    if (error || !data) return productos;
+    const porId = new Map(data.map((r) => [r.id, r]));
+    return productos.map((p) => {
+      const r = porId.get(p.id);
+      if (!r) return p;
+      const vigente = precioConOferta(r);
+      return vigente < Number(r.precio)
+        ? { ...p, precio: vigente, precio_lista: Number(r.precio), en_oferta: true }
+        : p;
+    });
+  } catch {
+    return productos;
+  }
+}
+
 /** Recorta la descripción: los modelos locales tienen contexto limitado. */
 function compactarProducto(p) {
   return {
@@ -246,8 +275,9 @@ export function crearHerramientas({ supabaseAdmin }, ctx) {
     async ({ query, categoria, precio_max }) => {
       const viaRpc = await buscarPorRpc(supabaseAdmin, { query, categoria, precioMax: precio_max });
       if (viaRpc) {
-        anotar(ctx, "productos", viaRpc);
-        return JSON.stringify({ resultados: viaRpc.map(compactarProducto) });
+        const conOferta = await conPrecioVigente(supabaseAdmin, viaRpc);
+        anotar(ctx, "productos", conOferta);
+        return JSON.stringify({ resultados: conOferta.map(compactarProducto) });
       }
 
       // Respaldo (migración no aplicada): ILIKE solo por nombre/descripción.
@@ -279,8 +309,9 @@ export function crearHerramientas({ supabaseAdmin }, ctx) {
         data = data2;
       }
 
-      anotar(ctx, "productos", data ?? []);
-      return JSON.stringify({ resultados: (data ?? []).map(compactarProducto) });
+      const conOferta = await conPrecioVigente(supabaseAdmin, data ?? []);
+      anotar(ctx, "productos", conOferta);
+      return JSON.stringify({ resultados: conOferta.map(compactarProducto) });
     },
     {
       name: "buscar_productos",
@@ -389,7 +420,7 @@ export function crearHerramientas({ supabaseAdmin }, ctx) {
     async ({ product_id, cantidad }) => {
       const { data: product, error } = await supabaseAdmin
         .from("products")
-        .select("id, nombre, precio, stock, tipo_gestion, activo, imagen_url, sku")
+        .select("id, nombre, precio, descuento_porcentaje, oferta_vence_el, stock, tipo_gestion, activo, imagen_url, sku")
         .eq("id", product_id)
         .maybeSingle();
 
@@ -407,7 +438,7 @@ export function crearHerramientas({ supabaseAdmin }, ctx) {
       ctx.cartActions.push({
         id: product.id,
         title: product.nombre,
-        price: product.precio,
+        price: precioConOferta(product),   // R1: igual que la tienda (oferta vigente)
         image: product.imagen_url,
         sku: product.sku,
         cantidad,
