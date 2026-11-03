@@ -526,8 +526,9 @@ export async function listUsers() {
   return { profiles: profiles ?? [], roles: roles ?? [] };
 }
 
-// Cada usuario tiene un solo rol. Para subir a "admin" se exige escribir ADMIN.
-// La seguridad real está en RLS (solo admin escribe user_roles); cada cambio queda en audit_log.
+// Cada usuario tiene un solo rol. El cambio lo hace la función set_user_role en la base de datos
+// (SECURITY DEFINER): ella valida que quien llama sea admin, exige "ADMIN" para otorgar admin,
+// impide cambiar el propio rol y el trigger deja el registro en audit_log.
 export async function setUserRole(input: {
   user_id: string;
   role: "admin" | "vendedor" | "carpintero" | "cliente";
@@ -539,24 +540,13 @@ export async function setUserRole(input: {
     confirmacion: z.string().optional(),
   }).parse(input);
 
-  if (data.role === "admin" && data.confirmacion !== "ADMIN") {
-    throw new Error('Para asignar el rol de administrador escribe ADMIN para confirmar');
-  }
-
-  const { supabase, userId } = await getAuthenticatedClient();
-  const { data: adminCheck } = await supabase
-    .from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle();
-  if (!adminCheck) throw new Error("Solo administradores pueden cambiar roles");
-
-  // Primero se agrega el rol nuevo y después se quitan los demás: así el usuario nunca queda sin rol.
-  const { error: insErr } = await supabase
-    .from("user_roles").insert({ user_id: data.user_id, role: data.role });
-  if (insErr && !insErr.message.toLowerCase().includes("duplicate")) throw new Error(insErr.message);
-
-  const { error: delErr } = await supabase
-    .from("user_roles").delete().eq("user_id", data.user_id).neq("role", data.role);
-  if (delErr) throw new Error(delErr.message);
-
+  const { supabase } = await getAuthenticatedClient();
+  const { error } = await supabase.rpc("set_user_role", {
+    _user_id: data.user_id,
+    _role: data.role,
+    _confirmacion: data.confirmacion,
+  });
+  if (error) throw new Error(error.message);
   return { ok: true };
 }
 
