@@ -26,11 +26,22 @@ import { toast } from "sonner";
 import { format, isPast, isToday } from "date-fns";
 import { es } from "date-fns/locale";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { RoleGate } from "@/components/RoleGate";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/produccion")({
   head: () => ({ meta: [{ title: "Producción — G&M" }] }),
-  component: ProduccionPage,
+  component: ProduccionRoute,
 });
+
+// El vendedor puede ver el estado y las fechas; solo el administrador asigna y edita.
+function ProduccionRoute() {
+  return (
+    <RoleGate allow={["admin", "vendedor"]}>
+      <ProduccionPage />
+    </RoleGate>
+  );
+}
 
 // ── Configuración visual ─────────────────────────────────────
 const PROD_STATUS_CONFIG = {
@@ -70,6 +81,8 @@ function OrdenDetalle({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  const canEdit = roles.includes("admin"); // el vendedor solo lee
   const [editObs, setEditObs] = useState(false);
   const [obs, setObs] = useState(orden.observaciones ?? "");
   const [asignarOpen, setAsignarOpen] = useState(false);
@@ -84,11 +97,13 @@ function OrdenDetalle({
   const { data: carpinterosData } = useQuery({
     queryKey: ["carpinteros"],
     queryFn: listCarpinteros,
+    enabled: canEdit,
   });
 
   const { data: ubicData } = useQuery({
     queryKey: ["ubicaciones"],
     queryFn: listUbicaciones,
+    enabled: canEdit,
   });
 
   const refresh = () => {
@@ -199,15 +214,22 @@ function OrdenDetalle({
                   </span>
                 </div>
 
-                {/* Asignar carpintero */}
-                <Button size="sm" variant="outline" onClick={() => setAsignarOpen(true)}>
-                  <UserCheck className="h-3.5 w-3.5 mr-1" />
-                  {orden.carpintero ? `Asignado: ${orden.carpintero}` : "Asignar carpintero"}
-                </Button>
+                {/* Asignar carpintero (solo admin); el vendedor ve a quién está asignada */}
+                {canEdit ? (
+                  <Button size="sm" variant="outline" onClick={() => setAsignarOpen(true)}>
+                    <UserCheck className="h-3.5 w-3.5 mr-1" />
+                    {orden.carpintero ? `Asignado: ${orden.carpintero}` : "Asignar carpintero"}
+                  </Button>
+                ) : (
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    {orden.carpintero ? `Asignado: ${orden.carpintero}` : "Sin asignar"}
+                  </span>
+                )}
               </div>
 
-              {/* Cambios de estado rápidos */}
-              <div className="flex gap-2 flex-wrap">
+              {/* Cambios de estado rápidos (solo admin) */}
+              {canEdit && <div className="flex gap-2 flex-wrap">
                 {([
                   ["en_proceso",        "Iniciar"],
                   ["pausado",           "Pausar"],
@@ -227,7 +249,7 @@ function OrdenDetalle({
                     </Button>
                   ) : null
                 )}
-              </div>
+              </div>}
             </div>
 
             {/* Ítems del pedido */}
@@ -259,7 +281,7 @@ function OrdenDetalle({
             <section>
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-semibold text-sm">Observaciones internas</h4>
-                {!editObs
+                {!canEdit ? null : !editObs
                   ? <Button size="sm" variant="ghost" onClick={() => setEditObs(true)}>Editar</Button>
                   : <div className="flex gap-2">
                       <Button size="sm" variant="ghost" onClick={() => setEditObs(false)}>Cancelar</Button>
@@ -301,7 +323,7 @@ function OrdenDetalle({
         )}
 
         {/* Dialog asignar carpintero */}
-        {asignarOpen && (
+        {canEdit && asignarOpen && (
           <Dialog open onOpenChange={setAsignarOpen}>
             <DialogContent className="max-w-sm">
               <DialogHeader>

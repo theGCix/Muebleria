@@ -29,11 +29,21 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { RoleGate } from "@/components/RoleGate";
 
 export const Route = createFileRoute("/_authenticated/proveedores")({
   head: () => ({ meta: [{ title: "Proveedores — G&M" }] }),
-  component: ProveedoresPage,
+  component: ProveedoresRoute,
 });
+
+// Compras es solo del administrador (la RLS lo exige también en el servidor).
+function ProveedoresRoute() {
+  return (
+    <RoleGate allow={["admin"]}>
+      <ProveedoresPage />
+    </RoleGate>
+  );
+}
 
 // ── Config visual ────────────────────────────────────────────
 const TIPO_CONFIG = {

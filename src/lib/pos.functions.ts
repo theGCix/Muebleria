@@ -1347,127 +1347,26 @@ export async function getMaterialesOrden(input: {
   const { order_id } = z.object({ order_id: z.string().uuid() }).parse(input);
   const { supabase } = await getAuthenticatedClient();
 
-  // 1. Obtener order_number
-  const { data: order } = await supabase
-    .from("orders")
-    .select("order_number")
-    .eq("id", order_id)
-    .single();
+  // Los materiales salen de una función del servidor (materiales_orden, SECURITY DEFINER)
+  // que valida que la orden sea del carpintero o que quien llama sea admin, y no expone
+  // precios ni proveedor. Ya no se leen insumos / bom_items / insumo_movimientos desde aquí:
+  // esas tablas son solo de administrador.
+  const { data, error } = await supabase.rpc("materiales_orden", { _order_id: order_id });
+  if (error) throw new Error(error.message);
 
-  if (!order) return { materiales: [] };
-
-  // 2. Buscar movimientos de salida (órdenes creadas con el flujo MRP nuevo)
-  const { data: movs } = await supabase
-    .from("insumo_movimientos")
-    .select("cantidad, insumos(id, nombre, unidad, stock_actual)")
-    .eq("referencia", order.order_number)
-    .eq("tipo", "salida");
-
-  if (movs && movs.length > 0) {
-    const mapa = new Map<string, { nombre: string; unidad: string; necesario: number; stock_actual: number }>();
-    for (const mov of movs) {
-      const ins = mov.insumos as { id: string; nombre: string; unidad: string; stock_actual: number } | null;
-      if (!ins) continue;
-      const prev = mapa.get(ins.id);
-      if (prev) {
-        prev.necesario += Number(mov.cantidad);
-      } else {
-        mapa.set(ins.id, { nombre: ins.nombre, unidad: ins.unidad, necesario: Number(mov.cantidad), stock_actual: Number(ins.stock_actual) });
-      }
-    }
-    if (mapa.size > 0) return { materiales: _mapaToMateriales(mapa) };
-  }
-
-  // 3. Obtener items de la orden
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("sku, title, qty")
-    .eq("order_id", order_id);
-
-  if (!items?.length) return { materiales: [] };
-
-  // 4. Fallback A: BOM por SKU "MOD-TALLA-XXX"
-  type PedidoBom = { modelo: string; talla: string; cantidad: number };
-  const porSku: PedidoBom[] = [];
-  for (const item of items) {
-    if (item.sku) {
-      const parts = (item.sku as string).split("-");
-      if (parts.length >= 3 && parts[1] && parts[2]) {
-        porSku.push({ modelo: parts[1], talla: parts[2], cantidad: Number(item.qty) });
-      }
-    }
-  }
-  if (porSku.length > 0) {
-    const { data: boms } = await supabase
-      .from("bom_items")
-      .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)")
-      .or(porSku.map((p) => `and(modelo.eq.${p.modelo},talla.eq.${p.talla})`).join(","));
-    const mapa = _buildMapa(boms ?? [], porSku);
-    if (mapa.size > 0) return { materiales: _mapaToMateriales(mapa) };
-  }
-
-  // 5. Fallback B: BOM por título del mueble
-  const { data: todosLosBoms } = await supabase
-    .from("bom_items")
-    .select("modelo, talla, cantidad, insumos(id, nombre, unidad, stock_actual)");
-
-  if (!todosLosBoms?.length) return { materiales: [] };
-
-  const modelos = [...new Set(todosLosBoms.map((b) => b.modelo as string))];
-  const porTitulo: PedidoBom[] = [];
-
-  for (const item of items) {
-    const tituloLower = (item.title as string).toLowerCase();
-    const modeloMatch = modelos.find((m) => tituloLower.includes(m.toLowerCase()));
-    if (!modeloMatch) continue;
-
-    const tallasDelModelo = [...new Set(
-      todosLosBoms.filter((b) => b.modelo === modeloMatch).map((b) => b.talla as string)
-    )];
-
-    for (const talla of tallasDelModelo) {
-      // Busca "N× ... <talla>" en el título para extraer cantidad
-      const escaped = talla.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp("(\\d+)[\\u00d7x]\\s*[^(]+" + escaped, "i");
-      const m = (item.title as string).match(re);
-      porTitulo.push({ modelo: modeloMatch, talla, cantidad: m ? Number(m[1]) : Number(item.qty) });
-    }
-  }
-
-  if (!porTitulo.length) return { materiales: [] };
-  const mapa = _buildMapa(todosLosBoms, porTitulo);
-  return { materiales: _mapaToMateriales(mapa) };
-}
-
-// ── helpers privados ────────────────────────────────────────
-type _BomRow = { modelo: unknown; talla: unknown; cantidad: unknown; insumos: unknown };
-type _MapaVal = { nombre: string; unidad: string; necesario: number; stock_actual: number };
-
-function _buildMapa(boms: _BomRow[], pedidos: Array<{ modelo: string; talla: string; cantidad: number }>): Map<string, _MapaVal> {
-  const mapa = new Map<string, _MapaVal>();
-  for (const pedido of pedidos) {
-    const match = boms.filter((b) => b.modelo === pedido.modelo && b.talla === pedido.talla);
-    for (const bom of match) {
-      const ins = bom.insumos as { id: string; nombre: string; unidad: string; stock_actual: number } | null;
-      if (!ins) continue;
-      const prev = mapa.get(ins.id);
-      if (prev) {
-        prev.necesario += Number(bom.cantidad) * pedido.cantidad;
-      } else {
-        mapa.set(ins.id, { nombre: ins.nombre, unidad: ins.unidad, necesario: Number(bom.cantidad) * pedido.cantidad, stock_actual: Number(ins.stock_actual) });
-      }
-    }
-  }
-  return mapa;
-}
-
-function _mapaToMateriales(mapa: Map<string, _MapaVal>): MaterialNecesario[] {
-  return Array.from(mapa.entries()).map(([insumo_id, v]) => ({
-    insumo_id,
-    nombre: v.nombre,
-    unidad: v.unidad,
-    necesario: v.necesario,
-    stock_actual: v.stock_actual,
-    stockOk: v.stock_actual >= v.necesario,
-  }));
+  const materiales: MaterialNecesario[] = (data ?? []).map((m: {
+    insumo_id: string; nombre: string; unidad: string; necesario: number | string; stock_actual: number | string;
+  }) => {
+    const necesario = Number(m.necesario);
+    const stock_actual = Number(m.stock_actual);
+    return {
+      insumo_id: m.insumo_id,
+      nombre: m.nombre,
+      unidad: m.unidad,
+      necesario,
+      stock_actual,
+      stockOk: stock_actual >= necesario,
+    };
+  });
+  return { materiales };
 }

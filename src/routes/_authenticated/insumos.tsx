@@ -25,11 +25,21 @@ import { Loader2, AlertTriangle, Plus, ArrowDown, Calculator, Package, Hammer } 
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { RoleGate } from "@/components/RoleGate";
 
 export const Route = createFileRoute("/_authenticated/insumos")({
   head: () => ({ meta: [{ title: "Insumos MRP — G&M" }] }),
-  component: InsumosPage,
+  component: InsumosRoute,
 });
+
+// Insumos MRP (precios de compra, proveedores, stock) es solo del administrador.
+function InsumosRoute() {
+  return (
+    <RoleGate allow={["admin"]}>
+      <InsumosPage />
+    </RoleGate>
+  );
+}
 
 const MODELOS = ["Vintage", "Rex", "Lineal Punta", "London", "Garra"] as const;
 const TALLAS  = ["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"] as const;

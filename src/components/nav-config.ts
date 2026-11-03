@@ -72,8 +72,8 @@ export const groups: NavGroup[] = [
     items: [
       { title: "Mis órdenes", url: "/mi-produccion", icon: Wrench, roles: CARPINTERO },
       { title: "Producción", url: "/produccion", icon: Hammer, roles: ADMIN_VENDEDOR },
-      { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ADMIN_VENDEDOR, countKey: "insumos" },
-      { title: "Proveedores", url: "/proveedores", icon: Truck, roles: ADMIN_VENDEDOR },
+      { title: "Insumos MRP", url: "/insumos", icon: Boxes, roles: ADMIN, countKey: "insumos" },
+      { title: "Proveedores", url: "/proveedores", icon: Truck, roles: ADMIN },
     ],
   },
   {
