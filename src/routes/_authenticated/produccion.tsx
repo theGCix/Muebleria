@@ -34,10 +34,10 @@ export const Route = createFileRoute("/_authenticated/produccion")({
   component: ProduccionRoute,
 });
 
-// El vendedor puede ver el estado y las fechas; solo el administrador asigna y edita.
+// Solo el administrador ve Producción (la RLS de produccion lo exige también).
 function ProduccionRoute() {
   return (
-    <RoleGate allow={["admin", "vendedor"]}>
+    <RoleGate allow={["admin"]}>
       <ProduccionPage />
     </RoleGate>
   );
