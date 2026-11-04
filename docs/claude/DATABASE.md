@@ -15,3 +15,41 @@
 
 ## Propuesta preliminar (D1) — a validar tras inspección
 Estructura por producto, p. ej.: tabla de opciones (tipo: tapizado/color/firmeza/patas), valores con atributos (material, tratamiento), ajuste de precio, imagen asociada y disponibilidad. Se definirá tras ver el esquema real.
+
+---
+# PROPUESTA D1/D2 — Opciones por producto (modelo "completo")
+Estado: **diseño, pendiente de aprobación. Sin código.** Reglas: migraciones idempotentes, RLS con `has_role()`, RPC `SECURITY DEFINER`, sin dependencias nuevas.
+
+## Tablas nuevas
+**`producto_opcion_grupos`**: id, product_id (FK), tipo (`color` | `tapizado` | `firmeza` | `patas` | otro), etiqueta, obligatorio (bool), orden.
+**`producto_opcion_valores`**: id, grupo_id (FK), valor, descripcion, material, cuidado, hex, image_url, ajuste_precio (numeric, default 0), es_default (bool), activo (bool), orden.
+- Lectura pública solo de activos; escritura solo admin (`has_role`).
+
+## Cambios en tablas existentes
+**`order_items`**: `opciones jsonb` (foto fija: tipo, valor, material, ajuste, valor_id) y `precio_opciones numeric default 0`. El `title` queda como respaldo (pedidos antiguos).
+
+## Reglas
+- Precio unitario = precio base/oferta + suma de `ajuste_precio` de las opciones válidas, calculado SIEMPRE en el servidor. El cliente solo envía ids de valores.
+- El servidor valida que cada valor pertenezca al producto y esté activo, arma el `title` y el `opciones` snapshot (deja de confiar en el `title` del navegador).
+- Stock: se mantiene a nivel de producto (sin stock por variante) en esta etapa.
+- Imágenes: `image_url` del valor reemplaza al mapa `fotoColores` por índice de foto, que queda como respaldo.
+- Materiales: el tapizado elegido (material, cuidado) tiene prioridad sobre el texto por categoría de `productProfiles.ts`, que queda como respaldo. Corrige casos como Imperial cuero vs. Velvet.
+
+## Frontend
+- `cartStore`: cada línea tiene `lineId` = id de producto + ids de valores ordenados; `addItem`, `updateQty` y `removeItem` pasan a usar `lineId`. Carritos guardados sin `lineId` usan su `id` (migración por `version` de zustand).
+- Ficha de producto: lee opciones de la BD; si el producto no tiene, usa las listas fijas actuales (Suave/Equilibrado/Firme; Dorado/Negro).
+- Mis pedidos y `OrdenCard`: muestran `opciones` como etiquetas; si es nulo, muestran `title`.
+- `PasosFabricacion`: detecta tapizado por la opción `tapizado`, no por palabras del título.
+- Vista del carpintero (`v_mi_produccion`): hay que exponer `opciones`. Antes se extrae su definición con `pg_get_functiondef()` porque no está versionada.
+
+## Fases (se aprueba cada una)
+1. **BD:** migración con tablas, columnas y RLS (sin cambios visibles). Script para extraer `v_mi_produccion`.
+2. **Servidor:** validación, precio, snapshot y `title` en `server/pagos.js` e `index.js`. Compatible con el formato antiguo.
+3. **Carrito y ficha:** `lineId` y lectura de opciones con respaldo.
+4. **Visualización:** Mis pedidos, `OrdenCard`, `v_mi_produccion`, `PasosFabricacion`.
+5. **Admin y datos:** editor de opciones en el panel y carga de datos reales (plantilla CSV para el dueño).
+
+## Puntos de atención
+- Fiscal: el `ajuste_precio` cambia el total antes de la fórmula base = total/1.18; no se toca el IGV, pero se mostrará la fórmula antes de aplicar.
+- RLS nuevas: requieren confirmación del dueño antes de ejecutarse.
+- Combos: sus piezas entran sin opciones; falta definir si eligen opciones.
