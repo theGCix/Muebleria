@@ -1,0 +1,290 @@
+{
+  "name": "G&M — Notificaciones por correo (cola)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Notificaciones por correo (cola)\nCada 2 minutos n8n lee la tabla `notificaciones` (enviado = false), envía cada correo por Gmail y lo marca.\nCubre: avance del pedido (producción, calidad, despacho, entregado, cancelado), cupón de salida, solicitud de reseña y fotos del pedido.\n**No** envía `pedido_confirmado` (lo manda \"Pedido pagado\") ni `recordatorio_carrito` (lo manda \"Carrito abandonado\"): saldrían duplicados.\n\n1. Ejecuta `supabase/migrations/20261031_worker_notificaciones_n8n.sql`.\n2. Credenciales: **Supabase G&M** (Header Auth, `apikey` = service_role) y **Gmail G&M** (SMTP).\n3. Si desactivas Resend, este flujo reemplaza a `send-notifications` (no los uses a la vez).\n\nVer n8n/NOTIFICACIONES.md",
+        "height": 340,
+        "width": 460
+      },
+      "id": "c5000000-0000-4000-8000-000000000001",
+      "name": "Léeme",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "c5000000-0000-4000-8000-000000000002",
+      "name": "Cada 2 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ \"https://ckgaipbgyyvvqctehyvi.supabase.co/rest/v1/notificaciones?select=id,order_id,destinatario_email,destinatario_nombre,tipo,asunto,mensaje,intentos&enviado=eq.false&canal=eq.email&tipo=not.in.(pedido_confirmado,recordatorio_carrito)&intentos=lt.5&created_at=gte.\" + new Date(Date.now() - 3*24*3600*1000).toISOString() + \"&or=(ultimo_intento_at.is.null,ultimo_intento_at.lt.\" + new Date(Date.now() - 5*60*1000).toISOString() + \")&order=created_at.asc&limit=15\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "c5000000-0000-4000-8000-000000000003",
+      "name": "Notificaciones pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        140
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════\nconst REMITENTE_NOMBRE = \"G&M Mueblería\";\nconst REMITENTE_EMAIL = \"proyectomuebleria1@gmail.com\"; // la MISMA cuenta Gmail de la credencial SMTP (Gmail reescribe el remitente si no coincide)\nconst SITE_URL = \"https://muebleria-q74c.onrender.com\"; // dirección de tu tienda (sin / al final)\nconst COLOR = \"#6B4226\"; // color de marca del correo\n// ══════════════════════════════════════════════════════════════\n\n// Lo que recibe n8n desde Supabase: filas de `notificaciones` (enviado = false, canal = email).\n// Devuelve una fila por notificación:\n//   enviar: true  → correo listo (to, from, subject, html, text)\n//   enviar: false → no se puede enviar (sin correo válido): el flujo la deja marcada con error y no la reintenta.\n\nconst EMAIL_RE = /^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]{2,}$/;\nconst MAX_INTENTOS = 5; // mismo valor que el filtro `intentos=lt.5` del nodo de consulta\n\nconst esc = (s) =>\n  String(s ?? \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\nconst sinSaltos = (s) => String(s ?? \"\").replace(/[\\r\\n]+/g, \" \").trim();\nconst base = SITE_URL.replace(/\\/$/, \"\");\n\n// Las notificaciones de cambio de estado (cambiar_estado_pedido) se encolan SIN mensaje y a veces sin asunto.\nconst TEXTOS = {\n  en_produccion: {\n    asunto: \"Tu mueble está en producción\",\n    mensaje: \"Buenas noticias: tu pedido ya está en producción. Nuestros carpinteros están trabajando en él y te avisaremos en cada avance.\",\n  },\n  control_calidad: {\n    asunto: \"Estamos revisando la calidad de tu pedido\",\n    mensaje: \"Tu pedido está en control de calidad. Revisamos cada detalle antes de despacharlo.\",\n  },\n  listo_despacho: {\n    asunto: \"Tu pedido está listo para despacho\",\n    mensaje: \"Tu pedido ya está terminado y listo para despacho. Pronto nos pondremos en contacto contigo para coordinar la entrega.\",\n  },\n  entregado: {\n    asunto: \"¡Tu pedido fue entregado!\",\n    mensaje: \"Tu pedido fue entregado. ¡Esperamos que lo disfrutes mucho!\",\n  },\n  cancelado: {\n    asunto: \"Pedido cancelado\",\n    mensaje: \"Tu pedido fue cancelado. Si tienes dudas o no esperabas este aviso, respóndenos y te ayudamos.\",\n  },\n};\n\n// Botón opcional según el tipo (solo si hay a dónde llevar al cliente).\nfunction boton(n) {\n  const pedidos = `${base}/perfil/pedidos`;\n  switch (n.tipo) {\n    case \"en_produccion\":\n    case \"control_calidad\":\n    case \"listo_despacho\":\n    case \"entregado\":\n    case \"evidencia_pedido\":\n      return { texto: \"Ver mi pedido\", url: pedidos };\n    case \"solicitud_resena\":\n      return n.order_id ? { texto: \"Dejar mi reseña\", url: `${base}/resena/${encodeURIComponent(n.order_id)}` } : null;\n    case \"cupon_bienvenida\":\n      return { texto: \"Ir a la tienda\", url: base };\n    default:\n      return null;\n  }\n}\n\n// Convierte el texto plano en HTML: escapa todo y vuelve clicables los enlaces.\nfunction textoAHtml(texto) {\n  return esc(texto).replace(/(https?:\\/\\/[^\\s<]+)/g, (m) => {\n    const fin = (m.match(/[.,;:!?)]+$/) ?? [\"\"])[0];\n    const url = fin ? m.slice(0, -fin.length) : m;\n    return `<a href=\"${url}\" style=\"color:${COLOR};\">${url}</a>${fin}`;\n  });\n}\n\nfunction construir(n) {\n  const to = String(n.destinatario_email ?? \"\").trim();\n  if (!EMAIL_RE.test(to)) return { enviar: false, motivo: \"sin correo válido\" };\n\n  const plantilla = TEXTOS[n.tipo] ?? {};\n  const nombre = sinSaltos(n.destinatario_nombre).split(\" \")[0];\n  const subject = sinSaltos(n.asunto) || plantilla.asunto || \"Novedades de tu pedido — G&M Mueblería\";\n  const cuerpo = String(n.mensaje ?? \"\").trim()\n    ? String(n.mensaje).trim()\n    : `Hola${nombre ? \" \" + nombre : \"\"},\\n\\n${plantilla.mensaje ?? \"tu pedido ha cambiado de estado.\"}\\n\\nGracias por confiar en G&M Mueblería.`;\n\n  const b = boton(n);\n  const html = `<!doctype html>\n<html lang=\"es\"><body style=\"margin:0;padding:0;background:#f6f1ea;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f6f1ea;padding:24px 12px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;\">\n        <tr><td style=\"background:${COLOR};padding:18px 24px;color:#ffffff;font-size:18px;font-weight:bold;\">${esc(REMITENTE_NOMBRE)}</td></tr>\n        <tr><td style=\"padding:24px;font-size:15px;line-height:1.6;color:#2b2118;white-space:pre-line;\">${textoAHtml(cuerpo)}</td></tr>\n        ${\n          b\n            ? `<tr><td style=\"padding:0 24px 28px;\"><a href=\"${esc(b.url)}\" style=\"display:inline-block;background:${COLOR};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-size:15px;font-weight:bold;\">${esc(b.texto)}</a></td></tr>`\n            : \"\"\n        }\n        <tr><td style=\"padding:14px 24px;background:#faf6f1;color:#8a7a6a;font-size:12px;\">${esc(REMITENTE_NOMBRE)} · Lima, Perú</td></tr>\n      </table>\n    </td></tr>\n  </table>\n</body></html>`;\n\n  return {\n    enviar: true,\n    to,\n    from: `${REMITENTE_NOMBRE} <${REMITENTE_EMAIL}>`,\n    subject,\n    html,\n    text: cuerpo,\n  };\n}\n\nconst salida = [];\nfor (const item of $input.all()) {\n  const n = item.json;\n  const r = construir(n);\n  // `intentos_siguiente` lo usa el nodo que registra el error; `motivo_final` corta los reintentos si no hay remedio.\n  salida.push({\n    json: {\n      id: n.id,\n      intentos_siguiente: (Number(n.intentos) || 0) + 1,\n      ...(r.enviar ? r : { ...r, intentos_siguiente: MAX_INTENTOS }),\n    },\n  });\n}\nreturn salida;\n"
+      },
+      "id": "c5000000-0000-4000-8000-000000000004",
+      "name": "Armar correos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-n1",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c5000000-0000-4000-8000-000000000005",
+      "name": "¿Se puede enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.from }}",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "c5000000-0000-4000-8000-000000000006",
+      "name": "Enviar correo",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "Gmail G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ \"https://ckgaipbgyyvvqctehyvi.supabase.co/rest/v1/notificaciones?id=eq.\" + $('Armar correos').item.json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ enviado: true, enviado_at: new Date().toISOString(), error: null, ultimo_intento_at: new Date().toISOString(), intentos: $('Armar correos').item.json.intentos_siguiente }) }}",
+        "options": {}
+      },
+      "id": "c5000000-0000-4000-8000-000000000007",
+      "name": "Marcar como enviado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ \"https://ckgaipbgyyvvqctehyvi.supabase.co/rest/v1/notificaciones?id=eq.\" + $('Armar correos').item.json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ error: String($json.error?.message ?? $json.error ?? $json.motivo ?? 'error desconocido').slice(0, 300), ultimo_intento_at: new Date().toISOString(), intentos: $('Armar correos').item.json.intentos_siguiente }) }}",
+        "options": {}
+      },
+      "id": "c5000000-0000-4000-8000-000000000008",
+      "name": "Registrar fallo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        260
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada 2 minutos": {
+      "main": [
+        [
+          {
+            "node": "Notificaciones pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificaciones pendientes": {
+      "main": [
+        [
+          {
+            "node": "Armar correos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar correos": {
+      "main": [
+        [
+          {
+            "node": "¿Se puede enviar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se puede enviar?": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo": {
+      "main": [
+        [
+          {
+            "node": "Marcar como enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

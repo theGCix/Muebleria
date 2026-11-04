@@ -1,0 +1,243 @@
+{
+  "name": "G&M — Aviso al equipo por WhatsApp (pedido pagado)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Aviso al equipo por WhatsApp (pedido pagado)\nCada minuto n8n pregunta a Supabase por pedidos pagados sin avisar y manda un WhatsApp (CallMeBot) a quien configures. Si el pedido es a provincia, el mensaje dice que falta cotizar el flete.\n\n1. Ejecuta `supabase/migrations/20261031b_aviso_equipo_pedido.sql`.\n2. Cada persona activa CallMeBot con su número y obtiene su apikey (ver n8n/AVISO-EQUIPO.md).\n3. En el nodo **Avisar al equipo** edita `DESTINATARIOS` (teléfono con + y apikey).\n4. Credencial **Supabase G&M** (Header Auth, `apikey` = service_role) en los 3 nodos de Supabase.\n\nSi tu PC estuvo apagada, al volver avisa de los pedidos de las últimas 24 h.",
+        "height": 340,
+        "width": 460
+      },
+      "id": "c6000000-0000-4000-8000-000000000001",
+      "name": "Léeme",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "c6000000-0000-4000-8000-000000000002",
+      "name": "Cada minuto",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ \"https://ckgaipbgyyvvqctehyvi.supabase.co/rest/v1/orders?select=id,order_number,nombre,telefono,total,subtotal,envio,metodo_entrega,distrito,departamento,provincia,envio_estado,notas,aviso_equipo_intentos,order_items(title,qty,total)&aviso_equipo_enviado_at=is.null&aviso_equipo_intentos=lt.3&status=not.in.(pendiente,cancelado)&created_at=gte.\" + new Date(Date.now() - 24*3600*1000).toISOString() + \"&created_at=lt.\" + new Date(Date.now() - 2*60*1000).toISOString() + \"&order=created_at.asc&limit=5\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "c6000000-0000-4000-8000-000000000003",
+      "name": "Pedidos por avisar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        140
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══ CONFIGURA AQUÍ ═══════════════════════════════════════════\n// Quién recibe el aviso por WhatsApp (máximo 3). Cada persona activa CallMeBot UNA vez con su propio número\n// y recibe su apikey (ver n8n/AVISO-EQUIPO.md). El teléfono va con + y código de país.\nconst DESTINATARIOS = [\n  { nombre: \"Gian\", telefono: \"+51999999999\", apikey: \"PEGA_AQUI_TU_APIKEY\" },\n  // { nombre: \"Otra persona\", telefono: \"+51988888888\", apikey: \"SU_APIKEY\" },\n];\nconst SITE_URL = \"https://muebleria-q74c.onrender.com\"; // sin / al final: enlace al panel de pedidos\n// ══════════════════════════════════════════════════════════════\n\n// Cada elemento de entrada es un pedido pagado de Supabase (con sus productos en order_items).\n// Por cada pedido: envía el WhatsApp a todos los destinatarios y devuelve un resultado para marcarlo:\n//   enviado: true  → llegó al menos a una persona (se marca como avisado)\n//   enviado: false → no llegó a nadie (se suma un intento; el flujo se rinde a los 3)\n\nconst FLETE_POR_COTIZAR = [\"por_cotizar\", \"por_confirmar\"];\nconst MAX_ITEMS_EN_TEXTO = 4;\n\nconst limpio = (s, max = 60) => String(s ?? \"\").replace(/\\s+/g, \" \").trim().slice(0, max);\nconst soles = (n) => \"S/ \" + Number(n || 0).toLocaleString(\"en-US\", { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n\nfunction construirTexto(o, productos) {\n  const lineas = [];\n  lineas.push(`🛒 Pedido pagado ${limpio(o.order_number, 30)}`);\n  const contacto = [limpio(o.nombre, 50), limpio(o.telefono, 20)].filter(Boolean).join(\" · \");\n  if (contacto) lineas.push(`👤 ${contacto}`);\n\n  const recojo = o.metodo_entrega === \"recojo_tienda\";\n  const cotizar = FLETE_POR_COTIZAR.includes(o.envio_estado);\n  const envio = recojo ? \"recojo sin costo\" : cotizar ? \"flete por confirmar\" : `envío ${soles(o.envio)}`;\n  lineas.push(`💰 ${soles(o.total)} (${envio})`);\n\n  const visibles = productos.slice(0, MAX_ITEMS_EN_TEXTO).map((i) => `${Number(i.qty) || 1}× ${limpio(i.title, 40)}`);\n  const resto = productos.length - visibles.length;\n  lineas.push(`🪑 ${visibles.join(\", \")}${resto > 0 ? ` y ${resto} más` : \"\"}`);\n\n  if (recojo) lineas.push(\"📦 Recojo en tienda\");\n  else if (cotizar)\n    lineas.push(`⚠️ PROVINCIA (${limpio(o.provincia || o.departamento, 40) || \"destino por definir\"}): falta cotizar el flete y confirmarlo con el cliente`);\n  else lineas.push(`📦 Domicilio${o.distrito ? \": \" + limpio(o.distrito, 40) : \"\"}`);\n\n  if (String(o.notas ?? \"\").trim()) lineas.push(`📝 ${limpio(o.notas, 120)}`);\n  lineas.push(`👉 ${SITE_URL.replace(/\\/$/, \"\")}/pedidos`);\n  return lineas.join(\"\\n\");\n}\n\n// CallMeBot responde 200 con \"Message queued...\" si salió bien; con clave o teléfono inválidos devuelve otro código.\nasync function enviar(helpers, dest, texto) {\n  try {\n    const r = await helpers.httpRequest({\n      method: \"GET\",\n      url: \"https://api.callmebot.com/whatsapp.php\",\n      qs: { phone: dest.telefono, text: texto, apikey: dest.apikey },\n      returnFullResponse: true,\n      ignoreHttpStatusErrors: true,\n      timeout: 15000,\n    });\n    const cuerpo = String(r.body ?? \"\");\n    if (r.statusCode === 200 && !/error|invalid/i.test(cuerpo)) return { ok: true };\n    return { ok: false, motivo: `${r.statusCode}: ${cuerpo.replace(/<[^>]*>/g, \" \").replace(/\\s+/g, \" \").trim().slice(0, 120)}` };\n  } catch (err) {\n    return { ok: false, motivo: String(err?.message ?? err).slice(0, 120) };\n  }\n}\n\nconst pedidos = $input.all().map((i) => i.json);\nif (pedidos.length === 0) return [];\n\nconst destinatarios = DESTINATARIOS.filter(\n  (d) => /^\\+\\d{8,15}$/.test(String(d.telefono ?? \"\").trim()) && String(d.apikey ?? \"\").trim() && !/PEGA_AQUI/.test(d.apikey),\n);\nif (destinatarios.length === 0) {\n  // Falla a la vista en n8n (Executions) en vez de descartar el aviso en silencio.\n  throw new Error(\"Configura DESTINATARIOS en el nodo «Avisar al equipo» (teléfono con + y apikey de CallMeBot).\");\n}\n\nconst salida = [];\nfor (const o of pedidos) {\n  const productos = Array.isArray(o.order_items) ? o.order_items : [];\n  // Si aún no se guardaron los productos, se deja pendiente y se reintenta en la próxima vuelta (sin gastar intentos).\n  if (productos.length === 0) continue;\n\n  const texto = construirTexto(o, productos);\n  let enviados = 0;\n  const fallos = [];\n  for (const d of destinatarios) {\n    const r = await enviar(this.helpers, d, texto);\n    if (r.ok) enviados++;\n    else fallos.push(`${limpio(d.nombre, 30) || d.telefono}: ${r.motivo}`);\n  }\n  salida.push({\n    json: {\n      order_id: o.id,\n      enviado: enviados > 0,\n      intentos_siguiente: (Number(o.aviso_equipo_intentos) || 0) + 1,\n      error: fallos.length ? fallos.join(\" | \").slice(0, 300) : null,\n    },\n  });\n}\nreturn salida;\n"
+      },
+      "id": "c6000000-0000-4000-8000-000000000004",
+      "name": "Avisar al equipo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-e1",
+              "leftValue": "={{ $json.enviado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c6000000-0000-4000-8000-000000000005",
+      "name": "¿Llegó a alguien?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ \"https://ckgaipbgyyvvqctehyvi.supabase.co/rest/v1/orders?id=eq.\" + $json.order_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ aviso_equipo_enviado_at: new Date().toISOString(), aviso_equipo_intentos: $json.intentos_siguiente, aviso_equipo_error: $json.error }) }}",
+        "options": {}
+      },
+      "id": "c6000000-0000-4000-8000-000000000006",
+      "name": "Marcar como avisado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ \"https://ckgaipbgyyvvqctehyvi.supabase.co/rest/v1/orders?id=eq.\" + $json.order_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ aviso_equipo_intentos: $json.intentos_siguiente, aviso_equipo_error: $json.error }) }}",
+        "options": {}
+      },
+      "id": "c6000000-0000-4000-8000-000000000007",
+      "name": "Registrar fallo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase G&M"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Pedidos por avisar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedidos por avisar": {
+      "main": [
+        [
+          {
+            "node": "Avisar al equipo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar al equipo": {
+      "main": [
+        [
+          {
+            "node": "¿Llegó a alguien?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Llegó a alguien?": {
+      "main": [
+        [
+          {
+            "node": "Marcar como avisado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
