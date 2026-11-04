@@ -57,6 +57,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
   // menú los leía una sola vez por su cuenta y quedaba desfasado del panel.
   const { roles: rolesAuth } = useAuth();
   const roles: Role[] = session ? rolesAuth : [];
+  const userId = session?.user?.id ?? null;
 
   // Invitación discreta: una sola vez por sesión del navegador.
   useEffect(() => {

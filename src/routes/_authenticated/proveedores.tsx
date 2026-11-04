@@ -25,6 +25,7 @@ import {
   CheckCircle2, XCircle, Send, RefreshCw, Trash2,
 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { validarItemsOC, validarOCParaEnvio, limiteCantidad } from "@/lib/oc-validaciones";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -364,8 +365,13 @@ function ProveedorDetalle({ proveedorId, onClose }: { proveedorId: string; onClo
                               <div className="flex gap-2">
                                 {oc.status === "borrador" && (
                                   <Button size="sm" variant="outline"
+                                    title={validarOCParaEnvio(
+                                      (oc.orden_compra_items ?? []).map((x: any) => ({ unidad: x.unidad ?? "unidades", cantidad: Number(x.cantidad), precio_unit: Number(x.precio_unit) })),
+                                    )[0]}
                                     onClick={() => statusMut.mutate({ id: oc.id, status: "enviada" })}
-                                    disabled={statusMut.isPending}>
+                                    disabled={statusMut.isPending || validarOCParaEnvio(
+                                      (oc.orden_compra_items ?? []).map((x: any) => ({ unidad: x.unidad ?? "unidades", cantidad: Number(x.cantidad), precio_unit: Number(x.precio_unit) })),
+                                    ).length > 0}>
                                     <Send className="h-3.5 w-3.5 mr-1" /> Enviar al proveedor
                                   </Button>
                                 )}
@@ -464,6 +470,7 @@ function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClo
     setItems((it) => it.map((row, idx) => idx === i ? { ...row, [k]: v } : row));
 
   const total = items.reduce((s, it) => s + it.cantidad * it.precio_unit, 0);
+  const errores = validarItemsOC(items);
 
   const mut = useMutation({
     mutationFn: () => crearOrdenCompra({
@@ -527,7 +534,7 @@ function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClo
                 </div>
                 <div className="col-span-2">
                   {i === 0 && <Label className="text-xs mb-1 block">Cantidad</Label>}
-                  <Input type="number" min={0} value={item.cantidad}
+                  <Input type="number" min={0} max={limiteCantidad(item.unidad)} value={item.cantidad}
                     onChange={(e) => updateItem(i, "cantidad", Number(e.target.value))} />
                 </div>
                 <div className="col-span-2">
@@ -551,13 +558,18 @@ function NuevaOrdenDialog({ proveedorId, onClose }: { proveedorId: string; onClo
               </div>
             ))}
 
+            {errores.length > 0 && (
+              <ul className="text-xs text-red-600 space-y-0.5 list-disc pl-4">
+                {errores.map((e) => <li key={e}>{e}</li>)}
+              </ul>
+            )}
             <div className="flex justify-end pt-2 border-t text-sm font-semibold">
               Total estimado: {fmt(total)} + IGV ({fmt(total * 0.18)}) = {fmt(total * 1.18)}
             </div>
           </div>
 
           <Button className="w-full"
-            disabled={items.some((it) => !it.descripcion) || mut.isPending}
+            disabled={items.some((it) => !it.descripcion) || errores.length > 0 || mut.isPending}
             onClick={() => mut.mutate()}>
             {mut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Crear orden de compra (borrador)

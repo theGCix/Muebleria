@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getAuthenticatedClient } from "@/integrations/supabase/auth-middleware";
 import { API_URL } from "@/config";
 import type { MaterialNecesario } from "@/types/produccion";
+import { validarItemsOC, validarOCParaEnvio } from "@/lib/oc-validaciones";
 
 const ItemSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
@@ -1129,6 +1130,10 @@ export async function crearOrdenCompra(input: {
     })).min(1).max(50),
   }).parse(input);
 
+  // Fase 3: topes de cantidad por unidad, precio y total
+  const errores = validarItemsOC(data.items);
+  if (errores.length) throw new Error(errores.join(" "));
+
   const { supabase, userId } = await getAuthenticatedClient();
 
   // Generar número de OC
@@ -1167,6 +1172,20 @@ export async function actualizarStatusOrden(input: {
   }).parse(input);
 
   const { supabase } = await getAuthenticatedClient();
+
+  // Fase 3: no se envía una OC vacía, con líneas en S/ 0 o con total inusual
+  if (status === "enviada") {
+    const { data: its, error: itsErr } = await supabase
+      .from("orden_compra_items")
+      .select("unidad, cantidad, precio_unit")
+      .eq("orden_id", id);
+    if (itsErr) throw new Error(itsErr.message);
+    const errores = validarOCParaEnvio(
+      (its ?? []).map((r: any) => ({ unidad: r.unidad, cantidad: Number(r.cantidad), precio_unit: Number(r.precio_unit) })),
+    );
+    if (errores.length) throw new Error(errores.join(" "));
+  }
+
   const { error } = await supabase
     .from("ordenes_compra")
     .update({ status, updated_at: new Date().toISOString() })
