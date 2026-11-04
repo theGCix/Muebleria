@@ -46,10 +46,12 @@ export function precioConOferta(p, ahora = Date.now()) {
  * Precio unitario vigente de UNA línea (producto suelto o pieza de combo).
  * Única fuente de esta regla: la usan calcularPedido() (cobro) y validarCarrito() (aviso previo),
  * así lo que se avisa y lo que se cobra no pueden divergir.
+ * `ajuste`: suma de ajustes de las opciones elegidas (S/); se suma al precio de lista ANTES de aplicar la oferta,
+ * así el descuento vigente también alcanza al ajuste. Las piezas de combo ignoran el ajuste (precio propio).
  * Devuelve { unit } o { error: "combo_no_disponible" | "combo_no_coincide" }.
  */
-export function precioUnitarioLinea({ it, prod, combos, ahora = Date.now() }) {
-  if (!it.comboId) return { unit: precioConOferta(prod, ahora) };
+export function precioUnitarioLinea({ it, prod, combos, ahora = Date.now(), ajuste = 0 }) {
+  if (!it.comboId) return { unit: precioConOferta({ ...prod, precio: Number(prod.precio) + ajuste }, ahora) };
   const combo = combos.get(it.comboId);
   const vigente = combo && combo.activo && (!combo.vence_el || new Date(combo.vence_el).getTime() > ahora);
   if (!vigente) return { error: "combo_no_disponible" };
@@ -181,11 +183,11 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
   const lineas = items.map((it) => {
     const prod = porId.get(it.product_id);
     if (!prod) throw new PagoError("Un producto del carrito ya no existe. Actualiza tu carrito.", 409);
-    const r = precioUnitarioLinea({ it, prod, combos, ahora });
+    const ro = resolverOpcionesLinea({ it, grupos: opcionesPorProducto.get(it.product_id) });
+    const r = precioUnitarioLinea({ it, prod, combos, ahora, ajuste: ro?.precio_opciones ?? 0 });
     if (r.error === "combo_no_disponible") throw new PagoError("Un combo del carrito ya no está disponible. Actualiza tu carrito.", 409);
     if (r.error === "combo_no_coincide") throw new PagoError("El carrito no coincide con el combo. Actualiza tu carrito.", 409);
-    const ro = resolverOpcionesLinea({ it, grupos: opcionesPorProducto.get(it.product_id) });
-    const unit = r2(r.unit + (ro?.precio_opciones ?? 0));
+    const unit = r.unit;
     if (ro && !(unit > 0)) throw new PagoError("El precio de un producto no es válido. Actualiza tu carrito.", 409);
     return {
       ...it,
@@ -194,7 +196,8 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
       // title lo arma el servidor cuando hay opciones (las piezas de combo conservan el suyo)
       title: ro && !it.comboId ? tituloConOpciones(prod.nombre, ro.opciones) : it.title,
       opciones_snapshot: ro?.opciones ?? null,
-      precio_opciones: ro?.precio_opciones ?? 0,
+      // Efecto real de las opciones en el precio unitario cobrado (ya con la oferta aplicada)
+      precio_opciones: ro && !it.comboId ? r2(unit - precioConOferta(prod, ahora)) : 0,
     };
   });
 
@@ -249,9 +252,6 @@ export async function validarCarrito({ supabase, items, ahora = Date.now() }) {
     if (!prod || prod.activo === false) return { ...base, estado: "no_disponible", precio_actual: null, stock: null };
 
     const stock = prod.stock ?? null;
-    const r = precioUnitarioLinea({ it, prod, combos, ahora });
-    if (r.error) return { ...base, estado: "combo_no_disponible", precio_actual: null, stock };
-
     // Opciones elegidas: el ajuste de precio forma parte del precio que se cobra (mismo cálculo que calcularPedido)
     let ro = null;
     try {
@@ -260,8 +260,8 @@ export async function validarCarrito({ supabase, items, ahora = Date.now() }) {
       if (e instanceof PagoError) return { ...base, estado: "opcion_no_disponible", precio_actual: null, stock };
       throw e;
     }
-    const unit = r2(r.unit + (ro?.precio_opciones ?? 0));
-    r.unit = unit;
+    const r = precioUnitarioLinea({ it, prod, combos, ahora, ajuste: ro?.precio_opciones ?? 0 });
+    if (r.error) return { ...base, estado: "combo_no_disponible", precio_actual: null, stock };
 
     let estado = "ok";
     if (stock !== null && stock <= 0) estado = "sin_stock";
