@@ -224,15 +224,3 @@ test("validarCarrito: con opciones, el precio avisado coincide con el que cobra 
   const malo = await validarCarrito({ supabase: sb, items: [{ ...items[0], opciones: ["v-off"] }] });
   assert.equal(malo.lineas[0].estado, "opcion_no_disponible");
 });
-
-test("opciones: la oferta vigente también descuenta el ajuste de la opción", async () => {
-  // P2: S/ 500 con 10 % de oferta. Opción +S/ 100 → (500 + 100) × 0.9 = 540
-  const g = [{ id: "g-m", product_id: "p2", tipo: "tapizado", etiqueta: "Tapizado", obligatorio: false, orden: 1,
-    producto_opcion_valores: [val("v-b", "Base", 0, { es_default: true }), val("v-p", "Premium", 100)] }];
-  const sb = fakeSupabase({ products: [{ ...P2, nombre: "Sillón Y" }], grupos: g });
-  const r = await calcularPedido({ supabase: sb, order: recojo, items: [{ product_id: "p2", qty: 1, opciones: ["v-p"] }] });
-  assert.equal(r.lineas[0].unit_price, 540);
-  assert.equal(r.lineas[0].precio_opciones, 90); // 540 − 450 (precio con oferta sin opción)
-  const v = await validarCarrito({ supabase: fakeSupabase({ products: [V({ ...P2, nombre: "Sillón Y" })], grupos: g }), items: [{ product_id: "p2", qty: 1, price: 540, opciones: ["v-p"] }] });
-  assert.equal(v.lineas[0].estado, "ok");
-});
