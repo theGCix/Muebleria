@@ -923,7 +923,21 @@ app.post("/api/staff/create-user", async (req, res) => {
     .maybeSingle();
   if (!roles) return res.status(403).json({ error: "Solo admins pueden crear usuarios" });
 
-  const { email, password, fullName, role } = req.body;
+  const { email, password, fullName, role, confirmacion } = req.body ?? {};
+
+  // Validación en servidor (no depende de la UI).
+  const ROLES_PERMITIDOS = ["admin", "vendedor", "carpintero"];
+  if (!ROLES_PERMITIDOS.includes(role)) {
+    return res.status(400).json({ error: "Rol no permitido" });
+  }
+  if (typeof email !== "string" || !email.includes("@") || typeof password !== "string" || password.length < 8) {
+    return res.status(400).json({ error: "Correo o contraseña inválidos (mínimo 8 caracteres)" });
+  }
+  if (role === "admin" && confirmacion !== "ADMIN") {
+    return res.status(400).json({ error: "Para crear un administrador debes escribir ADMIN para confirmar" });
+  }
+
+  let nuevoId = null;
   try {
     const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
       email, password,
@@ -931,12 +945,37 @@ app.post("/api/staff/create-user", async (req, res) => {
       user_metadata: { full_name: fullName },
     });
     if (error) throw error;
+    nuevoId = newUser.user.id;
 
-    await supabaseAdmin.from("user_roles").insert({ user_id: newUser.user.id, role });
-    await supabaseAdmin.from("profiles").upsert({ id: newUser.user.id, full_name: fullName });
+    // El trigger handle_new_user ya insertó el rol "cliente". Se REEMPLAZA por el
+    // elegido (un solo rol por usuario, UNIQUE (user_id)); no se inserta uno más.
+    const { error: rolError } = await supabaseAdmin
+      .from("user_roles")
+      .upsert({ user_id: nuevoId, role }, { onConflict: "user_id" });
+    if (rolError) throw rolError;
 
-    res.json({ success: true, userId: newUser.user.id });
+    await supabaseAdmin.from("profiles").upsert({ id: nuevoId, full_name: fullName });
+
+    // Con service role auth.uid() es nulo y el trigger no sabe quién actuó:
+    // se deja constancia explícita del actor en audit_log (quién, cuándo, qué).
+    const { error: audError } = await supabaseAdmin.from("audit_log").insert({
+      tabla: "user_roles",
+      operacion: "CREATE_USER",
+      fila_id: nuevoId,
+      usuario: user.id,
+      rol_db: "admin",
+      antes: null,
+      despues: { user_id: nuevoId, role },
+    });
+    if (audError) console.error("[create-user] no se pudo registrar auditoría:", audError.message);
+
+    res.json({ success: true, userId: nuevoId });
   } catch (err) {
+    // Si el usuario se creó pero no se pudo fijar el rol, no se deja una cuenta
+    // a medias con rol equivocado: se elimina para que se pueda reintentar.
+    if (nuevoId) {
+      await supabaseAdmin.auth.admin.deleteUser(nuevoId).catch(() => {});
+    }
     res.status(500).json({ error: err.message });
   }
 });

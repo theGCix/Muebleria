@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { LoginModal, fetchRoles, type Role } from "@/components/LoginModal";
+import { LoginModal, type Role } from "@/components/LoginModal";
+import { useAuth } from "@/hooks/useAuth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +37,6 @@ function initials(session: Session) {
 export function AuthButton({ className, compact = false }: { className?: string; compact?: boolean }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [open, setOpen] = useState(false);
   const [nudge, setNudge] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
@@ -52,19 +52,11 @@ export function AuthButton({ className, compact = false }: { className?: string;
     return () => data.subscription.unsubscribe();
   }, []);
 
-  // Roles (para mostrar el acceso correcto en el menú)
-  const userId = session?.user.id;
-  useEffect(() => {
-    if (!userId) {
-      setRoles([]);
-      return;
-    }
-    let alive = true;
-    fetchRoles(userId).then((r) => alive && setRoles(r));
-    return () => {
-      alive = false;
-    };
-  }, [userId]);
+  // Roles: salen del mismo estado compartido que el panel (useAuth), que se lee
+  // del servidor en cada cambio de sesión y al volver a la pestaña. Antes este
+  // menú los leía una sola vez por su cuenta y quedaba desfasado del panel.
+  const { roles: rolesAuth } = useAuth();
+  const roles: Role[] = session ? rolesAuth : [];
 
   // Invitación discreta: una sola vez por sesión del navegador.
   useEffect(() => {
