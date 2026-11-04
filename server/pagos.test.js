@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError } from "./pagos.js";
 
 // Supabase de mentira: devuelve tablas fijas
-function fakeSupabase({ products = [], combos = [] }) {
-  const tabla = (rows) => ({ select: () => ({ in: async (_c, ids) => ({ data: rows.filter((r) => ids.includes(r.id)), error: null }) }) });
-  return { from: (t) => tabla(t === "products" ? products : combos) };
+function fakeSupabase({ products = [], combos = [], grupos = [] }) {
+  const tabla = (rows, clave = "id") => ({ select: () => ({ in: async (_c, ids) => ({ data: rows.filter((r) => ids.includes(r[clave])), error: null }) }) });
+  return { from: (t) => (t === "products" ? tabla(products) : t === "producto_opcion_grupos" ? tabla(grupos, "product_id") : tabla(combos)) };
 }
 const P1 = { id: "p1", precio: 1000, descuento_porcentaje: null, oferta_vence_el: null };
 const P2 = { id: "p2", precio: 500, descuento_porcentaje: 10, oferta_vence_el: null };
@@ -148,4 +148,79 @@ test("validarCarrito: entradas inválidas lanzan PagoError", async () => {
   await assert.rejects(validarCarrito({ supabase: sb, items: [] }), PagoError);
   await assert.rejects(validarCarrito({ supabase: sb, items: [{ product_id: "p1", qty: 0, price: 1 }] }), PagoError);
   await assert.rejects(validarCarrito({ supabase: sb, items: [{ qty: 1, price: 1 }] }), PagoError);
+});
+// ── Opciones por producto (color, tapizado, firmeza, patas) ──
+const val = (id, valor, ajuste = 0, extra = {}) => ({ id, valor, material: null, ajuste_precio: ajuste, es_default: false, activo: true, orden: 0, ...extra });
+const G1 = [
+  { id: "g-tap", product_id: "p1", tipo: "tapizado", etiqueta: "Tapizado", obligatorio: false, orden: 1,
+    producto_opcion_valores: [val("v-tela", "Tela", 0, { es_default: true }), val("v-cuero", "Cuero", 300, { material: "Cuero" })] },
+  { id: "g-pat", product_id: "p1", tipo: "patas", etiqueta: "Patas", obligatorio: false, orden: 2,
+    producto_opcion_valores: [val("v-dor", "Dorado", 0, { es_default: true }), val("v-neg", "Negro", 0), val("v-off", "Madera", 50, { activo: false })] },
+];
+const P1n = { ...P1, nombre: "Sofá X" };
+const sbOp = () => fakeSupabase({ products: [P1n, P2], grupos: G1 });
+const recojo = { metodo_entrega: "recojo_tienda" };
+
+test("opciones: el ajuste de precio se suma, la copia queda fija y el title lo arma el servidor", async () => {
+  const r = await calcularPedido({ supabase: sbOp(), order: recojo, items: [{ product_id: "p1", qty: 2, opciones: ["v-cuero", "v-neg"], title: "inventado por el navegador" }] });
+  assert.equal(r.lineas[0].unit_price, 1300);
+  assert.equal(r.total, 2600);
+  assert.equal(r.lineas[0].precio_opciones, 300);
+  assert.equal(r.lineas[0].title, "Sofá X (Cuero, Negro)");
+  assert.deepEqual(r.lineas[0].opciones_snapshot.map((o) => [o.tipo, o.valor, o.ajuste_precio, o.es_default]), [["tapizado", "Cuero", 300, false], ["patas", "Negro", 0, false]]);
+});
+
+test("opciones: lo no elegido toma el valor por defecto (preseleccionado)", async () => {
+  const r = await calcularPedido({ supabase: sbOp(), order: recojo, items: [{ product_id: "p1", qty: 1, opciones: [] }] });
+  assert.equal(r.lineas[0].unit_price, 1000);
+  assert.equal(r.lineas[0].title, "Sofá X (Tela, Dorado)");
+  assert.ok(r.lineas[0].opciones_snapshot.every((o) => o.es_default));
+});
+
+test("opciones: formato antiguo (sin campo opciones) no cambia precio ni title", async () => {
+  const r = await calcularPedido({ supabase: sbOp(), order: recojo, items: [{ product_id: "p1", qty: 1, title: "Sofá X (Gris, Firme)" }] });
+  assert.equal(r.lineas[0].unit_price, 1000);
+  assert.equal(r.lineas[0].title, "Sofá X (Gris, Firme)");
+  assert.equal(r.lineas[0].opciones_snapshot, null);
+});
+
+test("opciones: valor inactivo, ajeno al producto o repetido en el mismo grupo se rechazan", async () => {
+  const sb = sbOp();
+  for (const opciones of [["v-off"], ["no-existe"], ["v-tela", "v-cuero"]]) {
+    await assert.rejects(calcularPedido({ supabase: sb, order: recojo, items: [{ product_id: "p1", qty: 1, opciones }] }), PagoError);
+  }
+  await assert.rejects(calcularPedido({ supabase: sb, order: recojo, items: [{ product_id: "p2", qty: 1, opciones: ["v-cuero"] }] }), PagoError);
+  await assert.rejects(calcularPedido({ supabase: sb, order: recojo, items: [{ product_id: "p1", qty: 1, opciones: "v-cuero" }] }), PagoError);
+});
+
+test("opciones: grupo obligatorio sin valor por defecto exige elegir", async () => {
+  const g = [{ id: "g-col", product_id: "p1", tipo: "color", etiqueta: "Color", obligatorio: true, orden: 1, producto_opcion_valores: [val("v-gris", "Gris"), val("v-beige", "Beige")] }];
+  const sb = fakeSupabase({ products: [P1n], grupos: g });
+  await assert.rejects(calcularPedido({ supabase: sb, order: recojo, items: [{ product_id: "p1", qty: 1, opciones: [] }] }), PagoError);
+  const r = await calcularPedido({ supabase: sb, order: recojo, items: [{ product_id: "p1", qty: 1, opciones: ["v-gris"] }] });
+  assert.equal(r.lineas[0].title, "Sofá X (Gris)");
+});
+
+test("opciones: pieza de combo registra los valores por defecto y NO cambia el precio del combo", async () => {
+  const combo = { id: "c1", precio_combo: 1200, activo: true, vence_el: null, combo_items: [
+    { cantidad: 1, product_id: "p1", products: { precio: 1000 } }, { cantidad: 1, product_id: "p2", products: { precio: 500 } } ] };
+  const r = await calcularPedido({
+    supabase: fakeSupabase({ products: [P1n, P2], combos: [combo], grupos: G1 }), order: recojo,
+    items: [{ product_id: "p1", qty: 1, comboId: "c1", title: "Combo Sala" }, { product_id: "p2", qty: 1, comboId: "c1", title: "Combo Sala" }],
+  });
+  assert.equal(r.subtotal, 1200);
+  assert.equal(r.lineas[0].title, "Combo Sala");
+  assert.deepEqual(r.lineas[0].opciones_snapshot.map((o) => o.valor), ["Tela", "Dorado"]);
+  assert.equal(r.lineas[0].precio_opciones, 0);
+});
+
+test("validarCarrito: con opciones, el precio avisado coincide con el que cobra calcularPedido", async () => {
+  const sb = fakeSupabase({ products: [{ ...V(P1), nombre: "Sofá X" }], grupos: G1 });
+  const items = [{ product_id: "p1", qty: 1, price: 1300, opciones: ["v-cuero"] }];
+  const v = await validarCarrito({ supabase: sb, items });
+  const c = await calcularPedido({ supabase: sb, order: recojo, items });
+  assert.equal(v.lineas[0].estado, "ok");
+  assert.equal(v.lineas[0].precio_actual, c.lineas[0].unit_price);
+  const malo = await validarCarrito({ supabase: sb, items: [{ ...items[0], opciones: ["v-off"] }] });
+  assert.equal(malo.lineas[0].estado, "opcion_no_disponible");
 });

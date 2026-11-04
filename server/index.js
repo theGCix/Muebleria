@@ -147,7 +147,7 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
     // cupón que dejó de valer) se le avisa ANTES de abrir la pasarela, con los valores correctos.
     let monto = Number(amount);
     if (Array.isArray(items) && items.length > 0 && order) {
-      const itemsCalculo = items.map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, sku: i.sku, title: i.title, image: i.image }));
+      const itemsCalculo = items.map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones, sku: i.sku, title: i.title, image: i.image }));
       let descuento = 0;
       if (cupon_codigo) {
         const rc = await validarCupon({
@@ -174,7 +174,7 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
           error: "Los precios de tu pedido cambiaron. Actualizamos tu carrito con el total correcto.",
           total: calculo.total,
           descuento,
-          lineas: calculo.lineas.map((l) => ({ product_id: l.product_id, unit_price: l.unit_price })),
+          lineas: calculo.lineas.map((l) => ({ product_id: l.product_id, opciones: l.opciones ?? null, unit_price: l.unit_price })),
         });
       }
       monto = calculo.total;
@@ -477,7 +477,7 @@ app.post("/api/orders", async (req, res) => {
     const calculo = await calcularPedido({
       supabase: supabaseAdmin,
       order: { ...order, distrito: order.distrito },
-      items: (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, sku: i.sku, title: i.title, image: i.image })),
+      items: (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones, sku: i.sku, title: i.title, image: i.image })),
       descuento,
     });
     const subtotalReal      = calculo.subtotal;
@@ -589,6 +589,8 @@ app.post("/api/orders", async (req, res) => {
       unit_price: l.unit_price,   // precio de la BD, no el del navegador
       total:      l.line_total,
       image_url:  l.image ?? null,
+      // Solo si el ítem trae opciones (formato nuevo): copia fija de lo elegido + su efecto en el precio
+      ...(l.opciones_snapshot ? { opciones: l.opciones_snapshot, precio_opciones: l.precio_opciones } : {}),
     }));
 
     if (orderItems.length > 0) {

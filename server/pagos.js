@@ -75,6 +75,80 @@ async function leerCombos(supabase, items) {
   return combos;
 }
 
+// ── Opciones por producto (color, tapizado, firmeza, patas) ─────────────────────────────
+// El navegador solo manda los ids de los valores elegidos (it.opciones). El servidor valida que
+// pertenezcan al producto, completa con el valor por defecto lo que falte y suma el ajuste de precio.
+// Un ítem SIN el campo `opciones` es formato antiguo: no se procesa (precio y title como antes).
+
+/** Grupos activos de opciones (con sus valores activos) por producto: Map(product_id → grupos[]). */
+async function leerOpciones(supabase, productIds) {
+  const porProducto = new Map();
+  if (!productIds.length) return porProducto;
+  const { data, error } = await supabase
+    .from("producto_opcion_grupos")
+    .select("id, product_id, tipo, etiqueta, obligatorio, orden, producto_opcion_valores(id, valor, material, ajuste_precio, es_default, activo, orden)")
+    .in("product_id", productIds);
+  if (error) throw new PagoError(`No se pudieron leer las opciones: ${error.message}`, 500);
+  for (const g of data ?? []) {
+    const valores = (g.producto_opcion_valores ?? [])
+      .filter((v) => v.activo !== false)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const lista = porProducto.get(g.product_id) ?? [];
+    lista.push({ ...g, valores });
+    porProducto.set(g.product_id, lista);
+  }
+  for (const lista of porProducto.values()) lista.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  return porProducto;
+}
+
+/** ¿Algún ítem necesita leer opciones? (formato nuevo o pieza de combo). */
+const requiereOpciones = (items) => items.some((i) => i.comboId || i.opciones !== undefined);
+
+/**
+ * Resuelve las opciones de UNA línea. Devuelve null si no aplica (formato antiguo o producto sin opciones),
+ * o { opciones: [copia fija de lo elegido], precio_opciones } si aplica.
+ * Piezas de combo: se registran los valores por defecto, pero NO cambian el precio (el combo tiene precio propio).
+ */
+export function resolverOpcionesLinea({ it, grupos }) {
+  const esCombo = Boolean(it.comboId);
+  if (!esCombo && it.opciones === undefined) return null;
+  const ids = esCombo ? [] : it.opciones;
+  if (!Array.isArray(ids) || ids.length > 10 || ids.some((x) => typeof x !== "string")) {
+    throw new PagoError("Opciones inválidas en el pedido.");
+  }
+  if (!grupos || grupos.length === 0) {
+    if (ids.length) throw new PagoError("Una opción elegida ya no está disponible. Actualiza tu carrito.", 409);
+    return null;
+  }
+  const elegidos = new Map(); // grupo_id → valor
+  for (const id of ids) {
+    const g = grupos.find((x) => x.valores.some((v) => v.id === id));
+    if (!g) throw new PagoError("Una opción elegida ya no está disponible. Actualiza tu carrito.", 409);
+    if (elegidos.has(g.id)) throw new PagoError("Elegiste dos opciones del mismo tipo.");
+    elegidos.set(g.id, g.valores.find((v) => v.id === id));
+  }
+  const opciones = [];
+  for (const g of grupos) {
+    const v = elegidos.get(g.id) ?? g.valores.find((x) => x.es_default);
+    if (!v) {
+      if (g.obligatorio && !esCombo) throw new PagoError(`Falta elegir: ${g.etiqueta}.`);
+      continue;
+    }
+    opciones.push({
+      grupo_id: g.id, tipo: g.tipo, etiqueta: g.etiqueta,
+      valor_id: v.id, valor: v.valor, material: v.material ?? null,
+      ajuste_precio: esCombo ? 0 : r2(Number(v.ajuste_precio) || 0),
+      es_default: !elegidos.has(g.id),
+    });
+  }
+  const precio_opciones = r2(opciones.reduce((s, o) => s + o.ajuste_precio, 0));
+  return { opciones, precio_opciones };
+}
+
+/** Mismo formato que arma hoy el navegador: "Nombre (Valor1, Valor2)". */
+export const tituloConOpciones = (nombre, opciones) =>
+  opciones.length ? `${nombre} (${opciones.map((o) => o.valor).join(", ")})` : nombre;
+
 /**
  * Recalcula el pedido completo desde la BD.
  * items: [{ product_id, qty, comboId?, ...lo demás se ignora }]
@@ -90,17 +164,19 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
     if (!Number.isInteger(it.qty) || it.qty < 1 || it.qty > 99) {
       throw new PagoError("Cantidad inválida en el pedido.");
     }
+    if (it.opciones !== undefined && !Array.isArray(it.opciones)) throw new PagoError("Opciones inválidas en el pedido.");
   }
 
   const productIds = [...new Set(items.map((i) => i.product_id))];
   const { data: prods, error: pErr } = await supabase
     .from("products")
-    .select("id, precio, descuento_porcentaje, oferta_vence_el")
+    .select("id, nombre, precio, descuento_porcentaje, oferta_vence_el")
     .in("id", productIds);
   if (pErr) throw new PagoError(`No se pudieron leer los precios: ${pErr.message}`, 500);
   const porId = new Map((prods ?? []).map((p) => [p.id, p]));
 
   const combos = await leerCombos(supabase, items);
+  const opcionesPorProducto = requiereOpciones(items) ? await leerOpciones(supabase, productIds) : new Map();
 
   const lineas = items.map((it) => {
     const prod = porId.get(it.product_id);
@@ -108,7 +184,18 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
     const r = precioUnitarioLinea({ it, prod, combos, ahora });
     if (r.error === "combo_no_disponible") throw new PagoError("Un combo del carrito ya no está disponible. Actualiza tu carrito.", 409);
     if (r.error === "combo_no_coincide") throw new PagoError("El carrito no coincide con el combo. Actualiza tu carrito.", 409);
-    return { ...it, unit_price: r.unit, line_total: r2(r.unit * it.qty) };
+    const ro = resolverOpcionesLinea({ it, grupos: opcionesPorProducto.get(it.product_id) });
+    const unit = r2(r.unit + (ro?.precio_opciones ?? 0));
+    if (ro && !(unit > 0)) throw new PagoError("El precio de un producto no es válido. Actualiza tu carrito.", 409);
+    return {
+      ...it,
+      unit_price: unit,
+      line_total: r2(unit * it.qty),
+      // title lo arma el servidor cuando hay opciones (las piezas de combo conservan el suyo)
+      title: ro && !it.comboId ? tituloConOpciones(prod.nombre, ro.opciones) : it.title,
+      opciones_snapshot: ro?.opciones ?? null,
+      precio_opciones: ro?.precio_opciones ?? 0,
+    };
   });
 
   const subtotal = r2(lineas.reduce((s, l) => s + l.line_total, 0));
@@ -154,15 +241,27 @@ export async function validarCarrito({ supabase, items, ahora = Date.now() }) {
   if (error) throw new PagoError(`No se pudieron leer los precios: ${error.message}`, 500);
   const porId = new Map((prods ?? []).map((p) => [p.id, p]));
   const combos = await leerCombos(supabase, items);
+  const opcionesPorProducto = requiereOpciones(items) ? await leerOpciones(supabase, ids) : new Map();
 
   const lineas = items.map((it) => {
-    const base = { product_id: it.product_id, comboId: it.comboId ?? null, precio_cliente: Number(it.price) };
+    const base = { product_id: it.product_id, comboId: it.comboId ?? null, opciones: it.opciones ?? null, precio_cliente: Number(it.price) };
     const prod = porId.get(it.product_id);
     if (!prod || prod.activo === false) return { ...base, estado: "no_disponible", precio_actual: null, stock: null };
 
     const stock = prod.stock ?? null;
     const r = precioUnitarioLinea({ it, prod, combos, ahora });
     if (r.error) return { ...base, estado: "combo_no_disponible", precio_actual: null, stock };
+
+    // Opciones elegidas: el ajuste de precio forma parte del precio que se cobra (mismo cálculo que calcularPedido)
+    let ro = null;
+    try {
+      ro = it.comboId ? null : resolverOpcionesLinea({ it, grupos: opcionesPorProducto.get(it.product_id) });
+    } catch (e) {
+      if (e instanceof PagoError) return { ...base, estado: "opcion_no_disponible", precio_actual: null, stock };
+      throw e;
+    }
+    const unit = r2(r.unit + (ro?.precio_opciones ?? 0));
+    r.unit = unit;
 
     let estado = "ok";
     if (stock !== null && stock <= 0) estado = "sin_stock";
