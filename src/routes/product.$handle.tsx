@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Loader2, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
-import { useCartStore } from "@/stores/cartStore";
+import { calcLineId, useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
@@ -26,6 +26,8 @@ import { resolveProfile, type ProductProfile } from "@/lib/productProfiles";
 import { LivePrice } from "@/components/product/LivePrice";
 import { DeliveryPromise } from "@/components/product/DeliveryPromise";
 import { SignatureModule } from "@/components/product/SignatureModules";
+import { OpcionesProducto } from "@/components/product/OpcionesProducto";
+import { useOpcionesProducto, resolverSeleccion, type SeleccionOpciones, type OpcionGrupo, type OpcionValor } from "@/hooks/useOpcionesProducto";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar } from "@/components/product/StickyBuyBar";
 import { ProductGallery } from "@/components/product/ProductGallery";
@@ -582,8 +584,7 @@ function ProductPage() {
 function ProductView({ product: base }: { product: ProductData }) {
   const product = base as ProductData & ProductExtra;
   const addItem = useCartStore((s) => s.addItem);
-  // Cantidad real de este producto en el carrito: el botón refleja el estado del carrito, no un temporizador
-  const qtyEnCarrito = useCartStore((s) => s.items.find((i) => i.id === product.id)?.qty ?? 0);
+  const itemsCarrito = useCartStore((s) => s.items);
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -598,6 +599,17 @@ function ProductView({ product: base }: { product: ProductData }) {
   const ctaRef = useRef<HTMLDivElement>(null);
 
   const profile = useMemo(() => resolveProfile(product), [product]);
+
+  // Opciones de la BD (color, tapizado, firmeza, patas). Si el producto no tiene, se usan las listas fijas de siempre.
+  const { grupos: gruposBD, cargando: cargandoOpciones } = useOpcionesProducto(product.id);
+  const hayOpcionesBD = gruposBD.length > 0;
+  const [selOpciones, setSelOpciones] = useState<SeleccionOpciones>({});
+  const { elegidos, ajuste: ajusteOpciones, ids: idsOpciones } = useMemo(
+    () => resolverSeleccion(gruposBD, selOpciones),
+    [gruposBD, selOpciones],
+  );
+  // Firmeza/patas de BD reemplazan a las fichas fijas del módulo "comfort"
+  const comfortEnBD = gruposBD.some((g) => ["firmeza", "patas"].includes(g.tipo.toLowerCase()));
 
   useEffect(() => {
     trackEvent({
@@ -642,6 +654,15 @@ function ProductView({ product: base }: { product: ProductData }) {
     });
   }, []);
 
+  // Las preferencias del módulo que ya cubre una opción de BD (firmeza, patas) no se duplican
+  const setPrefModulo = useCallback(
+    (k: string, v: string | null) => {
+      if (gruposBD.some((g) => g.tipo.toLowerCase() === k.toLowerCase())) return;
+      setPref(k, v);
+    },
+    [gruposBD, setPref],
+  );
+
   // Galería: array `imagenes` con fallback al campo legacy
   const allImgs: string[] = (() => {
     const gallery = product.imagenes;
@@ -677,6 +698,17 @@ function ProductView({ product: base }: { product: ProductData }) {
     if (i >= 0) setFotoColor(i);
   }, [activeImg, fotoColores, product.imagenes]);
 
+  // Color de BD → foto: se empareja por nombre o hex con los colores por foto que carga el admin
+  const elegirOpcion = (g: OpcionGrupo, v: OpcionValor) => {
+    setSelOpciones((prev) => ({ ...prev, [g.id]: v.id }));
+    if (g.tipo.toLowerCase() === "color") {
+      const m = fotoColores.find(
+        (c) => c.name.toLowerCase() === v.valor.toLowerCase() || (!!v.hex && c.hex.toLowerCase() === v.hex.toLowerCase()),
+      );
+      if (m) { setActiveImg(m.imgIdx); setVista("foto"); }
+    }
+  };
+
   const elegirColor = (i: number) => {
     if (hayColoresFoto) {
       setFotoColor(i);
@@ -687,7 +719,10 @@ function ProductView({ product: base }: { product: ProductData }) {
     }
   };
 
-  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo(product);
+  // Precio: (lista + ajustes de opciones) con la oferta aplicada al total — la misma regla del servidor
+  const precioLista = product.precio + (hayOpcionesBD ? ajusteOpciones : 0);
+  const { activa: enOferta, precioFinal: precioMostrado, venceEl } = ofertaInfo({ ...product, precio: precioLista });
+  const precioSinOpciones = ofertaInfo(product).precioFinal; // los combos usan el precio propio de la pieza
   const outOfStock = (product.stock ?? 1) <= 0;
   const has3D = !!product.modelo_3d_url;
   const esNuevo = Date.now() - new Date(product.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
@@ -745,7 +780,24 @@ function ProductView({ product: base }: { product: ProductData }) {
   const swatchSel = hayColoresFoto ? Math.min(fotoColor, fotoColores.length - 1) : finishIdx;
   const acabado = swatches[swatchSel];
   const acabadoLabel = hayColoresFoto ? "Color" : profile.acabadoLabel;
-  const prefs: Record<string, string> = { [acabadoLabel]: acabado.name, ...modPrefs };
+  const prefs: Record<string, string> = hayOpcionesBD
+    ? { ...Object.fromEntries(elegidos.map((x) => [x.grupo.etiqueta, x.valor.valor])), ...modPrefs }
+    : { [acabadoLabel]: acabado.name, ...modPrefs };
+
+  // Línea del carrito que corresponde a la selección actual (mismos ids → misma línea)
+  const lineIdActual = calcLineId(product.id, hayOpcionesBD ? idsOpciones : undefined);
+  // Cantidad real de ESTA selección en el carrito: el botón refleja el estado del carrito, no un temporizador
+  const qtyEnCarrito = itemsCarrito.find((i) => i.lineId === lineIdActual)?.qty ?? 0;
+  // Unidades de este producto en el carrito (todas las selecciones), para el enlace "Ir a pagar"
+  const qtyProductoTotal = itemsCarrito.filter((i) => i.id === product.id && !i.comboId).reduce((s, i) => s + i.qty, 0);
+
+  // Foto del color elegido (de BD): la del color por foto o, si no hay, la del propio valor
+  const imgOpcion = (() => {
+    const v = elegidos.find((x) => x.grupo.tipo.toLowerCase() === "color")?.valor;
+    if (!v) return null;
+    const m = fotoColores.find((c) => c.name.toLowerCase() === v.valor.toLowerCase() || (!!v.hex && c.hex.toLowerCase() === v.hex.toLowerCase()));
+    return (m ? allImgs[m.imgIdx] : null) ?? v.image_url;
+  })();
   const prefsLista = Object.entries(prefs);
   const prefsTexto = prefsLista.map(([k, v]) => `${k}: ${v}`).join(" · ");
 
@@ -756,8 +808,12 @@ function ProductView({ product: base }: { product: ProductData }) {
       title: `${product.nombre} (${Object.values(prefs).join(", ")})`,
       price: precioMostrado,
       // Con colores por foto, el carrito muestra la foto del color elegido
-      image: (hayColoresFoto ? allImgs[fotoColores[swatchSel]?.imgIdx ?? 0] : null) ?? mainImg ?? "",
+      image: hayOpcionesBD
+        ? imgOpcion ?? mainImg ?? ""
+        : (hayColoresFoto ? allImgs[fotoColores[swatchSel]?.imgIdx ?? 0] : null) ?? mainImg ?? "",
       sku: product.sku ?? undefined,
+      // Solo los ids: el servidor valida, suma el ajuste y arma el título. Sin opciones en BD → formato antiguo.
+      opciones: hayOpcionesBD ? idsOpciones : undefined,
     });
     toast.success("Agregado al carrito", { description: `${product.nombre} · ${Object.values(prefs).join(" · ")}`, position: "top-center" });
     // Solo el destello verde es temporal; después el botón queda en "En tu carrito" (qtyEnCarrito)
@@ -854,7 +910,7 @@ function ProductView({ product: base }: { product: ProductData }) {
             )}
 
             <LivePrice
-              precioOriginal={product.precio}
+              precioOriginal={precioLista}
               precioFinal={precioMostrado}
               enOferta={enOferta}
               descuento={product.descuento_porcentaje}
@@ -868,14 +924,16 @@ function ProductView({ product: base }: { product: ProductData }) {
             </ul>
 
             {/* herramienta firma de la categoría */}
+            {!(hayOpcionesBD && comfortEnBD && profile.module === "comfort") && (
             <SignatureModule
               profile={profile}
               nombre={product.nombre}
               subcategoria={product.subcategoria}
-              setPref={setPref}
+              setPref={setPrefModulo}
               ambient={ambient}
               setAmbient={setAmbient}
             />
+            )}
 
             {/* materiales (por categoría) */}
             <div className="gm-specs-label">Materiales y construcción</div>
@@ -891,16 +949,22 @@ function ProductView({ product: base }: { product: ProductData }) {
               ))}
             </div>
 
-            {/* acabado */}
-            <div className="gm-color-label">
-              {acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
-            </div>
-            <div className="gm-color-row" role="radiogroup" aria-label={acabadoLabel}>
-              {swatches.map((c, i) => (
-                <button key={c.hex} type="button" role="radio" aria-checked={swatchSel === i} aria-label={c.name}
-                  className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => elegirColor(i)} />
-              ))}
-            </div>
+            {/* opciones: de la BD si el producto las tiene; si no, acabados fijos de la categoría / colores por foto */}
+            {hayOpcionesBD ? (
+              <OpcionesProducto grupos={gruposBD} seleccion={selOpciones} onElegir={elegirOpcion} />
+            ) : (
+              <>
+                <div className="gm-color-label">
+                  {acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
+                </div>
+                <div className="gm-color-row" role="radiogroup" aria-label={acabadoLabel}>
+                  {swatches.map((c, i) => (
+                    <button key={c.hex} type="button" role="radio" aria-checked={swatchSel === i} aria-label={c.name}
+                      className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => elegirColor(i)} />
+                  ))}
+                </div>
+              </>
+            )}
 
             {/* descripción */}
             {product.descripcion && (
@@ -923,7 +987,7 @@ function ProductView({ product: base }: { product: ProductData }) {
                 className={`gm-btn-primary${adding ? " adding" : ""}${!adding && qtyEnCarrito > 0 ? " in-cart" : ""}${!adding && !outOfStock && qtyEnCarrito === 0 ? " gmx-btn-pulse" : ""}`}
                 style={{ flex: 1 }}
                 onClick={handleAdd}
-                disabled={outOfStock}
+                disabled={outOfStock || cargandoOpciones}
               >
                 {adding || qtyEnCarrito > 0 ? <Check size={16} /> : <ShoppingBag size={16} />}
                 {adding
@@ -952,9 +1016,9 @@ function ProductView({ product: base }: { product: ProductData }) {
                 <Heart size={18} fill={isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
               </button>
             </div>
-            {qtyEnCarrito > 0 && (
+            {qtyProductoTotal > 0 && (
               <Link to="/checkout" className="gmx-gopay">
-                Ir a pagar ({qtyEnCarrito} {qtyEnCarrito === 1 ? "unidad" : "unidades"}) <ChevronRight size={14} />
+                Ir a pagar ({qtyProductoTotal} {qtyProductoTotal === 1 ? "unidad" : "unidades"}) <ChevronRight size={14} />
               </Link>
             )}
             <div className="gm-cta-row">
@@ -1007,7 +1071,7 @@ function ProductView({ product: base }: { product: ProductData }) {
 
         <BundleBuilder
           profile={profile}
-          base={{ id: product.id, nombre: product.nombre, precio: precioMostrado, image: mainImg, sku: product.sku, categoria: product.categoria }}
+          base={{ id: product.id, nombre: product.nombre, precio: precioSinOpciones, image: mainImg, sku: product.sku, categoria: product.categoria }}
         />
 
         <Footer />
@@ -1018,7 +1082,7 @@ function ProductView({ product: base }: { product: ProductData }) {
           nombre={product.nombre}
           resumen={Object.values(prefs).join(" · ")}
           precio={precioMostrado}
-          disabled={outOfStock}
+          disabled={outOfStock || cargandoOpciones}
           adding={adding}
           qtyEnCarrito={qtyEnCarrito}
           onAdd={handleAdd}

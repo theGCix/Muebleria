@@ -4,17 +4,19 @@
 // Si la red falla o Render está "frío", no bloquea nada: /api/orders vuelve a validar al cobrar.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL } from "@/config";
-import { useCartStore } from "@/stores/cartStore";
+import { calcLineId, useCartStore } from "@/stores/cartStore";
 
 export type TipoAviso =
   | "precio_cambio"
   | "no_disponible"
   | "sin_stock"
   | "stock_insuficiente"
-  | "combo_no_disponible";
+  | "combo_no_disponible"
+  | "opcion_no_disponible";
 
 export interface AvisoCarrito {
   id: string; // product_id
+  lineId: string; // línea del carrito (producto + opciones)
   comboId: string | null;
   title: string;
   tipo: TipoAviso;
@@ -26,6 +28,7 @@ export interface AvisoCarrito {
 interface LineaValidada {
   product_id: string;
   comboId: string | null;
+  opciones?: string[] | null;
   estado: "ok" | TipoAviso;
   precio_actual: number | null;
   precio_cliente: number;
@@ -56,25 +59,28 @@ export function useValidarCarrito(activo = true) {
         headers: { "Content-Type": "application/json" },
         signal: ctrl.signal,
         body: JSON.stringify({
-          items: actuales.map((i) => ({ product_id: i.id, qty: i.qty, price: i.price, comboId: i.comboId ?? null })),
+          items: actuales.map((i) => ({ product_id: i.id, qty: i.qty, price: i.price, comboId: i.comboId ?? null, opciones: i.opciones })),
         }),
       });
       if (!res.ok) return; // silencioso: el cobro revalida en el servidor
       const data = (await res.json()) as { lineas: LineaValidada[] };
       if (id !== reqId.current) return; // llegó una respuesta más nueva
 
-      const titulo = new Map(actuales.map((i) => [`${i.id}|${i.comboId ?? ""}`, i.title]));
+      const titulo = new Map(actuales.map((i) => [i.lineId, i.title]));
       const nuevos: AvisoCarrito[] = [];
       const precios: Record<string, number> = {};
       for (const l of data.lineas) {
+        // Mismo cálculo de línea que el carrito: producto + opciones (las piezas de combo no llevan opciones)
+        const lineId = calcLineId(l.product_id, l.comboId ? undefined : l.opciones);
         if (l.precio_actual !== null && Math.abs(l.precio_actual - l.precio_cliente) > 0.009) {
-          precios[l.product_id] = l.precio_actual; // se corrige siempre, aunque además haya aviso de stock
+          precios[lineId] = l.precio_actual; // se corrige siempre, aunque además haya aviso de stock
         }
         if (l.estado === "ok") continue;
         nuevos.push({
           id: l.product_id,
+          lineId,
           comboId: l.comboId ?? null,
-          title: titulo.get(`${l.product_id}|${l.comboId ?? ""}`) ?? "Producto",
+          title: titulo.get(lineId) ?? "Producto",
           tipo: l.estado,
           antes: l.estado === "precio_cambio" ? l.precio_cliente : undefined,
           ahora: l.estado === "precio_cambio" ? (l.precio_actual ?? undefined) : undefined,
@@ -99,7 +105,7 @@ export function useValidarCarrito(activo = true) {
 
   // Un aviso deja de mostrarse si el cliente ya quitó esa línea del carrito.
   const visibles = useMemo(
-    () => avisos.filter((a) => items.some((i) => i.id === a.id && (i.comboId ?? null) === a.comboId)),
+    () => avisos.filter((a) => items.some((i) => i.lineId === a.lineId && (i.comboId ?? null) === a.comboId)),
     [avisos, items],
   );
 

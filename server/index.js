@@ -217,7 +217,7 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
 app.post("/api/carrito/validar", niubizLimiter, async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items)
-      ? req.body.items.map((i) => ({ product_id: i?.product_id, qty: i?.qty, price: i?.price, comboId: i?.comboId ?? null }))
+      ? req.body.items.map((i) => ({ product_id: i?.product_id, qty: i?.qty, price: i?.price, comboId: i?.comboId ?? null, opciones: i?.opciones }))
       : [];
     const r = await validarCarrito({ supabase: supabaseAdmin, items });
     res.json(r);

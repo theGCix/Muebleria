@@ -8,7 +8,7 @@ import { fmtPEN } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type { AvisoCarrito } from "@/hooks/useValidarCarrito";
 
-const QUITABLES = new Set<AvisoCarrito["tipo"]>(["no_disponible", "sin_stock", "combo_no_disponible"]);
+const QUITABLES = new Set<AvisoCarrito["tipo"]>(["no_disponible", "sin_stock", "combo_no_disponible", "opcion_no_disponible"]);
 
 function Texto({ a }: { a: AvisoCarrito }) {
   switch (a.tipo) {
@@ -37,6 +37,12 @@ function Texto({ a }: { a: AvisoCarrito }) {
       return (
         <>
           <span className="font-medium">{a.title}</span>: el combo ya no está disponible.
+        </>
+      );
+    case "opcion_no_disponible":
+      return (
+        <>
+          <span className="font-medium">{a.title}</span>: el acabado elegido ya no está disponible. Quítalo y vuelve a elegirlo en la ficha.
         </>
       );
     default:
@@ -68,7 +74,7 @@ export function CarritoAvisos({
       <AlertDescription>
         <ul className="mt-2 space-y-2">
           {avisos.map((a) => (
-            <li key={`${a.id}|${a.comboId ?? ""}|${a.tipo}`} className="flex items-start justify-between gap-2">
+            <li key={`${a.lineId}|${a.comboId ?? ""}|${a.tipo}`} className="flex items-start justify-between gap-2">
               <span className="min-w-0 flex-1">
                 <Texto a={a} />
               </span>
@@ -78,7 +84,7 @@ export function CarritoAvisos({
                   variant="outline"
                   size="sm"
                   className="min-h-[44px] flex-shrink-0"
-                  onClick={() => (a.comboId ? removeCombo(a.comboId) : removeItem(a.id))}
+                  onClick={() => (a.comboId ? removeCombo(a.comboId) : removeItem(a.lineId))}
                 >
                   Quitar
                 </Button>

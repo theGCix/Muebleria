@@ -174,7 +174,7 @@ export const CartDrawer = () => {
 
                           <ul className="mt-3 space-y-2 border-t border-border/50 pt-3">
                             {g.items.map((it) => (
-                              <li key={it.id} className="flex items-center gap-3">
+                              <li key={it.lineId} className="flex items-center gap-3">
                                 <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-md bg-secondary/40">
                                   {it.image ? (
                                     <img src={it.image} alt="" className="h-full w-full object-cover" />
@@ -201,10 +201,10 @@ export const CartDrawer = () => {
                         </div>
                       ) : (
                         <ItemFila
-                          key={g.item.id}
+                          key={g.item.lineId}
                           item={g.item}
-                          onRemove={() => removeItem(g.item.id)}
-                          onQty={(q) => updateQty(g.item.id, q)}
+                          onRemove={() => removeItem(g.item.lineId)}
+                          onQty={(q) => updateQty(g.item.lineId, q)}
                         />
                       ),
                     )}

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useCartStore } from "@/stores/cartStore";
+import { calcLineId, useCartStore } from "@/stores/cartStore";
 import { useValidarCarrito } from "@/hooks/useValidarCarrito";
 import { CarritoAvisos } from "@/components/CarritoAvisos";
 import {
@@ -89,7 +89,7 @@ class PrecioCambioError extends Error {
     message: string,
     public total: number,
     public descuento: number,
-    public lineas: { product_id: string; unit_price: number }[],
+    public lineas: { product_id: string; opciones?: string[] | null; unit_price: number }[],
   ) { super(message); }
 }
 
@@ -98,7 +98,7 @@ async function fetchNiubizSession(payload: {
   orderId: string;
   email?: string;
   /** Para que el servidor abra la sesión con el MISMO total que luego autoriza */
-  items?: { product_id: string; qty: number; sku?: string | null; title?: string; comboId?: string | null }[];
+  items?: { product_id: string; qty: number; sku?: string | null; title?: string; comboId?: string | null; opciones?: string[] }[];
   order?: { metodo_entrega: string; modo_entrega: string | null; destino: string; distrito: string };
   cupon_codigo?: string | null;
   user_id?: string | null;
@@ -409,6 +409,7 @@ useEffect(() => {
         price:      item.price,
         image:      item.image ?? null,
         comboId:    item.comboId ?? null,   // el servidor recalcula el precio del combo
+        opciones:   item.opciones,          // ids de opciones elegidas; el servidor valida, suma el ajuste y arma el título
       })),
     }),
   })
@@ -501,7 +502,7 @@ useEffect(() => {
         amount:  totalFinal,
         orderId,
         email:   form.email,
-        items: items.map((i) => ({ product_id: i.id, qty: i.qty, sku: i.sku ?? null, title: i.title, comboId: i.comboId ?? null })),
+        items: items.map((i) => ({ product_id: i.id, qty: i.qty, sku: i.sku ?? null, title: i.title, comboId: i.comboId ?? null, opciones: i.opciones })),
         order: {
           metodo_entrega: metodoEntrega,
           modo_entrega:   requiereEleccion ? modoEntrega : null,
@@ -556,7 +557,7 @@ useEffect(() => {
     } catch (err) {
       if (err instanceof PrecioCambioError) {
         // Precios guardados en el carrito desactualizados: se corrigen y el cliente confirma el nuevo total
-        actualizarPrecios(Object.fromEntries(err.lineas.map((l) => [l.product_id, l.unit_price])));
+        actualizarPrecios(Object.fromEntries(err.lineas.map((l) => [calcLineId(l.product_id, l.opciones), l.unit_price])));
         if (cuponAplicado) {
           if (err.descuento > 0) setCuponAplicado({ codigo: cuponAplicado.codigo, descuento: err.descuento });
           else { setCuponAplicado(null); setCuponCodigo(""); setErrorCupon("El cupón ya no aplica a tu pedido"); }
@@ -836,7 +837,7 @@ useEffect(() => {
               <h2 className="font-display text-xl font-semibold mb-4">Resumen del pedido</h2>
               <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                 {items.map((item) => (
-                  <div key={item.id} className="flex gap-3 items-center">
+                  <div key={item.lineId} className="flex gap-3 items-center">
                     <div className="w-14 h-14 rounded-md overflow-hidden bg-muted flex-shrink-0">
                       {item.image
                         ? <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
@@ -848,7 +849,7 @@ useEffect(() => {
                       <div className="flex items-center gap-1.5 mt-1">
                         <button
                           type="button"
-                          onClick={() => updateQty(item.id, item.qty - 1)}
+                          onClick={() => updateQty(item.lineId, item.qty - 1)}
                           className="w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                           aria-label="Restar"
                         >
@@ -857,7 +858,7 @@ useEffect(() => {
                         <span className="text-xs font-medium w-5 text-center">{item.qty}</span>
                         <button
                           type="button"
-                          onClick={() => updateQty(item.id, item.qty + 1)}
+                          onClick={() => updateQty(item.lineId, item.qty + 1)}
                           className="w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                           aria-label="Sumar"
                         >
@@ -865,7 +866,7 @@ useEffect(() => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeItem(item.id)}
+                          onClick={() => removeItem(item.lineId)}
                           className="ml-1.5 text-muted-foreground hover:text-destructive transition-colors"
                           aria-label="Quitar producto"
                         >
