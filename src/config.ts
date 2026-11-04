@@ -10,9 +10,9 @@ export const APP_URL = isProd
 
 /**
  * Número de WhatsApp de ventas (solo dígitos, con código de país: 51999999999).
- * Si no está definido, el botón de WhatsApp de la ficha de producto no se muestra.
+ * Valor por defecto: 922 629 024 (51 + número). Puede sobrescribirse con VITE_WHATSAPP_NUMBER en Render.
  */
-export const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER as string | undefined)?.replace(/\D/g, "") || undefined;
+export const WHATSAPP_NUMBER = (import.meta.env.VITE_WHATSAPP_NUMBER as string | undefined)?.replace(/\D/g, "") || "51922629024";
 
 /**
  * Datos oficiales para pagar el flete a provincias por transferencia/Yape, tal como se mostrarán al cliente
@@ -39,9 +39,16 @@ export const EMPRESA = {
   nombre: "G&M Mueblería",
   razonSocial: dato(import.meta.env.VITE_EMPRESA_RAZON_SOCIAL, ""),
   ruc: dato(import.meta.env.VITE_EMPRESA_RUC, ""),
-  direccion: dato(import.meta.env.VITE_EMPRESA_DIRECCION, ""),
-  email: dato(import.meta.env.VITE_EMPRESA_EMAIL, ""),
+  direccion: dato(import.meta.env.VITE_EMPRESA_DIRECCION, "Av. Gerardo Unger 5427"),
+  // Correo para derechos ARCO y contacto legal (Gmail del negocio, confirmado por el dueño).
+  email: dato(import.meta.env.VITE_EMPRESA_EMAIL, "proyectomuebleria1@gmail.com"),
 };
+
+// Horario de atención que se muestra en el pie de página.
+export const HORARIO = dato(import.meta.env.VITE_HORARIO, "Lunes a domingo, de 10:00 a. m. a 8:00 p. m.");
+
+// Medios de pago aceptados (texto; sin logos de terceros).
+export const MEDIOS_PAGO = ["Tarjeta de débito", "Tarjeta de crédito", "Yape", "Plin", "Transferencia", "Efectivo"];
 
 // ── Redes sociales del pie de página (solo se muestran las que empiecen con https://) ──
 const redUrl = (env: unknown, manual: string): string | undefined => {

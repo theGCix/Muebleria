@@ -22,7 +22,7 @@ export function LivePrice({ precioOriginal, precioFinal, enOferta, descuento, ve
   const restante = useCountdown(enOferta && venceEl ? venceEl.getTime() : null);
   // Solo mostramos el reloj cuando la oferta realmente está cerca de terminar
   const mostrarReloj = !!restante && !restante.terminada && restante.ms <= CATORCE_DIAS;
-  const pocasUnidades = stock != null && stock > 0 && stock <= 5;
+  const pocasUnidades = stock != null && stock > 0 && stock <= 3; // urgencia solo con ≤ 3 unidades
 
   return (
     <div className="gmx-price-card">

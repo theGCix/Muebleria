@@ -22,9 +22,9 @@ interface Props { product: Product; }
 
 /** Días durante los que un producto se considera "Nuevo". */
 const DIAS_NUEVO = 14;
-/** Con ≤ N unidades se muestra el aviso de poco stock (con oferta activa el umbral sube a 10). */
-const UMBRAL_STOCK = 5;
-const UMBRAL_STOCK_OFERTA = 10;
+/** Solo con ≤ 3 unidades se muestra el aviso de poco stock (también con oferta activa). */
+const UMBRAL_STOCK = 3;
+const UMBRAL_STOCK_OFERTA = 3;
 /** "Más valorado": promedio mínimo y reseñas mínimas (mismo mínimo que la sección de testimonios). */
 const MIN_PROMEDIO_TOP = 4.5;
 const MIN_RESENAS_TOP = 3;
