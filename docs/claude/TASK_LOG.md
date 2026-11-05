@@ -46,3 +46,10 @@
 - `src/lib/mediosPago.ts`: Yape, Plin y PagoEfectivo pasan a `habilitado: true` (el bloque «También puedes pagar con» del checkout ya se muestra solo).
 - Logos nuevos en `public/pagos/` (simplificados, no oficiales): `visa`, `mastercard`, `amex`, `yape`, `plin`, `pagoefectivo`, `niubiz` (.svg) + `LEEME.txt`. El `public/pagos/` anterior nunca se subió al repo (faltaba en el commit 9b0601b): ahora va en el patch.
 - Pendiente: reemplazar por logos oficiales si el dueño los consigue (mismo nombre de archivo). La nota previa de «cobro solo con tarjeta» queda superada por esta confirmación.
+
+## 2026-11-05 — Parte 5: Catálogo móvil (2 columnas, estrellas, compra rápida)
+- Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo.
+- Hallazgos (verificados): `ProductCard.tsx` YA muestra estrellas reales (`useProductRatings` → vista `v_producto_rating`; sin reseñas no muestra nada) y YA tiene «Agregar al carrito» con control de cantidad. Las grillas de `catalogo.tsx`, `categoria.$slug.tsx`, `ProductsSection.tsx` y `OfertasSection.tsx` son `grid-cols-1` en móvil (solo `ProductRecomendaciones` y `perfil/favoritos` ya usan 2). Botones de la tarjeta: corazón y ± de 32 px; falta «compra rápida».
+- Archivos previstos: `ProductCard.tsx`, `product-card.css`, las 4 grillas anteriores. Sin dependencias ni migraciones.
+- Pendiente: autorización y decisión sobre qué significa «compra rápida» (ver plan).
+- Nota: `v_producto_rating` no está versionada en `supabase/migrations/`; no se toca.
