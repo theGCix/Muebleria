@@ -53,3 +53,19 @@ Estado: **diseño, pendiente de aprobación. Sin código.** Reglas: migraciones 
 - Fiscal: el `ajuste_precio` cambia el total antes de la fórmula base = total/1.18; no se toca el IGV, pero se mostrará la fórmula antes de aplicar.
 - RLS nuevas: requieren confirmación del dueño antes de ejecutarse.
 - Combos: sus piezas entran sin opciones; falta definir si eligen opciones.
+
+---
+# ESTADO ACTUAL (2026-11-05)
+
+## Opciones por producto (D1/D2)
+- Fases 1–4 del diseño anterior implementadas en el repo (fases 1 y 2 reportadas como culminadas por el dueño). `v_mi_produccion` no requirió cambios.
+- Fase 5 (editor admin + datos reales con plantilla CSV): pendiente de verificar.
+
+## `products` — columnas reales (consulta del dueño, 2026-11-05)
+id, nombre, descripcion, sku, precio, stock, categoria, imagen_url, imagen_public_id, activo, created_at, updated_at, proveedor_id, modelo_3d_url, imagenes (jsonb), subcategoria, material_base, tipo_gestion (enum), descuento_porcentaje, oferta_vence_el, volumen_m3, peso_kg.
+
+## Propuesta D7 (no aplicada; requiere migración y aprobación)
+`products`: `alto_cm`, `ancho_cm`, `fondo_cm` (numeric, opcionales, > 0), `plazas` (smallint, opcional, ≥ 1), `esquema_url` (text). Sin cambios de RLS (la lectura pública de `products` ya existe). Si una misma ficha tiene tallas con medidas distintas, haría falta una tabla de variantes; por definir con el dueño.
+
+## Notas
+- `src/integrations/supabase/types.ts` está en UTF-16 (no compila como TS) y no refleja las tablas nuevas: el front consulta esas tablas con el cliente sin tipar.

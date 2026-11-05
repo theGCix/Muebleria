@@ -27,6 +27,8 @@
 - Cloudinary: URLs por producto; tabla de imágenes de producto.
 
 ---
+> Nota: los hallazgos de D2 de abajo describen el estado ANTERIOR a las fases 2–4; quedaron superados (ver TASK_LOG.md y la sección de la Parte 4).
+
 ## Hallazgos verificados en el repo (commit 7cd97c0, 2026-11-04)
 
 **T1 Footer/legal**
@@ -53,3 +55,22 @@
 - `product/LivePrice.tsx`: urgencia con `stock <= 5` ("Quedan N unidades listas").
 - No existe campo "bajo pedido" en el front: todo el copy dice "fabricado a pedido".
 - No hay seed/migración en el repo que fije stock=5; el valor vive en Supabase.
+
+---
+## Estado verificado — Parte 4/8 (commit 733413e + E6, 2026-11-05)
+
+**Distrito y envío**
+- Tarifario en CÓDIGO (no en BD): `DISTRITOS_ENVIO` en `src/lib/envios.ts` (mínimo S/ 60 al 2026-11-05). Solo por distrito, no por producto.
+- Fuente única del distrito: `localStorage` `gm_distrito_envio` (`DISTRITO_STORAGE_KEY`, `src/lib/entrega.ts`), con el evento `gm:distrito-envio`; se usa vía `useDistritoEnvio()` en ficha (`DeliveryPromise`), tarjeta (`ProductCard`), carrito (`CartDrawer`) y checkout.
+- Checkout (`src/routes/checkout.tsx`): `useCheckoutPrefill` + `DireccionesGuardadas` (dirección predeterminada); `ciudad` del pedido se deriva con `ciudadDeDistrito`; cabecera `CheckoutHeader`.
+
+**Pago / Niubiz**
+- `src/lib/niubiz.ts` y `VisanetCheckout.configure` en `checkout.tsx`: envía `name` (completo), `email` y datos de facturación; el servidor autoriza con `transactionToken` (API de Autorización).
+- La doc de la API de Autorización (subida por el dueño) pide `cardHolder.firstName/lastName/email` para comercios que manejan la tarjeta; NO confirma los parámetros de `configure` del Botón de Pago Web.
+- Su menú lista como integraciones aparte: Pago con Yape, Pago con QR, Pago con PLIN, API de PagoEfectivo (+ callback).
+- Medios anunciados al cliente: `src/lib/mediosPago.ts` + `components/checkout/MediosPago.tsx`; logos en `public/pagos/`.
+
+**Ficha de producto (`src/routes/product.$handle.tsx`)**
+- Existentes: `ProductGallery`, pestañas Especificaciones / Reseñas / Entrega, `ProductRecomendaciones` (misma categoría, 4 productos), cotización (`LeadFormDialog`) y WhatsApp.
+- `StickyBuyBar`: fija en móvil (≤ 640 px) y al hacer scroll en pantallas grandes; panel «Ir a pagar / Seguir comprando» tras agregar.
+- No existen medidas por producto (alto/ancho/fondo), plazas ni esquema: solo `volumen_m3` y `peso_kg` (ver DATABASE.md).

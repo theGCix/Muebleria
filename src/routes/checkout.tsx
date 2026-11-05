@@ -2,6 +2,8 @@
 // G&M Mueblería — Checkout con integración Niubiz (VisanetCheckout popup)
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
+import { MediosPago, LogoMedio } from "@/components/checkout/MediosPago";
+import { MEDIOS_PAGO, MEDIO_NIUBIZ } from "@/lib/mediosPago";
 import { Footer } from "@/components/Footer";
 import { LoginModal } from "@/components/LoginModal";
 import { Button } from "@/components/ui/button";
@@ -818,16 +820,21 @@ useEffect(() => {
               <h2 className="font-display text-xl font-semibold">Método de pago</h2>
               <div className="flex items-center gap-3 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
                 <CreditCard className="h-6 w-6 text-primary flex-shrink-0" />
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm">Tarjeta de crédito / débito</p>
-                  <p className="text-xs text-muted-foreground">Pago seguro procesado por Niubiz · Visa, Mastercard, Amex</p>
+                  <p className="text-xs text-muted-foreground">Pago seguro procesado por Niubiz</p>
+                  <MediosPago grupo="tarjeta" className="mt-2" />
                 </div>
-                <img
-                  src="https://static-content-qas.vnforapps.com/v2/img/vpos-logo-new.png"
-                  alt="Niubiz" className="ml-auto h-8 object-contain"
-                  onError={(e) => (e.currentTarget.style.display = "none")}
-                />
+                <LogoMedio nombre={MEDIO_NIUBIZ.nombre} logo={MEDIO_NIUBIZ.logo} altura="h-8" />
               </div>
+              {/* Otros medios (Yape, Plin, PagoEfectivo): solo se muestran cuando estén habilitados en src/lib/mediosPago.ts */}
+              {MEDIOS_PAGO.some((m) => m.habilitado && m.grupo !== "tarjeta") && (
+                <div className="rounded-lg border border-border p-4 space-y-2">
+                  <p className="text-sm font-medium">También puedes pagar con</p>
+                  <MediosPago grupo="billetera" />
+                  <MediosPago grupo="efectivo" />
+                </div>
+              )}
             </section>
 
             <div className="grid sm:grid-cols-3 gap-3 text-sm text-muted-foreground">
