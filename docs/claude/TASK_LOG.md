@@ -56,3 +56,9 @@
 - Contraste: `muted-foreground` sobre `card` = 5.7:1 (≥ 4.5).
 - Verificación: `tsc --noEmit` sin errores nuevos; `vite build` OK; capturas a 360 y 414 px con datos de prueba: 2 columnas, sin scroll horizontal, 0 botones < 44 px; «Comprar ahora» deja el producto en `gm-cart` y navega a `/checkout`.
 - Pendientes / notas: la tarjeta sigue usando `id` (no `lineId`) para cantidad/quitar; correcto mientras la tarjeta agregue sin opciones. Verificar en un celular real y con datos reales.
+
+## 2026-11-05 — Parte 5: K2 (filtros) y K3 (productos) del catálogo — plan
+- Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo (solo esta entrada).
+- Inspeccionados (solo lectura): `catalogo.tsx`, `categoria.$slug.tsx`, `ProductCard.tsx`, `categories.ts`, `useProducts.ts`, `AsistenteChat.tsx`, `ExitCouponDialog.tsx`, `Header.tsx`, `MobileBottomBar.tsx`, `CategoryMobileAccordion.tsx`, `CategoryMegaMenu.tsx`.
+- Hallazgos: filtros siempre visibles y `FilterChip` duplicado en las dos rutas; chips ~32 px (< 44 px); `ProductCard` muestra `categoria`, `subcategoria` y `material_base` crudos (slugs) aunque `categories.ts` ya tiene las etiquetas; no existe campo de nombre comercial en `products`; `MobileBottomBar` es solo del panel interno (no aplica al catálogo público); en público compiten por la esquina inferior el botón del chat (`bottom-6 right-6`, z-50) y la pastilla del cupón (`bottom-20 left-3`, z-30).
+- Pendiente: autorización del dueño; definir «nombres comerciales» y qué se entiende por «categorías duplicadas».
