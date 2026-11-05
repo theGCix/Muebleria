@@ -26,6 +26,8 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { RoleGate } from "@/components/RoleGate";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
+import { formatoCantidad, formatoFaltante } from "@/lib/cantidades";
 
 export const Route = createFileRoute("/_authenticated/insumos")({
   head: () => ({ meta: [{ title: "Insumos MRP — G&M" }] }),
@@ -45,7 +47,8 @@ const MODELOS = ["Vintage", "Rex", "Lineal Punta", "London", "Garra"] as const;
 const TALLAS  = ["2 pies", "2.5 pies", "3 pies", "3.5 pies", "4 pies", "5 pies", "6 pies"] as const;
 const UNIDADES = ["metros", "kg", "litros", "unidades", "planchas", "piezas", "paquetes", "palos", "pies", "bolsas"];
 
-const fmt = (n: number, u: string) => `${n % 1 === 0 ? n : n.toFixed(2)} ${u}`;
+// Enteros para unidades/planchas…, máx. 1 decimal para metros/kg… (ver src/lib/cantidades.ts)
+const fmt = formatoCantidad;
 
 // Modelos que usan piezas en vez de talla
 const MODELOS_CON_PIEZAS = ["London"] as const;
@@ -173,7 +176,7 @@ function FabricarDialog({
           {/* Tabla de insumos a descontar */}
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Insumos a descontar</p>
-            <div className="border rounded-lg overflow-hidden text-sm">
+            <div className="border rounded-lg overflow-x-auto text-sm">
               <table className="w-full">
                 <thead className="bg-muted/30">
                   <tr>
@@ -445,8 +448,8 @@ function CalculadoraMrp() {
               ✓ Stock suficiente para todos los pedidos.
             </div>
           )}
-          <div className="border rounded-xl overflow-hidden mt-2">
-            <table className="w-full text-sm">
+          <div className="border rounded-xl overflow-x-auto mt-2">
+            <table className="hidden sm:table w-full text-sm">
               <thead className="bg-muted/40 border-b">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium text-xs text-muted-foreground">Insumo</th>
@@ -459,17 +462,41 @@ function CalculadoraMrp() {
                 {resultado.resultado.map((r) => (
                   <tr key={r.nombre} className={r.faltante > 0 ? "bg-red-50/50" : ""}>
                     <td className="px-3 py-2 font-medium">{r.nombre}</td>
-                    <td className="px-3 py-2 text-right text-muted-foreground">{fmt(r.necesario, r.unidad)}</td>
-                    <td className="px-3 py-2 text-right">{fmt(r.stock_actual, r.unidad)}</td>
-                    <td className="px-3 py-2 text-right font-semibold">
+                    <td className="px-3 py-2 text-right text-muted-foreground whitespace-nowrap">{fmt(r.necesario, r.unidad)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">{fmt(r.stock_actual, r.unidad)}</td>
+                    <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">
                       {r.faltante > 0
-                        ? <span className="text-red-600">−{fmt(r.faltante, r.unidad)}</span>
-                        : <span className="text-green-600">OK</span>}
+                        ? <span className="text-red-600">{formatoFaltante(r.faltante, r.unidad)}</span>
+                        : <span className="text-green-700">OK</span>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {resultado.resultado.map((r) => (
+                <TarjetaFila
+                  key={r.nombre}
+                  tono={r.faltante > 0 ? "peligro" : "normal"}
+                  titulo={r.nombre}
+                  estado={
+                    r.faltante > 0 ? (
+                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 text-center">
+                        Faltan {fmt(r.faltante, r.unidad)}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">OK</span>
+                    )
+                  }
+                  datos={[
+                    { etiqueta: "Necesario", valor: fmt(r.necesario, r.unidad) },
+                    { etiqueta: "En stock", valor: fmt(r.stock_actual, r.unidad), destacado: true },
+                  ]}
+                />
+              ))}
+            </TarjetasMovil>
           </div>
 
           {/* Botón Fabricar */}
@@ -511,8 +538,8 @@ function CalculadoraMrp() {
 }
 
 // ── Modal movimiento de stock ─────────────────────────────────
-function MovimientoDialog({ insumoId, insumoNombre, onDone }: {
-  insumoId: string; insumoNombre: string; onDone: () => void;
+function MovimientoDialog({ insumoId, insumoNombre, onDone, triggerClassName }: {
+  insumoId: string; insumoNombre: string; onDone: () => void; triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [tipo, setTipo] = useState<"entrada" | "salida" | "ajuste">("entrada");
@@ -543,7 +570,7 @@ function MovimientoDialog({ insumoId, insumoNombre, onDone }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button size="sm" variant="outline" className={triggerClassName}>
           <ArrowDown className="h-3.5 w-3.5 mr-1" /> Stock
         </Button>
       </DialogTrigger>
@@ -608,7 +635,7 @@ function MovimientoDialog({ insumoId, insumoNombre, onDone }: {
 }
 
 // ── Modal editar / crear insumo ───────────────────────────────
-function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) {
+function InsumoDialog({ insumo, onDone, triggerClassName }: { insumo?: any; onDone: () => void; triggerClassName?: string }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     id:           insumo?.id,
@@ -645,7 +672,7 @@ function InsumoDialog({ insumo, onDone }: { insumo?: any; onDone: () => void }) 
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {insumo
-          ? <Button size="sm" variant="ghost">Editar</Button>
+          ? <Button size="sm" variant="ghost" className={triggerClassName}>Editar</Button>
           : <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nuevo insumo</Button>
         }
       </DialogTrigger>
@@ -818,11 +845,11 @@ function InsumosPage() {
               )
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="hidden sm:table w-full text-sm">
                   <thead className="bg-muted/40 border-b">
                     <tr>
                       {["Insumo", "Unidad", "Stock actual", "Stock mínimo", "Proveedor", ""].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left font-medium text-xs text-muted-foreground uppercase tracking-wide">
+                        <th key={h} className="px-4 py-3 text-left font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -840,13 +867,13 @@ function InsumosPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">{ins.unidad}</td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <span className={`font-semibold ${bajo ? "text-amber-600" : "text-foreground"}`}>
-                              {ins.stock_actual} {ins.unidad}
+                              {fmt(ins.stock_actual, ins.unidad)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {ins.stock_minimo} {ins.unidad}
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                            {fmt(ins.stock_minimo, ins.unidad)}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground text-xs">
                             {ins.proveedor ?? "—"}
@@ -866,6 +893,49 @@ function InsumosPage() {
                     })}
                   </tbody>
                 </table>
+
+                {/* Móvil (< 640 px): tarjetas apiladas */}
+                <TarjetasMovil>
+                  {filtrados.map((ins: any) => {
+                    const bajo = ins.stock_actual < ins.stock_minimo;
+                    return (
+                      <TarjetaFila
+                        key={ins.id}
+                        tono={bajo ? "alerta" : "normal"}
+                        titulo={ins.nombre}
+                        estado={
+                          bajo ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                              <AlertTriangle className="h-3 w-3" /> Stock bajo
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">OK</span>
+                          )
+                        }
+                        datos={[
+                          {
+                            etiqueta: "Stock actual",
+                            destacado: true,
+                            valor: <span className={bajo ? "text-amber-700" : undefined}>{fmt(ins.stock_actual, ins.unidad)}</span>,
+                          },
+                          { etiqueta: "Stock mínimo", valor: fmt(ins.stock_minimo, ins.unidad) },
+                          ...(ins.proveedor ? [{ etiqueta: "Proveedor", completo: true, valor: ins.proveedor }] : []),
+                        ]}
+                        acciones={
+                          <>
+                            <MovimientoDialog
+                              insumoId={ins.id}
+                              insumoNombre={ins.nombre}
+                              onDone={refresh}
+                              triggerClassName={`${BTN_TACTIL} flex-1`}
+                            />
+                            <InsumoDialog insumo={ins} onDone={refresh} triggerClassName={`${BTN_TACTIL} flex-1 border`} />
+                          </>
+                        }
+                      />
+                    );
+                  })}
+                </TarjetasMovil>
               </div>
             )}
           </div>

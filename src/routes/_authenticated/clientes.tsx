@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import type { ClienteUnificado } from "@/lib/pos.functions";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/clientes")({
   validateSearch: (s: Record<string, unknown>): { q?: string } => ({
@@ -423,7 +424,7 @@ function ClientesPage() {
           )
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/40">
                   {["Nombre", "Documento", "Contacto", "Canal", "Segmento", "Cliente desde", ""].map((h) => (
@@ -474,6 +475,49 @@ function ClientesPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {filtered.map((c: any) => {
+                const seg = SEGMENTO_CONFIG[c.segmento as Segmento] ?? SEGMENTO_CONFIG.nuevo;
+                return (
+                  <TarjetaFila
+                    key={c.id}
+                    titulo={c.nombre}
+                    subtitulo={`${c.doc_tipo ?? ""} ${c.doc_numero ?? ""}`.trim() || undefined}
+                    estado={
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ color: seg.color, background: seg.bg }}
+                      >
+                        {seg.label}
+                      </span>
+                    }
+                    datos={[
+                      ...(c.email || c.telefono
+                        ? [{
+                            etiqueta: "Contacto",
+                            completo: true,
+                            valor: (
+                              <>
+                                {c.email && <span className="block">{c.email}</span>}
+                                {c.telefono && <span className="block">{c.telefono}</span>}
+                              </>
+                            ),
+                          }]
+                        : []),
+                      { etiqueta: "Canal", valor: <CanalBadge fuente={c.fuente} /> },
+                      { etiqueta: "Cliente desde", valor: fmtDate(c.created_at) },
+                    ]}
+                    acciones={
+                      <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => setSelectedCliente(c)}>
+                        <Eye className="h-4 w-4 mr-1.5" /> Ver detalle
+                      </Button>
+                    }
+                  />
+                );
+              })}
+            </TarjetasMovil>
           </div>
         )}
       </div>

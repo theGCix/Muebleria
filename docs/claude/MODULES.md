@@ -81,3 +81,19 @@
 **Proyectos y reacciones**
 - `src/routes/proyectos.tsx` (grilla + detalle con fotos), `src/hooks/useProyectos.ts` (tabla `proyectos`, solo publicados), admin en `_authenticated/gestionar-proyectos.tsx` + `src/lib/proyectos.functions.ts`.
 - Reacciones: `useReaccionesProyectos` + `components/proyectos/ReaccionesProyecto.tsx`; datos en `proyecto_reacciones` y vista `v_proyecto_reacciones_conteo` (ver DATABASE.md).
+
+---
+## Admin móvil (2026-11-05)
+
+**Patrón de tablas del panel (`src/routes/_authenticated/`)**
+- Las pantallas usan `<table>` propias (no `ui/table.tsx`). En < 640 px la tabla lleva `hidden sm:table` y, dentro del mismo contenedor, se renderiza `<TarjetasMovil>` con una `<TarjetaFila>` por fila (`src/components/admin/TarjetaFila.tsx`). Para tablas nuevas, reutilizar ese par y `BTN_TACTIL`.
+- `TarjetaFila`: `titulo`, `subtitulo`, `estado` (insignia), `imagen`, `datos` (`{etiqueta, valor, destacado?, completo?}`), `acciones` y `tono` (`normal` | `alerta` | `peligro`).
+- `Button` mide 32–36 px (`sm` = `h-8`, `default` = `h-9`): en táctil pasar `className="h-11 min-w-11"`; `cn` (tailwind-merge) deja ganar la última clase.
+- `useIsMobile` corta en 768 px; las tarjetas usan el breakpoint CSS `sm` (640 px) a propósito.
+
+**Insumos (`insumos.tsx`)**
+- `fmt` ahora es `formatoCantidad` de `src/lib/cantidades.ts` (enteros: unidades, planchas, piezas, paquetes, palos, bolsas; 1 decimal: metros, kg, litros, pies; otras: 2). El faltante usa `formatoFaltante`.
+- `MovimientoDialog` e `InsumoDialog` aceptan `triggerClassName`.
+
+**Ficha de producto — D7**
+- `src/lib/piezas.ts` + `src/components/product/MedidasPiezas.tsx`: lectura de `products.piezas` y `products.esquema_url` (la nota anterior «no existen medidas» quedó superada en el front; faltan los datos y el editor).

@@ -28,6 +28,7 @@ import {
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 import { useNubefact } from "@/hooks/useNubefact";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
@@ -500,7 +501,7 @@ function VentasPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3">Comprobante</th>
@@ -573,6 +574,49 @@ function VentasPage() {
                 )}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {ventas.map((v) => (
+                <TarjetaFila
+                  key={`${v.canal}-${v.id}`}
+                  titulo={v.cliente_nombre || <span className="text-muted-foreground">Sin cliente</span>}
+                  subtitulo={v.cliente_doc ? `DNI ${v.cliente_doc}` : undefined}
+                  estado={
+                    <Badge variant={v.estado === "anulada" ? "destructive" : "default"}>{v.estado}</Badge>
+                  }
+                  datos={[
+                    { etiqueta: "Total", valor: fmt(Number(v.total)), destacado: true },
+                    { etiqueta: "Fecha", valor: format(new Date(v.created_at), "dd/MM/yyyy HH:mm") },
+                    {
+                      etiqueta: "Comprobante",
+                      valor: (
+                        <>
+                          <Badge variant={tipoColor[v.tipo] ?? "outline"} className="mb-1">
+                            {tipoLabel[v.tipo] ?? v.tipo}
+                          </Badge>
+                          <div className="font-mono text-xs">{v.numero}</div>
+                        </>
+                      ),
+                    },
+                    {
+                      etiqueta: "Canal",
+                      valor: <Badge variant="outline">{v.canal === "online" ? "🌐 Online" : "🏪 Local"}</Badge>,
+                    },
+                    ...(v.nubefact_estado ? [{ etiqueta: "SUNAT", valor: <NubefactBadge sale={v} /> }] : []),
+                  ]}
+                  acciones={
+                    <Button
+                      variant="outline"
+                      className={`${BTN_TACTIL} flex-1`}
+                      onClick={() => (v.canal === "online" ? setOpenOrderId(v.id) : setOpenId(v.id))}
+                    >
+                      <FileText className="h-4 w-4 mr-1.5" /> Ver comprobante
+                    </Button>
+                  }
+                />
+              ))}
+            </TarjetasMovil>
           </div>
         )}
       </Card>

@@ -26,3 +26,8 @@
 - **Distrito de envío:** una sola fuente (`useDistritoEnvio`). En el checkout manda el distrito elegido en la ficha sobre la dirección predeterminada (decisión del dueño); sin distrito nunca se asume uno.
 - **«Envío desde S/ X»:** sale del mínimo vigente del tarifario (`precioEnvioDesde()` en `src/lib/envios.ts`), nunca de un monto fijo en el código.
 - **`ciudad` del pedido:** se deriva del distrito (`ciudadDeDistrito`: Callao o Lima); el cliente ya no la escribe.
+
+
+## Reglas de negocio (Admin móvil)
+- **Tablas del panel en móvil (< 640 px):** tarjetas apiladas con nombre, estado, total/stock y la acción principal; controles táctiles ≥ 44 px (`BTN_TACTIL`). No se cambian consultas, mutaciones ni permisos al adaptar una pantalla.
+- **Cantidades de insumos (solo visualización):** enteros para unidades, planchas, piezas, paquetes, palos y bolsas; máximo 1 decimal para metros, kg, litros y pies; otra unidad conserva hasta 2 decimales. Se formatea con `src/lib/cantidades.ts`, nunca con `toFixed` suelto. Lo guardado en la BD no se redondea.

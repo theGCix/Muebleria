@@ -1,6 +1,6 @@
 # PROJECT — G&M Mueblería
 
-> Estado al 2026-11-05: Parte 3/8 implementada (D1/D2 fases 1–4). Parte 4/8: entregas A, B y E6 hechas (E6 con los 6 medios y logos SVG propios); N2 y D7 pendientes. Detalle en TASK_LOG.md y MODULES.md (hallazgos verificados en el repo).
+> Estado al 2026-11-05: Parte 3/8 implementada (D1/D2 fases 1–4). Parte 4/8: entregas A, B y E6 hechas (E6 con los 6 medios y logos SVG propios); N2 pendiente y D7 en curso (ficha lista; falta editor admin). Admin móvil (tablas → tarjetas) aplicado. Detalle en TASK_LOG.md y MODULES.md (hallazgos verificados en el repo).
 
 ## Resumen
 - Plataforma e-commerce + POS/ERP de una mueblería en Lima, Perú (Los Olivos).
@@ -40,7 +40,14 @@ Ingeniero full-stack senior + UI/UX e-commerce.
 | D8 | Un solo color/valor → texto, sin selector | Hecho |
 | E6 | Logos y medios de pago | Hecho: Visa, Mastercard, Amex, Yape, Plin y PagoEfectivo habilitados; logos SVG en `public/pagos/` (ver TASK_LOG) |
 | N2 | Precargar nombre, apellido y correo en Niubiz | Pendiente: falta doc «Botón de Pago Web» |
-| D7 | Medidas, plazas y esquema por producto | Pendiente: migración + método de carga |
+| D7 | Medidas, plazas y esquema por producto (por pieza) | En curso: ficha hecha con `products.piezas`; falta editor en el admin, plantilla CSV y confirmar la migración de piezas |
 
 ## Datos pendientes de confirmar con el dueño
 Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos oficiales de pago (opcional: reemplazan los SVG simplificados de `public/pagos/`) y datos del Libro de Reclamaciones. **No se inventan.**
+
+
+## Admin móvil — tablas anchas → tarjetas (2026-11-05)
+| Pantalla | Estado |
+|----------|--------|
+| Pedidos, Ventas realizadas, Clientes, Productos, Combos, Usuarios, Insumos (stock y MRP) | Hecho: tarjetas en < 640 px, controles de 44 px, cortes de Insumos corregidos y unidades con formato por tipo (ver TASK_LOG) |
+| Pendiente | `tsc` + `vite build` + prueba a 360/414/768 px; historial de roles y botones de cabecera siguen como estaban |

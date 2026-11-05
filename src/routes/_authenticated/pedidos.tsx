@@ -28,6 +28,7 @@ import { cambiarEstadoPedido } from "@/lib/pos.functions";
 import { whatsappLink } from "@/lib/despachos.functions";
 import { enlaceResena, mensajeResena } from "@/lib/resena-link";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { EvidenciasPedido } from "@/components/admin/EvidenciasPedido";
 
@@ -354,7 +355,7 @@ function PedidosPage() {
       ) : (
         <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/40">
                   {["Nº Pedido", "Cliente", "Productos", "Total", "Estado", "Fecha", ""].map((h) => (
@@ -407,6 +408,41 @@ function PedidosPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {filtered.map((order) => {
+                const cfg = STATUS_CONFIG[order.status as OrderStatus] ?? STATUS_CONFIG.pendiente;
+                const Icon = cfg.icon;
+                return (
+                  <TarjetaFila
+                    key={order.id}
+                    titulo={order.nombre}
+                    subtitulo={order.email}
+                    estado={
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        style={{ color: cfg.color, background: cfg.bg }}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {cfg.label}
+                      </span>
+                    }
+                    datos={[
+                      { etiqueta: "Total", valor: fmt(Number(order.total)), destacado: true },
+                      { etiqueta: "Fecha", valor: order.paid_at ? fmtDate(order.paid_at) : fmtDate(order.created_at) },
+                      { etiqueta: "Pedido", valor: <span className="font-mono text-xs">{order.order_number}</span> },
+                      ...(order.dni ? [{ etiqueta: "DNI", valor: order.dni }] : []),
+                    ]}
+                    acciones={
+                      <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => setSelectedId(order.id)}>
+                        <Eye className="h-4 w-4 mr-1.5" /> Ver detalle
+                      </Button>
+                    }
+                  />
+                );
+              })}
+            </TarjetasMovil>
           </div>
         </div>
       )}

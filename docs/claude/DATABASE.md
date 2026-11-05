@@ -74,3 +74,10 @@ id, nombre, descripcion, sku, precio, stock, categoria, imagen_url, imagen_publi
 - RLS (authenticated): select/update propios; insert con `user_id = auth.uid()`; delete propio o admin (`has_role`). Anónimos no escriben ni leen filas.
 - Vista `v_proyecto_reacciones_conteo(proyecto_id, tipo, total)`: lectura pública (anon y authenticated), corre con permisos del dueño a propósito para exponer solo conteos.
 - Supuesto: `proyectos.id` es `uuid` (lo valida `proyectos.functions.ts`). La tabla `proyectos` no tiene migración en el repo: verificar `\d proyectos` antes de ejecutar.
+
+## Estado D7 (2026-11-05)
+- Decisión: sin tallas; cada producto tiene una o más **piezas**, cada una con sus medidas y plazas.
+- `products.piezas jsonb` (opcional, debe ser un arreglo): `[{"nombre":"Sofá 3 plazas","alto_cm":85,"ancho_cm":210,"fondo_cm":95,"plazas":3}]`. La validación de cada pieza vive en el front (`src/lib/piezas.ts`) y en el futuro editor del admin; la BD solo exige que sea un arreglo. Migración `20261105_piezas_producto.sql` (con rollback y verificación): entregada, **ejecución sin confirmar**.
+- `products.esquema_url` (text, URL https de Cloudinary): creada con `20261105_medidas_producto.sql`, ejecutada y verificada por el dueño.
+- `products.alto_cm`, `ancho_cm`, `fondo_cm`, `plazas` (de la misma migración, todas en NULL): quedan **sin uso**; eliminarlas está pendiente de aprobación.
+- Las migraciones se corrieron en el SQL Editor y no están en `supabase/migrations/` del repo.

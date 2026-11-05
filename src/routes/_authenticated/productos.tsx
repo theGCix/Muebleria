@@ -21,6 +21,7 @@ import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 import { ofertaInfo } from "@/lib/pricing";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import { ColorFotoEditor, type ColorFoto } from "@/components/admin/ColorFotoEditor";
 
 export const Route = createFileRoute("/_authenticated/productos")({
@@ -696,6 +697,29 @@ function ProductosPage() {
     return [];
   };
 
+  // Abre el formulario de edición (lo usan la tabla y las tarjetas móviles)
+  const editarProducto = (p: any) =>
+    setEditItem({
+      id: p.id,
+      nombre: p.nombre,
+      descripcion: p.descripcion ?? "",
+      sku: p.sku ?? "",
+      precio: String(p.precio),
+      descuento_porcentaje: p.descuento_porcentaje != null ? String(p.descuento_porcentaje) : "",
+      oferta_vence_el: isoToLocalInput(p.oferta_vence_el),
+      stock: String(p.stock ?? 0),
+      volumen_m3: p.volumen_m3 != null ? String(p.volumen_m3) : "",
+      peso_kg: p.peso_kg != null ? String(p.peso_kg) : "",
+      categoria: p.categoria ?? "",
+      subcategoria: p.subcategoria ?? "",
+      material_base: p.material_base ?? "",
+      tipo_gestion: p.tipo_gestion ?? "manufactura",
+      proveedor_id: p.proveedor_id ?? "",
+      imagen_url: p.imagen_url ?? "",
+      imagen_public_id: p.imagen_public_id ?? "",
+      imagenes: parseImagenes(p),
+    });
+
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -725,7 +749,7 @@ function ProductosPage() {
           <TableSkeleton rows={6} cols={6} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
-            <table className="w-full min-w-[600px] text-sm">
+            <table className="hidden sm:table w-full min-w-[600px] text-sm">
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3">Imágenes</th>
@@ -819,26 +843,7 @@ function ProductosPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setEditItem({
-                              id: p.id,
-                              nombre: p.nombre,
-                              descripcion: p.descripcion ?? "",
-                              sku: p.sku ?? "",
-                              precio: String(p.precio),
-                              descuento_porcentaje: p.descuento_porcentaje != null ? String(p.descuento_porcentaje) : "",
-                              oferta_vence_el: isoToLocalInput(p.oferta_vence_el),
-                              stock: String(p.stock ?? 0),
-                              volumen_m3: p.volumen_m3 != null ? String(p.volumen_m3) : "",
-                              peso_kg: p.peso_kg != null ? String(p.peso_kg) : "",
-                              categoria: p.categoria ?? "",
-                              subcategoria: p.subcategoria ?? "",
-                              material_base: p.material_base ?? "",
-                              tipo_gestion: p.tipo_gestion ?? "manufactura",
-                              proveedor_id: p.proveedor_id ?? "",
-                              imagen_url: p.imagen_url ?? "",
-                              imagen_public_id: p.imagen_public_id ?? "",
-                              imagenes: parseImagenes(p),
-                            })}
+                            onClick={() => editarProducto(p)}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -876,6 +881,111 @@ function ProductosPage() {
                 )}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {filtered.map((p: any) => {
+                const imgs = parseImagenes(p);
+                const oi = ofertaInfo(p);
+                return (
+                  <TarjetaFila
+                    key={p.id}
+                    imagen={
+                      imgs.length > 0 ? (
+                        <img
+                          src={imgs[0].public_id ? cloudinaryUrl(imgs[0].public_id, { w: 48, h: 48 }) : imgs[0].url}
+                          alt=""
+                          className="w-12 h-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded bg-muted flex items-center justify-center">
+                          <Image className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )
+                    }
+                    titulo={p.nombre}
+                    subtitulo={p.sku ? `SKU ${p.sku}` : undefined}
+                    estado={
+                      oi.activa ? (
+                        <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive">
+                          -{p.descuento_porcentaje}%
+                        </Badge>
+                      ) : p.descuento_porcentaje ? (
+                        <Badge variant="outline" className="text-muted-foreground">Vencida</Badge>
+                      ) : undefined
+                    }
+                    datos={[
+                      {
+                        etiqueta: "Precio",
+                        destacado: true,
+                        valor: oi.activa ? (
+                          <span className="flex flex-col leading-tight">
+                            <span className="text-muted-foreground line-through text-xs font-normal">{fmt(Number(p.precio))}</span>
+                            <span className="text-destructive">{fmt(oi.precioFinal)}</span>
+                          </span>
+                        ) : (
+                          fmt(Number(p.precio))
+                        ),
+                      },
+                      {
+                        etiqueta: "Stock",
+                        valor: (
+                          <Badge variant={Number(p.stock) > 0 ? "default" : "destructive"}>{p.stock ?? 0}</Badge>
+                        ),
+                      },
+                      {
+                        etiqueta: "Tipo",
+                        completo: true,
+                        valor: (
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant={p.tipo_gestion === "retail" ? "secondary" : "outline"}>
+                              {p.tipo_gestion === "retail" ? "Retail" : "Manufactura"}
+                            </Badge>
+                            {p.categoria && (
+                              <>
+                                <Badge variant="outline">{getCategoria(p.categoria)?.nombre ?? p.categoria}</Badge>
+                                {p.subcategoria && <Badge variant="secondary">{p.subcategoria}</Badge>}
+                                {p.material_base && <Badge variant="secondary">{p.material_base}</Badge>}
+                              </>
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]}
+                    acciones={
+                      <>
+                        <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => editarProducto(p)}>
+                          <Pencil className="h-4 w-4 mr-1.5" /> Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={BTN_TACTIL}
+                          aria-label={`Eliminar ${p.nombre}`}
+                          onClick={() => { if (confirm("¿Eliminar producto?")) delMut.mutate(p.id); }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    }
+                  />
+                );
+              })}
+              {filtered.length === 0 &&
+                (data.length === 0 ? (
+                  <EmptyState
+                    icon={Package}
+                    title="Aún no hay productos"
+                    description="Crea el primero para que aparezca en la tienda y en el POS."
+                  />
+                ) : (
+                  <EmptyState
+                    icon={Search}
+                    title="Ningún producto coincide"
+                    description="Prueba con otro nombre o SKU."
+                    action={<Button variant="outline" size="sm" onClick={() => setSearch("")}>Limpiar búsqueda</Button>}
+                  />
+                ))}
+            </TarjetasMovil>
           </div>
         )}
       </Card>

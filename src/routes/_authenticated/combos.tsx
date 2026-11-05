@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN } from "@/lib/pricing";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/combos")({
   head: () => ({ meta: [{ title: "Combos — G&M POS" }] }),
@@ -318,6 +319,18 @@ function CombosPage() {
   const precioNormalDe = (c: any) =>
     (c.combo_items ?? []).reduce((s: number, it: any) => s + (it.products?.precio ?? 0) * it.cantidad, 0);
 
+  // Abre el formulario de edición (lo usan la tabla y las tarjetas móviles)
+  const editarCombo = (c: any) =>
+    setEditItem({
+      id: c.id,
+      nombre: c.nombre,
+      descripcion: c.descripcion ?? "",
+      precio_combo: String(c.precio_combo),
+      vence_el: isoToLocalInput(c.vence_el),
+      activo: c.activo,
+      items: (c.combo_items ?? []).map((it: any) => ({ product_id: it.product_id, cantidad: it.cantidad })),
+    });
+
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -335,7 +348,7 @@ function CombosPage() {
           <TableSkeleton rows={5} cols={5} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
-            <table className="w-full min-w-[600px] text-sm">
+            <table className="hidden sm:table w-full min-w-[600px] text-sm">
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3">Combo</th>
@@ -380,15 +393,7 @@ function CombosPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setEditItem({
-                              id: c.id,
-                              nombre: c.nombre,
-                              descripcion: c.descripcion ?? "",
-                              precio_combo: String(c.precio_combo),
-                              vence_el: isoToLocalInput(c.vence_el),
-                              activo: c.activo,
-                              items: (c.combo_items ?? []).map((it: any) => ({ product_id: it.product_id, cantidad: it.cantidad })),
-                            })}
+                            onClick={() => editarCombo(c)}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -417,6 +422,70 @@ function CombosPage() {
                 )}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {data.map((c: any) => {
+                const normal = precioNormalDe(c);
+                const vencido = c.vence_el && new Date(c.vence_el).getTime() <= Date.now();
+                const incluye = (c.combo_items ?? []).map((it: any) => it.products?.nombre).filter(Boolean).join(" + ");
+                return (
+                  <TarjetaFila
+                    key={c.id}
+                    titulo={
+                      <span className="flex items-center gap-2">
+                        <PackageCheck className="h-4 w-4 text-accent flex-shrink-0" />
+                        {c.nombre}
+                      </span>
+                    }
+                    estado={
+                      !c.activo ? (
+                        <Badge variant="outline" className="text-muted-foreground">Inactivo</Badge>
+                      ) : vencido ? (
+                        <Badge variant="outline" className="text-muted-foreground">Vencido</Badge>
+                      ) : (
+                        <Badge className="bg-accent text-accent-foreground hover:bg-accent">Activo</Badge>
+                      )
+                    }
+                    datos={[
+                      {
+                        etiqueta: "Precio",
+                        destacado: true,
+                        valor: (
+                          <span className="flex flex-col leading-tight">
+                            {normal > 0 && <span className="text-muted-foreground line-through text-xs font-normal">{fmt(normal)}</span>}
+                            <span className="text-accent">{fmt(c.precio_combo)}</span>
+                          </span>
+                        ),
+                      },
+                      ...(incluye ? [{ etiqueta: "Incluye", completo: true, valor: <span className="text-xs">{incluye}</span> }] : []),
+                    ]}
+                    acciones={
+                      <>
+                        <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => editarCombo(c)}>
+                          <Pencil className="h-4 w-4 mr-1.5" /> Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={BTN_TACTIL}
+                          aria-label={`Eliminar ${c.nombre}`}
+                          onClick={() => { if (confirm("¿Eliminar este combo?")) delMut.mutate(c.id); }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    }
+                  />
+                );
+              })}
+              {data.length === 0 && (
+                <EmptyState
+                  icon={PackageCheck}
+                  title="Aún no hay combos"
+                  description="Agrupa varios productos con un precio especial para venderlos juntos."
+                />
+              )}
+            </TarjetasMovil>
           </div>
         )}
       </Card>

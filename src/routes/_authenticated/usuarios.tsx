@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -247,7 +248,7 @@ function UsuariosPage() {
           <TableSkeleton rows={5} cols={3} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="hidden sm:table w-full min-w-[560px] text-sm">
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3">Usuario</th>
@@ -306,6 +307,64 @@ function UsuariosPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {profiles.map((p: any) => {
+                const rolesDe = (data?.roles ?? [])
+                  .filter((r: any) => r.user_id === p.id)
+                  .map((r: any) => r.role as Rol);
+                const variosRoles = rolesDe.length > 1;
+                const actual: Rol | null = variosRoles ? null : rolesDe[0] ?? null;
+                const esYo = p.id === user?.id;
+                return (
+                  <TarjetaFila
+                    key={p.id}
+                    titulo={p.full_name || "Sin nombre"}
+                    subtitulo={esYo ? "Tú" : undefined}
+                    estado={
+                      variosRoles ? (
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {rolesDe.map((r) => <Badge key={r} variant="secondary">{etiqueta(r)}</Badge>)}
+                        </div>
+                      ) : actual ? (
+                        <Badge variant="secondary">{etiqueta(actual)}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Sin rol</span>
+                      )
+                    }
+                    datos={
+                      variosRoles
+                        ? [{
+                            etiqueta: "Aviso",
+                            completo: true,
+                            valor: <span className="text-xs text-destructive">Tiene varios roles: elige uno para corregirlo.</span>,
+                          }]
+                        : undefined
+                    }
+                    acciones={
+                      <div className="w-full">
+                        <p className="mb-1 text-xs text-muted-foreground">Cambiar rol</p>
+                        <Select
+                          value={actual ?? undefined}
+                          onValueChange={(v) => pedirCambio(p, actual, v as Rol)}
+                          disabled={m.isPending || esYo}
+                        >
+                          <SelectTrigger className="h-11 w-full" aria-label={`Rol de ${p.full_name || "usuario"}`}>
+                            <SelectValue placeholder={variosRoles ? "Elegir rol" : "Asignar rol"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ROLES.map((r) => (
+                              <SelectItem key={r} value={r}>{ROL_LABEL[r]}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    }
+                  />
+                );
+              })}
+            </TarjetasMovil>
           </div>
         )}
       </Card>
