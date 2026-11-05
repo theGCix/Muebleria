@@ -104,3 +104,14 @@
 - No tocado, a la espera de aprobación del dueño: `src/routes/terminos.tsx` (el texto sobre fotos de reseñas cita la «galería de Proyectos realizados» y su enlace; con la redirección lleva al catálogo).
 - Pendiente (Fase 2 / B): sigue en espera hasta tener proyectos reales con antes/después, distrito, tiempo («2 semanas») y materiales, y permiso del cliente.
 - **Idea nueva del dueño (no planificada):** mostrar productos/ideas nuevas con «me gusta» o reacciones para medir si hay demanda antes de fabricarlos. Es otra función (reacciones de clientes), distinta de B: requiere plan aparte (tabla de reacciones, quién puede votar —anónimo o con cuenta—, antiabuso, privacidad, dónde se muestra y cómo se lee en el panel).
+
+## 2026-11-05 — Proyectos, Fase 2 (B) implementada (autorizada: «vamos con la fase 2-b»)
+- Patch `proyectos-fase2.patch` (se aplica DESPUÉS de `proyectos-fase1.patch`; 4 archivos modificados + 1 migración nueva; sin dependencias nuevas). Comprobado: aplica limpio sobre el zip original + Fase 1.
+- **Migración nueva (requiere ejecutarla en Supabase y `git add`):** `supabase/migrations/20261105_proyectos_realizados.sql` → `proyectos`: `distrito`, `tiempo_ejecucion` (texto libre), `materiales text[]`, `fotos_antes text[]`, `fotos_despues text[]`, `autorizacion_cliente boolean default false`. Idempotente. Sin cambios de RLS (por verificar con `pg_policies`).
+- `src/hooks/useProyectos.ts`: lee las columnas nuevas; si la migración no está aplicada, reintenta con las columnas anteriores (no oculta los proyectos existentes). Distrito y fotos antes/después solo salen si `autorizacion_cliente = true`.
+- `src/lib/proyectos.functions.ts`: validación de los campos nuevos; no se puede publicar distrito o antes/después sin `autorizacion_cliente`; los errores de validación ahora muestran el mensaje (antes salía el JSON de zod); si la migración falta, un proyecto sin datos nuevos se sigue guardando.
+- `src/routes/_authenticated/gestionar-proyectos.tsx`: campos Distrito, Tiempo de ejecución («2 semanas»), Materiales (separados por coma), tres grupos de fotos (proyecto ≤ 8, antes ≤ 4, después ≤ 4) e interruptor de autorización del cliente.
+- `src/routes/proyectos.tsx`: tarjeta con distrito y tiempo; diálogo con distrito, tiempo, materiales (chips), bloque Antes/Después (miniaturas que abren la galería) y etiquetas en la foto. Lo vacío no se muestra.
+- No cambia: sitemap, prerender y chat (Fase 1 ya los condiciona a que haya proyectos). `terminos.tsx` sigue sin tocar (a la espera del dueño).
+- Verificación: TypeScript sin errores de sintaxis en los 4 archivos; `git apply --check` OK. **Sin probar:** `tsc --noEmit`, `vite build`, ni el flujo en navegador/Supabase (el zip no trae `node_modules`).
+- Pendiente: ejecutar la migración; cargar un primer proyecto REAL (con autorización del cliente); revisar `pg_policies` de `proyectos`; decidir sobre `terminos.tsx`; la idea de reacciones («me gusta») sigue sin plan.

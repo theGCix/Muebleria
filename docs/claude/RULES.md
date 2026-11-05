@@ -32,3 +32,4 @@
 - Sin proyectos publicados con foto, `/proyectos` no existe de cara al público: redirige a `/catalogo` y no se anuncia (sitemap, prerender, chat).
 - Publicar fotos de clientes y su distrito requiere la autorización del cliente. El distrito se muestra sin dirección.
 - Tiempo de ejecución: texto libre breve («2 semanas»).
+- El distrito y las fotos antes/después solo se publican con `autorizacion_cliente = true` (el panel lo exige y la web lo vuelve a comprobar).

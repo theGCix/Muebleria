@@ -80,3 +80,6 @@ id, nombre, descripcion, sku, precio, stock, categoria, imagen_url, imagen_publi
 `proyectos`, todas opcionales: `distrito text`, `tiempo_ejecucion text` (texto libre breve, p. ej. «2 semanas»; formato confirmado por el dueño el 2026-11-05), `materiales text[]`, `fotos_antes text[]`, `fotos_despues text[]`. `fotos` queda como respaldo. Migración idempotente (`ADD COLUMN IF NOT EXISTS`). Sin cambios de RLS si la política actual es por fila (por verificar). Un campo vacío no se muestra; nada se rellena por defecto.
 
 > Fase 1 de Proyectos (2026-11-05): sin cambios de esquema ni de RLS. La Fase 2 (B) sigue sin aplicar.
+
+## Propuesta B → patch Fase 2 (2026-11-05, migración SIN ejecutar todavía)
+`supabase/migrations/20261105_proyectos_realizados.sql` agrega a `proyectos`: `distrito text`, `tiempo_ejecucion text`, `materiales text[] not null default '{}'`, `fotos_antes text[] not null default '{}'`, `fotos_despues text[] not null default '{}'` y `autorizacion_cliente boolean not null default false` (requisito de privacidad: sin ella no se publican distrito ni antes/después). Sin cambios de RLS: confirmar con `select policyname, cmd, qual from pg_policies where tablename = 'proyectos'`.
