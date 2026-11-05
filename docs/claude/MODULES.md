@@ -74,3 +74,6 @@
 - Existentes: `ProductGallery`, pestañas Especificaciones / Reseñas / Entrega, `ProductRecomendaciones` (misma categoría, 4 productos), cotización (`LeadFormDialog`) y WhatsApp.
 - `StickyBuyBar`: fija en móvil (≤ 640 px) y al hacer scroll en pantallas grandes; panel «Ir a pagar / Seguir comprando» tras agregar.
 - No existen medidas por producto (alto/ancho/fondo), plazas ni esquema: solo `volumen_m3` y `peso_kg` (ver DATABASE.md).
+**Chatbot (`src/components/AsistenteChat.tsx`)**
+- Streaming SSE en `POST /api/chat/stream` (eventos `status`, `token`, `reset`, `done`, `error`); si responde 404 usa `POST /api/chat`. Corte por inactividad de 8 s, errores clasificados y tarjeta de respaldo (ver TASK_LOG, «Robustez del chatbot»).
+- Servidor: `registerChat` en `server/chat.js` (LangChain + Ollama, `OLLAMA_TIMEOUT_MS` por defecto 60 s); `/health` en `server/index.js`.

@@ -72,3 +72,14 @@
 - Sin autoplay (decisión de criterio: son ofertas que el cliente compara; no se mueven solas).
 - Verificación: solo sintaxis TSX (el zip no trae `node_modules` y no hay red). **Pendiente:** `tsc --noEmit`, `vite build` y prueba a 360/414/768/1280 px con datos reales (arrastre sin disparar el enlace, cambio de chip, flechas, teclado).
 - Pendiente aparte (Parte 5/K2): los chips de categoría de esta sección siguen en ~32 px de alto (< 44 px).
+
+## 2026-11-05 — Robustez del chatbot (continuación)
+- Retomado desde un chat anterior cuyo trabajo no llegó al repo (solo se conservó el guion de pruebas); se reimplementó según ese guion. Si existía un plan aprobado con más puntos, falta contrastarlo.
+- `src/components/AsistenteChat.tsx` (único archivo de código tocado; servidor sin cambios):
+  - Corte a los **8 s sin ningún evento** del servidor (`SIN_EVENTOS_MS`); cada evento/bytes reinicia el reloj, así una respuesta lenta pero viva no se corta.
+  - Errores clasificados (`ChatError`): `timeout`, `servidor` (503, usa el texto `error` del servidor), `limite` (429) y `sin_red`.
+  - Tarjeta de respaldo (`role="alert"`): mensaje, «Reintentar» (reenvía sin duplicar el mensaje del cliente), «Escribir por WhatsApp» y «Mientras tanto» (catálogo, envíos). Botones ≥ 44 px.
+  - Esqueleto de carga mientras llega el primer evento; ping a `/health` una vez al abrir el chat (despierta Render).
+  - Modo sin streaming (`/api/chat`) ahora también clasifica errores y corta a los 30 s.
+- Verificado con servidor simulado + Playwright (390 px): colgado → respaldo a 8,4 s; reintentar OK; 503; 429; sin red; respuesta viva de 15 s sin corte.
+- Sin probar: contra el backend real (LangChain + Ollama) ni `node --test server/chat*.test.js` (no se tocó el servidor).

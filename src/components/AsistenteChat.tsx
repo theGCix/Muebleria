@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, X, Send, Loader2, Sparkles, ArrowLeft, ArrowUpRight, Phone } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, Sparkles, ArrowLeft, ArrowUpRight, Phone, RotateCw, WifiOff } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { API_URL as API, WHATSAPP_NUMBER } from "@/config";
 import { trackLead } from "@/lib/analytics";
@@ -19,6 +19,54 @@ type CartAction = {
   image?: string; sku?: string; cantidad: number;
 };
 
+/** Si el servidor no manda NINGÚN evento en este tiempo, se corta y se muestra el respaldo (con «Reintentar»). */
+const SIN_EVENTOS_MS = 8000;
+
+type TipoFallo = "timeout" | "servidor" | "limite" | "sin_red";
+
+/** Error del chat ya clasificado: `mensaje` es el texto que ve el cliente. */
+class ChatError extends Error {
+  constructor(public tipo: TipoFallo, mensaje: string) {
+    super(mensaje);
+  }
+}
+
+const MENSAJE_FALLO: Record<TipoFallo, string> = {
+  timeout: "El asistente está tardando más de lo normal en responder.",
+  servidor: "El asistente no está disponible en este momento.",
+  limite: "Estás enviando mensajes muy rápido. Espera un momento e intenta de nuevo.",
+  sin_red: "No pudimos conectar. Revisa tu conexión a internet.",
+};
+
+/** Convierte una respuesta HTTP no exitosa en un ChatError (usa el texto `error` del servidor si viene). */
+async function errorDeRespuesta(res: Response): Promise<ChatError> {
+  let texto = "";
+  try {
+    texto = ((await res.json()) as { error?: string }).error ?? "";
+  } catch {
+    /* cuerpo no JSON */
+  }
+  if (res.status === 429) return new ChatError("limite", texto || MENSAJE_FALLO.limite);
+  return new ChatError("servidor", texto || MENSAJE_FALLO.servidor);
+}
+
+/** Un fetch que falla (TypeError) es red caída o servidor inalcanzable. */
+function comoChatError(e: unknown): unknown {
+  if (e instanceof ChatError) return e;
+  if (e instanceof TypeError) return new ChatError("sin_red", MENSAJE_FALLO.sin_red);
+  return e;
+}
+
+/** Despierta el servidor (en Render gratis duerme): se llama una vez al abrir el chat. */
+let calentado = false;
+function calentarServidor() {
+  if (calentado) return;
+  calentado = true;
+  fetch(`${API}/health`, { method: "GET", cache: "no-store" }).catch(() => {
+    calentado = false; // si falló, se intenta de nuevo la próxima vez que abran el chat
+  });
+}
+
 /** Cabeceras del chat: si hay sesión, el servidor identifica al cliente y consulta SUS pedidos sin pedir número ni correo. */
 async function cabeceras(): Promise<Record<string, string>> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -32,12 +80,19 @@ async function cabeceras(): Promise<Record<string, string>> {
 }
 
 async function chatWithAssistant(messages: Message[], sessionId: string): Promise<ChatResult> {
-  const res = await fetch(`${API}/api/chat`, {
-    method: "POST",
-    headers: await cabeceras(),
-    body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
-  });
-  if (!res.ok) throw new Error("Error al conectar con el asistente");
+  let res: Response;
+  try {
+    res = await fetch(`${API}/api/chat`, {
+      method: "POST",
+      headers: await cabeceras(),
+      body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
+      signal: AbortSignal.timeout(30_000), // modo sin streaming: no hay eventos intermedios, se da más margen
+    });
+  } catch (e) {
+    if ((e as Error).name === "TimeoutError") throw new ChatError("timeout", MENSAJE_FALLO.timeout);
+    throw comoChatError(e);
+  }
+  if (!res.ok) throw await errorDeRespuesta(res);
   const data = await res.json();
   return { reply: data.reply ?? "Lo siento, no pude procesar tu consulta.", cartActions: data.cartActions ?? [], links: data.links ?? [] };
 }
@@ -58,53 +113,78 @@ async function chatWithAssistantStream(
   h: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<ChatResult> {
-  const res = await fetch(`${API}/api/chat/stream`, {
-    method: "POST",
-    headers: await cabeceras(),
-    body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
-    signal,
-  });
-  if (res.status === 404) throw new StreamNoDisponible();
-  if (!res.ok || !res.body) throw new Error("Error al conectar con el asistente");
+  // Corte por inactividad: 8 s sin NINGÚN evento (ni cabeceras ni bytes). Cada lectura reinicia el reloj,
+  // así una respuesta lenta pero viva no se corta.
+  const interno = new AbortController();
+  const alAbortarExterno = () => interno.abort();
+  signal?.addEventListener("abort", alAbortarExterno);
+  let sinEventos = false;
+  let reloj: ReturnType<typeof setTimeout> | undefined;
+  const armarReloj = () => {
+    clearTimeout(reloj);
+    reloj = setTimeout(() => {
+      sinEventos = true;
+      interno.abort();
+    }, SIN_EVENTOS_MS);
+  };
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let result: ChatResult | null = null;
+  try {
+    armarReloj();
+    const res = await fetch(`${API}/api/chat/stream`, {
+      method: "POST",
+      headers: await cabeceras(),
+      body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), sessionId }),
+      signal: interno.signal,
+    });
+    if (res.status === 404) throw new StreamNoDisponible();
+    if (!res.ok || !res.body) throw await errorDeRespuesta(res);
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: ChatResult | null = null;
 
-    let sep: number;
-    while ((sep = buffer.indexOf("\n\n")) !== -1) {
-      const raw = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
+    while (true) {
+      armarReloj();
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-      let event = "message";
-      let data = "";
-      for (const line of raw.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data += line.slice(5).trim();
-      }
-      const payload = data ? JSON.parse(data) : {};
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
 
-      if (event === "token") h.onToken(payload.text ?? "");
-      else if (event === "status") h.onStatus(payload.text ?? "");
-      else if (event === "reset") h.onReset();
-      else if (event === "error") throw new Error(payload.error ?? "Error del asistente");
-      else if (event === "done") {
-        result = {
-          reply: payload.reply ?? "Lo siento, no pude procesar tu consulta.",
-          cartActions: payload.cartActions ?? [],
-          links: payload.links ?? [],
-        };
+        let event = "message";
+        let data = "";
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        const payload = data ? JSON.parse(data) : {};
+
+        if (event === "token") h.onToken(payload.text ?? "");
+        else if (event === "status") h.onStatus(payload.text ?? "");
+        else if (event === "reset") h.onReset();
+        else if (event === "error") throw new ChatError("servidor", payload.error ?? MENSAJE_FALLO.servidor);
+        else if (event === "done") {
+          result = {
+            reply: payload.reply ?? "Lo siento, no pude procesar tu consulta.",
+            cartActions: payload.cartActions ?? [],
+            links: payload.links ?? [],
+          };
+        }
       }
     }
+    if (!result) throw new ChatError("servidor", "Respuesta incompleta del asistente.");
+    return result;
+  } catch (e) {
+    if (sinEventos) throw new ChatError("timeout", MENSAJE_FALLO.timeout);
+    throw comoChatError(e);
+  } finally {
+    clearTimeout(reloj);
+    signal?.removeEventListener("abort", alAbortarExterno);
   }
-  if (!result) throw new Error("Respuesta incompleta del asistente");
-  return result;
 }
 
 // Rutas del panel interno que en móvil tienen la barra de navegación inferior (MobileBottomBar):
@@ -118,6 +198,7 @@ export function AsistenteChat() {
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
   const [estado, setEstado]   = useState("Pensando…");
+  const [fallo, setFallo]     = useState<{ tipo: TipoFallo; texto: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -137,6 +218,11 @@ export function AsistenteChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, estado]);
+
+  // Al abrir el chat se despierta el servidor (evita el «primer mensaje eterno» con el servidor dormido)
+  useEffect(() => {
+    if (open) calentarServidor();
+  }, [open]);
 
   // Si el componente se desmonta, cancelamos la generación en curso
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -194,13 +280,16 @@ export function AsistenteChat() {
       return copia;
     });
 
-  const send = async (override?: string) => {
+  // `reintento`: el mensaje del cliente ya está en la conversación; no se vuelve a agregar
+  const send = async (override?: string, reintento = false) => {
     const text = (override ?? input).trim();
     if (!text || loading) return;
     setInput("");
     setTema(null);
+    setFallo(null);
 
-    const newMessages: Message[] = [...messages, { role: "user", content: text }];
+    const base = reintento ? messages.filter((m, i) => !(i === messages.length - 1 && m.role === "assistant" && !m.content)) : messages;
+    const newMessages: Message[] = reintento ? base : [...base, { role: "user", content: text }];
     // Burbuja vacía del asistente que se irá llenando con el stream
     setMessages([...newMessages, { role: "assistant", content: "" }]);
     setEstado("Pensando…");
@@ -232,10 +321,21 @@ export function AsistenteChat() {
       if (result.cartActions.length > 0) aplicarAccionesCarrito(result.cartActions);
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
-      editarUltimo(() => "Disculpa, hubo un error. Por favor intenta de nuevo.");
+      const err = e instanceof ChatError ? e : new ChatError("servidor", MENSAJE_FALLO.servidor);
+      // Se quita la burbuja vacía del asistente; el mensaje del cliente se conserva y se ofrece «Reintentar»
+      setMessages((m) => {
+        const last = m[m.length - 1];
+        return last?.role === "assistant" && !last.content ? m.slice(0, -1) : m;
+      });
+      setFallo({ tipo: err.tipo, texto: err.message });
     } finally {
       setLoading(false);
     }
+  };
+
+  const reintentar = () => {
+    const ultima = [...messages].reverse().find((m) => m.role === "user")?.content;
+    if (ultima) void send(ultima, true);
   };
 
   // Traspaso a una persona: abre WhatsApp con el contexto (página que ve + última consulta al asistente)
@@ -334,7 +434,7 @@ export function AsistenteChat() {
               )
             ))}
             {loading && !messages[messages.length - 1]?.content && (
-              <div className="flex justify-start">
+              <div className="flex flex-col items-start gap-1.5">
                 <div
                   className="rounded-2xl px-3.5 py-2.5 flex items-center gap-1.5"
                   style={{ background: "var(--muted)" }}
@@ -342,9 +442,66 @@ export function AsistenteChat() {
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">{estado}</span>
                 </div>
+                {/* Esqueleto de la respuesta mientras llega el primer evento */}
+                <div aria-hidden="true" className="w-[70%] space-y-1.5 rounded-2xl px-3.5 py-2.5" style={{ background: "var(--muted)" }}>
+                  <div className="h-2.5 w-full animate-pulse rounded bg-foreground/10" />
+                  <div className="h-2.5 w-4/5 animate-pulse rounded bg-foreground/10" />
+                </div>
               </div>
             )}
-            {messages.length > 0 && messages[messages.length - 1].role === "assistant" && !loading && (
+            {fallo && !loading && (
+              <div
+                role="alert"
+                className="rounded-2xl border p-3 space-y-2.5"
+                style={{ borderColor: "var(--border)", background: "var(--muted)" }}
+              >
+                <p className="flex items-start gap-2 text-sm leading-snug text-foreground">
+                  {fallo.tipo === "sin_red" && <WifiOff className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />}
+                  <span>{fallo.texto}</span>
+                </p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={reintentar}
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-medium"
+                    style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+                  >
+                    <RotateCw className="h-4 w-4" aria-hidden="true" /> Reintentar
+                  </button>
+                  {WHATSAPP_NUMBER && (
+                    <button
+                      type="button"
+                      onClick={abrirWhatsApp}
+                      className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-4 text-sm font-medium"
+                      style={{ borderColor: "var(--border)", color: "#1f6f43", background: "var(--background)" }}
+                    >
+                      <Phone className="h-4 w-4" aria-hidden="true" /> Escribir por WhatsApp
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs text-muted-foreground">Mientras tanto</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { label: "Ver el catálogo", to: "/catalogo" },
+                      { label: "Plazos y envíos", to: "/envios" },
+                    ] as ChatLink[]).map((l) => (
+                      <button
+                        key={l.to}
+                        type="button"
+                        onClick={() => irA(l)}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-full border px-3.5 text-xs font-medium"
+                        style={{ borderColor: "var(--primary)", color: "var(--primary)", background: "var(--background)" }}
+                      >
+                        {l.label}
+                        <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {messages.length > 0 && messages[messages.length - 1].role === "assistant" && !loading && !fallo && (
               <div className="flex flex-col gap-1.5 pt-1">
                 {tema ? (
                   <>
@@ -418,4 +575,4 @@ export function AsistenteChat() {
       )}
     </>
   );
-}
+}
