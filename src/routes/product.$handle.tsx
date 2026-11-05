@@ -32,6 +32,8 @@ import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBuyBar";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
+import { MedidasPiezas } from "@/components/product/MedidasPiezas";
+import { piezasDeProducto } from "@/lib/piezas";
 import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
 
@@ -105,6 +107,9 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
     ["Garantía", "2 años en estructura"],
   ];
 
+  // D7: piezas con medidas/plazas y esquema (columnas opcionales de products)
+  const medidas = useMemo(() => piezasDeProducto(product), [product]);
+
   const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
     queryKey: ["resenas-producto", product?.id],
     queryFn: () => fetchProductReviews(product!.id),
@@ -164,6 +169,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
                 ))}
               </ul>
             </div>
+            <MedidasPiezas piezas={medidas.piezas} esquemaUrl={medidas.esquemaUrl} producto={product?.nombre ?? ""} />
           </div>
         )}
 
