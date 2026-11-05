@@ -44,3 +44,16 @@ export function leerDistritoGuardado(): string {
     return "";
   }
 }
+
+/** Evento que avisa, en esta pestaña, que cambió el distrito guardado (el evento "storage" solo salta en otras pestañas). */
+export const DISTRITO_EVENT = "gm:distrito-envio";
+
+/** Guarda el distrito elegido (ficha, tarjeta o checkout) y avisa a quien lo esté mostrando. */
+export function guardarDistrito(distrito: string): void {
+  try {
+    localStorage.setItem(DISTRITO_STORAGE_KEY, distrito);
+  } catch {
+    /* sin storage: solo se pierde la memoria entre páginas */
+  }
+  window.dispatchEvent(new Event(DISTRITO_EVENT));
+}

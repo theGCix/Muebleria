@@ -13,6 +13,7 @@ export const DISTRITOS_ENVIO: DistritoEnvio[] = [
   { destino: "Carabayllo", precio: 130 },
   { destino: "Chaclacayo", precio: 280 },
   { destino: "Chorrillos", precio: 220 },
+  { destino: "Cercado de lima", precio: 120 },
   { destino: "Cieneguilla", precio: 300 },
   { destino: "Comas", precio: 80 },
   { destino: "El Agustino", precio: 160 },
@@ -64,4 +65,25 @@ export function getPrecioEnvio(distrito: string): number | null {
     (d) => d.destino.localeCompare(distrito, "es", { sensitivity: "base" }) === 0
   );
   return match ? match.precio : null;
-} 
+}
+
+/** Nombre del distrito tal como está en el tarifario (ignora tildes y mayúsculas), o "" si no hay cobertura. */
+export function distritoDeTarifa(distrito?: string | null): string {
+  const d = (distrito ?? "").trim();
+  if (!d) return "";
+  return DISTRITOS_ENVIO.find((x) => x.destino.localeCompare(d, "es", { sensitivity: "base" }) === 0)?.destino ?? "";
+}
+
+/** Precio de envío más bajo del tarifario vigente (para "Envío desde S/ X"). Se recalcula solo si cambian las tarifas. */
+export function precioEnvioDesde(): number {
+  return Math.min(...DISTRITOS_ENVIO.map((d) => d.precio));
+}
+
+/** Distritos de la Provincia Constitucional del Callao (el resto del tarifario es Lima Metropolitana). */
+const DISTRITOS_CALLAO = ["Bellavista", "Callao", "Carmen de la Legua", "La Perla", "La Punta", "Mi Perú", "Ventanilla"];
+
+/** "Callao" o "Lima" según el distrito; así el pedido sigue guardando `ciudad` sin pedírsela al cliente. */
+export function ciudadDeDistrito(distrito: string): "Lima" | "Callao" {
+  const d = distritoDeTarifa(distrito);
+  return DISTRITOS_CALLAO.some((c) => c === d) ? "Callao" : "Lima";
+}

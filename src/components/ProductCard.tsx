@@ -14,8 +14,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { LeadFormDialog } from "./LeadFormDialog";
 import { fmtPEN, ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
 import { useProductRating } from "@/hooks/useProductRatings";
-import { getPrecioEnvio } from "@/lib/envios";
-import { leerDistritoGuardado, rangoEntregaCorto } from "@/lib/entrega";
+import { rangoEntregaCorto } from "@/lib/entrega";
+import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
 import "./product-card.css";
 
 interface Props { product: Product; }
@@ -107,6 +107,8 @@ export function ProductCard({ product: p }: Props) {
   const { toggleWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
   const [medidaOpen, setMedidaOpen] = useState(false);
+  // Distrito compartido con la ficha y el checkout (nunca se asume uno)
+  const { distrito: distritoEnvio, envio: envioDistrito, desde: envioDesde } = useDistritoEnvio();
   const [entrega, setEntrega] = useState<{ rango: string; distrito: string; envio: number | null } | null>(null);
 
   const cardRef = useRef<HTMLElement | null>(null);
@@ -127,9 +129,8 @@ export function ProductCard({ product: p }: Props) {
 
   // Fecha y envío se calculan en el cliente (evita desajustes de hidratación por zona horaria)
   useEffect(() => {
-    const distrito = leerDistritoGuardado();
-    setEntrega({ rango: rangoEntregaCorto(), distrito, envio: distrito ? getPrecioEnvio(distrito) : null });
-  }, []);
+    setEntrega({ rango: rangoEntregaCorto(), distrito: distritoEnvio, envio: envioDistrito });
+  }, [distritoEnvio, envioDistrito]);
 
   const descripcion = descripcionUtil(p.nombre, p.descripcion);
   const atributos = [p.material_base, p.subcategoria].filter(
@@ -361,8 +362,10 @@ export function ProductCard({ product: p }: Props) {
                       <Truck className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
                       <span>
                         Llega <b className="whitespace-nowrap font-semibold text-foreground">{entrega.rango}</b>
-                        {entrega.distrito && entrega.envio != null && (
+                        {entrega.distrito && entrega.envio != null ? (
                           <> · Envío a {entrega.distrito} <b className="font-semibold text-foreground">{fmtPEN(entrega.envio)}</b></>
+                        ) : (
+                          <> · Envío desde <b className="font-semibold text-foreground">{fmtPEN(envioDesde)}</b></>
                         )}
                       </span>
                     </>
