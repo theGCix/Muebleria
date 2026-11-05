@@ -3,7 +3,7 @@
 // Sin proyectos publicados la página no se muestra: redirige a /catalogo (nunca una vitrina vacía).
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Ruler } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MapPin, Ruler } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,20 @@ function liviana(url: string, w: number) {
   return url.replace("/upload/", `/upload/w_${w},q_auto,f_auto/`);
 }
 
+interface ItemGaleria {
+  url: string;
+  etiqueta?: "Antes" | "Después";
+}
+
+/** Galería del diálogo: primero el antes y el después (si existen), luego las fotos del proyecto. */
+function galeriaDe(p: Proyecto): ItemGaleria[] {
+  return [
+    ...p.fotos_antes.map((url) => ({ url, etiqueta: "Antes" as const })),
+    ...p.fotos_despues.map((url) => ({ url, etiqueta: "Después" as const })),
+    ...p.fotos.map((url) => ({ url })),
+  ];
+}
+
 function ProyectosPage() {
   const { data, isLoading } = useProyectos();
   const [sel, setSel] = useState<Proyecto | null>(null);
@@ -48,7 +62,9 @@ function ProyectosPage() {
     setSel(p);
     setFoto(0);
   };
-  const mover = (d: number) => sel && setFoto((f) => (f + d + sel.fotos.length) % sel.fotos.length);
+  const galeria = sel ? galeriaDe(sel) : [];
+  const actual = galeria[Math.min(foto, galeria.length - 1)];
+  const mover = (d: number) => galeria.length > 0 && setFoto((f) => (f + d + galeria.length) % galeria.length);
 
   // Sin proyectos reales publicados no hay nada que mostrar: al catálogo (replace: no deja /proyectos en el historial).
   if (!isLoading && !hayProyectos) return <Navigate to="/catalogo" replace />;
@@ -103,6 +119,20 @@ function ProyectosPage() {
                       <div className="p-4">
                         <p className="font-display text-xl font-semibold leading-tight">{p.titulo}</p>
                         {p.anio && <p className="mt-1 text-xs text-muted-foreground">{p.anio}</p>}
+                        {(p.distrito || p.tiempo_ejecucion) && (
+                          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            {p.distrito && (
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin className="h-3.5 w-3.5" aria-hidden="true" /> {p.distrito}
+                              </span>
+                            )}
+                            {p.tiempo_ejecucion && (
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5" aria-hidden="true" /> {p.tiempo_ejecucion}
+                              </span>
+                            )}
+                          </p>
+                        )}
                         {p.descripcion && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{p.descripcion}</p>}
                       </div>
                     </button>
@@ -142,11 +172,16 @@ function ProyectosPage() {
               <div className="relative flex min-h-[280px] flex-col bg-black/90 md:min-h-[520px]">
                 <div className="relative flex flex-1 items-center justify-center">
                   <img
-                    src={liviana(sel.fotos[Math.min(foto, sel.fotos.length - 1)], 1400)}
-                    alt={sel.titulo}
+                    src={liviana(actual.url, 1400)}
+                    alt={actual.etiqueta ? `${sel.titulo} — ${actual.etiqueta.toLowerCase()}` : sel.titulo}
                     className="max-h-[70vh] w-full object-contain"
                   />
-                  {sel.fotos.length > 1 && (
+                  {actual.etiqueta && (
+                    <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-medium shadow-sm">
+                      {actual.etiqueta}
+                    </span>
+                  )}
+                  {galeria.length > 1 && (
                     <>
                       <button
                         type="button"
@@ -167,11 +202,11 @@ function ProyectosPage() {
                     </>
                   )}
                 </div>
-                {sel.fotos.length > 1 && (
-                  <div className="flex justify-center gap-2 p-3">
-                    {sel.fotos.map((f, i) => (
+                {galeria.length > 1 && (
+                  <div className="flex flex-wrap justify-center gap-2 p-3">
+                    {galeria.map((g, i) => (
                       <button
-                        key={f + i}
+                        key={g.url + i}
                         type="button"
                         onClick={() => setFoto(i)}
                         aria-label={`Ver foto ${i + 1}`}
@@ -179,7 +214,7 @@ function ProyectosPage() {
                           i === foto ? "border-accent" : "border-transparent opacity-60 hover:opacity-100"
                         }`}
                       >
-                        <img src={liviana(f, 120)} alt="" className="h-full w-full object-cover" />
+                        <img src={liviana(g.url, 120)} alt="" className="h-full w-full object-cover" />
                       </button>
                     ))}
                   </div>
@@ -194,6 +229,63 @@ function ProyectosPage() {
                   {sel.anio && <span className="text-xs text-muted-foreground">{sel.anio}</span>}
                 </div>
                 <h3 className="font-display text-2xl font-semibold leading-tight">{sel.titulo}</h3>
+                {(sel.distrito || sel.tiempo_ejecucion || sel.materiales.length > 0) && (
+                  <dl className="space-y-3 rounded-2xl bg-secondary/40 p-4 text-sm">
+                    {sel.distrito && (
+                      <div className="flex items-start gap-3">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Distrito</dt>
+                          <dd className="font-medium">{sel.distrito}</dd>
+                        </div>
+                      </div>
+                    )}
+                    {sel.tiempo_ejecucion && (
+                      <div className="flex items-start gap-3">
+                        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Tiempo de ejecución</dt>
+                          <dd className="font-medium">{sel.tiempo_ejecucion}</dd>
+                        </div>
+                      </div>
+                    )}
+                    {sel.materiales.length > 0 && (
+                      <div>
+                        <dt className="mb-1.5 text-xs text-muted-foreground">Materiales utilizados</dt>
+                        <dd className="flex flex-wrap gap-1.5">
+                          {sel.materiales.map((m) => (
+                            <span key={m} className="rounded-full bg-background px-2.5 py-1 text-xs font-medium">
+                              {m}
+                            </span>
+                          ))}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                )}
+                {sel.fotos_antes.length > 0 && sel.fotos_despues.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ["Antes", 0],
+                        ["Después", sel.fotos_antes.length],
+                      ] as const
+                    ).map(([txt, idx]) => (
+                      <button
+                        key={txt}
+                        type="button"
+                        onClick={() => setFoto(idx)}
+                        aria-label={`Ver la foto de ${txt.toLowerCase()}`}
+                        className="relative aspect-[4/3] overflow-hidden rounded-xl border border-border/60 bg-muted"
+                      >
+                        <img src={liviana(galeria[idx].url, 400)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-medium shadow-sm">
+                          {txt}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {sel.descripcion && (
                   <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{sel.descripcion}</p>
                 )}

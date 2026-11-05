@@ -34,8 +34,26 @@ interface Form {
   fotos: string[];
   destacado: boolean;
   publicado: boolean;
+  distrito: string;
+  tiempo_ejecucion: string;
+  /** Materiales separados por coma. */
+  materiales: string;
+  fotos_antes: string[];
+  fotos_despues: string[];
+  autorizacion_cliente: boolean;
 }
-const VACIO: Form = { titulo: "", descripcion: "", etiqueta: "", anio: String(new Date().getFullYear()), fotos: [], destacado: false, publicado: true };
+const VACIO: Form = {
+  titulo: "", descripcion: "", etiqueta: "", anio: String(new Date().getFullYear()), fotos: [], destacado: false, publicado: true,
+  distrito: "", tiempo_ejecucion: "", materiales: "", fotos_antes: [], fotos_despues: [], autorizacion_cliente: false,
+};
+
+type CampoFotos = "fotos" | "fotos_antes" | "fotos_despues";
+const MAX_ANTES_DESPUES = 4;
+const GRUPOS_FOTOS: { campo: CampoFotos; titulo: string; max: number; ayuda: string }[] = [
+  { campo: "fotos", titulo: "Fotos del proyecto", max: MAX_FOTOS, ayuda: "la primera es la portada" },
+  { campo: "fotos_antes", titulo: "Antes (opcional)", max: MAX_ANTES_DESPUES, ayuda: "cómo estaba el espacio" },
+  { campo: "fotos_despues", titulo: "Después (opcional)", max: MAX_ANTES_DESPUES, ayuda: "cómo quedó" },
+];
 
 const mini = (url: string, w = 400) =>
   url.includes("res.cloudinary.com") && url.includes("/upload/") && !/\/upload\/[a-z]_/.test(url)
@@ -47,6 +65,7 @@ function ProyectosAdminPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const campoRef = useRef<CampoFotos>("fotos");
 
   const lista = useQuery({ queryKey: ["proyectos-admin"], queryFn: listProyectosAdmin });
 
@@ -66,6 +85,12 @@ function ProyectosAdminPage() {
         fotos: f.fotos,
         destacado: f.destacado,
         publicado: f.publicado,
+        distrito: f.distrito.trim() || null,
+        tiempo_ejecucion: f.tiempo_ejecucion.trim() || null,
+        materiales: f.materiales.split(",").map((m) => m.trim()).filter(Boolean),
+        fotos_antes: f.fotos_antes,
+        fotos_despues: f.fotos_despues,
+        autorizacion_cliente: f.autorizacion_cliente,
       }),
     onSuccess: () => {
       toast.success("Proyecto guardado");
@@ -94,8 +119,10 @@ function ProyectosAdminPage() {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (!form || files.length === 0) return;
-    const cupo = MAX_FOTOS - form.fotos.length;
-    if (cupo <= 0) return toast.error(`Máximo ${MAX_FOTOS} fotos por proyecto`);
+    const campo = campoRef.current;
+    const max = campo === "fotos" ? MAX_FOTOS : MAX_ANTES_DESPUES;
+    const cupo = max - form[campo].length;
+    if (cupo <= 0) return toast.error(`Máximo ${max} fotos en este grupo`);
     setSubiendo(true);
     try {
       const urls: string[] = [];
@@ -103,7 +130,7 @@ function ProyectosAdminPage() {
         const r = await uploadImage(f, "muebleria/proyectos");
         urls.push(r.secure_url);
       }
-      setForm((cur) => (cur ? { ...cur, fotos: [...cur.fotos, ...urls] } : cur));
+      setForm((cur) => (cur ? { ...cur, [campo]: [...cur[campo], ...urls] } : cur));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo subir la imagen");
     } finally {
@@ -121,6 +148,12 @@ function ProyectosAdminPage() {
       fotos: p.fotos,
       destacado: p.destacado,
       publicado: p.publicado,
+      distrito: p.distrito ?? "",
+      tiempo_ejecucion: p.tiempo_ejecucion ?? "",
+      materiales: (p.materiales ?? []).join(", "),
+      fotos_antes: p.fotos_antes ?? [],
+      fotos_despues: p.fotos_despues ?? [],
+      autorizacion_cliente: !!p.autorizacion_cliente,
     });
 
   const items = lista.data ?? [];
@@ -131,7 +164,7 @@ function ProyectosAdminPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold">Proyectos</h1>
           <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
-            Piezas especiales e innovaciones que fabricaron en G&M. Se muestran en la página pública Proyectos.
+            Proyectos realizados por G&M: solo trabajos reales. Se muestran en la página pública Proyectos cuando hay al menos uno publicado.
           </p>
         </div>
         <Button onClick={() => setForm({ ...VACIO })}>
@@ -144,7 +177,7 @@ function ProyectosAdminPage() {
       ) : lista.isError ? (
         <EmptyState
           title="No se pudo cargar"
-          description="Si es la primera vez, ejecuta la migración 20261028_testimonios_y_proyectos.sql en Supabase."
+          description="Si es la primera vez, ejecuta en Supabase la migración 20261028_testimonios_y_proyectos.sql."
         />
       ) : items.length === 0 ? (
         <EmptyState icon={Sparkles} title="Aún no hay proyectos" description="Agrega la primera pieza que fabricaron con una idea nueva." />
@@ -203,36 +236,43 @@ function ProyectosAdminPage() {
               </DialogHeader>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Fotos ({form.fotos.length}/{MAX_FOTOS}) · la primera es la portada</Label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {form.fotos.map((f, i) => (
-                      <div key={f + i} className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
-                        <img src={mini(f, 240)} alt="" className="h-full w-full object-cover" />
+                {GRUPOS_FOTOS.map((g) => (
+                  <div key={g.campo} className="space-y-2">
+                    <Label>
+                      {g.titulo} ({form[g.campo].length}/{g.max}) · {g.ayuda}
+                    </Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {form[g.campo].map((u, i) => (
+                        <div key={u + i} className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
+                          <img src={mini(u, 240)} alt="" className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            aria-label="Quitar foto"
+                            onClick={() => setForm({ ...form, [g.campo]: form[g.campo].filter((_, k) => k !== i) })}
+                            className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-background/90 shadow"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {form[g.campo].length < g.max && (
                         <button
                           type="button"
-                          aria-label="Quitar foto"
-                          onClick={() => setForm({ ...form, fotos: form.fotos.filter((_, k) => k !== i) })}
-                          className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-background/90 shadow"
+                          disabled={subiendo}
+                          onClick={() => {
+                            campoRef.current = g.campo;
+                            inputRef.current?.click();
+                          }}
+                          className="flex aspect-square flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
                         >
-                          <X className="h-3.5 w-3.5" />
+                          {subiendo && campoRef.current === g.campo ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                          <span className="mt-1 text-[10px]">{subiendo && campoRef.current === g.campo ? "Subiendo…" : "Agregar"}</span>
                         </button>
-                      </div>
-                    ))}
-                    {form.fotos.length < MAX_FOTOS && (
-                      <button
-                        type="button"
-                        disabled={subiendo}
-                        onClick={() => inputRef.current?.click()}
-                        className="flex aspect-square flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-                      >
-                        {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
-                        <span className="mt-1 text-[10px]">{subiendo ? "Subiendo…" : "Agregar"}</span>
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
-                  <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={subirFotos} />
-                </div>
+                ))}
+                <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={subirFotos} />
 
                 <div className="space-y-1.5">
                   <Label htmlFor="p-titulo">Título</Label>
@@ -262,6 +302,39 @@ function ProyectosAdminPage() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="p-distrito">Distrito (opcional)</Label>
+                    <Input
+                      id="p-distrito"
+                      value={form.distrito}
+                      maxLength={60}
+                      placeholder="Ej. Los Olivos"
+                      onChange={(e) => setForm({ ...form, distrito: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="p-tiempo">Tiempo de ejecución (opcional)</Label>
+                    <Input
+                      id="p-tiempo"
+                      value={form.tiempo_ejecucion}
+                      maxLength={40}
+                      placeholder="Ej. 2 semanas"
+                      onChange={(e) => setForm({ ...form, tiempo_ejecucion: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="p-materiales">Materiales utilizados (opcional)</Label>
+                  <Input
+                    id="p-materiales"
+                    value={form.materiales}
+                    placeholder="Separados por coma. Ej. Madera tornillo, Velvet, Herrajes"
+                    onChange={(e) => setForm({ ...form, materiales: e.target.value })}
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor="p-desc">Qué lo hace especial (opcional)</Label>
                   <Textarea
@@ -284,6 +357,19 @@ function ProyectosAdminPage() {
                     Destacado (va primero)
                   </label>
                 </div>
+                <label className="flex items-start gap-2 rounded-lg border border-border/60 p-3 text-sm">
+                  <Switch
+                    checked={form.autorizacion_cliente}
+                    onCheckedChange={(v) => setForm({ ...form, autorizacion_cliente: v })}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    El cliente autorizó mostrar su distrito y las fotos antes/después
+                    <span className="block text-xs text-muted-foreground">
+                      Sin esta confirmación, el distrito y las fotos antes/después no se publican en la web.
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <DialogFooter>
