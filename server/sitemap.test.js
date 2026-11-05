@@ -17,7 +17,8 @@ function fakeSupabase(tablas, llamadas = []) {
         order() { return b; },
         range(a, z) {
           llamadas.push({ tabla, columnas: q.columnas, a, z });
-          return Promise.resolve(tablas[tabla](q.columnas, a, z));
+          const lee = tablas[tabla] ?? (tabla === "proyectos" ? () => ({ data: [], error: null }) : undefined);
+          return Promise.resolve(lee(q.columnas, a, z));
         },
       };
       return b;
@@ -180,4 +181,58 @@ test("sin SITE_URL responde 503 con un mensaje claro", async () => {
   restaurar();
   assert.equal(res.code, 503);
   assert.match(res.body, /SITE_URL/);
+});
+
+test("sin proyectos publicados, /proyectos no aparece en el sitemap", async () => {
+  const restaurar = entorno({ SITE_URL: SITIO });
+  const sb = fakeSupabase({
+    products: () => ({ data: filas(1, "p"), error: null }),
+    combos: () => ({ data: [], error: null }),
+    proyectos: () => ({ data: [], error: null }),
+  });
+  const res = await montar(sb)();
+  restaurar();
+  assert.equal(res.code, 200);
+  assert.doesNotMatch(res.body, /\/proyectos</);
+  assert.match(res.body, /\/testimonios</);
+});
+
+test("proyectos sin fotos https no cuentan: /proyectos no aparece", async () => {
+  const restaurar = entorno({ SITE_URL: SITIO });
+  const sb = fakeSupabase({
+    products: () => ({ data: [], error: null }),
+    combos: () => ({ data: [], error: null }),
+    proyectos: () => ({ data: [{ id: "x", fotos: [], created_at: "2026-02-02T00:00:00Z" }, { id: "y", fotos: ["http://inseguro/a.jpg"], created_at: "2026-02-03T00:00:00Z" }], error: null }),
+  });
+  const res = await montar(sb)();
+  restaurar();
+  assert.doesNotMatch(res.body, /\/proyectos</);
+});
+
+test("con al menos un proyecto publicado con foto, /proyectos aparece con su lastmod", async () => {
+  const restaurar = entorno({ SITE_URL: SITIO });
+  const sb = fakeSupabase({
+    products: () => ({ data: [], error: null }),
+    combos: () => ({ data: [], error: null }),
+    proyectos: () => ({ data: [{ id: "x", fotos: ["https://res.cloudinary.com/demo/a.jpg"], created_at: "2026-05-06T00:00:00Z" }], error: null }),
+  });
+  const res = await montar(sb)();
+  restaurar();
+  assert.match(res.body, /\/proyectos<\/loc>\s*<lastmod>2026-05-06<\/lastmod>/);
+});
+
+test("si la tabla proyectos no existe o falla, el sitemap sigue completo y sin /proyectos", async () => {
+  const restaurar = entorno({ SITE_URL: SITIO });
+  const originalWarn = console.warn; console.warn = () => {};
+  const sb = fakeSupabase({
+    products: () => ({ data: filas(2, "p"), error: null }),
+    combos: () => ({ data: [], error: null }),
+    proyectos: () => ({ data: null, error: { code: "42P01", message: 'relation "proyectos" does not exist' } }),
+  });
+  const res = await montar(sb)();
+  console.warn = originalWarn;
+  restaurar();
+  assert.equal(res.code, 200);
+  assert.equal((res.body.match(/\/product\//g) ?? []).length, 2);
+  assert.doesNotMatch(res.body, /\/proyectos</);
 });

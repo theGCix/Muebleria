@@ -45,11 +45,11 @@ if (process.env.SITEMAP_STATIC !== "1") {
 }
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// /proyectos no es fija: solo se agrega si hay proyectos publicados con fotos (más abajo).
 const entries = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/catalogo", changefreq: "daily", priority: "0.9" },
   { path: "/nosotros", changefreq: "monthly", priority: "0.6" },
-  { path: "/proyectos", changefreq: "weekly", priority: "0.6" },
   { path: "/testimonios", changefreq: "weekly", priority: "0.6" },
   { path: "/envios", changefreq: "yearly", priority: "0.3" },
   { path: "/terminos", changefreq: "yearly", priority: "0.3" },
@@ -92,6 +92,14 @@ if (SB_URL && SB_KEY) {
     console.log(`[sitemap] ${combos.length} combos`);
   } catch (e) {
     console.warn("[sitemap] No pude leer combos:", e.message);
+  }
+  try {
+    const proyectos = await sb("proyectos?select=id,fotos,created_at&publicado=eq.true&order=created_at.desc&limit=60");
+    const validos = proyectos.filter((p) => (p.fotos ?? []).some((u) => /^https:\/\//i.test(u)));
+    if (validos.length) entries.push({ path: "/proyectos", lastmod: validos[0].created_at, changefreq: "weekly", priority: "0.6" });
+    console.log(`[sitemap] ${validos.length} proyectos publicados`);
+  } catch (e) {
+    console.warn("[sitemap] No pude leer proyectos (se omite /proyectos):", e.message);
   }
 } else {
   console.warn("[sitemap] Sin credenciales de Supabase: solo páginas fijas y categorías.");

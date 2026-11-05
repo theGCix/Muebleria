@@ -26,3 +26,9 @@
 - **Distrito de envío:** una sola fuente (`useDistritoEnvio`). En el checkout manda el distrito elegido en la ficha sobre la dirección predeterminada (decisión del dueño); sin distrito nunca se asume uno.
 - **«Envío desde S/ X»:** sale del mínimo vigente del tarifario (`precioEnvioDesde()` en `src/lib/envios.ts`), nunca de un monto fijo en el código.
 - **`ciudad` del pedido:** se deriva del distrito (`ciudadDeDistrito`: Callao o Lima); el cliente ya no la escribe.
+
+## Reglas de negocio (Proyectos)
+- Solo proyectos reales: no se inventan fotos, distritos, tiempos ni materiales. Un campo sin dato no se muestra.
+- Sin proyectos publicados con foto, `/proyectos` no existe de cara al público: redirige a `/catalogo` y no se anuncia (sitemap, prerender, chat).
+- Publicar fotos de clientes y su distrito requiere la autorización del cliente. El distrito se muestra sin dirección.
+- Tiempo de ejecución: texto libre breve («2 semanas»).

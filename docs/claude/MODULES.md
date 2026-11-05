@@ -77,3 +77,15 @@
 **Chatbot (`src/components/AsistenteChat.tsx`)**
 - Streaming SSE en `POST /api/chat/stream` (eventos `status`, `token`, `reset`, `done`, `error`); si responde 404 usa `POST /api/chat`. Corte por inactividad de 8 s, errores clasificados y tarjeta de respaldo (ver TASK_LOG, «Robustez del chatbot»).
 - Servidor: `registerChat` en `server/chat.js` (LangChain + Ollama, `OLLAMA_TIMEOUT_MS` por defecto 60 s); `/health` en `server/index.js`.
+
+---
+## Proyectos (`/proyectos`) — verificado en el repo, 2026-11-05
+- `src/routes/proyectos.tsx`: grilla de tarjetas + diálogo con galería de fotos; vacío = «Muy pronto» + botón al catálogo (antes de la Fase 1; hoy redirige a `/catalogo`). No existe el texto «Nuevos modelos pronto» (ni en el código ni en el historial git): el sitio publicado puede ser otra versión.
+- `src/hooks/useProyectos.ts`: lee la tabla `proyectos` (`publicado = true`, ≤ 60) y descarta filas sin fotos https. Si la consulta falla (tabla ausente) devuelve `[]`: no distingue «sin filas» de «sin tabla». `useHayProyectos()` = al menos 1.
+- `src/routes/_authenticated/gestionar-proyectos.tsx` + `src/lib/proyectos.functions.ts` (admin; zod): campos título, descripción, etiqueta, año, fotos (≤ 8, Cloudinary `muebleria/proyectos`), destacado, publicado.
+- **Navegación:** solo el pie de página enlaza `/proyectos` y ya está condicionado a `useHayProyectos()`. El `Header` no lo enlaza. El menú admin («Proyectos» → `/gestionar-proyectos`) no cambia.
+- **Antes de la Fase 1 referenciaban `/proyectos` sin condición (ver «Fase 1 aplicada»):** `server/sitemap.js` y `scripts/generate-sitemap.mjs` (lista fija), `scripts/prerender.mjs`, `src/lib/chatSugerencias.ts` y `server/chatNavegacion.js` («Ver proyectos realizados»; textos que dicen que ahí se ven trabajos), `src/routes/terminos.tsx` (autorización de fotos de reseñas, enlace a «Proyectos realizados»).
+- Relacionado: `/testimonios` ya muestra fotos reales de clientes (reseñas aprobadas + `galeria_clientes`), con umbral `MIN_GALERIA = 3` (`useGaleriaClientes.ts`).
+- `src/routeTree.gen.ts` del repo no lista `/proyectos` ni `/testimonios` (archivo generado; no se edita a mano).
+
+**Fase 1 aplicada (2026-11-05, pendiente de commit):** `/proyectos` redirige a `/catalogo` si no hay proyectos publicados con foto; el sitemap (`server/sitemap.js`, `generate-sitemap.mjs`) la incluye solo con proyectos; `prerender.mjs` no la genera; el chat cambia «Ver proyectos realizados» por «Ver testimonios» mientras no haya proyectos (`AsistenteChat.tsx`, `sinProyectosVacios`). `terminos.tsx` sin cambios (a la espera del dueño). Detalle en TASK_LOG.md.

@@ -83,3 +83,24 @@
   - Modo sin streaming (`/api/chat`) ahora también clasifica errores y corta a los 30 s.
 - Verificado con servidor simulado + Playwright (390 px): colgado → respaldo a 8,4 s; reintentar OK; 503; 429; sin red; respuesta viva de 15 s sin corte.
 - Sin probar: contra el backend real (LangChain + Ollama) ni `node --test server/chat*.test.js` (no se tocó el servidor).
+
+## 2026-11-05 — Página Proyectos: ocultar (A) vs proyectos realizados (B) — plan
+- Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo (solo estas notas de docs).
+- Inspeccionados (solo lectura): `src/routes/proyectos.tsx`, `src/hooks/useProyectos.ts`, `src/lib/proyectos.functions.ts`, `src/routes/_authenticated/gestionar-proyectos.tsx`, `Footer.tsx`, `Header.tsx`, `nav-config.ts`, `server/sitemap.js`, `scripts/generate-sitemap.mjs`, `scripts/prerender.mjs`, `src/lib/chatSugerencias.ts`, `server/chatNavegacion.js`, `terminos.tsx`, `useGaleriaClientes.ts`, historial git de `proyectos.tsx`.
+- Hallazgos: ver MODULES.md («Proyectos») y DATABASE.md («`proyectos`»). Resumen: el texto «Nuevos modelos pronto» NO existe en el código ni en el historial git (el vacío actual dice «Muy pronto»); la página ya lee la tabla `proyectos` y el pie de página ya oculta el enlace sin proyectos, pero `/proyectos` sigue en sitemap, prerender, chatbot y términos; la tabla no tiene distrito, tiempo, materiales ni antes/después; su migración no está en el repo.
+- Recomendación: **A ahora** (cambio pequeño y reversible) y **B por fases, solo cuando el dueño tenga proyectos reales con datos y autorización de los clientes**.
+- Pendiente del dueño: confirmar qué ve hoy en producción, cuántas filas hay en `proyectos`, esquema real de la tabla, y si hay proyectos reales con las 4 informaciones y permiso de los clientes.
+
+## 2026-11-05 — Proyectos, Fase 1 (A) implementada (autorizada: «Fase 1 A primero»)
+- Decisiones del dueño: Fase 1 (A) ahora; B en espera (hoy **no hay proyectos reales**); tiempo de ejecución como texto libre («2 semanas»); sin proyectos, redirigir a **/catalogo**.
+- Patch `proyectos-fase1.patch` (7 archivos, sin archivos nuevos, sin dependencias, sin cambios de BD ni de RLS):
+  - `src/routes/proyectos.tsx`: sin proyectos publicados → `<Navigate to="/catalogo" replace />` (se quitó el vacío «Muy pronto»); la vista `pagina_vista` solo se registra si hay proyectos.
+  - `server/sitemap.js`: `/proyectos` sale de las páginas fijas y se agrega solo si hay proyectos publicados con foto https (`leerProyectos`); si la tabla no existe o falla, se omite sin marcar el sitemap como parcial.
+  - `server/sitemap.test.js`: el simulador devuelve `proyectos` vacío por defecto; 4 pruebas nuevas.
+  - `scripts/generate-sitemap.mjs` (modo `SITEMAP_STATIC=1`): misma regla. `scripts/prerender.mjs`: se retiró `/proyectos`.
+  - `src/lib/chatSugerencias.ts`: las dos respuestas fijas ya no prometen «Proyectos»; apuntan a Testimonios.
+  - `src/components/AsistenteChat.tsx`: si no hay proyectos, el botón «Ver proyectos realizados» que manda el servidor se cambia por «Ver testimonios» (sin duplicar). `server/chatNavegacion.js` NO se tocó.
+- Verificación: `node --test server/sitemap.test.js server/chat-navegacion.test.js` → 21/21 OK; `node --check` de los .mjs OK; TypeScript sin errores de sintaxis en los 3 archivos .ts/.tsx. **Sin probar:** `tsc --noEmit` y `vite build` completos (el zip no trae `node_modules`), ni en navegador (redirección, botón del chat).
+- No tocado, a la espera de aprobación del dueño: `src/routes/terminos.tsx` (el texto sobre fotos de reseñas cita la «galería de Proyectos realizados» y su enlace; con la redirección lleva al catálogo).
+- Pendiente (Fase 2 / B): sigue en espera hasta tener proyectos reales con antes/después, distrito, tiempo («2 semanas») y materiales, y permiso del cliente.
+- **Idea nueva del dueño (no planificada):** mostrar productos/ideas nuevas con «me gusta» o reacciones para medir si hay demanda antes de fabricarlos. Es otra función (reacciones de clientes), distinta de B: requiere plan aparte (tabla de reacciones, quién puede votar —anónimo o con cuenta—, antiabuso, privacidad, dónde se muestra y cómo se lee en el panel).

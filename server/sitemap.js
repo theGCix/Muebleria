@@ -17,11 +17,11 @@
 // ════════════════════════════════════════════════════════════════
 
 // Páginas fijas. Mantén esta lista alineada con scripts/generate-sitemap.mjs y src/lib/rutas.ts.
+// /proyectos NO va aquí: se agrega solo si hay proyectos publicados con fotos (ver leerProyectos).
 const PAGINAS = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/catalogo", changefreq: "daily", priority: "0.9" },
   { path: "/nosotros", changefreq: "monthly", priority: "0.6" },
-  { path: "/proyectos", changefreq: "weekly", priority: "0.6" },
   { path: "/testimonios", changefreq: "weekly", priority: "0.6" },
   { path: "/envios", changefreq: "yearly", priority: "0.3" },
   { path: "/terminos", changefreq: "yearly", priority: "0.3" },
@@ -110,6 +110,25 @@ async function leerCombos(supabase) {
   }
 }
 
+/**
+ * Proyectos publicados con al menos una foto https (mismo criterio que useProyectos en el front).
+ * Devuelve la fecha del más reciente, o null si no hay ninguno. Si la tabla no existe o la consulta
+ * falla, devuelve null: sin proyectos confirmados, /proyectos no se anuncia.
+ */
+async function leerProyectos(supabase, log) {
+  try {
+    const filas = await leerTodo((a, b) =>
+      supabase.from("proyectos").select("id,fotos,created_at").eq("publicado", true).order("created_at", { ascending: false }).range(a, b),
+    );
+    const validos = filas.filter((f) => (f.fotos ?? []).some((u) => /^https:\/\//i.test(u)));
+    return validos.length ? { lastmod: validos[0].created_at } : null;
+  } catch (err) {
+    if (!/relation|does not exist|42P01|PGRST205/i.test(`${err?.code ?? ""} ${err?.message ?? ""}`))
+      log.warn("[sitemap] No pude leer proyectos (se omite /proyectos):", err?.message ?? err);
+    return null;
+  }
+}
+
 /** Arma todas las entradas. Si una tabla falla, la omite y lo informa en `parcial`. */
 export async function reunirEntradas(supabase, log = console) {
   const entradas = [
@@ -117,6 +136,9 @@ export async function reunirEntradas(supabase, log = console) {
     ...CATEGORIAS.map((slug) => ({ path: `/categoria/${slug}`, changefreq: "weekly", priority: "0.8" })),
   ];
   let parcial = false;
+
+  const proyectos = await leerProyectos(supabase, log);
+  if (proyectos) entradas.push({ path: "/proyectos", lastmod: proyectos.lastmod, changefreq: "weekly", priority: "0.6" });
 
   try {
     for (const p of await leerProductos(supabase))

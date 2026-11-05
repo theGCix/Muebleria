@@ -1,8 +1,9 @@
 // src/routes/proyectos.tsx
 // Proyectos: piezas especiales e innovaciones que fabricamos en G&M. Se cargan desde el panel (/gestionar-proyectos).
+// Sin proyectos publicados la página no se muestra: redirige a /catalogo (nunca una vitrina vacía).
 import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Ruler, Sparkles } from "lucide-react";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Ruler } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -38,15 +39,19 @@ function ProyectosPage() {
   const [foto, setFoto] = useState(0);
   const lista = data ?? [];
 
+  const hayProyectos = lista.length > 0;
   useEffect(() => {
-    trackEvent({ tipo: "pagina_vista", path: "/proyectos" });
-  }, []);
+    if (!isLoading && hayProyectos) trackEvent({ tipo: "pagina_vista", path: "/proyectos" });
+  }, [isLoading, hayProyectos]);
 
   const abrir = (p: Proyecto) => {
     setSel(p);
     setFoto(0);
   };
   const mover = (d: number) => sel && setFoto((f) => (f + d + sel.fotos.length) % sel.fotos.length);
+
+  // Sin proyectos reales publicados no hay nada que mostrar: al catálogo (replace: no deja /proyectos en el historial).
+  if (!isLoading && !hayProyectos) return <Navigate to="/catalogo" replace />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -71,17 +76,6 @@ function ProyectosPage() {
                 {[0, 1, 2].map((i) => (
                   <Skeleton key={i} className="aspect-[4/3] w-full rounded-2xl" />
                 ))}
-              </div>
-            ) : lista.length === 0 ? (
-              <div className="rounded-3xl border border-border/60 bg-card px-6 py-16 text-center">
-                <Sparkles className="mx-auto mb-4 h-8 w-8 text-muted-foreground" aria-hidden="true" />
-                <h2 className="font-display text-2xl font-semibold">Muy pronto</h2>
-                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                  Estamos preparando la vitrina de nuestros proyectos. Mientras tanto, conoce el catálogo.
-                </p>
-                <Button asChild className="mt-6 rounded-full">
-                  <Link to="/catalogo">Ver el catálogo</Link>
-                </Button>
               </div>
             ) : (
               <>
