@@ -11,24 +11,9 @@ import { useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthModalStore } from "@/stores/authModalStore";
-import { useHayProyectos } from "@/hooks/useProyectos";
 
 type ChatResult = { reply: string; cartActions: CartAction[]; links: ChatLink[] };
 type Message = { role: "user" | "assistant"; content: string; links?: ChatLink[] };
-/** Sin proyectos publicados, /proyectos redirige al catálogo: el chat ofrece Testimonios en su lugar (sin repetir botones). */
-function sinProyectosVacios(links: ChatLink[], hayProyectos: boolean): ChatLink[] {
-  if (hayProyectos) return links;
-  const vistos = new Set<string>();
-  return links
-    .map((l) => (l.to === "/proyectos" ? { label: "Ver testimonios", to: "/testimonios" } : l))
-    .filter((l) => {
-      const k = `${l.to}|${l.hash ?? ""}|${JSON.stringify(l.params ?? {})}|${JSON.stringify(l.search ?? {})}`;
-      if (vistos.has(k)) return false;
-      vistos.add(k);
-      return true;
-    });
-}
-
 type CartAction = {
   id: string; title: string; price: number;
   image?: string; sku?: string; cantidad: number;
@@ -226,7 +211,6 @@ export function AsistenteChat() {
   const sessionIdRef = useRef<string>(crypto.randomUUID());
   const [tema, setTema] = useState<TemaChat | null>(null);
   const navigate = useNavigate();
-  const hayProyectos = useHayProyectos();
   const addItem = useCartStore((s) => s.addItem);
   const updateQty = useCartStore((s) => s.updateQty);
   const items = useCartStore((s) => s.items);
@@ -433,7 +417,7 @@ export function AsistenteChat() {
                 </div>
                 {m.role === "assistant" && m.links && m.links.length > 0 && (
                   <div className="mt-1.5 flex max-w-[85%] flex-wrap gap-1.5">
-                    {sinProyectosVacios(m.links, hayProyectos).map((l) => (
+                    {m.links.map((l) => (
                       <button
                         key={`${l.to}${l.label}`}
                         onClick={() => irA(l)}

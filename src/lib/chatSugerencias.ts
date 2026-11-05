@@ -181,7 +181,7 @@ export const TEMAS_CHAT: TemaChat[] = [
       ia("¿Hay stock de este producto?", "¿Cómo sé si un producto tiene stock?"),
       fija("¿Puedo reservar sin pagar?", "Un pedido queda confirmado cuando recibimos el pago. Para consultas sobre reservas o separar una pieza, escríbenos y el equipo te orienta.", [L.nosotros]),
       fija("¿Puedo comprar varias unidades?", "Sí, puedes cambiar la cantidad en el carrito. Si es una compra grande o para un proyecto (hotel, oficina), pide una cotización.", [L.medida]),
-      fija("¿Puedo ver el mueble antes de comprar?", "En cada ficha ves fotos, medidas y reseñas de clientes. Para ver nuestro trabajo, revisa Testimonios, o escríbenos si quieres más detalles.", [L.testimonios]),
+      fija("¿Puedo ver el mueble antes de comprar?", "En cada ficha ves fotos, medidas y reseñas de clientes. Para ver nuestro trabajo, revisa Proyectos y Testimonios, o escríbenos si quieres más detalles.", [L.proyectos, L.testimonios]),
     ],
   },
   {
@@ -214,7 +214,7 @@ export const TEMAS_CHAT: TemaChat[] = [
       fija("¿Puedo modificar un modelo del catálogo?", "Pide una cotización a medida indicando el modelo que te gusta y qué quieres cambiar (medidas, acabado, etc.); el equipo te dice qué es posible.", [L.medida]),
       fija("¿Qué información necesito dar?", "Tipo de mueble, medidas aproximadas (largo, ancho y alto), el espacio donde irá y, si tienes, fotos o referencias de lo que te gusta.", [L.medida]),
       fija("¿Cómo fabrican los muebles?", "Cada pieza se fabrica a pedido en nuestro taller de Lima: madera tornillo seca y tratada, acabado a mano y control de calidad antes del despacho. En la página del taller ves el proceso paso a paso.", [L.nosotros]),
-      fija("¿Puedo ver trabajos anteriores?", "Claro: en Testimonios ves opiniones y fotos reales de clientes con sus muebles.", [L.testimonios]),
+      fija("¿Puedo ver trabajos anteriores?", "Claro: en Proyectos mostramos piezas especiales que fabricamos, y en Testimonios las opiniones y fotos de clientes.", [L.proyectos, L.testimonios]),
       equipo("¿Hacen muebles para negocios u oficinas?"),
       equipo("¿Puedo elegir color o tela?"),
       equipo("¿Piden adelanto para fabricar?"),

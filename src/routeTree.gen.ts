@@ -9,32 +9,83 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TestimoniosRouteImport } from './routes/testimonios'
+import { Route as TerminosRouteImport } from './routes/terminos'
+import { Route as RestablecerRouteImport } from './routes/restablecer'
+import { Route as ProyectosRouteImport } from './routes/proyectos'
+import { Route as PrivacidadRouteImport } from './routes/privacidad'
 import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as NosotrosRouteImport } from './routes/nosotros'
+import { Route as EnviosRouteImport } from './routes/envios'
 import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as CatalogoRouteImport } from './routes/catalogo'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PerfilIndexRouteImport } from './routes/perfil/index'
+import { Route as ResenaOrderIdRouteImport } from './routes/resena.$orderId'
 import { Route as ProductHandleRouteImport } from './routes/product.$handle'
+import { Route as PerfilSeguridadRouteImport } from './routes/perfil/seguridad'
+import { Route as PerfilPedidosRouteImport } from './routes/perfil/pedidos'
+import { Route as PerfilFavoritosRouteImport } from './routes/perfil/favoritos'
+import { Route as PerfilFacturacionRouteImport } from './routes/perfil/facturacion'
+import { Route as PerfilDireccionesRouteImport } from './routes/perfil/direcciones'
+import { Route as PerfilDatosRouteImport } from './routes/perfil/datos'
+import { Route as ConformidadOrderIdRouteImport } from './routes/conformidad.$orderId'
+import { Route as ComboIdRouteImport } from './routes/combo.$id'
 import { Route as CategoriaSlugRouteImport } from './routes/categoria.$slug'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
+import { Route as AdminChatRouteImport } from './routes/admin.chat'
 import { Route as AuthenticatedVentasRouteImport } from './routes/_authenticated/ventas'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
+import { Route as AuthenticatedResenasRouteImport } from './routes/_authenticated/resenas'
 import { Route as AuthenticatedProveedoresRouteImport } from './routes/_authenticated/proveedores'
 import { Route as AuthenticatedProductosRouteImport } from './routes/_authenticated/productos'
 import { Route as AuthenticatedProduccionRouteImport } from './routes/_authenticated/produccion'
 import { Route as AuthenticatedPosRouteImport } from './routes/_authenticated/pos'
 import { Route as AuthenticatedPedidosRouteImport } from './routes/_authenticated/pedidos'
 import { Route as AuthenticatedMiProduccionRouteImport } from './routes/_authenticated/mi-produccion'
+import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedInsumosRouteImport } from './routes/_authenticated/insumos'
+import { Route as AuthenticatedGestionarProyectosRouteImport } from './routes/_authenticated/gestionar-proyectos'
+import { Route as AuthenticatedFotosClientesRouteImport } from './routes/_authenticated/fotos-clientes'
+import { Route as AuthenticatedDevolucionesRouteImport } from './routes/_authenticated/devoluciones'
+import { Route as AuthenticatedDespachosRouteImport } from './routes/_authenticated/despachos'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCuponesRouteImport } from './routes/_authenticated/cupones'
 import { Route as AuthenticatedCrmRouteImport } from './routes/_authenticated/crm'
+import { Route as AuthenticatedCorreosPedidosRouteImport } from './routes/_authenticated/correos-pedidos'
+import { Route as AuthenticatedCombosRouteImport } from './routes/_authenticated/combos'
 import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticated/clientes'
 import { Route as AuthenticatedCentralRouteImport } from './routes/_authenticated/central'
+import { Route as AuthenticatedCarruselRouteImport } from './routes/_authenticated/carrusel'
+import { Route as AuthenticatedCarritosAbandonadosRouteImport } from './routes/_authenticated/carritos-abandonados'
+import { Route as AuthenticatedCajaRouteImport } from './routes/_authenticated/caja'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+const TestimoniosRoute = TestimoniosRouteImport.update({
+  id: '/testimonios',
+  path: '/testimonios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminosRoute = TerminosRouteImport.update({
+  id: '/terminos',
+  path: '/terminos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RestablecerRoute = RestablecerRouteImport.update({
+  id: '/restablecer',
+  path: '/restablecer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProyectosRoute = ProyectosRouteImport.update({
+  id: '/proyectos',
+  path: '/proyectos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadRoute = PrivacidadRouteImport.update({
+  id: '/privacidad',
+  path: '/privacidad',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PerfilRoute = PerfilRouteImport.update({
@@ -42,9 +93,24 @@ const PerfilRoute = PerfilRouteImport.update({
   path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NosotrosRoute = NosotrosRouteImport.update({
+  id: '/nosotros',
+  path: '/nosotros',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EnviosRoute = EnviosRouteImport.update({
+  id: '/envios',
+  path: '/envios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoRoute = CatalogoRouteImport.update({
+  id: '/catalogo',
+  path: '/catalogo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -56,9 +122,59 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PerfilIndexRoute = PerfilIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const ResenaOrderIdRoute = ResenaOrderIdRouteImport.update({
+  id: '/resena/$orderId',
+  path: '/resena/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProductHandleRoute = ProductHandleRouteImport.update({
   id: '/product/$handle',
   path: '/product/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PerfilSeguridadRoute = PerfilSeguridadRouteImport.update({
+  id: '/seguridad',
+  path: '/seguridad',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const PerfilPedidosRoute = PerfilPedidosRouteImport.update({
+  id: '/pedidos',
+  path: '/pedidos',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const PerfilFavoritosRoute = PerfilFavoritosRouteImport.update({
+  id: '/favoritos',
+  path: '/favoritos',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const PerfilFacturacionRoute = PerfilFacturacionRouteImport.update({
+  id: '/facturacion',
+  path: '/facturacion',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const PerfilDireccionesRoute = PerfilDireccionesRouteImport.update({
+  id: '/direcciones',
+  path: '/direcciones',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const PerfilDatosRoute = PerfilDatosRouteImport.update({
+  id: '/datos',
+  path: '/datos',
+  getParentRoute: () => PerfilRoute,
+} as any)
+const ConformidadOrderIdRoute = ConformidadOrderIdRouteImport.update({
+  id: '/conformidad/$orderId',
+  path: '/conformidad/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComboIdRoute = ComboIdRouteImport.update({
+  id: '/combo/$id',
+  path: '/combo/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriaSlugRoute = CategoriaSlugRouteImport.update({
@@ -66,9 +182,19 @@ const CategoriaSlugRoute = CategoriaSlugRouteImport.update({
   path: '/categoria/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
   id: '/admin/orders',
   path: '/admin/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminChatRoute = AdminChatRouteImport.update({
+  id: '/admin/chat',
+  path: '/admin/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedVentasRoute = AuthenticatedVentasRouteImport.update({
@@ -79,6 +205,11 @@ const AuthenticatedVentasRoute = AuthenticatedVentasRouteImport.update({
 const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedResenasRoute = AuthenticatedResenasRouteImport.update({
+  id: '/resenas',
+  path: '/resenas',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedProveedoresRoute =
@@ -113,9 +244,37 @@ const AuthenticatedMiProduccionRoute =
     path: '/mi-produccion',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedInsumosRoute = AuthenticatedInsumosRouteImport.update({
   id: '/insumos',
   path: '/insumos',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedGestionarProyectosRoute =
+  AuthenticatedGestionarProyectosRouteImport.update({
+    id: '/gestionar-proyectos',
+    path: '/gestionar-proyectos',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFotosClientesRoute =
+  AuthenticatedFotosClientesRouteImport.update({
+    id: '/fotos-clientes',
+    path: '/fotos-clientes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDevolucionesRoute =
+  AuthenticatedDevolucionesRouteImport.update({
+    id: '/devoluciones',
+    path: '/devoluciones',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDespachosRoute = AuthenticatedDespachosRouteImport.update({
+  id: '/despachos',
+  path: '/despachos',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -123,9 +282,25 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedCuponesRoute = AuthenticatedCuponesRouteImport.update({
+  id: '/cupones',
+  path: '/cupones',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedCrmRoute = AuthenticatedCrmRouteImport.update({
   id: '/crm',
   path: '/crm',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCorreosPedidosRoute =
+  AuthenticatedCorreosPedidosRouteImport.update({
+    id: '/correos-pedidos',
+    path: '/correos-pedidos',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCombosRoute = AuthenticatedCombosRouteImport.update({
+  id: '/combos',
+  path: '/combos',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedClientesRoute = AuthenticatedClientesRouteImport.update({
@@ -138,6 +313,22 @@ const AuthenticatedCentralRoute = AuthenticatedCentralRouteImport.update({
   path: '/central',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedCarruselRoute = AuthenticatedCarruselRouteImport.update({
+  id: '/carrusel',
+  path: '/carrusel',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCarritosAbandonadosRoute =
+  AuthenticatedCarritosAbandonadosRouteImport.update({
+    id: '/carritos-abandonados',
+    path: '/carritos-abandonados',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCajaRoute = AuthenticatedCajaRouteImport.update({
+  id: '/caja',
+  path: '/caja',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -146,166 +337,390 @@ const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/catalogo': typeof CatalogoRoute
   '/checkout': typeof CheckoutRoute
-  '/perfil': typeof PerfilRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/envios': typeof EnviosRoute
+  '/nosotros': typeof NosotrosRoute
+  '/perfil': typeof PerfilRouteWithChildren
+  '/privacidad': typeof PrivacidadRoute
+  '/proyectos': typeof ProyectosRoute
+  '/restablecer': typeof RestablecerRoute
+  '/terminos': typeof TerminosRoute
+  '/testimonios': typeof TestimoniosRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/caja': typeof AuthenticatedCajaRoute
+  '/carritos-abandonados': typeof AuthenticatedCarritosAbandonadosRoute
+  '/carrusel': typeof AuthenticatedCarruselRoute
   '/central': typeof AuthenticatedCentralRoute
   '/clientes': typeof AuthenticatedClientesRoute
+  '/combos': typeof AuthenticatedCombosRoute
+  '/correos-pedidos': typeof AuthenticatedCorreosPedidosRoute
   '/crm': typeof AuthenticatedCrmRoute
+  '/cupones': typeof AuthenticatedCuponesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/despachos': typeof AuthenticatedDespachosRoute
+  '/devoluciones': typeof AuthenticatedDevolucionesRoute
+  '/fotos-clientes': typeof AuthenticatedFotosClientesRoute
+  '/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
   '/insumos': typeof AuthenticatedInsumosRoute
+  '/leads': typeof AuthenticatedLeadsRoute
   '/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/pos': typeof AuthenticatedPosRoute
   '/produccion': typeof AuthenticatedProduccionRoute
   '/productos': typeof AuthenticatedProductosRoute
   '/proveedores': typeof AuthenticatedProveedoresRoute
+  '/resenas': typeof AuthenticatedResenasRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/ventas': typeof AuthenticatedVentasRoute
+  '/admin/chat': typeof AdminChatRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/categoria/$slug': typeof CategoriaSlugRoute
+  '/combo/$id': typeof ComboIdRoute
+  '/conformidad/$orderId': typeof ConformidadOrderIdRoute
+  '/perfil/datos': typeof PerfilDatosRoute
+  '/perfil/direcciones': typeof PerfilDireccionesRoute
+  '/perfil/facturacion': typeof PerfilFacturacionRoute
+  '/perfil/favoritos': typeof PerfilFavoritosRoute
+  '/perfil/pedidos': typeof PerfilPedidosRoute
+  '/perfil/seguridad': typeof PerfilSeguridadRoute
   '/product/$handle': typeof ProductHandleRoute
+  '/resena/$orderId': typeof ResenaOrderIdRoute
+  '/perfil/': typeof PerfilIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/catalogo': typeof CatalogoRoute
   '/checkout': typeof CheckoutRoute
-  '/perfil': typeof PerfilRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/envios': typeof EnviosRoute
+  '/nosotros': typeof NosotrosRoute
+  '/privacidad': typeof PrivacidadRoute
+  '/proyectos': typeof ProyectosRoute
+  '/restablecer': typeof RestablecerRoute
+  '/terminos': typeof TerminosRoute
+  '/testimonios': typeof TestimoniosRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
+  '/caja': typeof AuthenticatedCajaRoute
+  '/carritos-abandonados': typeof AuthenticatedCarritosAbandonadosRoute
+  '/carrusel': typeof AuthenticatedCarruselRoute
   '/central': typeof AuthenticatedCentralRoute
   '/clientes': typeof AuthenticatedClientesRoute
+  '/combos': typeof AuthenticatedCombosRoute
+  '/correos-pedidos': typeof AuthenticatedCorreosPedidosRoute
   '/crm': typeof AuthenticatedCrmRoute
+  '/cupones': typeof AuthenticatedCuponesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/despachos': typeof AuthenticatedDespachosRoute
+  '/devoluciones': typeof AuthenticatedDevolucionesRoute
+  '/fotos-clientes': typeof AuthenticatedFotosClientesRoute
+  '/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
   '/insumos': typeof AuthenticatedInsumosRoute
+  '/leads': typeof AuthenticatedLeadsRoute
   '/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/pos': typeof AuthenticatedPosRoute
   '/produccion': typeof AuthenticatedProduccionRoute
   '/productos': typeof AuthenticatedProductosRoute
   '/proveedores': typeof AuthenticatedProveedoresRoute
+  '/resenas': typeof AuthenticatedResenasRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
   '/ventas': typeof AuthenticatedVentasRoute
+  '/admin/chat': typeof AdminChatRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/categoria/$slug': typeof CategoriaSlugRoute
+  '/combo/$id': typeof ComboIdRoute
+  '/conformidad/$orderId': typeof ConformidadOrderIdRoute
+  '/perfil/datos': typeof PerfilDatosRoute
+  '/perfil/direcciones': typeof PerfilDireccionesRoute
+  '/perfil/facturacion': typeof PerfilFacturacionRoute
+  '/perfil/favoritos': typeof PerfilFavoritosRoute
+  '/perfil/pedidos': typeof PerfilPedidosRoute
+  '/perfil/seguridad': typeof PerfilSeguridadRoute
   '/product/$handle': typeof ProductHandleRoute
+  '/resena/$orderId': typeof ResenaOrderIdRoute
+  '/perfil': typeof PerfilIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/catalogo': typeof CatalogoRoute
   '/checkout': typeof CheckoutRoute
-  '/perfil': typeof PerfilRoute
-  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/envios': typeof EnviosRoute
+  '/nosotros': typeof NosotrosRoute
+  '/perfil': typeof PerfilRouteWithChildren
+  '/privacidad': typeof PrivacidadRoute
+  '/proyectos': typeof ProyectosRoute
+  '/restablecer': typeof RestablecerRoute
+  '/terminos': typeof TerminosRoute
+  '/testimonios': typeof TestimoniosRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
+  '/_authenticated/caja': typeof AuthenticatedCajaRoute
+  '/_authenticated/carritos-abandonados': typeof AuthenticatedCarritosAbandonadosRoute
+  '/_authenticated/carrusel': typeof AuthenticatedCarruselRoute
   '/_authenticated/central': typeof AuthenticatedCentralRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
+  '/_authenticated/combos': typeof AuthenticatedCombosRoute
+  '/_authenticated/correos-pedidos': typeof AuthenticatedCorreosPedidosRoute
   '/_authenticated/crm': typeof AuthenticatedCrmRoute
+  '/_authenticated/cupones': typeof AuthenticatedCuponesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/despachos': typeof AuthenticatedDespachosRoute
+  '/_authenticated/devoluciones': typeof AuthenticatedDevolucionesRoute
+  '/_authenticated/fotos-clientes': typeof AuthenticatedFotosClientesRoute
+  '/_authenticated/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
   '/_authenticated/insumos': typeof AuthenticatedInsumosRoute
+  '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/_authenticated/pedidos': typeof AuthenticatedPedidosRoute
   '/_authenticated/pos': typeof AuthenticatedPosRoute
   '/_authenticated/produccion': typeof AuthenticatedProduccionRoute
   '/_authenticated/productos': typeof AuthenticatedProductosRoute
   '/_authenticated/proveedores': typeof AuthenticatedProveedoresRoute
+  '/_authenticated/resenas': typeof AuthenticatedResenasRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
   '/_authenticated/ventas': typeof AuthenticatedVentasRoute
+  '/admin/chat': typeof AdminChatRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/categoria/$slug': typeof CategoriaSlugRoute
+  '/combo/$id': typeof ComboIdRoute
+  '/conformidad/$orderId': typeof ConformidadOrderIdRoute
+  '/perfil/datos': typeof PerfilDatosRoute
+  '/perfil/direcciones': typeof PerfilDireccionesRoute
+  '/perfil/facturacion': typeof PerfilFacturacionRoute
+  '/perfil/favoritos': typeof PerfilFavoritosRoute
+  '/perfil/pedidos': typeof PerfilPedidosRoute
+  '/perfil/seguridad': typeof PerfilSeguridadRoute
   '/product/$handle': typeof ProductHandleRoute
+  '/resena/$orderId': typeof ResenaOrderIdRoute
+  '/perfil/': typeof PerfilIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/catalogo'
     | '/checkout'
+    | '/envios'
+    | '/nosotros'
     | '/perfil'
-    | '/sitemap.xml'
+    | '/privacidad'
+    | '/proyectos'
+    | '/restablecer'
+    | '/terminos'
+    | '/testimonios'
     | '/analytics'
+    | '/caja'
+    | '/carritos-abandonados'
+    | '/carrusel'
     | '/central'
     | '/clientes'
+    | '/combos'
+    | '/correos-pedidos'
     | '/crm'
+    | '/cupones'
     | '/dashboard'
+    | '/despachos'
+    | '/devoluciones'
+    | '/fotos-clientes'
+    | '/gestionar-proyectos'
     | '/insumos'
+    | '/leads'
     | '/mi-produccion'
     | '/pedidos'
     | '/pos'
     | '/produccion'
     | '/productos'
     | '/proveedores'
+    | '/resenas'
     | '/usuarios'
     | '/ventas'
+    | '/admin/chat'
     | '/admin/orders'
+    | '/auth/callback'
     | '/categoria/$slug'
+    | '/combo/$id'
+    | '/conformidad/$orderId'
+    | '/perfil/datos'
+    | '/perfil/direcciones'
+    | '/perfil/facturacion'
+    | '/perfil/favoritos'
+    | '/perfil/pedidos'
+    | '/perfil/seguridad'
     | '/product/$handle'
+    | '/resena/$orderId'
+    | '/perfil/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/catalogo'
     | '/checkout'
-    | '/perfil'
-    | '/sitemap.xml'
+    | '/envios'
+    | '/nosotros'
+    | '/privacidad'
+    | '/proyectos'
+    | '/restablecer'
+    | '/terminos'
+    | '/testimonios'
     | '/analytics'
+    | '/caja'
+    | '/carritos-abandonados'
+    | '/carrusel'
     | '/central'
     | '/clientes'
+    | '/combos'
+    | '/correos-pedidos'
     | '/crm'
+    | '/cupones'
     | '/dashboard'
+    | '/despachos'
+    | '/devoluciones'
+    | '/fotos-clientes'
+    | '/gestionar-proyectos'
     | '/insumos'
+    | '/leads'
     | '/mi-produccion'
     | '/pedidos'
     | '/pos'
     | '/produccion'
     | '/productos'
     | '/proveedores'
+    | '/resenas'
     | '/usuarios'
     | '/ventas'
+    | '/admin/chat'
     | '/admin/orders'
+    | '/auth/callback'
     | '/categoria/$slug'
+    | '/combo/$id'
+    | '/conformidad/$orderId'
+    | '/perfil/datos'
+    | '/perfil/direcciones'
+    | '/perfil/facturacion'
+    | '/perfil/favoritos'
+    | '/perfil/pedidos'
+    | '/perfil/seguridad'
     | '/product/$handle'
+    | '/resena/$orderId'
+    | '/perfil'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/catalogo'
     | '/checkout'
+    | '/envios'
+    | '/nosotros'
     | '/perfil'
-    | '/sitemap.xml'
+    | '/privacidad'
+    | '/proyectos'
+    | '/restablecer'
+    | '/terminos'
+    | '/testimonios'
     | '/_authenticated/analytics'
+    | '/_authenticated/caja'
+    | '/_authenticated/carritos-abandonados'
+    | '/_authenticated/carrusel'
     | '/_authenticated/central'
     | '/_authenticated/clientes'
+    | '/_authenticated/combos'
+    | '/_authenticated/correos-pedidos'
     | '/_authenticated/crm'
+    | '/_authenticated/cupones'
     | '/_authenticated/dashboard'
+    | '/_authenticated/despachos'
+    | '/_authenticated/devoluciones'
+    | '/_authenticated/fotos-clientes'
+    | '/_authenticated/gestionar-proyectos'
     | '/_authenticated/insumos'
+    | '/_authenticated/leads'
     | '/_authenticated/mi-produccion'
     | '/_authenticated/pedidos'
     | '/_authenticated/pos'
     | '/_authenticated/produccion'
     | '/_authenticated/productos'
     | '/_authenticated/proveedores'
+    | '/_authenticated/resenas'
     | '/_authenticated/usuarios'
     | '/_authenticated/ventas'
+    | '/admin/chat'
     | '/admin/orders'
+    | '/auth/callback'
     | '/categoria/$slug'
+    | '/combo/$id'
+    | '/conformidad/$orderId'
+    | '/perfil/datos'
+    | '/perfil/direcciones'
+    | '/perfil/facturacion'
+    | '/perfil/favoritos'
+    | '/perfil/pedidos'
+    | '/perfil/seguridad'
     | '/product/$handle'
+    | '/resena/$orderId'
+    | '/perfil/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  CatalogoRoute: typeof CatalogoRoute
   CheckoutRoute: typeof CheckoutRoute
-  PerfilRoute: typeof PerfilRoute
-  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  EnviosRoute: typeof EnviosRoute
+  NosotrosRoute: typeof NosotrosRoute
+  PerfilRoute: typeof PerfilRouteWithChildren
+  PrivacidadRoute: typeof PrivacidadRoute
+  ProyectosRoute: typeof ProyectosRoute
+  RestablecerRoute: typeof RestablecerRoute
+  TerminosRoute: typeof TerminosRoute
+  TestimoniosRoute: typeof TestimoniosRoute
+  AdminChatRoute: typeof AdminChatRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   CategoriaSlugRoute: typeof CategoriaSlugRoute
+  ComboIdRoute: typeof ComboIdRoute
+  ConformidadOrderIdRoute: typeof ConformidadOrderIdRoute
   ProductHandleRoute: typeof ProductHandleRoute
+  ResenaOrderIdRoute: typeof ResenaOrderIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
+    '/testimonios': {
+      id: '/testimonios'
+      path: '/testimonios'
+      fullPath: '/testimonios'
+      preLoaderRoute: typeof TestimoniosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminos': {
+      id: '/terminos'
+      path: '/terminos'
+      fullPath: '/terminos'
+      preLoaderRoute: typeof TerminosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/restablecer': {
+      id: '/restablecer'
+      path: '/restablecer'
+      fullPath: '/restablecer'
+      preLoaderRoute: typeof RestablecerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/proyectos': {
+      id: '/proyectos'
+      path: '/proyectos'
+      fullPath: '/proyectos'
+      preLoaderRoute: typeof ProyectosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidad': {
+      id: '/privacidad'
+      path: '/privacidad'
+      fullPath: '/privacidad'
+      preLoaderRoute: typeof PrivacidadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/perfil': {
@@ -315,11 +730,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/nosotros': {
+      id: '/nosotros'
+      path: '/nosotros'
+      fullPath: '/nosotros'
+      preLoaderRoute: typeof NosotrosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/envios': {
+      id: '/envios'
+      path: '/envios'
+      fullPath: '/envios'
+      preLoaderRoute: typeof EnviosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/checkout': {
       id: '/checkout'
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo': {
+      id: '/catalogo'
+      path: '/catalogo'
+      fullPath: '/catalogo'
+      preLoaderRoute: typeof CatalogoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -336,11 +772,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/perfil/': {
+      id: '/perfil/'
+      path: '/'
+      fullPath: '/perfil/'
+      preLoaderRoute: typeof PerfilIndexRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/resena/$orderId': {
+      id: '/resena/$orderId'
+      path: '/resena/$orderId'
+      fullPath: '/resena/$orderId'
+      preLoaderRoute: typeof ResenaOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/product/$handle': {
       id: '/product/$handle'
       path: '/product/$handle'
       fullPath: '/product/$handle'
       preLoaderRoute: typeof ProductHandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/perfil/seguridad': {
+      id: '/perfil/seguridad'
+      path: '/seguridad'
+      fullPath: '/perfil/seguridad'
+      preLoaderRoute: typeof PerfilSeguridadRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/perfil/pedidos': {
+      id: '/perfil/pedidos'
+      path: '/pedidos'
+      fullPath: '/perfil/pedidos'
+      preLoaderRoute: typeof PerfilPedidosRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/perfil/favoritos': {
+      id: '/perfil/favoritos'
+      path: '/favoritos'
+      fullPath: '/perfil/favoritos'
+      preLoaderRoute: typeof PerfilFavoritosRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/perfil/facturacion': {
+      id: '/perfil/facturacion'
+      path: '/facturacion'
+      fullPath: '/perfil/facturacion'
+      preLoaderRoute: typeof PerfilFacturacionRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/perfil/direcciones': {
+      id: '/perfil/direcciones'
+      path: '/direcciones'
+      fullPath: '/perfil/direcciones'
+      preLoaderRoute: typeof PerfilDireccionesRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/perfil/datos': {
+      id: '/perfil/datos'
+      path: '/datos'
+      fullPath: '/perfil/datos'
+      preLoaderRoute: typeof PerfilDatosRouteImport
+      parentRoute: typeof PerfilRoute
+    }
+    '/conformidad/$orderId': {
+      id: '/conformidad/$orderId'
+      path: '/conformidad/$orderId'
+      fullPath: '/conformidad/$orderId'
+      preLoaderRoute: typeof ConformidadOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/combo/$id': {
+      id: '/combo/$id'
+      path: '/combo/$id'
+      fullPath: '/combo/$id'
+      preLoaderRoute: typeof ComboIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categoria/$slug': {
@@ -350,11 +856,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CategoriaSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/orders': {
       id: '/admin/orders'
       path: '/admin/orders'
       fullPath: '/admin/orders'
       preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/chat': {
+      id: '/admin/chat'
+      path: '/admin/chat'
+      fullPath: '/admin/chat'
+      preLoaderRoute: typeof AdminChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/ventas': {
@@ -369,6 +889,13 @@ declare module '@tanstack/react-router' {
       path: '/usuarios'
       fullPath: '/usuarios'
       preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/resenas': {
+      id: '/_authenticated/resenas'
+      path: '/resenas'
+      fullPath: '/resenas'
+      preLoaderRoute: typeof AuthenticatedResenasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/proveedores': {
@@ -413,11 +940,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMiProduccionRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/leads': {
+      id: '/_authenticated/leads'
+      path: '/leads'
+      fullPath: '/leads'
+      preLoaderRoute: typeof AuthenticatedLeadsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/insumos': {
       id: '/_authenticated/insumos'
       path: '/insumos'
       fullPath: '/insumos'
       preLoaderRoute: typeof AuthenticatedInsumosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/gestionar-proyectos': {
+      id: '/_authenticated/gestionar-proyectos'
+      path: '/gestionar-proyectos'
+      fullPath: '/gestionar-proyectos'
+      preLoaderRoute: typeof AuthenticatedGestionarProyectosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/fotos-clientes': {
+      id: '/_authenticated/fotos-clientes'
+      path: '/fotos-clientes'
+      fullPath: '/fotos-clientes'
+      preLoaderRoute: typeof AuthenticatedFotosClientesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/devoluciones': {
+      id: '/_authenticated/devoluciones'
+      path: '/devoluciones'
+      fullPath: '/devoluciones'
+      preLoaderRoute: typeof AuthenticatedDevolucionesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/despachos': {
+      id: '/_authenticated/despachos'
+      path: '/despachos'
+      fullPath: '/despachos'
+      preLoaderRoute: typeof AuthenticatedDespachosRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -427,11 +989,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/cupones': {
+      id: '/_authenticated/cupones'
+      path: '/cupones'
+      fullPath: '/cupones'
+      preLoaderRoute: typeof AuthenticatedCuponesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/crm': {
       id: '/_authenticated/crm'
       path: '/crm'
       fullPath: '/crm'
       preLoaderRoute: typeof AuthenticatedCrmRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/correos-pedidos': {
+      id: '/_authenticated/correos-pedidos'
+      path: '/correos-pedidos'
+      fullPath: '/correos-pedidos'
+      preLoaderRoute: typeof AuthenticatedCorreosPedidosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/combos': {
+      id: '/_authenticated/combos'
+      path: '/combos'
+      fullPath: '/combos'
+      preLoaderRoute: typeof AuthenticatedCombosRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/clientes': {
@@ -448,6 +1031,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCentralRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/carrusel': {
+      id: '/_authenticated/carrusel'
+      path: '/carrusel'
+      fullPath: '/carrusel'
+      preLoaderRoute: typeof AuthenticatedCarruselRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/carritos-abandonados': {
+      id: '/_authenticated/carritos-abandonados'
+      path: '/carritos-abandonados'
+      fullPath: '/carritos-abandonados'
+      preLoaderRoute: typeof AuthenticatedCarritosAbandonadosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/caja': {
+      id: '/_authenticated/caja'
+      path: '/caja'
+      fullPath: '/caja'
+      preLoaderRoute: typeof AuthenticatedCajaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/analytics': {
       id: '/_authenticated/analytics'
       path: '/analytics'
@@ -460,34 +1064,58 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
+  AuthenticatedCajaRoute: typeof AuthenticatedCajaRoute
+  AuthenticatedCarritosAbandonadosRoute: typeof AuthenticatedCarritosAbandonadosRoute
+  AuthenticatedCarruselRoute: typeof AuthenticatedCarruselRoute
   AuthenticatedCentralRoute: typeof AuthenticatedCentralRoute
   AuthenticatedClientesRoute: typeof AuthenticatedClientesRoute
+  AuthenticatedCombosRoute: typeof AuthenticatedCombosRoute
+  AuthenticatedCorreosPedidosRoute: typeof AuthenticatedCorreosPedidosRoute
   AuthenticatedCrmRoute: typeof AuthenticatedCrmRoute
+  AuthenticatedCuponesRoute: typeof AuthenticatedCuponesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDespachosRoute: typeof AuthenticatedDespachosRoute
+  AuthenticatedDevolucionesRoute: typeof AuthenticatedDevolucionesRoute
+  AuthenticatedFotosClientesRoute: typeof AuthenticatedFotosClientesRoute
+  AuthenticatedGestionarProyectosRoute: typeof AuthenticatedGestionarProyectosRoute
   AuthenticatedInsumosRoute: typeof AuthenticatedInsumosRoute
+  AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedMiProduccionRoute: typeof AuthenticatedMiProduccionRoute
   AuthenticatedPedidosRoute: typeof AuthenticatedPedidosRoute
   AuthenticatedPosRoute: typeof AuthenticatedPosRoute
   AuthenticatedProduccionRoute: typeof AuthenticatedProduccionRoute
   AuthenticatedProductosRoute: typeof AuthenticatedProductosRoute
   AuthenticatedProveedoresRoute: typeof AuthenticatedProveedoresRoute
+  AuthenticatedResenasRoute: typeof AuthenticatedResenasRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
   AuthenticatedVentasRoute: typeof AuthenticatedVentasRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
+  AuthenticatedCajaRoute: AuthenticatedCajaRoute,
+  AuthenticatedCarritosAbandonadosRoute: AuthenticatedCarritosAbandonadosRoute,
+  AuthenticatedCarruselRoute: AuthenticatedCarruselRoute,
   AuthenticatedCentralRoute: AuthenticatedCentralRoute,
   AuthenticatedClientesRoute: AuthenticatedClientesRoute,
+  AuthenticatedCombosRoute: AuthenticatedCombosRoute,
+  AuthenticatedCorreosPedidosRoute: AuthenticatedCorreosPedidosRoute,
   AuthenticatedCrmRoute: AuthenticatedCrmRoute,
+  AuthenticatedCuponesRoute: AuthenticatedCuponesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDespachosRoute: AuthenticatedDespachosRoute,
+  AuthenticatedDevolucionesRoute: AuthenticatedDevolucionesRoute,
+  AuthenticatedFotosClientesRoute: AuthenticatedFotosClientesRoute,
+  AuthenticatedGestionarProyectosRoute: AuthenticatedGestionarProyectosRoute,
   AuthenticatedInsumosRoute: AuthenticatedInsumosRoute,
+  AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedMiProduccionRoute: AuthenticatedMiProduccionRoute,
   AuthenticatedPedidosRoute: AuthenticatedPedidosRoute,
   AuthenticatedPosRoute: AuthenticatedPosRoute,
   AuthenticatedProduccionRoute: AuthenticatedProduccionRoute,
   AuthenticatedProductosRoute: AuthenticatedProductosRoute,
   AuthenticatedProveedoresRoute: AuthenticatedProveedoresRoute,
+  AuthenticatedResenasRoute: AuthenticatedResenasRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
   AuthenticatedVentasRoute: AuthenticatedVentasRoute,
 }
@@ -496,15 +1124,50 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface PerfilRouteChildren {
+  PerfilDatosRoute: typeof PerfilDatosRoute
+  PerfilDireccionesRoute: typeof PerfilDireccionesRoute
+  PerfilFacturacionRoute: typeof PerfilFacturacionRoute
+  PerfilFavoritosRoute: typeof PerfilFavoritosRoute
+  PerfilPedidosRoute: typeof PerfilPedidosRoute
+  PerfilSeguridadRoute: typeof PerfilSeguridadRoute
+  PerfilIndexRoute: typeof PerfilIndexRoute
+}
+
+const PerfilRouteChildren: PerfilRouteChildren = {
+  PerfilDatosRoute: PerfilDatosRoute,
+  PerfilDireccionesRoute: PerfilDireccionesRoute,
+  PerfilFacturacionRoute: PerfilFacturacionRoute,
+  PerfilFavoritosRoute: PerfilFavoritosRoute,
+  PerfilPedidosRoute: PerfilPedidosRoute,
+  PerfilSeguridadRoute: PerfilSeguridadRoute,
+  PerfilIndexRoute: PerfilIndexRoute,
+}
+
+const PerfilRouteWithChildren =
+  PerfilRoute._addFileChildren(PerfilRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  CatalogoRoute: CatalogoRoute,
   CheckoutRoute: CheckoutRoute,
-  PerfilRoute: PerfilRoute,
-  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  EnviosRoute: EnviosRoute,
+  NosotrosRoute: NosotrosRoute,
+  PerfilRoute: PerfilRouteWithChildren,
+  PrivacidadRoute: PrivacidadRoute,
+  ProyectosRoute: ProyectosRoute,
+  RestablecerRoute: RestablecerRoute,
+  TerminosRoute: TerminosRoute,
+  TestimoniosRoute: TestimoniosRoute,
+  AdminChatRoute: AdminChatRoute,
   AdminOrdersRoute: AdminOrdersRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   CategoriaSlugRoute: CategoriaSlugRoute,
+  ComboIdRoute: ComboIdRoute,
+  ConformidadOrderIdRoute: ConformidadOrderIdRoute,
   ProductHandleRoute: ProductHandleRoute,
+  ResenaOrderIdRoute: ResenaOrderIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

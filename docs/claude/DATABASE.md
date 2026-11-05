@@ -69,17 +69,8 @@ id, nombre, descripcion, sku, precio, stock, categoria, imagen_url, imagen_publi
 
 ## Notas
 - `src/integrations/supabase/types.ts` está en UTF-16 (no compila como TS) y no refleja las tablas nuevas: el front consulta esas tablas con el cliente sin tipar.
-
----
-# `proyectos` — lo que se sabe (2026-11-05, por el código; NO verificado en la BD)
-- Columnas usadas por el front: `id`, `titulo`, `descripcion`, `etiqueta`, `anio`, `fotos` (text[] de URLs https), `destacado`, `publicado`, `created_at`. La lectura pública filtra `publicado = true`.
-- Su migración (`20261028_testimonios_y_proyectos.sql`, citada en `fotos-clientes.tsx`) **no está en `supabase/migrations/`**: antes de cualquier cambio hay que pedir al dueño el esquema real y las políticas RLS (`information_schema.columns` y `pg_policies`).
-- No existen: distrito, tiempo de ejecución, materiales, fotos antes/después.
-
-## Propuesta B (no aplicada; requiere migración y aprobación)
-`proyectos`, todas opcionales: `distrito text`, `tiempo_ejecucion text` (texto libre breve, p. ej. «2 semanas»; formato confirmado por el dueño el 2026-11-05), `materiales text[]`, `fotos_antes text[]`, `fotos_despues text[]`. `fotos` queda como respaldo. Migración idempotente (`ADD COLUMN IF NOT EXISTS`). Sin cambios de RLS si la política actual es por fila (por verificar). Un campo vacío no se muestra; nada se rellena por defecto.
-
-> Fase 1 de Proyectos (2026-11-05): sin cambios de esquema ni de RLS. La Fase 2 (B) sigue sin aplicar.
-
-## Propuesta B → patch Fase 2 (2026-11-05, migración SIN ejecutar todavía)
-`supabase/migrations/20261105_proyectos_realizados.sql` agrega a `proyectos`: `distrito text`, `tiempo_ejecucion text`, `materiales text[] not null default '{}'`, `fotos_antes text[] not null default '{}'`, `fotos_despues text[] not null default '{}'` y `autorizacion_cliente boolean not null default false` (requisito de privacidad: sin ella no se publican distrito ni antes/después). Sin cambios de RLS: confirmar con `select policyname, cmd, qual from pg_policies where tablename = 'proyectos'`.
+## Reacciones a proyectos (2026-11-05) — migración lista, sin ejecutar
+- `proyecto_reacciones(id, proyecto_id → proyectos, user_id → auth.users default auth.uid(), tipo, created_at)`; `tipo` ∈ `me_gusta | me_encanta | impresionante | lo_quiero`; única `(proyecto_id, user_id)`.
+- RLS (authenticated): select/update propios; insert con `user_id = auth.uid()`; delete propio o admin (`has_role`). Anónimos no escriben ni leen filas.
+- Vista `v_proyecto_reacciones_conteo(proyecto_id, tipo, total)`: lectura pública (anon y authenticated), corre con permisos del dueño a propósito para exponer solo conteos.
+- Supuesto: `proyectos.id` es `uuid` (lo valida `proyectos.functions.ts`). La tabla `proyectos` no tiene migración en el repo: verificar `\d proyectos` antes de ejecutar.

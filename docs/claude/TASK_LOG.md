@@ -84,34 +84,12 @@
 - Verificado con servidor simulado + Playwright (390 px): colgado → respaldo a 8,4 s; reintentar OK; 503; 429; sin red; respuesta viva de 15 s sin corte.
 - Sin probar: contra el backend real (LangChain + Ollama) ni `node --test server/chat*.test.js` (no se tocó el servidor).
 
-## 2026-11-05 — Página Proyectos: ocultar (A) vs proyectos realizados (B) — plan
-- Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo (solo estas notas de docs).
-- Inspeccionados (solo lectura): `src/routes/proyectos.tsx`, `src/hooks/useProyectos.ts`, `src/lib/proyectos.functions.ts`, `src/routes/_authenticated/gestionar-proyectos.tsx`, `Footer.tsx`, `Header.tsx`, `nav-config.ts`, `server/sitemap.js`, `scripts/generate-sitemap.mjs`, `scripts/prerender.mjs`, `src/lib/chatSugerencias.ts`, `server/chatNavegacion.js`, `terminos.tsx`, `useGaleriaClientes.ts`, historial git de `proyectos.tsx`.
-- Hallazgos: ver MODULES.md («Proyectos») y DATABASE.md («`proyectos`»). Resumen: el texto «Nuevos modelos pronto» NO existe en el código ni en el historial git (el vacío actual dice «Muy pronto»); la página ya lee la tabla `proyectos` y el pie de página ya oculta el enlace sin proyectos, pero `/proyectos` sigue en sitemap, prerender, chatbot y términos; la tabla no tiene distrito, tiempo, materiales ni antes/después; su migración no está en el repo.
-- Recomendación: **A ahora** (cambio pequeño y reversible) y **B por fases, solo cuando el dueño tenga proyectos reales con datos y autorización de los clientes**.
-- Pendiente del dueño: confirmar qué ve hoy en producción, cuántas filas hay en `proyectos`, esquema real de la tabla, y si hay proyectos reales con las 4 informaciones y permiso de los clientes.
-
-## 2026-11-05 — Proyectos, Fase 1 (A) implementada (autorizada: «Fase 1 A primero»)
-- Decisiones del dueño: Fase 1 (A) ahora; B en espera (hoy **no hay proyectos reales**); tiempo de ejecución como texto libre («2 semanas»); sin proyectos, redirigir a **/catalogo**.
-- Patch `proyectos-fase1.patch` (7 archivos, sin archivos nuevos, sin dependencias, sin cambios de BD ni de RLS):
-  - `src/routes/proyectos.tsx`: sin proyectos publicados → `<Navigate to="/catalogo" replace />` (se quitó el vacío «Muy pronto»); la vista `pagina_vista` solo se registra si hay proyectos.
-  - `server/sitemap.js`: `/proyectos` sale de las páginas fijas y se agrega solo si hay proyectos publicados con foto https (`leerProyectos`); si la tabla no existe o falla, se omite sin marcar el sitemap como parcial.
-  - `server/sitemap.test.js`: el simulador devuelve `proyectos` vacío por defecto; 4 pruebas nuevas.
-  - `scripts/generate-sitemap.mjs` (modo `SITEMAP_STATIC=1`): misma regla. `scripts/prerender.mjs`: se retiró `/proyectos`.
-  - `src/lib/chatSugerencias.ts`: las dos respuestas fijas ya no prometen «Proyectos»; apuntan a Testimonios.
-  - `src/components/AsistenteChat.tsx`: si no hay proyectos, el botón «Ver proyectos realizados» que manda el servidor se cambia por «Ver testimonios» (sin duplicar). `server/chatNavegacion.js` NO se tocó.
-- Verificación: `node --test server/sitemap.test.js server/chat-navegacion.test.js` → 21/21 OK; `node --check` de los .mjs OK; TypeScript sin errores de sintaxis en los 3 archivos .ts/.tsx. **Sin probar:** `tsc --noEmit` y `vite build` completos (el zip no trae `node_modules`), ni en navegador (redirección, botón del chat).
-- No tocado, a la espera de aprobación del dueño: `src/routes/terminos.tsx` (el texto sobre fotos de reseñas cita la «galería de Proyectos realizados» y su enlace; con la redirección lleva al catálogo).
-- Pendiente (Fase 2 / B): sigue en espera hasta tener proyectos reales con antes/después, distrito, tiempo («2 semanas») y materiales, y permiso del cliente.
-- **Idea nueva del dueño (no planificada):** mostrar productos/ideas nuevas con «me gusta» o reacciones para medir si hay demanda antes de fabricarlos. Es otra función (reacciones de clientes), distinta de B: requiere plan aparte (tabla de reacciones, quién puede votar —anónimo o con cuenta—, antiabuso, privacidad, dónde se muestra y cómo se lee en el panel).
-
-## 2026-11-05 — Proyectos, Fase 2 (B) implementada (autorizada: «vamos con la fase 2-b»)
-- Patch `proyectos-fase2.patch` (se aplica DESPUÉS de `proyectos-fase1.patch`; 4 archivos modificados + 1 migración nueva; sin dependencias nuevas). Comprobado: aplica limpio sobre el zip original + Fase 1.
-- **Migración nueva (requiere ejecutarla en Supabase y `git add`):** `supabase/migrations/20261105_proyectos_realizados.sql` → `proyectos`: `distrito`, `tiempo_ejecucion` (texto libre), `materiales text[]`, `fotos_antes text[]`, `fotos_despues text[]`, `autorizacion_cliente boolean default false`. Idempotente. Sin cambios de RLS (por verificar con `pg_policies`).
-- `src/hooks/useProyectos.ts`: lee las columnas nuevas; si la migración no está aplicada, reintenta con las columnas anteriores (no oculta los proyectos existentes). Distrito y fotos antes/después solo salen si `autorizacion_cliente = true`.
-- `src/lib/proyectos.functions.ts`: validación de los campos nuevos; no se puede publicar distrito o antes/después sin `autorizacion_cliente`; los errores de validación ahora muestran el mensaje (antes salía el JSON de zod); si la migración falta, un proyecto sin datos nuevos se sigue guardando.
-- `src/routes/_authenticated/gestionar-proyectos.tsx`: campos Distrito, Tiempo de ejecución («2 semanas»), Materiales (separados por coma), tres grupos de fotos (proyecto ≤ 8, antes ≤ 4, después ≤ 4) e interruptor de autorización del cliente.
-- `src/routes/proyectos.tsx`: tarjeta con distrito y tiempo; diálogo con distrito, tiempo, materiales (chips), bloque Antes/Después (miniaturas que abren la galería) y etiquetas en la foto. Lo vacío no se muestra.
-- No cambia: sitemap, prerender y chat (Fase 1 ya los condiciona a que haya proyectos). `terminos.tsx` sigue sin tocar (a la espera del dueño).
-- Verificación: TypeScript sin errores de sintaxis en los 4 archivos; `git apply --check` OK. **Sin probar:** `tsc --noEmit`, `vite build`, ni el flujo en navegador/Supabase (el zip no trae `node_modules`).
-- Pendiente: ejecutar la migración; cargar un primer proyecto REAL (con autorización del cliente); revisar `pg_policies` de `proyectos`; decidir sobre `terminos.tsx`; la idea de reacciones («me gusta») sigue sin plan.
+## 2026-11-05 — Reacciones en Proyectos (plan aprobado)
+- Decisiones del dueño: **solo con sesión**; **varios tipos** de reacción; contador **visible desde la primera reacción**.
+- Tipos: `me_gusta` 👍, `me_encanta` ❤️, `impresionante` 😮, `lo_quiero` 🙌. Una reacción por persona y proyecto: tocar la misma la quita, otra la cambia.
+- **BD (pendiente de ejecutar; requiere confirmación del dueño por las RLS):** `supabase/migrations/20261105_proyecto_reacciones.sql` — tabla `proyecto_reacciones` (única por `proyecto_id`+`user_id`), 4 políticas (cada quien lo suyo; admin ve y quita), vista pública `v_proyecto_reacciones_conteo` (solo conteos). Incluye verificación y rollback comentados.
+- **Front:** `src/hooks/useReaccionesProyectos.ts` (consulta, actualización inmediata con reversión si falla, reacción pendiente tras iniciar sesión vía `sessionStorage`), `src/components/proyectos/ReaccionesProyecto.tsx` (`ResumenReacciones` en la tarjeta, `SelectorReacciones` en el detalle, botones ≥ 44 px, `aria-pressed`), cambios en `src/routes/proyectos.tsx`. Sin dependencias nuevas.
+- Sin sesión: al reaccionar se abre el `LoginModal` y la reacción elegida se aplica al volver.
+- Si la migración aún no se ejecutó, las consultas fallan en silencio y no se muestran reacciones (el resto de la página no se afecta).
+- Verificación: `tsc` sin errores nuevos; `vite build` OK; prueba en navegador a 390 px con Supabase simulado (con estado): resumen en tarjeta solo con reacciones, selector con conteos, sin sesión → login y pendiente guardado, con sesión → reaccionar (POST), cambiar (POST) y quitar (DELETE), reacción previa marcada, 0 botones < 44 px.
+- Pendiente: ejecutar la migración en Supabase y probar con datos reales; columna de reacciones en `gestionar-proyectos.tsx` (opcional, no hecho).

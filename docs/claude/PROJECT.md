@@ -44,10 +44,3 @@ Ingeniero full-stack senior + UI/UX e-commerce.
 
 ## Datos pendientes de confirmar con el dueño
 Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos oficiales de pago (opcional: reemplazan los SVG simplificados de `public/pagos/`) y datos del Libro de Reclamaciones. **No se inventan.**
-
-
-## Proyectos (2026-11-05)
-- **Fase 1 (A) hecha** (pendiente de commit): sin proyectos publicados, `/proyectos` redirige a `/catalogo` y deja de anunciarse (sitemap, prerender, chat).
-- **Fase 2 (B) hecha en código** (pendiente de commit y de ejecutar la migración `20261105_proyectos_realizados.sql`): «proyectos realizados» con antes/después, distrito, tiempo («2 semanas», texto libre) y materiales. La página sigue oculta hasta que se publique un proyecto REAL con permiso del cliente.
-- **Idea nueva sin plan:** reacciones/«me gusta» de clientes para medir demanda de productos nuevos.
-- Detalle en TASK_LOG.md.

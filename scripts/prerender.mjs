@@ -130,7 +130,7 @@ try {
   const fijas = [
     ["/catalogo", "Catálogo completo — G&M Mueblería", "Explora todos nuestros muebles: salas, comedores, recámaras, separadores de ambiente y accesorios.", true],
     ["/nosotros", "Nuestro taller — G&M Mueblería", "Conoce cómo fabricamos cada mueble en nuestro taller de Lima: madera tornillo seca y tratada, acabado a mano y control de calidad pieza por pieza."],
-    // /proyectos no se prerenderiza: sin proyectos publicados redirige a /catalogo. Volver a agregarlo cuando haya proyectos reales (Fase 2).
+    ["/proyectos", "Proyectos — G&M Mueblería", "Piezas especiales e ideas nuevas que fabricamos en nuestro taller de Lima."],
     ["/testimonios", "Testimonios — G&M Mueblería", "Fotos reales y reseñas verificadas de clientes con sus muebles G&M."],
     ["/envios", "Envíos y entregas — G&M Mueblería", "Plazos de entrega en Lima y provincias, recojo en tienda y cómo coordinamos la entrega de tu mueble."],
     ["/terminos", "Términos y condiciones — G&M Mueblería", "Condiciones de compra, fabricación a pedido, pagos, garantía y cambios de G&M Mueblería."],
