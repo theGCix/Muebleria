@@ -62,3 +62,13 @@
 - Inspeccionados (solo lectura): `catalogo.tsx`, `categoria.$slug.tsx`, `ProductCard.tsx`, `categories.ts`, `useProducts.ts`, `AsistenteChat.tsx`, `ExitCouponDialog.tsx`, `Header.tsx`, `MobileBottomBar.tsx`, `CategoryMobileAccordion.tsx`, `CategoryMegaMenu.tsx`.
 - Hallazgos: filtros siempre visibles y `FilterChip` duplicado en las dos rutas; chips ~32 px (< 44 px); `ProductCard` muestra `categoria`, `subcategoria` y `material_base` crudos (slugs) aunque `categories.ts` ya tiene las etiquetas; no existe campo de nombre comercial en `products`; `MobileBottomBar` es solo del panel interno (no aplica al catálogo público); en público compiten por la esquina inferior el botón del chat (`bottom-6 right-6`, z-50) y la pastilla del cupón (`bottom-20 left-3`, z-30).
 - Pendiente: autorización del dueño; definir «nombres comerciales» y qué se entiende por «categorías duplicadas».
+
+## 2026-11-05 — Ofertas: carrusel responsive (plan aprobado: «aplica todo para móvil y pc … hazlo a tu criterio»)
+- Antes: `OfertasSection.tsx` era una grilla (2/3/4 columnas) con «Ver las N ofertas restantes»; no había carrusel de ofertas.
+- Ahora: carrusel con `ui/carousel.tsx` (Embla, ya en `package.json`; **sin dependencias nuevas**) en móvil y escritorio. Tarjetas por vista: 2 (móvil, `basis-[46%]`), 3 (≥ sm), 4 (≥ lg); `slidesToScroll: "auto"` avanza una página completa. Se muestran las 24 ofertas de `useOfertas(24)`; se eliminó el botón «Ver restantes».
+- Uniformidad: las diapositivas se estiran a la misma altura (flex) y el bloque de precio/acciones de `ProductCard` queda abajo (`mt-auto`). `ProductCard.tsx` y `product-card.css` NO se tocaron.
+- Indicadores: flechas ‹ › + puntos (≤ 4 páginas) o contador «3 / 12» con barra de avance (más páginas). Todo ≥ 44 px, activo en `primary`, inactivo `muted-foreground/70` (los puntos de `HeroSlider` son blancos de 10 px y no sirven sobre fondo claro). Textos en español y `aria-current`.
+- Al cambiar de chip de categoría el carrusel vuelve a la primera página (`key` en `Carousel`). `py-3` en el contenido para que el viewport (overflow) no recorte la sombra/inclinación 3D de `.gmc-card`.
+- Sin autoplay (decisión de criterio: son ofertas que el cliente compara; no se mueven solas).
+- Verificación: solo sintaxis TSX (el zip no trae `node_modules` y no hay red). **Pendiente:** `tsc --noEmit`, `vite build` y prueba a 360/414/768/1280 px con datos reales (arrastre sin disparar el enlace, cambio de chip, flechas, teclado).
+- Pendiente aparte (Parte 5/K2): los chips de categoría de esta sección siguen en ~32 px de alto (< 44 px).

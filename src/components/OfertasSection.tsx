@@ -1,16 +1,25 @@
 // src/components/OfertasSection.tsx
-import { useMemo, useState } from "react";
-import { Flame } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { useOfertas } from "@/hooks/useProducts";
 import { fmtPEN, ofertaInfo } from "@/lib/pricing";
+import { cn } from "@/lib/utils";
 import { ProductCard } from "./ProductCard";
 
-const VISIBLES = 8;
+// Con más páginas que esto, los puntos no caben en un móvil de 320 px (cada uno mide 44 px
+// de alto/ancho táctil) y se cambia a contador + barra de avance.
+const MAX_PUNTOS = 4;
 
 export function OfertasSection() {
   const { data = [], isLoading } = useOfertas(24);
   const [categoria, setCategoria] = useState<string | null>(null);
-  const [verTodas, setVerTodas] = useState(false);
+  const [api, setApi] = useState<CarouselApi>();
 
   // Categorías con ofertas y cuántas hay en cada una
   const categorias = useMemo(() => {
@@ -21,7 +30,6 @@ export function OfertasSection() {
   }, [data]);
 
   const filtradas = categoria ? data.filter((p) => p.categoria === categoria) : data;
-  const mostradas = verTodas ? filtradas : filtradas.slice(0, VISIBLES);
   const mayorAhorro = useMemo(() => Math.max(0, ...data.map((p) => ofertaInfo(p).ahorro)), [data]);
 
   // Sin productos en oferta: no mostramos la sección (evita un bloque vacío en la home)
@@ -77,26 +85,134 @@ export function OfertasSection() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
-              {mostradas.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
-            </div>
-            {!verTodas && filtradas.length > VISIBLES && (
-              <div className="mt-8 text-center">
-                <button
-                  type="button"
-                  onClick={() => setVerTodas(true)}
-                  className="rounded-full border border-foreground/20 px-6 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
-                >
-                  Ver las {filtradas.length - VISIBLES} ofertas restantes
-                </button>
-              </div>
-            )}
+            {/* key: al cambiar de categoría el carrusel vuelve a la primera página */}
+            <Carousel
+              key={categoria ?? "todas"}
+              setApi={setApi}
+              opts={{ align: "start", slidesToScroll: "auto", containScroll: "trimSnaps" }}
+              aria-roledescription="carrusel"
+              aria-label="Ofertas"
+            >
+              {/* py-3: el viewport recorta (overflow), y la sombra/inclinación de la tarjeta necesita aire */}
+              <CarouselContent className="-ml-3 touch-pan-y touch-pinch-zoom py-3 sm:-ml-6">
+                {filtradas.map((p, i) => (
+                  <CarouselItem
+                    key={p.id}
+                    aria-roledescription="diapositiva"
+                    aria-label={`${i + 1} de ${filtradas.length}`}
+                    // Móvil: 2 tarjetas (como la grilla anterior); ≥ sm: 3; ≥ lg: 4.
+                    // Las diapositivas se estiran a la misma altura y el pie de la tarjeta queda abajo (mt-auto).
+                    className="basis-[46%] pl-3 sm:basis-1/3 sm:pl-6 lg:basis-1/4"
+                  >
+                    <ProductCard product={p} />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+            </Carousel>
+            <ControlesCarrusel api={api} />
           </>
         )}
       </div>
     </section>
+  );
+}
+
+/** Flechas + indicador de posición (puntos o contador). Todo táctil ≥ 44 px. */
+function ControlesCarrusel({ api }: { api: CarouselApi }) {
+  const [total, setTotal] = useState(0);
+  const [actual, setActual] = useState(0);
+  const [puedeAtras, setPuedeAtras] = useState(false);
+  const [puedeAdelante, setPuedeAdelante] = useState(false);
+
+  useEffect(() => {
+    if (!api) return;
+    const sincronizar = () => {
+      setTotal(api.scrollSnapList().length);
+      setActual(api.selectedScrollSnap());
+      setPuedeAtras(api.canScrollPrev());
+      setPuedeAdelante(api.canScrollNext());
+    };
+    sincronizar();
+    // reInit se dispara al redimensionar: el número de páginas cambia entre móvil y escritorio
+    api.on("select", sincronizar).on("reInit", sincronizar);
+    return () => {
+      api.off("select", sincronizar).off("reInit", sincronizar);
+    };
+  }, [api]);
+
+  // Todo cabe en una sola página: no hay nada que navegar
+  if (!api || total <= 1) return null;
+
+  return (
+    <div className="mt-4 flex items-center justify-center gap-2">
+      <Flecha etiqueta="Ofertas anteriores" deshabilitado={!puedeAtras} onClick={() => api.scrollPrev()}>
+        <ChevronLeft className="h-5 w-5" />
+      </Flecha>
+
+      {total <= MAX_PUNTOS ? (
+        <div className="flex items-center" role="group" aria-label="Posición en el carrusel de ofertas">
+          {Array.from({ length: total }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => api.scrollTo(i)}
+              aria-label={`Ir a la página ${i + 1} de ${total}`}
+              aria-current={i === actual ? "true" : undefined}
+              className="group flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                className={cn(
+                  "h-2 rounded-full transition-all duration-300",
+                  i === actual
+                    ? "w-6 bg-primary"
+                    : "w-2 bg-muted-foreground/70 group-hover:bg-muted-foreground",
+                )}
+              />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex min-w-[8.5rem] flex-col items-center gap-1.5 px-2" aria-live="polite">
+          <span className="text-sm font-medium tabular-nums text-foreground">
+            {actual + 1} <span className="text-muted-foreground">/ {total}</span>
+          </span>
+          <span className="h-1 w-28 overflow-hidden rounded-full bg-muted-foreground/25" aria-hidden>
+            <span
+              className="block h-full rounded-full bg-primary transition-[width] duration-300"
+              style={{ width: `${((actual + 1) / total) * 100}%` }}
+            />
+          </span>
+        </div>
+      )}
+
+      <Flecha etiqueta="Ofertas siguientes" deshabilitado={!puedeAdelante} onClick={() => api.scrollNext()}>
+        <ChevronRight className="h-5 w-5" />
+      </Flecha>
+    </div>
+  );
+}
+
+function Flecha({
+  etiqueta,
+  deshabilitado,
+  onClick,
+  children,
+}: {
+  etiqueta: string;
+  deshabilitado: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={deshabilitado}
+      aria-label={etiqueta}
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+    >
+      {children}
+    </button>
   );
 }
 
