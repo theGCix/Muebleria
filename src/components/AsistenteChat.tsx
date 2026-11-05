@@ -257,8 +257,10 @@ export function AsistenteChat() {
 
   // En el panel interno (móvil) se sube sobre la barra inferior; en el resto queda abajo a la derecha.
   const elevado = RUTAS_CON_BARRA_INFERIOR.test(pathname);
-  const posBoton = elevado ? "bottom-20 md:bottom-6" : "bottom-6";
-  const posPanel = elevado ? "bottom-36 md:bottom-24" : "bottom-24";
+  // En la ficha de producto, en móvil, hay una barra de compra fija abajo: el chat se sube sobre ella.
+  const enFicha = pathname.startsWith("/product/");
+  const posBoton = enFicha ? "bottom-24 sm:bottom-6" : elevado ? "bottom-20 md:bottom-6" : "bottom-6";
+  const posPanel = enFicha ? "bottom-40 sm:bottom-24" : elevado ? "bottom-36 md:bottom-24" : "bottom-24";
 
   return (
     <>

@@ -29,7 +29,7 @@ import { SignatureModule } from "@/components/product/SignatureModules";
 import { OpcionesProducto } from "@/components/product/OpcionesProducto";
 import { useOpcionesProducto, resolverSeleccion, type SeleccionOpciones, type OpcionGrupo, type OpcionValor } from "@/hooks/useOpcionesProducto";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
-import { StickyBuyBar } from "@/components/product/StickyBuyBar";
+import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBuyBar";
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
 import "@/components/product/product-experience.css";
@@ -434,8 +434,9 @@ const PAGE_CSS = `
         .gm-btn-wish:hover,.gm-btn-wish.active { border-color:var(--gm-gold); color:var(--gm-gold); }
         .gm-btn-quote {
           flex:1; background:transparent; color:var(--gm-walnut);
-          border:1px solid var(--gm-walnut); padding:15px;
-          border-radius:2px; font-size:14px; letter-spacing:.06em;
+          border:none; min-height:44px; padding:10px 12px;
+          font-size:14px; font-weight:500; letter-spacing:.04em;
+          text-decoration:underline; text-underline-offset:3px;
           cursor:pointer; transition:background .2s;
         }
         .gm-btn-quote:hover { background:var(--gm-cream); }
@@ -596,6 +597,8 @@ function ProductView({ product: base }: { product: ProductData }) {
   const [fotoColor, setFotoColor] = useState(0);
   const [modPrefs, setModPrefs] = useState<Record<string, string>>({});
   const [showSticky, setShowSticky] = useState(false);
+  // Tras agregar: la ficha y la barra ofrecen «Ir a pagar» / «Seguir comprando»
+  const [postAdd, setPostAdd] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
 
   const profile = useMemo(() => resolveProfile(product), [product]);
@@ -803,6 +806,7 @@ function ProductView({ product: base }: { product: ProductData }) {
 
   const handleAdd = () => {
     setAdding(true);
+    setPostAdd(true);
     addItem({
       id: product.id,
       title: `${product.nombre} (${Object.values(prefs).join(", ")})`,
@@ -953,17 +957,24 @@ function ProductView({ product: base }: { product: ProductData }) {
             {hayOpcionesBD ? (
               <OpcionesProducto grupos={gruposBD} seleccion={selOpciones} onElegir={elegirOpcion} />
             ) : (
-              <>
+              swatches.length > 1 ? (
+                <>
+                  <div className="gm-color-label">
+                    {acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
+                  </div>
+                  <div className="gm-color-row" role="radiogroup" aria-label={acabadoLabel}>
+                    {swatches.map((c, i) => (
+                      <button key={c.hex} type="button" role="radio" aria-checked={swatchSel === i} aria-label={c.name}
+                        className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => elegirColor(i)} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                // D8: con un único color no hay nada que elegir → texto, sin selector
                 <div className="gm-color-label">
-                  {acabadoLabel} — <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
+                  {acabadoLabel}: <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{acabado.name}</span>
                 </div>
-                <div className="gm-color-row" role="radiogroup" aria-label={acabadoLabel}>
-                  {swatches.map((c, i) => (
-                    <button key={c.hex} type="button" role="radio" aria-checked={swatchSel === i} aria-label={c.name}
-                      className="gmx-swatch" style={{ background: c.hex }} title={c.name} onClick={() => elegirColor(i)} />
-                  ))}
-                </div>
-              </>
+              )
             )}
 
             {/* descripción */}
@@ -1016,7 +1027,18 @@ function ProductView({ product: base }: { product: ProductData }) {
                 <Heart size={18} fill={isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
               </button>
             </div>
-            {qtyProductoTotal > 0 && (
+            {postAdd && qtyProductoTotal > 0 && (
+              <div className="gmx-postadd" role="status">
+                <p className="gmx-postadd-msg">
+                  <Check size={16} aria-hidden /> Agregado al carrito ({qtyProductoTotal} {qtyProductoTotal === 1 ? "unidad" : "unidades"})
+                </p>
+                <div className="gmx-postadd-btns">
+                  <Link to="/checkout" className="gmx-postadd-pay">Ir a pagar</Link>
+                  <SeguirComprandoLink categoria={product.categoria} className="gmx-postadd-more">Seguir comprando</SeguirComprandoLink>
+                </div>
+              </div>
+            )}
+            {!postAdd && qtyProductoTotal > 0 && (
               <Link to="/checkout" className="gmx-gopay">
                 Ir a pagar ({qtyProductoTotal} {qtyProductoTotal === 1 ? "unidad" : "unidades"}) <ChevronRight size={14} />
               </Link>
@@ -1075,6 +1097,8 @@ function ProductView({ product: base }: { product: ProductData }) {
         />
 
         <Footer />
+        {/* En móvil la barra de compra es fija: este espacio evita que tape el final de la página */}
+        <div className="gmx-sticky-spacer" aria-hidden />
 
         <StickyBuyBar
           visible={showSticky}
@@ -1085,6 +1109,8 @@ function ProductView({ product: base }: { product: ProductData }) {
           disabled={outOfStock || cargandoOpciones}
           adding={adding}
           qtyEnCarrito={qtyEnCarrito}
+          postAdd={postAdd && qtyProductoTotal > 0}
+          categoria={product.categoria}
           onAdd={handleAdd}
         />
       </div>

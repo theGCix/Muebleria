@@ -16,6 +16,7 @@ import { LoginModal } from "./LoginModal";
 import { useValidarCarrito } from "@/hooks/useValidarCarrito";
 import { CarritoAvisos } from "./CarritoAvisos";
 import { precalentarServidor } from "@/lib/precalentar";
+import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -37,34 +38,36 @@ function ItemFila({
   onQty: (qty: number) => void;
 }) {
   return (
-    <div className="flex gap-4 p-3 rounded-lg bg-card border border-border/50">
-      <div className="w-20 h-20 bg-secondary/40 rounded-md overflow-hidden flex-shrink-0">
-        {item.image ? (
-          <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ShoppingBag className="h-8 w-8 text-muted-foreground" />
-          </div>
-        )}
+    <div className="p-3 rounded-lg bg-card border border-border/50">
+      <div className="flex gap-3">
+        <div className="w-20 h-20 bg-secondary/40 rounded-md overflow-hidden flex-shrink-0">
+          {item.image ? (
+            <img src={item.image} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          {/* Nombre completo (con sus opciones): se parte en varias líneas en vez de cortarse */}
+          <h4 className="font-medium text-foreground break-words">{item.title}</h4>
+          <p className="font-semibold mt-1 text-foreground">{fmt(item.price)}</p>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <h4 className="font-medium truncate text-foreground">{item.title}</h4>
-        {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
-        <p className="font-semibold mt-1 text-foreground">{fmt(item.price)}</p>
-      </div>
-      <div className="flex flex-col items-end gap-2 flex-shrink-0">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onQty(item.qty - 1)}>
-            <Minus className="h-3 w-3" />
+      <div className="mt-2 flex items-center justify-between">
+        <div className="flex items-center gap-1" role="group" aria-label="Cantidad">
+          <Button variant="outline" size="icon" className="h-11 w-11" aria-label="Quitar una unidad" onClick={() => onQty(item.qty - 1)}>
+            <Minus className="h-4 w-4" />
           </Button>
-          <span className="w-8 text-center text-sm">{item.qty}</span>
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onQty(item.qty + 1)}>
-            <Plus className="h-3 w-3" />
+          <span className="w-10 text-center text-sm" aria-live="polite">{item.qty}</span>
+          <Button variant="outline" size="icon" className="h-11 w-11" aria-label="Agregar una unidad" onClick={() => onQty(item.qty + 1)}>
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
+        <Button variant="ghost" className="h-11 px-3 text-muted-foreground" onClick={onRemove}>
+          <Trash2 className="mr-1.5 h-4 w-4" /> Quitar
+        </Button>
       </div>
     </div>
   );
@@ -75,10 +78,13 @@ export const CartDrawer = () => {
   const [loginOpen, setLoginOpen] = useState(false);
   const { items, updateQty, removeItem, removeCombo, total, clearCart } = useCartStore();
   const { user } = useAuth();
+  const { distrito, envio, desde } = useDistritoEnvio();
+  const [confirmarVaciar, setConfirmarVaciar] = useState(false);
   // Al abrir el carrito se revisa contra el servidor (precios vigentes, stock, combos)
   const { avisos, entendido } = useValidarCarrito(isOpen);
   // Despierta Render al abrir el carrito, antes de llegar al checkout
   useEffect(() => { if (isOpen) precalentarServidor(); }, [isOpen]);
+  useEffect(() => { if (!isOpen) setConfirmarVaciar(false); }, [isOpen]);
 
   // Las piezas que entraron con un combo se agrupan en una sola tarjeta; el resto queda igual.
   const grupos = useMemo<Grupo[]>(() => {
@@ -164,7 +170,7 @@ export const CartDrawer = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 flex-shrink-0"
+                              className="h-11 w-11 flex-shrink-0"
                               aria-label="Quitar combo del carrito"
                               onClick={() => removeCombo(g.comboId)}
                             >
@@ -210,26 +216,40 @@ export const CartDrawer = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex-shrink-0 space-y-4 pt-4 border-t border-border bg-background">
+                <div className="flex-shrink-0 space-y-3 pt-4 border-t border-border bg-background">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-medium">Total</span>
                     <span className="text-2xl font-display font-semibold">{fmt(total())}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={clearCart}
+                  {/* Envío estimado: nunca se asume un distrito */}
+                  <p className="text-xs text-muted-foreground">
+                    {distrito && envio != null
+                      ? <>Envío estimado a {distrito}: <b className="text-foreground">{fmt(envio)}</b>. Se suma al pagar.</>
+                      : <>Envío desde <b className="text-foreground">{fmt(desde)}</b> según tu distrito. Se calcula al pagar.</>}
+                  </p>
+                  <Button className="h-12 w-full" onClick={handleCheckout}>
+                    Comprar ahora
+                  </Button>
+                  {/* «Vaciar carrito» discreto y con confirmación, para que no se toque por error */}
+                  {confirmarVaciar ? (
+                    <div className="flex items-center justify-center gap-1 text-sm">
+                      <span className="text-muted-foreground">¿Vaciar todo el carrito?</span>
+                      <Button variant="ghost" className="h-11 px-3 text-destructive" onClick={() => { clearCart(); setConfirmarVaciar(false); }}>
+                        Sí, vaciar
+                      </Button>
+                      <Button variant="ghost" className="h-11 px-3" onClick={() => setConfirmarVaciar(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="mx-auto block min-h-[44px] px-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      onClick={() => setConfirmarVaciar(true)}
                     >
                       Vaciar carrito
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      onClick={handleCheckout}
-                    >
-                      Comprar ahora
-                    </Button>
-                  </div>
+                    </button>
+                  )}
                 </div>
               </>
             )}

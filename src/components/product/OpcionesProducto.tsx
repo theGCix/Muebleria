@@ -19,6 +19,24 @@ export function OpcionesProducto({ grupos, seleccion, onElegir }: Props) {
       {grupos.map((g) => {
         const actual = valorElegido(g, seleccion);
         const usaSwatch = g.tipo === "color" && g.valores.every((v) => !!v.hex);
+        // Un solo valor = nada que elegir: se muestra como texto, sin selector
+        if (g.valores.length === 1 && actual) {
+          return (
+            <div key={g.id} style={{ marginBottom: 14 }}>
+              <div className="gm-color-label">
+                {g.etiqueta}: <span style={{ color: "var(--gm-dark)", fontWeight: 500 }}>{actual.valor}</span>
+                {actual.ajuste_precio !== 0 && (
+                  <span style={{ color: "var(--gm-mid)", fontWeight: 400 }}> ({ajusteTxt(actual.ajuste_precio)})</span>
+                )}
+              </div>
+              {(actual.descripcion || actual.material) && (
+                <p style={{ fontSize: 12, color: "var(--gm-mid)", margin: "4px 0 0", lineHeight: 1.5 }}>
+                  {actual.descripcion ?? actual.material}
+                </p>
+              )}
+            </div>
+          );
+        }
         return (
           <div key={g.id} style={{ marginBottom: 14 }}>
             <div className="gm-color-label">

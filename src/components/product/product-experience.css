@@ -215,20 +215,31 @@
 /* ── Barra pegajosa de compra ───────────────────────────────────────────── */
 .gmx-sticky {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
-  transform: translateY(110%); transition: transform .35s ease;
+  transform: translateY(110%); visibility: hidden; transition: transform .35s ease, visibility 0s linear .35s;
   background: rgba(253,250,246,.96); backdrop-filter: blur(10px);
   border-top: 1px solid var(--gm-border); box-shadow: 0 -8px 30px rgba(59,43,31,.10);
   padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
 }
-.gmx-sticky.show { transform: translateY(0); }
+.gmx-sticky.show { transform: translateY(0); visibility: visible; transition: transform .35s ease, visibility 0s; }
 .gmx-sticky-in { max-width: 1300px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
 .gmx-sticky img { width: 46px; height: 46px; border-radius: 6px; object-fit: cover; background: var(--gm-cream); }
 .gmx-sticky-name { font-size: 14px; font-weight: 500; color: var(--gm-dark); line-height: 1.2; }
 .gmx-sticky-meta { font-size: 12px; color: var(--gm-muted); }
 .gmx-sticky-price { margin-left: auto; font-family: var(--font-display); font-size: 22px; color: var(--gm-walnut); white-space: nowrap; }
-.gmx-sticky .gm-btn-primary { padding: 12px 22px; }
+.gmx-sticky .gm-btn-primary { padding: 12px 22px; min-height: 48px; text-decoration: none; }
+.gmx-sticky-more {
+  margin-left: auto; min-height: 48px; display: flex; align-items: center; justify-content: center;
+  padding: 0 18px; font-size: 14px; font-weight: 600; color: var(--gm-walnut); text-decoration: none;
+  border: 1px solid var(--gm-walnut); border-radius: 2px; white-space: nowrap;
+}
+.gmx-sticky-more:hover { background: var(--gm-cream); }
+.gmx-sticky-spacer { display: none; }
 @media (max-width: 640px) {
-  .gmx-sticky { padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); }
+  /* D3: en móvil la barra está siempre a la vista; el espaciador evita que tape el final de la página */
+  .gmx-sticky { transform: translateY(0); visibility: visible; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); }
+  .gmx-sticky-spacer { display: block; height: calc(72px + env(safe-area-inset-bottom)); }
+  .gmx-sticky-more { flex: 1; padding: 0 10px; font-size: 13px; }
+  .gmx-sticky .gm-btn-primary.gmx-sticky-pay { flex: 1; padding: 12px 10px; }
   .gmx-sticky-txt { display: none; }
   .gmx-sticky-price { font-size: 19px; }
   .gmx-sticky .gm-btn-primary { flex: 1; }
@@ -286,6 +297,21 @@
   font-size:13px; font-weight:600; color:var(--gm-walnut); text-decoration:none;
 }
 .gmx-gopay:hover { text-decoration:underline; }
+
+/* D4: confirmación tras agregar — «Ir a pagar» principal, «Seguir comprando» secundario */
+.gmx-postadd { margin:12px 0; padding:14px; background:var(--gm-cream); border:1px solid var(--gm-border); border-radius:2px; }
+.gmx-postadd-msg { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:14px; font-weight:600; color:var(--gm-dark); }
+.gmx-postadd-btns { display:flex; flex-direction:column; gap:8px; }
+.gmx-postadd-pay {
+  display:flex; align-items:center; justify-content:center; min-height:48px; padding:0 20px; border-radius:2px;
+  background:var(--gm-walnut); color:#fff; font-size:14px; font-weight:600; letter-spacing:.06em; text-decoration:none;
+}
+.gmx-postadd-pay:hover { background:var(--gm-walnut-mid); }
+.gmx-postadd-more {
+  display:flex; align-items:center; justify-content:center; min-height:44px; padding:0 20px; border-radius:2px;
+  color:var(--gm-walnut); font-size:14px; font-weight:600; text-decoration:underline; text-underline-offset:3px;
+}
+.gmx-postadd-more:hover { background:rgba(59,43,31,.05); }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Galería showroom (ProductGallery)
