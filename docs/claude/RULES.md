@@ -14,7 +14,8 @@
 12. Al subir: `git add` explícito de los archivos NUEVOS y revisar `git status`. (La Fase 3 rompió el build de Render porque faltaron dos archivos nuevos.)
 13. Antes de entregar: `tsc --noEmit` (ignorar los errores preexistentes de `src/integrations/supabase/types.ts`, que está en UTF-16) y `vite build`. Para el servidor: `node --test server/pagos.test.js`.
 14. UX móvil (360–414 px): controles táctiles ≥ 44 px y contraste ≥ 4.5:1.
-15. Niubiz: no asumir parámetros del SDK ni medios habilitados; pedir la documentación o confirmación. No anunciar medios de pago que el cobro no ofrezca.
+15. Niubiz: no asumir parámetros del SDK ni medios habilitados; pedir la documentación o confirmación. No anunciar medios de pago que el cobro no ofrezca. Medios confirmados por el dueño (2026-11-05): tarjetas, Yape, Plin y PagoEfectivo (`src/lib/mediosPago.ts`).
+16. Entrega de código como patch (`git apply`). Los archivos NUEVOS (p. ej. `public/pagos/*.svg`) van dentro del patch; revisar `git status` antes del commit.
 
 ## Reglas de negocio (H1)
 - Urgencia de stock solo si stock ≤ 3.

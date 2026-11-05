@@ -1,0 +1,7 @@
+Logos de medios de pago (SVG) usados por src/lib/mediosPago.ts
+
+visa.svg, mastercard.svg, amex.svg, yape.svg, plin.svg, pagoefectivo.svg, niubiz.svg
+
+Son versiones simplificadas hechas para el sitio. Para usar los logos oficiales, reemplaza el archivo
+con el mismo nombre (puede ser .svg; si cambias la extension, actualiza `logo` en mediosPago.ts).
+Si un archivo falta, el checkout muestra el nombre del medio como texto.

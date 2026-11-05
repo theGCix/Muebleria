@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 32" role="img" aria-label="Niubiz">
+  <rect width="96" height="32" rx="6" fill="#fff" stroke="#E2E8F0"/>
+  <circle cx="18" cy="16" r="8" fill="#E4002B"/>
+  <path d="M14.5 20.5v-9l7 9v-9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="58" y="22" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800" fill="#1F2937">niubiz</text>
+</svg>

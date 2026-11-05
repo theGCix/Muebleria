@@ -1,0 +1,10 @@
+Logos de medios de pago (checkout)
+
+Coloca aquí los logos OFICIALES (SVG o PNG con fondo transparente, ~120x40 px) con estos nombres:
+
+  visa.svg  mastercard.svg  amex.svg  niubiz.svg
+  yape.svg  plin.svg  pagoefectivo.svg   (solo cuando esos medios estén habilitados)
+
+Usa los archivos de marca que entrega cada empresa (Niubiz, Visa, Mastercard, American Express) y sigue sus
+guías de uso. Si un archivo no existe, el checkout muestra el nombre del medio como texto.
+Si usas otro formato, cambia la extensión en src/lib/mediosPago.ts.

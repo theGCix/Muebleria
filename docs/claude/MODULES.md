@@ -68,7 +68,7 @@
 - `src/lib/niubiz.ts` y `VisanetCheckout.configure` en `checkout.tsx`: envía `name` (completo), `email` y datos de facturación; el servidor autoriza con `transactionToken` (API de Autorización).
 - La doc de la API de Autorización (subida por el dueño) pide `cardHolder.firstName/lastName/email` para comercios que manejan la tarjeta; NO confirma los parámetros de `configure` del Botón de Pago Web.
 - Su menú lista como integraciones aparte: Pago con Yape, Pago con QR, Pago con PLIN, API de PagoEfectivo (+ callback).
-- Medios anunciados al cliente: `src/lib/mediosPago.ts` + `components/checkout/MediosPago.tsx`; logos en `public/pagos/`.
+- Medios anunciados al cliente: `src/lib/mediosPago.ts` (6 medios con `habilitado: true`, confirmados por el dueño) + `components/checkout/MediosPago.tsx`; logos SVG propios en `public/pagos/` (visa, mastercard, amex, yape, plin, pagoefectivo, niubiz). El texto anterior sobre integraciones separadas de Niubiz queda como referencia: el dueño confirmó que están disponibles.
 
 **Ficha de producto (`src/routes/product.$handle.tsx`)**
 - Existentes: `ProductGallery`, pestañas Especificaciones / Reseñas / Entrega, `ProductRecomendaciones` (misma categoría, 4 productos), cotización (`LeadFormDialog`) y WhatsApp.

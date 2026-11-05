@@ -1,6 +1,6 @@
 # PROJECT — G&M Mueblería
 
-> Estado al 2026-11-05: Parte 3/8 implementada (D1/D2 fases 1–4). Parte 4/8: entregas A, B y E6 hechas; N2 y D7 pendientes. Detalle en TASK_LOG.md y MODULES.md (hallazgos verificados en el repo).
+> Estado al 2026-11-05: Parte 3/8 implementada (D1/D2 fases 1–4). Parte 4/8: entregas A, B y E6 hechas (E6 con los 6 medios y logos SVG propios); N2 y D7 pendientes. Detalle en TASK_LOG.md y MODULES.md (hallazgos verificados en el repo).
 
 ## Resumen
 - Plataforma e-commerce + POS/ERP de una mueblería en Lima, Perú (Los Olivos).
@@ -38,9 +38,9 @@ Ingeniero full-stack senior + UI/UX e-commerce.
 | D4 | Tras agregar: «Ir a pagar» + «Seguir comprando» | Hecho |
 | D5 | Cotización personalizada como acción secundaria | Hecho |
 | D8 | Un solo color/valor → texto, sin selector | Hecho |
-| E6 | Logos y medios de pago | Hecho solo tarjetas; Yape/Plin/PagoEfectivo deshabilitados (ver TASK_LOG) |
+| E6 | Logos y medios de pago | Hecho: Visa, Mastercard, Amex, Yape, Plin y PagoEfectivo habilitados; logos SVG en `public/pagos/` (ver TASK_LOG) |
 | N2 | Precargar nombre, apellido y correo en Niubiz | Pendiente: falta doc «Botón de Pago Web» |
 | D7 | Medidas, plazas y esquema por producto | Pendiente: migración + método de carga |
 
 ## Datos pendientes de confirmar con el dueño
-Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos oficiales de pago (se colocan en `public/pagos/`), medios habilitados en el comercio Niubiz y datos del Libro de Reclamaciones. **No se inventan.**
+Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos oficiales de pago (opcional: reemplazan los SVG simplificados de `public/pagos/`) y datos del Libro de Reclamaciones. **No se inventan.**
