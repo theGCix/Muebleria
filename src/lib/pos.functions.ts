@@ -872,7 +872,7 @@ export async function getDetalleProduccion(input: { order_id: string }) {
   const [itemsRes, produccionRes] = await Promise.all([
     supabase
       .from("order_items")
-      .select("id, sku, title, qty, unit_price, total, image_url")
+      .select("id, sku, title, qty, unit_price, total, image_url, opciones")
       .eq("order_id", order_id),
     supabase
       .from("produccion")

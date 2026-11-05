@@ -28,6 +28,8 @@ import {
 import { MaterialesLista } from "./MaterialesLista";
 import { EspecificacionesGrid } from "./EspecificacionesGrid";
 import { PasosFabricacion } from "./PasosFabricacion";
+import { OpcionesPedido } from "@/components/OpcionesPedido";
+import { opcionesDe, tituloBase } from "@/lib/opcionesPedido";
 
 // ─────────────────────────────────────────────────────────────
 
@@ -302,8 +304,9 @@ export function OrdenCard({ orden }: OrdenCardProps) {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
-                          {item.title}
+                          {tituloBase(item.title, opcionesDe(item.opciones))}
                         </p>
+                        <OpcionesPedido opciones={opcionesDe(item.opciones)} conMaterial />
                         <p className="text-xs text-muted-foreground">
                           Cant: {item.qty}
                           {item.sku ? ` · SKU: ${item.sku}` : ""}

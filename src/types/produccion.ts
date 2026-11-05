@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // G&M Mueblería — Types: módulo de producción (carpintero)
 // ─────────────────────────────────────────────────────────────
+import type { OpcionPedido } from "@/lib/opcionesPedido";
 
 export type ProduccionStatus =
   | "pendiente"
@@ -43,6 +44,8 @@ export interface OrderItem {
   image_url: string | null;
   /** Personalización JSONB: {madera, acabado, medidas, color, ...} */
   personalizacion?: Record<string, string> | null;
+  /** Opciones elegidas al comprar (copia fija del pedido). Nulo en pedidos antiguos. */
+  opciones?: OpcionPedido[] | null;
 }
 
 // ── Insumo del BOM ───────────────────────────────────────────

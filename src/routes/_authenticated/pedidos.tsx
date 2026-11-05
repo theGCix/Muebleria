@@ -3,6 +3,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { OpcionesPedido } from "@/components/OpcionesPedido";
+import { opcionesDe, tituloBase } from "@/lib/opcionesPedido";
 import { Badge } from "@/components/ui/badge";
 import { FleteProvinciaAdmin } from "@/components/admin/FleteProvinciaAdmin";
 import { AgenciaProvinciaAdmin } from "@/components/admin/AgenciaProvinciaAdmin";
@@ -108,7 +110,7 @@ async function fetchOrders() {
 async function fetchOrderItems(orderId: string) {
   const { data, error } = await supabase
     .from("order_items")
-    .select("id, sku, title, qty, unit_price, total, image_url, product_id, fulfillment_status, products(tipo_gestion)")
+    .select("id, sku, title, qty, unit_price, total, image_url, opciones, product_id, fulfillment_status, products(tipo_gestion)")
     .eq("order_id", orderId);
   if (error) throw new Error(error.message);
   return data ?? [];
@@ -579,7 +581,8 @@ function PedidosPage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium break-words">{item.title}</p>
+                            <p className="font-medium break-words">{tituloBase(item.title, opcionesDe((item as any).opciones))}</p>
+                            <OpcionesPedido opciones={opcionesDe((item as any).opciones)} conMaterial />
                             {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
                             <p className="text-xs text-muted-foreground">
                               {fmt(Number(item.unit_price))} × {item.qty}

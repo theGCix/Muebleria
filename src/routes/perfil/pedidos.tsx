@@ -15,6 +15,8 @@ import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoEx
 import { EvidenciasCliente } from "@/components/EvidenciasCliente";
 import { FleteProvincia } from "@/components/FleteProvincia";
 import { AgenciaProvincia } from "@/components/AgenciaProvincia";
+import { OpcionesPedido } from "@/components/OpcionesPedido";
+import { opcionesDe, tituloBase } from "@/lib/opcionesPedido";
 
 export const Route = createFileRoute("/perfil/pedidos")({
   head: () => ({ meta: [{ title: "Mis pedidos — G&M Mueblería" }] }),
@@ -94,7 +96,7 @@ async function fetchMisPedidos(userId: string) {
 async function fetchItemsDePedido(orderId: string) {
   const { data, error } = await supabase
     .from("order_items" as any)
-    .select("id, sku, title, qty, unit_price, total, image_url")
+    .select("id, sku, title, qty, unit_price, total, image_url, opciones")
     .eq("order_id", orderId);
 
   if (error) throw new Error(error.message);
@@ -346,7 +348,8 @@ function PedidoCard({ order }: { order: any }) {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.title}</p>
+                      <p className="font-medium text-sm truncate">{tituloBase(item.title, opcionesDe(item.opciones))}</p>
+                      <OpcionesPedido opciones={opcionesDe(item.opciones)} />
                       {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
                       <p className="text-xs text-muted-foreground">
                         {fmt(Number(item.unit_price))} × {item.qty}

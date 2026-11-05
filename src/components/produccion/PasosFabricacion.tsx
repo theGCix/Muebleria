@@ -1,5 +1,6 @@
 // src/components/produccion/PasosFabricacion.tsx
 import type { OrderItem } from "@/types/produccion";
+import { opcionDeTipo, opcionesDe } from "@/lib/opcionesPedido";
 
 interface Props {
   items: OrderItem[];
@@ -22,9 +23,18 @@ function generarPasos(item: OrderItem): string[] {
 
   const usaLaca = acabado.includes("laca");
   const usaBarniz = acabado.includes("barniz");
-  const usaTapizado = item.title.toLowerCase().includes("sofá") ||
+  // Opciones elegidas al comprar: solo AGREGAN datos; si no hay, rige la deducción por título de siempre.
+  const opciones = opcionesDe(item.opciones);
+  const opTapiz = opcionDeTipo(opciones, "tapizado");
+  const opFirmeza = opcionDeTipo(opciones, "firmeza");
+  const opPatas = opcionDeTipo(opciones, "patas");
+  const opColor = opcionDeTipo(opciones, "color");
+  const usaTapizado = !!opTapiz ||
+    item.title.toLowerCase().includes("sofá") ||
     item.title.toLowerCase().includes("silla") ||
     item.title.toLowerCase().includes("sillon");
+  const nombreOp = (o: { valor: string; material?: string | null }) =>
+    o.material && o.material.toLowerCase() !== o.valor.toLowerCase() ? `${o.valor} (${o.material})` : o.valor;
 
   const pasos: string[] = [
     `Cortar y secar piezas de ${madera}${medidas ? ` según medidas ${medidas}` : ""}`,
@@ -39,12 +49,26 @@ function generarPasos(item: OrderItem): string[] {
     pasos.push("Aplicar fondo sellador, dejar secar 4 h");
     pasos.push(`Aplicar ${acabado} en cabina, 2 manos`);
   } else {
-    pasos.push("Aplicar acabado superficial según especificación del cliente");
+    pasos.push(
+      opColor
+        ? `Aplicar acabado en color ${opColor.valor}, según especificación del cliente`
+        : "Aplicar acabado superficial según especificación del cliente",
+    );
   }
 
+  if (opPatas) pasos.push(`Instalar patas: ${nombreOp(opPatas)}`);
+
   if (usaTapizado) {
-    pasos.push("Cortar y pegar espuma en asiento y respaldo");
-    pasos.push("Tapizar y fijar con grapas tapiceras");
+    pasos.push(
+      opFirmeza
+        ? `Cortar y pegar espuma en asiento y respaldo, firmeza ${opFirmeza.valor}`
+        : "Cortar y pegar espuma en asiento y respaldo",
+    );
+    pasos.push(
+      opTapiz
+        ? `Tapizar con ${nombreOp(opTapiz)} y fijar con grapas tapiceras`
+        : "Tapizar y fijar con grapas tapiceras",
+    );
   }
 
   pasos.push("Control de calidad: estabilidad, nivel y acabado visual");
