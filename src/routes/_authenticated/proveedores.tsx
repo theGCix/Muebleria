@@ -31,6 +31,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { RoleGate } from "@/components/RoleGate";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/proveedores")({
   head: () => ({ meta: [{ title: "Proveedores — G&M" }] }),
@@ -619,10 +620,10 @@ function ProveedoresPage() {
           <p className="text-muted-foreground mt-0.5">Directorio y órdenes de compra</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <Button variant="outline" size="sm" className="h-11 sm:h-8" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-2" /> Actualizar
           </Button>
-          <Button size="sm" onClick={() => setFormOpen(true)}>
+          <Button size="sm" className="h-11 sm:h-8" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> Nuevo proveedor
           </Button>
         </div>
@@ -673,7 +674,7 @@ function ProveedoresPage() {
       ) : (
         <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/40">
                   {["Proveedor", "Tipo", "Contacto", "Plazo", "Insumos", "OC pendientes", "Total comprado", ""].map((h) => (
@@ -720,6 +721,51 @@ function ProveedoresPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {filtrados.map((p: any) => {
+                const tipo = TIPO_CONFIG[p.tipo as ProvTipo];
+                return (
+                  <TarjetaFila
+                    key={p.id}
+                    titulo={p.nombre}
+                    subtitulo={p.ruc ? `RUC ${p.ruc}` : undefined}
+                    estado={
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ color: tipo?.color, background: tipo?.bg }}>{tipo?.label}</span>
+                    }
+                    datos={[
+                      {
+                        etiqueta: "Total comprado",
+                        destacado: true,
+                        valor: Number(p.total_comprado) > 0 ? fmt(Number(p.total_comprado)) : "—",
+                      },
+                      { etiqueta: "OC pendientes", valor: (p.oc_pendientes ?? 0) > 0 ? p.oc_pendientes : "—" },
+                      { etiqueta: "Insumos", valor: p.total_insumos ?? 0 },
+                      { etiqueta: "Plazo", valor: p.plazo_entrega_dias ? `${p.plazo_entrega_dias}d` : "—" },
+                      ...(p.contacto_nombre || p.telefono
+                        ? [{
+                            etiqueta: "Contacto",
+                            completo: true,
+                            valor: (
+                              <>
+                                {p.contacto_nombre && <span className="block">{p.contacto_nombre}</span>}
+                                {p.telefono && <span className="block">{p.telefono}</span>}
+                              </>
+                            ),
+                          }]
+                        : []),
+                    ]}
+                    acciones={
+                      <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => setSelectedId(p.id)}>
+                        <Eye className="h-4 w-4 mr-1.5" /> Ver detalle
+                      </Button>
+                    }
+                  />
+                );
+              })}
+            </TarjetasMovil>
           </div>
         </div>
       )}

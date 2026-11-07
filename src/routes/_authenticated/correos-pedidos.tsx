@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+import { TarjetaFila, TarjetasMovil } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/correos-pedidos")({
   head: () => ({ meta: [{ title: "Correos de pedidos — G&M" }] }),
@@ -211,7 +212,7 @@ function CorreosPedidosPage() {
         />
       ) : (
         <div className="overflow-hidden rounded-xl border border-border/50 bg-card">
-          <Table>
+          <Table className="hidden sm:table">
             <TableHeader>
               <TableRow>
                 <TableHead>Pedido</TableHead>
@@ -256,6 +257,40 @@ function CorreosPedidosPage() {
               })}
             </TableBody>
           </Table>
+
+          {/* Móvil (< 640 px): tarjetas apiladas */}
+          <TarjetasMovil>
+            {visibles.map((f) => {
+              const cfg = ESTADO_CONFIG[f.estado];
+              return (
+                <TarjetaFila
+                  key={f.id}
+                  titulo={<span className="font-mono text-sm">{f.order_number}</span>}
+                  subtitulo={f.nombre || "—"}
+                  estado={
+                    <span
+                      className="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
+                      style={{ color: cfg.color, background: cfg.bg }}
+                    >
+                      {cfg.label}
+                    </span>
+                  }
+                  datos={[
+                    { etiqueta: "Total", destacado: true, valor: fmtSoles(f.total) },
+                    { etiqueta: "Pedido", valor: fmtFechaHora(f.created_at) },
+                    { etiqueta: "Correo", completo: true, valor: f.email || "—" },
+                    ...(f.estado === "enviado" && f.correo_confirmacion_enviado_at
+                      ? [{
+                          etiqueta: "Enviado el",
+                          completo: true,
+                          valor: `${fmtFechaHora(f.correo_confirmacion_enviado_at)} (a los ${demora(f.created_at, f.correo_confirmacion_enviado_at)})`,
+                        }]
+                      : []),
+                  ]}
+                />
+              );
+            })}
+          </TarjetasMovil>
         </div>
       )}
 

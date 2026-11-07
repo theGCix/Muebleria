@@ -25,6 +25,7 @@ import {
   MOTIVO_LABEL, REEMBOLSO_LABEL, NC_LABEL,
   type Devolucion, type VentaBusqueda, type VentaDetalle, type MotivoDev, type MetodoReembolso, type NcEstado,
 } from "@/lib/devoluciones.functions";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/devoluciones")({
   head: () => ({ meta: [{ title: "Devoluciones — G&M" }] }),
@@ -73,6 +74,36 @@ function DevolucionesPage() {
   const totalMes = vivas.reduce((s, d) => s + d.total, 0);
   const ncPendientes = vivas.filter((d) => ["pendiente", "error", "rechazado"].includes(d.nc_estado)).length;
 
+  const datosDevolucion = (d: (typeof rows)[number]) => {
+    const anulada = d.estado === "anulada";
+    const puedeEmitir = !anulada && ["pendiente", "error", "rechazado"].includes(d.nc_estado);
+    const busy = emitir.isPending && emitir.variables === d.id;
+    const botones = (
+      <>
+        {puedeEmitir && (
+          <Button size="sm" className="h-8" disabled={busy} onClick={() => emitir.mutate(d.id)}>
+            {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1 h-3.5 w-3.5" />}
+            {d.nc_estado === "pendiente" ? "Emitir NC" : "Reintentar NC"}
+          </Button>
+        )}
+        {d.nc_estado === "aceptado" && d.nc_enlace && (
+          <Button asChild size="sm" variant="outline" className="h-8">
+            <a href={d.nc_enlace} target="_blank" rel="noreferrer">
+              <FileCheck2 className="mr-1 h-3.5 w-3.5" /> Ver NC
+            </a>
+          </Button>
+        )}
+        {isAdmin && !anulada && d.nc_estado !== "aceptado" && (
+          <Button size="icon" variant="ghost" className="h-8 w-8" title="Anular devolución"
+                  onClick={() => setAnular(d)}>
+            <Ban className="h-4 w-4" />
+          </Button>
+        )}
+      </>
+    );
+    return { anulada, botones };
+  };
+
   return (
     <div className="space-y-5 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -82,7 +113,7 @@ function DevolucionesPage() {
             Registra lo que el cliente devuelve, reembolsa y emite la nota de crédito cuando corresponde.
           </p>
         </div>
-        <Button size="sm" onClick={() => setNueva(true)}><Plus className="mr-1.5 h-4 w-4" /> Nueva devolución</Button>
+        <Button size="sm" className="h-11 sm:h-8" onClick={() => setNueva(true)}><Plus className="mr-1.5 h-4 w-4" /> Nueva devolución</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -115,7 +146,7 @@ function DevolucionesPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Devolución</th>
@@ -128,9 +159,7 @@ function DevolucionesPage() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {rows.map((d) => {
-                  const anulada = d.estado === "anulada";
-                  const puedeEmitir = !anulada && ["pendiente", "error", "rechazado"].includes(d.nc_estado);
-                  const busy = emitir.isPending && emitir.variables === d.id;
+                  const { anulada, botones } = datosDevolucion(d);
                   return (
                     <tr key={d.id} className={`align-top ${anulada ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3">
@@ -164,25 +193,7 @@ function DevolucionesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap justify-end gap-1">
-                          {puedeEmitir && (
-                            <Button size="sm" className="h-8" disabled={busy} onClick={() => emitir.mutate(d.id)}>
-                              {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1 h-3.5 w-3.5" />}
-                              {d.nc_estado === "pendiente" ? "Emitir NC" : "Reintentar NC"}
-                            </Button>
-                          )}
-                          {d.nc_estado === "aceptado" && d.nc_enlace && (
-                            <Button asChild size="sm" variant="outline" className="h-8">
-                              <a href={d.nc_enlace} target="_blank" rel="noreferrer">
-                                <FileCheck2 className="mr-1 h-3.5 w-3.5" /> Ver NC
-                              </a>
-                            </Button>
-                          )}
-                          {isAdmin && !anulada && d.nc_estado !== "aceptado" && (
-                            <Button size="icon" variant="ghost" className="h-8 w-8" title="Anular devolución"
-                                    onClick={() => setAnular(d)}>
-                              <Ban className="h-4 w-4" />
-                            </Button>
-                          )}
+                          {botones}
                         </div>
                       </td>
                     </tr>
@@ -190,6 +201,65 @@ function DevolucionesPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {rows.map((d) => {
+                const { anulada, botones } = datosDevolucion(d);
+                return (
+                  <div key={d.id} className={anulada ? "opacity-50" : undefined}>
+                    <TarjetaFila
+                      titulo={<span className={anulada ? "line-through" : undefined}>{d.numero}</span>}
+                      subtitulo={`${fmtFechaCorta(d.created_at)} · venta ${d.venta_numero ?? "—"}`}
+                      estado={
+                        anulada
+                          ? <Badge variant="outline">Anulada</Badge>
+                          : <Badge variant="outline" className={NC_CLS[d.nc_estado]}>{NC_LABEL[d.nc_estado]}</Badge>
+                      }
+                      datos={[
+                        {
+                          etiqueta: "Reembolso",
+                          destacado: true,
+                          valor: (
+                            <>
+                              {fmtPEN(d.total)}
+                              <span className="block text-xs font-normal text-muted-foreground">
+                                {REEMBOLSO_LABEL[d.metodo_reembolso].split(" (")[0]}
+                              </span>
+                            </>
+                          ),
+                        },
+                        { etiqueta: "Motivo", valor: MOTIVO_LABEL[d.motivo] },
+                        {
+                          etiqueta: "Productos",
+                          completo: true,
+                          valor: (
+                            <>
+                              {d.devolucion_items.map((i, k) => (
+                                <span key={k} className="block">{i.qty}× {i.title}</span>
+                              ))}
+                            </>
+                          ),
+                        },
+                        ...(d.detalle ? [{ etiqueta: "Detalle", completo: true, valor: d.detalle }] : []),
+                        ...(anulada ? [{ etiqueta: "Anulada", completo: true, valor: d.anulado_motivo }] : []),
+                        ...(d.nc_serie && d.nc_numero && d.nc_estado !== "no_aplica"
+                          ? [{ etiqueta: "Nota de crédito", valor: `${d.nc_serie}-${String(d.nc_numero).padStart(8, "0")}` }]
+                          : []),
+                        ...(d.nc_error && d.nc_estado !== "aceptado" && !anulada
+                          ? [{ etiqueta: "Error de la NC", completo: true, valor: <span className="text-red-700">{d.nc_error}</span> }]
+                          : []),
+                      ]}
+                      acciones={
+                        <div className="flex w-full flex-wrap gap-2 [&_a]:h-11 [&_a]:min-w-11 [&_button]:h-11 [&_button]:min-w-11">
+                          {botones}
+                        </div>
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </TarjetasMovil>
           </div>
         </Card>
       )}

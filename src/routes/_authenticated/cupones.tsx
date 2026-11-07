@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { fmtPEN } from "@/lib/pricing";
 import { CATEGORIAS } from "@/lib/categories";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/cupones")({
   head: () => ({ meta: [{ title: "Cupones — G&M POS" }] }),
@@ -479,6 +480,30 @@ function CuponesPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const editarCupon = (c: any) =>
+    setEditItem({
+      id: c.id,
+      codigo: c.codigo,
+      descripcion: c.descripcion ?? "",
+      tipo_descuento: c.tipo_descuento,
+      valor: String(c.valor),
+      descuento_maximo: c.descuento_maximo ? String(c.descuento_maximo) : "",
+      monto_minimo_compra: String(c.monto_minimo_compra ?? 0),
+      aplica_a: c.aplica_a,
+      categoria: c.categoria ?? "",
+      producto_id: c.producto_id ?? "",
+      combo_id: c.combo_id ?? "",
+      segmento_objetivo: c.segmento_objetivo ?? "ninguno",
+      solo_primera_compra: c.solo_primera_compra,
+      uso_maximo_total: c.uso_maximo_total ? String(c.uso_maximo_total) : "",
+      uso_maximo_por_cliente: String(c.uso_maximo_por_cliente ?? 1),
+      vigente_desde: isoToLocalInput(c.vigente_desde),
+      vence_el: isoToLocalInput(c.vence_el),
+      activo: c.activo,
+      origen: c.origen,
+      notas: c.notas ?? "",
+    });
+
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -486,7 +511,7 @@ function CuponesPage() {
           <h1 className="text-3xl font-display font-semibold">Cupones</h1>
           <p className="text-muted-foreground">Códigos de descuento para la tienda</p>
         </div>
-        <Button onClick={() => setEditItem(null)}>
+        <Button className="h-11 sm:h-9" onClick={() => setEditItem(null)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo cupón
         </Button>
       </div>
@@ -496,7 +521,7 @@ function CuponesPage() {
           <TableSkeleton rows={5} cols={6} bare />
         ) : (
           <div className="overflow-x-auto -mx-px">
-            <table className="w-full min-w-[700px] text-sm">
+            <table className="hidden sm:table w-full min-w-[700px] text-sm">
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-4 py-3">Código</th>
@@ -544,28 +569,7 @@ function CuponesPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setEditItem({
-                              id: c.id,
-                              codigo: c.codigo,
-                              descripcion: c.descripcion ?? "",
-                              tipo_descuento: c.tipo_descuento,
-                              valor: String(c.valor),
-                              descuento_maximo: c.descuento_maximo ? String(c.descuento_maximo) : "",
-                              monto_minimo_compra: String(c.monto_minimo_compra ?? 0),
-                              aplica_a: c.aplica_a,
-                              categoria: c.categoria ?? "",
-                              producto_id: c.producto_id ?? "",
-                              combo_id: c.combo_id ?? "",
-                              segmento_objetivo: c.segmento_objetivo ?? "ninguno",
-                              solo_primera_compra: c.solo_primera_compra,
-                              uso_maximo_total: c.uso_maximo_total ? String(c.uso_maximo_total) : "",
-                              uso_maximo_por_cliente: String(c.uso_maximo_por_cliente ?? 1),
-                              vigente_desde: isoToLocalInput(c.vigente_desde),
-                              vence_el: isoToLocalInput(c.vence_el),
-                              activo: c.activo,
-                              origen: c.origen,
-                              notas: c.notas ?? "",
-                            })}
+                            onClick={() => editarCupon(c)}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -594,6 +598,65 @@ function CuponesPage() {
                 )}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {data.map((c: any) => {
+                const estado = estadoCupon(c);
+                return (
+                  <TarjetaFila
+                    key={c.id}
+                    titulo={<span className="font-mono">{c.codigo}</span>}
+                    subtitulo={<span className="capitalize">{c.aplica_a}</span>}
+                    estado={<Badge variant="outline" className={estado.className}>{estado.label}</Badge>}
+                    datos={[
+                      {
+                        etiqueta: "Descuento",
+                        destacado: true,
+                        valor: c.tipo_descuento === "porcentaje"
+                          ? `${c.valor}%${c.descuento_maximo ? ` (máx ${fmt(c.descuento_maximo)})` : ""}`
+                          : fmt(c.valor),
+                      },
+                      { etiqueta: "Usos", valor: `${c.usos_actuales}${c.uso_maximo_total ? ` / ${c.uso_maximo_total}` : ""}` },
+                      {
+                        etiqueta: "Vigencia",
+                        completo: true,
+                        valor: c.vence_el ? new Date(c.vence_el).toLocaleDateString("es-PE") : "Sin vencimiento",
+                      },
+                    ]}
+                    acciones={
+                      <>
+                        <label className="flex h-11 min-w-11 cursor-pointer items-center justify-center">
+                          <Switch
+                            aria-label={`Activar o desactivar ${c.codigo}`}
+                            checked={c.activo}
+                            onCheckedChange={(v) => toggleMut.mutate({ id: c.id, activo: v })}
+                          />
+                        </label>
+                        <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => editarCupon(c)}>
+                          <Pencil className="h-4 w-4 mr-1.5" /> Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={BTN_TACTIL}
+                          aria-label={`Eliminar ${c.codigo}`}
+                          onClick={() => { if (confirm(`¿Eliminar el cupón "${c.codigo}"?`)) delMut.mutate(c.id); }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    }
+                  />
+                );
+              })}
+              {data.length === 0 && (
+                <EmptyState
+                  icon={Tag}
+                  title="Aún no hay cupones"
+                  description="Crea un cupón de descuento para campañas, reactivar clientes o recuperar carritos."
+                />
+              )}
+            </TarjetasMovil>
           </div>
         )}
       </Card>

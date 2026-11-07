@@ -28,6 +28,7 @@ import { es } from "date-fns/locale";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { RoleGate } from "@/components/RoleGate";
 import { useAuth } from "@/hooks/useAuth";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/produccion")({
   head: () => ({ meta: [{ title: "Producción — G&M" }] }),
@@ -482,7 +483,7 @@ function ProduccionPage() {
       ) : (
         <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/40">
                   {["Pedido", "Cliente", "Carpintero", "Prioridad", "Estado", "Fin estimado", ""].map((h) => (
@@ -549,6 +550,66 @@ function ProduccionPage() {
                 })}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {filtradas.map((orden: any) => {
+                const ps = PROD_STATUS_CONFIG[orden.prod_status as ProdStatus];
+                const pr = PRIORIDAD_CONFIG[orden.prioridad as 1 | 2 | 3];
+                const urgencia = getFechaUrgencia(orden.fecha_fin_estimada);
+                const Icon = ps?.icon ?? Clock;
+                return (
+                  <TarjetaFila
+                    key={orden.produccion_id}
+                    titulo={<span className="font-mono text-sm">{orden.order_number}</span>}
+                    subtitulo={orden.cliente}
+                    tono={urgencia === "vencida" ? "peligro" : urgencia === "hoy" ? "alerta" : "normal"}
+                    estado={
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        style={{ color: ps?.color, background: ps?.bg }}>
+                        <Icon className="h-3 w-3" />
+                        {ps?.label}
+                      </span>
+                    }
+                    datos={[
+                      { etiqueta: "Total", destacado: true, valor: fmt(Number(orden.total)) },
+                      {
+                        etiqueta: "Prioridad",
+                        valor: (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium"
+                            style={{ color: pr?.color, background: pr?.bg }}>
+                            {pr?.label}
+                          </span>
+                        ),
+                      },
+                      {
+                        etiqueta: "Carpintero",
+                        valor: orden.carpintero ?? <span className="italic opacity-60">Sin asignar</span>,
+                      },
+                      {
+                        etiqueta: "Fin estimado",
+                        valor: (
+                          <span className={
+                            urgencia === "vencida" ? "text-red-600 font-semibold" :
+                            urgencia === "hoy"     ? "text-amber-600 font-semibold" :
+                            "text-muted-foreground"
+                          }>
+                            {fmtDay(orden.fecha_fin_estimada)}
+                            {urgencia === "vencida" && " ⚠️"}
+                            {urgencia === "hoy"     && " 🔔"}
+                          </span>
+                        ),
+                      },
+                    ]}
+                    acciones={
+                      <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => setSelectedOrden(orden)}>
+                        <Eye className="h-4 w-4 mr-1.5" /> Ver detalle
+                      </Button>
+                    }
+                  />
+                );
+              })}
+            </TarjetasMovil>
           </div>
         </div>
       )}

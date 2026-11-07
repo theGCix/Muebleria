@@ -30,4 +30,5 @@
 
 ## Reglas de negocio (Admin móvil)
 - **Tablas del panel en móvil (< 640 px):** tarjetas apiladas con nombre, estado, total/stock y la acción principal; controles táctiles ≥ 44 px (`BTN_TACTIL`). No se cambian consultas, mutaciones ni permisos al adaptar una pantalla.
-- **Cantidades de insumos (solo visualización):** enteros para unidades, planchas, piezas, paquetes, palos y bolsas; máximo 1 decimal para metros, kg, litros y pies; otra unidad conserva hasta 2 decimales. Se formatea con `src/lib/cantidades.ts`, nunca con `toFixed` suelto. Lo guardado en la BD no se redondea.
+- **Cantidades de insumos (solo visualización):** enteros para unidades, planchas, piezas, paquetes, palos y bolsas; máximo 1 decimal para metros, kg, litros y pies; otra unidad conserva hasta 2 decimales. Se formatea con `src/lib/cantidades.ts`, nunca con `toFixed` suelto. Lo ya guardado en la BD no se redondea. En campos de entrada (Movimiento de stock, Stock mínimo) `limitarDecimales(texto, unidad)` recorta lo que se escribe a esos mismos decimales.
+- **Botones de cabecera del panel en móvil:** `h-11 sm:h-9` (o `sm:h-8` si son `size="sm"`), solo clases.

@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { RoleGate } from "@/components/RoleGate";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
-import { formatoCantidad, formatoFaltante } from "@/lib/cantidades";
+import { formatoCantidad, formatoFaltante, limitarDecimales } from "@/lib/cantidades";
 
 export const Route = createFileRoute("/_authenticated/insumos")({
   head: () => ({ meta: [{ title: "Insumos MRP — G&M" }] }),
@@ -538,8 +538,8 @@ function CalculadoraMrp() {
 }
 
 // ── Modal movimiento de stock ─────────────────────────────────
-function MovimientoDialog({ insumoId, insumoNombre, onDone, triggerClassName }: {
-  insumoId: string; insumoNombre: string; onDone: () => void; triggerClassName?: string;
+function MovimientoDialog({ insumoId, insumoNombre, unidad, onDone, triggerClassName }: {
+  insumoId: string; insumoNombre: string; unidad?: string; onDone: () => void; triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [tipo, setTipo] = useState<"entrada" | "salida" | "ajuste">("entrada");
@@ -599,7 +599,7 @@ function MovimientoDialog({ insumoId, insumoNombre, onDone, triggerClassName }: 
             <Input
               className="mt-1" type="number"
               placeholder={tipo === "ajuste" ? "−5 o +10" : "0"}
-              value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+              value={cantidad} onChange={(e) => setCantidad(limitarDecimales(e.target.value, unidad))}
             />
           </div>
           <div>
@@ -673,7 +673,7 @@ function InsumoDialog({ insumo, onDone, triggerClassName }: { insumo?: any; onDo
       <DialogTrigger asChild>
         {insumo
           ? <Button size="sm" variant="ghost" className={triggerClassName}>Editar</Button>
-          : <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nuevo insumo</Button>
+          : <Button size="sm" className="h-11 sm:h-8"><Plus className="h-4 w-4 mr-1" /> Nuevo insumo</Button>
         }
       </DialogTrigger>
       <DialogContent className="max-w-sm">
@@ -693,7 +693,10 @@ function InsumoDialog({ insumo, onDone, triggerClassName }: { insumo?: any; onDo
                 className="mt-1" type={type ?? "text"}
                 placeholder={placeholder}
                 value={(form as any)[key]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                onChange={(e) => setForm((f) => ({
+                  ...f,
+                  [key]: key === "stock_minimo" ? limitarDecimales(e.target.value, f.unidad) : e.target.value,
+                }))}
               />
             </div>
           ))}
@@ -883,6 +886,7 @@ function InsumosPage() {
                               <MovimientoDialog
                                 insumoId={ins.id}
                                 insumoNombre={ins.nombre}
+                                unidad={ins.unidad}
                                 onDone={refresh}
                               />
                               <InsumoDialog insumo={ins} onDone={refresh} />
@@ -926,6 +930,7 @@ function InsumosPage() {
                             <MovimientoDialog
                               insumoId={ins.id}
                               insumoNombre={ins.nombre}
+                              unidad={ins.unidad}
                               onDone={refresh}
                               triggerClassName={`${BTN_TACTIL} flex-1`}
                             />

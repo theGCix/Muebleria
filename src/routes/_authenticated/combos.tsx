@@ -338,7 +338,7 @@ function CombosPage() {
           <h1 className="text-3xl font-display font-semibold">Combos</h1>
           <p className="text-muted-foreground">Paquetes de varios productos a un precio único</p>
         </div>
-        <Button onClick={() => setEditItem(null)}>
+        <Button className="h-11 sm:h-9" onClick={() => setEditItem(null)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo combo
         </Button>
       </div>

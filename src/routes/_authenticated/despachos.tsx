@@ -27,6 +27,7 @@ import {
   cambiarEstadoDespacho, hoyISO, whatsappLink, FRANJA_LABEL, TIPO_LABEL,
   type Despacho, type DespachoEstado, type Franja, type TipoEntrega,
 } from "@/lib/despachos.functions";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/despachos")({
   head: () => ({ meta: [{ title: "Despachos — G&M" }] }),
@@ -138,6 +139,106 @@ function DespachosPage() {
     }
   };
 
+  const datosDespacho = (d: (typeof filtrados)[number]) => {
+    const o = d.orders;
+    const vencido = d.estado === "programado" && d.fecha_programada < hoy;
+    const nombre = o?.nombre?.split(" ")[0] ?? "";
+    const wa = whatsappLink(
+      o?.telefono,
+      d.tipo === "recojo"
+        ? `Hola ${nombre}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está listo para que lo retires el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que pasarás?`
+        : `Hola ${nombre}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está programado para el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que habrá alguien para recibirlo?`,
+    );
+    const busy = salirARuta.isPending && salirARuta.variables === d.id;
+    const botones = (
+      <>
+        {d.estado === "programado" && d.tipo === "recojo" && (
+          <>
+            <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "entregado" })}>
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Retiró
+            </Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => setAccion({ d, tipo: "fallido" })}>
+              <XCircle className="mr-1 h-3.5 w-3.5" /> No vino
+            </Button>
+          </>
+        )}
+        {d.estado === "programado" && d.tipo === "domicilio" && (
+          <Button size="sm" className="h-8" disabled={busy} onClick={() => salirARuta.mutate(d.id)}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1 h-3.5 w-3.5" />}
+            Salir a ruta
+          </Button>
+        )}
+        {d.estado === "en_ruta" && (
+          <>
+            <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "entregado" })}>
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Entregado
+            </Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => setAccion({ d, tipo: "fallido" })}>
+              <XCircle className="mr-1 h-3.5 w-3.5" /> No se pudo
+            </Button>
+          </>
+        )}
+        {d.estado === "fallido" && (
+          <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "reprogramar" })}>
+            <CalendarClock className="mr-1 h-3.5 w-3.5" /> Reprogramar
+          </Button>
+        )}
+        {["programado", "fallido"].includes(d.estado) && (
+          <Button size="icon" variant="ghost" className="h-8 w-8" title="Cancelar despacho"
+                  onClick={() => setAccion({ d, tipo: "cancelado" })}>
+            <Ban className="h-4 w-4" />
+          </Button>
+        )}
+        {["programado", "en_ruta", "fallido"].includes(d.estado) && (
+          <Button size="icon" variant="ghost" className="h-8 w-8" title="Editar"
+                  onClick={() => setForm({ open: true, edit: d })}>
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        {d.estado === "entregado" && o?.telefono && (
+          <Button asChild size="sm" variant="outline" className="h-8" title="Pedir reseña y fotos por WhatsApp">
+            <a
+              href={whatsappLink(o.telefono, mensajeResena(o.nombre, o.order_number, d.order_id)) ?? "#"}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="mr-1 h-3.5 w-3.5" /> Pedir reseña
+            </a>
+          </Button>
+        )}
+        {wa && ["programado", "en_ruta", "fallido"].includes(d.estado) && (
+          <Button asChild size="icon" variant="ghost" className="h-8 w-8" title="Avisar por WhatsApp">
+            <a href={wa} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /></a>
+          </Button>
+        )}
+      </>
+    );
+    return { o, vencido, wa, busy, botones };
+  };
+
+  const vacioDespachos = (
+    despachos.length === 0 ? (
+        <EmptyState
+          icon={Navigation}
+          title="Aún no hay despachos"
+          description="Programa la entrega de un pedido pagado para ordenar las salidas del día."
+          action={<Button size="sm" onClick={() => setForm({ open: true })}>Programar despacho</Button>}
+        />
+      ) : (
+        <EmptyState
+          icon={Navigation}
+          title="Ningún despacho coincide con el filtro"
+          description="Prueba con otro estado, quita la fecha o cambia la búsqueda."
+          action={
+            <Button size="sm" variant="outline"
+                    onClick={() => { setFiltro("todos"); setFecha(""); setQ(""); }}>
+              Limpiar filtros
+            </Button>
+          }
+        />
+      )
+  );
+
   return (
     <div className="space-y-5 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -148,10 +249,10 @@ function DespachosPage() {
           <p className="text-sm text-muted-foreground">Programa, controla y cierra las entregas de los pedidos.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={copiarHojaDeRuta}>
+          <Button variant="outline" size="sm" className="h-11 sm:h-8" onClick={copiarHojaDeRuta}>
             <ClipboardCopy className="mr-1.5 h-4 w-4" /> Hoja de ruta
           </Button>
-          <Button size="sm" onClick={() => setForm({ open: true })}>
+          <Button size="sm" className="h-11 sm:h-8" onClick={() => setForm({ open: true })}>
             <Plus className="mr-1.5 h-4 w-4" /> Programar despacho
           </Button>
         </div>
@@ -220,7 +321,7 @@ function DespachosPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="hidden sm:table w-full text-sm">
               <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Pedido / cliente</th>
@@ -233,16 +334,7 @@ function DespachosPage() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {filtrados.map((d) => {
-                  const o = d.orders;
-                  const vencido = d.estado === "programado" && d.fecha_programada < hoy;
-                  const nombre = o?.nombre?.split(" ")[0] ?? "";
-                  const wa = whatsappLink(
-                    o?.telefono,
-                    d.tipo === "recojo"
-                      ? `Hola ${nombre}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está listo para que lo retires el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que pasarás?`
-                      : `Hola ${nombre}, te escribimos de G&M Mueblería. Tu pedido ${o?.order_number} está programado para el ${fmtFecha(d.fecha_programada)} (${FRANJA_LABEL[d.franja].toLowerCase()}). ¿Nos confirmas que habrá alguien para recibirlo?`,
-                  );
-                  const busy = salirARuta.isPending && salirARuta.variables === d.id;
+                  const { o, vencido, botones } = datosDespacho(d);
                   return (
                     <tr key={d.id} className="align-top">
                       <td className="px-4 py-3">
@@ -287,65 +379,7 @@ function DespachosPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap justify-end gap-1">
-                          {d.estado === "programado" && d.tipo === "recojo" && (
-                            <>
-                              <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "entregado" })}>
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Retiró
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8" onClick={() => setAccion({ d, tipo: "fallido" })}>
-                                <XCircle className="mr-1 h-3.5 w-3.5" /> No vino
-                              </Button>
-                            </>
-                          )}
-                          {d.estado === "programado" && d.tipo === "domicilio" && (
-                            <Button size="sm" className="h-8" disabled={busy} onClick={() => salirARuta.mutate(d.id)}>
-                              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="mr-1 h-3.5 w-3.5" />}
-                              Salir a ruta
-                            </Button>
-                          )}
-                          {d.estado === "en_ruta" && (
-                            <>
-                              <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "entregado" })}>
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Entregado
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-8" onClick={() => setAccion({ d, tipo: "fallido" })}>
-                                <XCircle className="mr-1 h-3.5 w-3.5" /> No se pudo
-                              </Button>
-                            </>
-                          )}
-                          {d.estado === "fallido" && (
-                            <Button size="sm" className="h-8" onClick={() => setAccion({ d, tipo: "reprogramar" })}>
-                              <CalendarClock className="mr-1 h-3.5 w-3.5" /> Reprogramar
-                            </Button>
-                          )}
-                          {["programado", "fallido"].includes(d.estado) && (
-                            <Button size="icon" variant="ghost" className="h-8 w-8" title="Cancelar despacho"
-                                    onClick={() => setAccion({ d, tipo: "cancelado" })}>
-                              <Ban className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {["programado", "en_ruta", "fallido"].includes(d.estado) && (
-                            <Button size="icon" variant="ghost" className="h-8 w-8" title="Editar"
-                                    onClick={() => setForm({ open: true, edit: d })}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {d.estado === "entregado" && o?.telefono && (
-                            <Button asChild size="sm" variant="outline" className="h-8" title="Pedir reseña y fotos por WhatsApp">
-                              <a
-                                href={whatsappLink(o.telefono, mensajeResena(o.nombre, o.order_number, d.order_id)) ?? "#"}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                <MessageCircle className="mr-1 h-3.5 w-3.5" /> Pedir reseña
-                              </a>
-                            </Button>
-                          )}
-                          {wa && ["programado", "en_ruta", "fallido"].includes(d.estado) && (
-                            <Button asChild size="icon" variant="ghost" className="h-8 w-8" title="Avisar por WhatsApp">
-                              <a href={wa} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4" /></a>
-                            </Button>
-                          )}
+                          {botones}
                         </div>
                       </td>
                     </tr>
@@ -354,31 +388,65 @@ function DespachosPage() {
                 {filtrados.length === 0 && (
                   <tr>
                     <td colSpan={6}>
-                      {despachos.length === 0 ? (
-                        <EmptyState
-                          icon={Navigation}
-                          title="Aún no hay despachos"
-                          description="Programa la entrega de un pedido pagado para ordenar las salidas del día."
-                          action={<Button size="sm" onClick={() => setForm({ open: true })}>Programar despacho</Button>}
-                        />
-                      ) : (
-                        <EmptyState
-                          icon={Navigation}
-                          title="Ningún despacho coincide con el filtro"
-                          description="Prueba con otro estado, quita la fecha o cambia la búsqueda."
-                          action={
-                            <Button size="sm" variant="outline"
-                                    onClick={() => { setFiltro("todos"); setFecha(""); setQ(""); }}>
-                              Limpiar filtros
-                            </Button>
-                          }
-                        />
-                      )}
+                      {vacioDespachos}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+
+            {/* Móvil (< 640 px): tarjetas apiladas */}
+            <TarjetasMovil>
+              {filtrados.map((d) => {
+                const { o, vencido, botones } = datosDespacho(d);
+                return (
+                  <TarjetaFila
+                    key={d.id}
+                    titulo={o?.order_number}
+                    subtitulo={[o?.nombre, o?.telefono].filter(Boolean).join(" · ") || undefined}
+                    estado={<Badge variant="outline" className={ESTADO[d.estado].cls}>{ESTADO[d.estado].label}</Badge>}
+                    tono={vencido ? "peligro" : "normal"}
+                    datos={[
+                      {
+                        etiqueta: "Fecha",
+                        destacado: true,
+                        valor: (
+                          <>
+                            <span className={vencido ? "text-red-700" : undefined}>{fmtFecha(d.fecha_programada)}</span>
+                            <span className="block text-xs font-normal text-muted-foreground">
+                              {FRANJA_LABEL[d.franja]}{vencido ? " · Vencido" : ""}
+                            </span>
+                          </>
+                        ),
+                      },
+                      {
+                        etiqueta: "Conductor",
+                        valor: d.tipo === "recojo" ? "—" : (d.conductor ?? "Sin asignar"),
+                      },
+                      {
+                        etiqueta: d.tipo === "recojo" ? "Entrega" : "Dirección",
+                        completo: true,
+                        valor: d.tipo === "recojo"
+                          ? "Recojo en tienda"
+                          : [o?.direccion ?? "—", o?.distrito].filter(Boolean).join(", "),
+                      },
+                      ...(d.estado === "fallido" && d.motivo_fallo
+                        ? [{ etiqueta: "Motivo", completo: true, valor: <span className="text-red-700">{d.motivo_fallo}</span> }]
+                        : []),
+                      ...(d.estado === "entregado" && d.recibido_por
+                        ? [{ etiqueta: "Recibió", valor: d.recibido_por }]
+                        : []),
+                    ]}
+                    acciones={
+                      <div className="flex w-full flex-wrap gap-2 [&_a]:h-11 [&_a]:min-w-11 [&_button]:h-11 [&_button]:min-w-11">
+                        {botones}
+                      </div>
+                    }
+                  />
+                );
+              })}
+              {filtrados.length === 0 && vacioDespachos}
+            </TarjetasMovil>
           </div>
         </Card>
       )}

@@ -732,7 +732,7 @@ function ProductosPage() {
             </p>
           )}
         </div>
-        <Button onClick={() => setEditItem(null)}>
+        <Button className="h-11 sm:h-9" onClick={() => setEditItem(null)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo producto
         </Button>
       </div>

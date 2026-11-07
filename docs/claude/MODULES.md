@@ -97,3 +97,9 @@
 
 **Ficha de producto — D7**
 - `src/lib/piezas.ts` + `src/components/product/MedidasPiezas.tsx`: lectura de `products.piezas` y `products.esquema_url` (la nota anterior «no existen medidas» quedó superada en el front; faltan los datos y el editor).
+
+**Admin móvil — ampliación (2026-11-07)**
+- Además de las 7 pantallas iniciales, usan `TarjetasMovil`/`TarjetaFila`: `cupones`, `despachos`, `devoluciones`, `proveedores`, `produccion`, `caja` (`MovTable` e historial) y `correos-pedidos` (con `ui/table`, `className="hidden sm:table"`).
+- Funciones locales compartidas por tabla y tarjeta: `editarCupon` (cupones), `datosDespacho` + `vacioDespachos` (despachos), `datosDevolucion` (devoluciones). Los botones de la tarjeta se agrandan con `[&_button]:h-11 [&_a]:h-11` sin tocar el JSX de la tabla.
+- `src/lib/cantidades.ts` suma `limitarDecimales(texto, unidad)` para campos de entrada; `MovimientoDialog` acepta `unidad`.
+- `src/components/produccion/MaterialesLista.tsx` formatea con `formatoCantidad`.

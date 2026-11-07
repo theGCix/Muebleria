@@ -44,3 +44,16 @@ export function formatoFaltante(valor: unknown, unidad: string | null | undefine
   const u = unidad ?? "";
   return (num.startsWith("<") || num.startsWith(">") ? `${num} ${u}` : `−${num} ${u}`).trim();
 }
+
+/**
+ * Para campos de cantidad: recorta lo que se escribe a los decimales que admite la unidad
+ * (enteros → ninguno; metros, kg, litros, pies → 1). Otra unidad: sin cambios.
+ * Conserva el signo y el punto a medio escribir («5.», «−», «»).
+ */
+export function limitarDecimales(texto: string, unidad: string | null | undefined): string {
+  const d = decimalesDeUnidad(unidad);
+  if (d >= 2) return texto;
+  const t = texto.replace(",", ".");
+  if (d === 0) return t.replace(/\..*$/, "");
+  return t.replace(/^([^.]*\.\d?).*$/, "$1");
+}

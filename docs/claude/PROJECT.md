@@ -50,4 +50,6 @@ Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos of
 | Pantalla | Estado |
 |----------|--------|
 | Pedidos, Ventas realizadas, Clientes, Productos, Combos, Usuarios, Insumos (stock y MRP) | Hecho: tarjetas en < 640 px, controles de 44 px, cortes de Insumos corregidos y unidades con formato por tipo (ver TASK_LOG) |
-| Pendiente | `tsc` + `vite build` + prueba a 360/414/768 px; historial de roles y botones de cabecera siguen como estaban |
+| Cupones, Despachos, Devoluciones, Proveedores, Producción, Caja (movimientos e historial), Correos de pedidos | Hecho (2026-11-07): tarjetas en < 640 px |
+| Cabeceras e inputs | Hecho (2026-11-07): botones de cabecera a 44 px en móvil; `limitarDecimales` en Movimiento de stock y Stock mínimo; `MaterialesLista` con unidades formateadas |
+| Pendiente | Prueba en navegador a 360/414/768 px con datos reales; historial de roles y tablas dentro de diálogos siguen con scroll horizontal |

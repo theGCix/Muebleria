@@ -27,6 +27,7 @@ import {
   movimientosACsv, categoriaLabel, GASTO_CATEGORIAS, METODO_LABEL, TIPO_MOV_LABEL,
   type Turno, type Movimiento, type ResumenTurno, type MetodoPago, type TipoMov, type TipoManual,
 } from "@/lib/caja.functions";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/caja")({
   head: () => ({ meta: [{ title: "Caja y gastos — G&M" }] }),
@@ -222,7 +223,7 @@ function ResumenCards({ r }: { r: ResumenTurno }) {
 function MovTable({ rows, onAnular }: { rows: Movimiento[]; onAnular?: (m: Movimiento) => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="hidden sm:table w-full text-sm">
         <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
           <tr>
             <th className="px-4 py-2.5 font-medium">Hora</th>
@@ -265,6 +266,45 @@ function MovTable({ rows, onAnular }: { rows: Movimiento[]; onAnular?: (m: Movim
           ))}
         </tbody>
       </table>
+
+      {/* Móvil (< 640 px): tarjetas apiladas */}
+      <TarjetasMovil>
+        {rows.map((m) => {
+          const detalle = [
+            m.tipo === "gasto" ? categoriaLabel(m.categoria) : "",
+            m.comprobante ?? "",
+            m.anulado && m.anulado_motivo ? `Anulado: ${m.anulado_motivo}` : "",
+          ].filter(Boolean).join(" · ");
+          return (
+            <div key={m.id} className={m.anulado ? "opacity-50" : undefined}>
+              <TarjetaFila
+                titulo={<span className={m.anulado ? "line-through" : undefined}>{m.descripcion}</span>}
+                subtitulo={`${fmtFechaHora(m.created_at)} · ${METODO_LABEL[m.metodo]}`}
+                estado={<Badge variant="outline" className={TIPO_CLS[m.tipo]}>{TIPO_MOV_LABEL[m.tipo]}</Badge>}
+                datos={[
+                  {
+                    etiqueta: "Monto",
+                    destacado: true,
+                    valor: (
+                      <span className={m.tipo === "ingreso" ? "text-emerald-700" : "text-red-700"}>
+                        {m.tipo === "ingreso" ? "+" : "−"}{fmtPEN(m.monto)}
+                      </span>
+                    ),
+                  },
+                  ...(detalle ? [{ etiqueta: "Detalle", completo: true, valor: detalle }] : []),
+                ]}
+                acciones={
+                  onAnular && !m.anulado ? (
+                    <Button variant="outline" className={BTN_TACTIL} onClick={() => onAnular(m)}>
+                      <Ban className="h-4 w-4 mr-1.5" /> Anular
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          );
+        })}
+      </TarjetasMovil>
     </div>
   );
 }
@@ -609,7 +649,7 @@ function HistorialTab() {
     <>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="hidden sm:table w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Turno</th>
@@ -645,6 +685,39 @@ function HistorialTab() {
               })}
             </tbody>
           </table>
+
+          {/* Móvil (< 640 px): tarjetas apiladas */}
+          <TarjetasMovil>
+            {turnos.map((t) => {
+              const d = t.diferencia ?? 0;
+              return (
+                <TarjetaFila
+                  key={t.id}
+                  titulo={fmtFechaHora(t.abierta_at)}
+                  subtitulo={`a ${t.cerrada_at ? fmtFechaHora(t.cerrada_at) : "—"}`}
+                  datos={[
+                    { etiqueta: "Ventas", destacado: true, valor: fmtPEN(t.resumen?.ventas_total ?? 0) },
+                    {
+                      etiqueta: "Diferencia",
+                      destacado: true,
+                      valor: (
+                        <span className={d === 0 ? "text-emerald-700" : d < 0 ? "text-red-700" : "text-amber-700"}>
+                          {d === 0 ? "Cuadra" : `${d > 0 ? "+" : "−"}${fmtPEN(Math.abs(d))}`}
+                        </span>
+                      ),
+                    },
+                    { etiqueta: "Esperado", valor: fmtPEN(t.efectivo_esperado ?? 0) },
+                    { etiqueta: "Contado", valor: fmtPEN(t.efectivo_contado ?? 0) },
+                  ]}
+                  acciones={
+                    <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => setVer(t)}>
+                      <Eye className="h-4 w-4 mr-1.5" /> Ver detalle
+                    </Button>
+                  }
+                />
+              );
+            })}
+          </TarjetasMovil>
         </div>
       </Card>
       {ver && <DetalleTurnoDialog turno={ver} onClose={() => setVer(null)} />}
