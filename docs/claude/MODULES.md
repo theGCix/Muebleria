@@ -103,3 +103,8 @@
 - Funciones locales compartidas por tabla y tarjeta: `editarCupon` (cupones), `datosDespacho` + `vacioDespachos` (despachos), `datosDevolucion` (devoluciones). Los botones de la tarjeta se agrandan con `[&_button]:h-11 [&_a]:h-11` sin tocar el JSX de la tabla.
 - `src/lib/cantidades.ts` suma `limitarDecimales(texto, unidad)` para campos de entrada; `MovimientoDialog` acepta `unidad`.
 - `src/components/produccion/MaterialesLista.tsx` formatea con `formatoCantidad`.
+
+**Insumos MRP — estado de stock y calculadora (2026-11-08)**
+- `src/lib/cantidades.ts`: `estadoStock(stock, mínimo)` → `sin_stock | insuficiente | suficiente | sin_minimo`; `faltaStock(estado)`; `ordenarPorUrgencia(lista)`.
+- `insumos.tsx`: `ESTADO_STOCK` (etiqueta y clases por estado) alimenta la columna «Estado» de la tabla y la insignia de las tarjetas; `filtrados` se ordena con `ordenarPorUrgencia`.
+- `FilaModelo`: controles de 44 px, piezas en una columna en móvil, resumen «Por juego …» con total de piezas.

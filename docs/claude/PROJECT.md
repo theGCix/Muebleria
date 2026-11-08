@@ -52,4 +52,6 @@ Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos of
 | Pedidos, Ventas realizadas, Clientes, Productos, Combos, Usuarios, Insumos (stock y MRP) | Hecho: tarjetas en < 640 px, controles de 44 px, cortes de Insumos corregidos y unidades con formato por tipo (ver TASK_LOG) |
 | Cupones, Despachos, Devoluciones, Proveedores, Producción, Caja (movimientos e historial), Correos de pedidos | Hecho (2026-11-07): tarjetas en < 640 px |
 | Cabeceras e inputs | Hecho (2026-11-07): botones de cabecera a 44 px en móvil; `limitarDecimales` en Movimiento de stock y Stock mínimo; `MaterialesLista` con unidades formateadas |
+| Insumos MRP — F5 Stock | Hecho (2026-11-08): faltantes primero; rojo / verde / gris según `estadoStock`; mínimo se guarda como número |
+| Insumos MRP — F7 Calculadora | Hecho (2026-11-08): + / − de 44 px, piezas apiladas en móvil, resumen compacto con total de piezas, «Juegos» entero |
 | Pendiente | Prueba en navegador a 360/414/768 px con datos reales; historial de roles y tablas dentro de diálogos siguen con scroll horizontal |

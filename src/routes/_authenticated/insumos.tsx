@@ -27,7 +27,10 @@ import { toast } from "sonner";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { RoleGate } from "@/components/RoleGate";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
-import { formatoCantidad, formatoFaltante, limitarDecimales } from "@/lib/cantidades";
+import {
+  formatoCantidad, formatoFaltante, limitarDecimales,
+  estadoStock, faltaStock, ordenarPorUrgencia, type EstadoStock,
+} from "@/lib/cantidades";
 
 export const Route = createFileRoute("/_authenticated/insumos")({
   head: () => ({ meta: [{ title: "Insumos MRP — G&M" }] }),
@@ -49,6 +52,14 @@ const UNIDADES = ["metros", "kg", "litros", "unidades", "planchas", "piezas", "p
 
 // Enteros para unidades/planchas…, máx. 1 decimal para metros/kg… (ver src/lib/cantidades.ts)
 const fmt = formatoCantidad;
+
+// Estado de stock (ver estadoStock en src/lib/cantidades.ts): rojo = falta, verde = suficiente, gris = sin mínimo
+const ESTADO_STOCK: Record<EstadoStock, { label: string; badge: string; texto: string; fila: string }> = {
+  sin_stock:    { label: "Sin stock",    badge: "bg-red-100 text-red-700",           texto: "text-red-600",       fila: "bg-red-50/50" },
+  insuficiente: { label: "Insuficiente", badge: "bg-red-100 text-red-700",           texto: "text-red-600",       fila: "bg-red-50/50" },
+  suficiente:   { label: "Suficiente",   badge: "bg-green-100 text-green-800",       texto: "text-green-700",     fila: "hover:bg-muted/20" },
+  sin_minimo:   { label: "Sin mínimo",   badge: "bg-muted text-muted-foreground",    texto: "text-foreground",    fila: "hover:bg-muted/20" },
+};
 
 // Modelos que usan piezas en vez de talla
 const MODELOS_CON_PIEZAS = ["London"] as const;
@@ -306,12 +317,12 @@ function FilaModelo({
             {usaPiezas ? "Juegos" : "Cantidad"}
           </Label>
           <Input
-            type="number" min={1} value={fila.cantidad}
-            onChange={(e) => onChange(index, { ...fila, cantidad: Math.max(1, Number(e.target.value)) })}
+            type="number" min={1} step={1} inputMode="numeric" value={fila.cantidad}
+            onChange={(e) => onChange(index, { ...fila, cantidad: Math.max(1, Math.floor(Number(e.target.value)) || 1) })}
           />
         </div>
         {total > 1 && (
-          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onRemove(index)}>✕</Button>
+          <Button size="sm" variant="ghost" className="h-11 min-w-11 text-muted-foreground" aria-label="Quitar modelo" onClick={() => onRemove(index)}>✕</Button>
         )}
       </div>
 
@@ -332,26 +343,28 @@ function FilaModelo({
       {usaPiezas && fila.tipo === "piezas" && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            Piezas por juego{fila.cantidad > 1 ? ` (×${fila.cantidad} juegos)` : ""}:
+            Piezas por juego:
           </p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
             {PIEZAS_LONDON.map(({ id, label }) => {
               const qty = fila.piezas[id] ?? 0;
               return (
-                <div key={id} className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">{label}</Label>
+                <div key={id} className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-1.5 sm:block sm:space-y-1 sm:border-0 sm:p-0">
+                  <Label className="text-sm text-muted-foreground sm:text-xs">{label}</Label>
                   <div className="flex items-center gap-1">
                     <Button
-                      size="sm" variant="outline" className="h-7 w-7 p-0"
+                      size="sm" variant="outline" className="h-11 w-11 p-0 text-lg"
+                      aria-label={`Quitar una pieza: ${label}`}
                       disabled={qty <= 0}
                       onClick={() => onChange(index, {
                         ...fila,
                         piezas: { ...fila.piezas, [id]: Math.max(0, qty - 1) },
                       })}
                     >−</Button>
-                    <span className="w-6 text-center text-sm font-semibold">{qty}</span>
+                    <span className="w-8 text-center text-base font-semibold">{qty}</span>
                     <Button
-                      size="sm" variant="outline" className="h-7 w-7 p-0"
+                      size="sm" variant="outline" className="h-11 w-11 p-0 text-lg"
+                      aria-label={`Añadir una pieza: ${label}`}
                       disabled={qty >= 3}
                       onClick={() => onChange(index, {
                         ...fila,
@@ -363,15 +376,26 @@ function FilaModelo({
               );
             })}
           </div>
-          {Object.values(fila.piezas).some(v => v > 0) && (
-            <p className="text-xs text-muted-foreground pt-1 border-t border-border/40">
-              {PIEZAS_LONDON
-                .filter(({ id }) => fila.piezas[id] > 0)
-                .map(({ id, label }) => `${fila.piezas[id]}× ${label}`)
-                .join(" + ")}
-              {fila.cantidad > 1 ? ` (×${fila.cantidad} juegos)` : ""}
-            </p>
-          )}
+          {Object.values(fila.piezas).some(v => v > 0) && (() => {
+            const porJuego = PIEZAS_LONDON.filter(({ id }) => fila.piezas[id] > 0);
+            const piezasJuego = porJuego.reduce((s, { id }) => s + fila.piezas[id], 0);
+            return (
+              <p className="text-xs text-muted-foreground pt-2 border-t border-border/40">
+                <span className="font-medium text-foreground">Por juego:</span>{" "}
+                {porJuego.map(({ id }) => `${fila.piezas[id]}× ${id}`).join(" · ")}
+                {" · "}
+                <span className="font-medium text-foreground">
+                  {piezasJuego} {piezasJuego === 1 ? "pieza" : "piezas"}
+                </span>
+                {fila.cantidad > 1 && (
+                  <>
+                    {" · "}{fila.cantidad} juegos ={" "}
+                    <span className="font-medium text-foreground">{piezasJuego * fila.cantidad} piezas</span>
+                  </>
+                )}
+              </p>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -657,6 +681,7 @@ function InsumoDialog({ insumo, onDone, triggerClassName }: { insumo?: any; onDo
     mutationFn: () =>
     upsertInsumo({
         ...form,
+        stock_minimo: Number(form.stock_minimo) || 0,
         precio_unit: form.precio_unit ? Number(form.precio_unit) : null,
         proveedor_id: form.proveedor_id || null,
     }),
@@ -776,10 +801,10 @@ function InsumosPage() {
 
   const filtrados = useMemo(() => {
     const list = insumosData?.insumos ?? [];
-    if (!busqueda.trim()) return list;
-    return list.filter((i: any) =>
-      i.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    );
+    const visibles = !busqueda.trim()
+      ? list
+      : list.filter((i: any) => i.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+    return ordenarPorUrgencia(visibles);
   }, [insumosData, busqueda]);
 
   const alertaCount = alertasData?.alertas?.length ?? 0;
@@ -851,7 +876,7 @@ function InsumosPage() {
                 <table className="hidden sm:table w-full text-sm">
                   <thead className="bg-muted/40 border-b">
                     <tr>
-                      {["Insumo", "Unidad", "Stock actual", "Stock mínimo", "Proveedor", ""].map((h) => (
+                      {["Insumo", "Unidad", "Stock actual", "Stock mínimo", "Estado", "Proveedor", ""].map((h) => (
                         <th key={h} className="px-4 py-3 text-left font-medium text-xs text-muted-foreground uppercase tracking-wide whitespace-nowrap">
                           {h}
                         </th>
@@ -860,23 +885,24 @@ function InsumosPage() {
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {filtrados.map((ins: any) => {
-                      const bajo = ins.stock_actual < ins.stock_minimo;
+                      const est = estadoStock(ins.stock_actual, ins.stock_minimo);
+                      const cfg = ESTADO_STOCK[est];
                       return (
-                        <tr key={ins.id} className={bajo ? "bg-amber-50/40" : "hover:bg-muted/20"}>
-                          <td className="px-4 py-3 font-medium">
-                            {ins.nombre}
-                            {bajo && (
-                              <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500 ml-1.5" />
-                            )}
-                          </td>
+                        <tr key={ins.id} className={cfg.fila}>
+                          <td className="px-4 py-3 font-medium">{ins.nombre}</td>
                           <td className="px-4 py-3 text-muted-foreground">{ins.unidad}</td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`font-semibold ${bajo ? "text-amber-600" : "text-foreground"}`}>
+                            <span className={`font-semibold ${cfg.texto}`}>
                               {fmt(ins.stock_actual, ins.unidad)}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                             {fmt(ins.stock_minimo, ins.unidad)}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.badge}`}>
+                              {faltaStock(est) && <AlertTriangle className="h-3 w-3" />} {cfg.label}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground text-xs">
                             {ins.proveedor ?? "—"}
@@ -901,28 +927,29 @@ function InsumosPage() {
                 {/* Móvil (< 640 px): tarjetas apiladas */}
                 <TarjetasMovil>
                   {filtrados.map((ins: any) => {
-                    const bajo = ins.stock_actual < ins.stock_minimo;
+                    const est = estadoStock(ins.stock_actual, ins.stock_minimo);
+                    const cfg = ESTADO_STOCK[est];
+                    const faltan = Math.max(0, Number(ins.stock_minimo) - Number(ins.stock_actual));
                     return (
                       <TarjetaFila
                         key={ins.id}
-                        tono={bajo ? "alerta" : "normal"}
+                        tono={faltaStock(est) ? "peligro" : "normal"}
                         titulo={ins.nombre}
                         estado={
-                          bajo ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                              <AlertTriangle className="h-3 w-3" /> Stock bajo
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">OK</span>
-                          )
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.badge}`}>
+                            {faltaStock(est) && <AlertTriangle className="h-3 w-3" />} {cfg.label}
+                          </span>
                         }
                         datos={[
                           {
                             etiqueta: "Stock actual",
                             destacado: true,
-                            valor: <span className={bajo ? "text-amber-700" : undefined}>{fmt(ins.stock_actual, ins.unidad)}</span>,
+                            valor: <span className={cfg.texto}>{fmt(ins.stock_actual, ins.unidad)}</span>,
                           },
                           { etiqueta: "Stock mínimo", valor: fmt(ins.stock_minimo, ins.unidad) },
+                          ...(faltan > 0
+                            ? [{ etiqueta: "Faltan", valor: <span className="text-red-600">{fmt(faltan, ins.unidad)}</span> }]
+                            : []),
                           ...(ins.proveedor ? [{ etiqueta: "Proveedor", completo: true, valor: ins.proveedor }] : []),
                         ]}
                         acciones={
