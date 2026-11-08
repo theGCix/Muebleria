@@ -108,3 +108,8 @@
 - `src/lib/cantidades.ts`: `estadoStock(stock, mínimo)` → `sin_stock | insuficiente | suficiente | sin_minimo`; `faltaStock(estado)`; `ordenarPorUrgencia(lista)`.
 - `insumos.tsx`: `ESTADO_STOCK` (etiqueta y clases por estado) alimenta la columna «Estado» de la tabla y la insignia de las tarjetas; `filtrados` se ordena con `ordenarPorUrgencia`.
 - `FilaModelo`: controles de 44 px, piezas en una columna en móvil, resumen «Por juego …» con total de piezas.
+
+**Fabricar (MRP) y modal de proveedores (2026-11-08)**
+- `enviarAProduccion({ order_number, descripcion, insumos:[{insumo_id, cantidad}], … })` → una sola llamada `rpc("fabricar_mrp")`; devuelve `{ ok, order_id, order_number, produccion_id, duplicado }`. `calcularMrp` incluye `insumo_id` en cada fila.
+- `FabricarDialog` (`insumos.tsx`): `r3()` redondea a 3 decimales; consulta `["insumos"]` con `staleTime: 0` y `refetchOnMount: "always"`; la clave de idempotencia se crea una vez por apertura (`useState`); `enviandoRef` evita toques repetidos.
+- `ProveedorDetalle` (`proveedores.tsx`): rama de carga con `Skeleton`; si se cambia el contenido final del modal, ajustar el esqueleto.

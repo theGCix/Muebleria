@@ -34,3 +34,5 @@
 - **Botones de cabecera del panel en móvil:** `h-11 sm:h-9` (o `sm:h-8` si son `size="sm"`), solo clases.
 - **Estado de stock de insumos:** rojo si stock ≤ 0 («Sin stock») o stock < mínimo («Insuficiente»); verde si stock ≥ mínimo (mínimo > 0); gris «Sin mínimo» si hay stock pero no hay mínimo. Los faltantes van primero. Se calcula con `estadoStock` (`src/lib/cantidades.ts`), nunca comparando a mano.
 - **Calculadora MRP:** los controles + / − miden ≥ 44 px; «Juegos» es entero (mínimo 1); no se cambian las fórmulas de `calcularMrp`.
+- **Fabricar insumos:** siempre por `fabricar_mrp` (transacción única, idempotente por `order_number`); nunca volver a insertar `orders` / `produccion` / `insumo_movimientos` suelto desde el cliente. No se permite fabricar si el stock actual no alcanza: así el movimiento coincide con el descuento real (el trigger recorta en 0).
+- **Estados de carga en modales:** skeleton con la misma estructura y medidas que el contenido final, no texto «Cargando…» ni spinner centrado.

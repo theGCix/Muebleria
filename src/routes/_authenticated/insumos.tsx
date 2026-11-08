@@ -22,10 +22,11 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import { Loader2, AlertTriangle, Plus, ArrowDown, Calculator, Package, Hammer } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { RoleGate } from "@/components/RoleGate";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import {
   formatoCantidad, formatoFaltante, limitarDecimales,
@@ -92,13 +93,17 @@ function expandirPedidos(filas: FilaPedido[]) {
 }
 
 // ── Modal Fabricar ────────────────────────────────────────────
+// Redondeo a 3 decimales: es la precisión de insumos.stock_actual / insumo_movimientos.cantidad
+// (NUMERIC(12,3)). Evita falsos faltantes por coma flotante (0.1 + 0.2).
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
 function FabricarDialog({
   insumos,
   descripcion,
   onClose,
   onDone,
 }: {
-  insumos: Array<{ nombre: string; necesario: number; unidad: string; faltante: number; stock_actual: number }>;
+  insumos: Array<{ insumo_id: string; nombre: string; necesario: number; unidad: string; faltante: number; stock_actual: number }>;
   descripcion: string;
   onClose: () => void;
   onDone: () => void;
@@ -109,56 +114,77 @@ function FabricarDialog({
   const [observaciones, setObservaciones] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [prioridad, setPrioridad] = useState("2");
+  // Clave de idempotencia: una por apertura del diálogo. Si la operación se repite
+  // (doble toque, reintento tras un corte), el servidor devuelve la misma orden y no descuenta otra vez.
+  const [clave] = useState(() => `GM-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`);
+  // Guard síncrono contra toques repetidos (isPending se actualiza un instante después del primer clic).
+  const enviandoRef = useRef(false);
 
   const { data: carpinterosData } = useQuery({
     queryKey: ["carpinteros"],
     queryFn: listCarpinteros,
   });
 
-  const hayFaltantes = insumos.some((i) => i.faltante > 0);
-
-  // Necesitamos los insumo_id — los traemos del BOM calculado que ya tiene el resultado
-  // Pero calcularMrp no devuelve insumo_id, así que hacemos una query adicional
-  const { data: insumosData } = useQuery({
+  // Stock ACTUAL al abrir: el del cálculo puede estar desactualizado.
+  const { data: insumosData, isFetching } = useQuery({
     queryKey: ["insumos"],
     queryFn: listInsumos,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
+  const cargando = isFetching || !insumosData;
+
+  const lineas = useMemo(() => {
+    const stockPorId = new Map<string, number>(
+      (insumosData?.insumos ?? []).map((i: any) => [i.id as string, Number(i.stock_actual)])
+    );
+    return insumos
+      .map((i) => ({ ...i, necesario: r3(i.necesario) }))
+      .filter((i) => i.necesario > 0)
+      .map((i) => {
+        const actual = r3(stockPorId.get(i.insumo_id) ?? i.stock_actual);
+        return { ...i, actual, resultante: r3(actual - i.necesario), falta: r3(Math.max(0, i.necesario - actual)) };
+      });
+  }, [insumos, insumosData]);
+
+  const hayFaltantes = lineas.some((l) => l.falta > 0);
 
   const fabricarMut = useMutation({
-    mutationFn: async () => {
-      // Mapear nombre → id
-      const insumosMap = new Map(
-        (insumosData?.insumos ?? []).map((i: any) => [i.nombre, i.id])
-      );
-      const insumosPayload = insumos
-        .filter((i) => i.necesario > 0)
-        .map((i) => ({
-          insumo_id: insumosMap.get(i.nombre) as string,
-          cantidad:  i.necesario,
-          nombre:    i.nombre,
-        }))
-        .filter((i) => i.insumo_id); // descartar si no se encontró ID
-
-      return enviarAProduccion({
+    mutationFn: () =>
+      enviarAProduccion({
+        order_number: clave,
         descripcion,
-        insumos: insumosPayload,
+        insumos: lineas.map((l) => ({ insumo_id: l.insumo_id, cantidad: l.necesario })),
         carpintero_id:      carpinteroId || undefined,
         observaciones:      observaciones || undefined,
         fecha_fin_estimada: fechaFin || undefined,
         prioridad:          Number(prioridad),
-      });
-    },
+      }),
     onSuccess: (res) => {
-      toast.success(`Orden ${res.order_number} enviada a producción`);
+      if (res.duplicado) {
+        toast.info(`La orden ${res.order_number} ya estaba registrada; no se volvió a descontar stock`);
+      } else {
+        toast.success(`Orden ${res.order_number} enviada a producción`);
+      }
       qc.invalidateQueries({ queryKey: ["insumos"] });
       qc.invalidateQueries({ queryKey: ["insumos-alertas"] });
       qc.invalidateQueries({ queryKey: ["produccion"] });
       onDone();
       navigate({ to: "/produccion" });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      enviandoRef.current = false; // permite reintentar (misma clave)
+      toast.error(e.message);
+      // El stock pudo cambiar: se vuelve a leer para que el diálogo muestre lo real.
+      qc.invalidateQueries({ queryKey: ["insumos"] });
+    },
   });
+
+  const confirmar = () => {
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
+    fabricarMut.mutate();
+  };
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -176,41 +202,52 @@ function FabricarDialog({
             <p className="font-medium">{descripcion}</p>
           </div>
 
-          {/* Alerta de faltantes */}
-          {hayFaltantes && (
-            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          {/* Sin stock suficiente: no se puede confirmar */}
+          {!cargando && hayFaltantes && (
+            <div role="alert" className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>Hay insumos insuficientes. Se registrará la salida de lo disponible, pero puede quedar stock negativo. Asegúrate de reponer antes de fabricar.</span>
+              <span>No hay stock suficiente para fabricar. Repón los insumos marcados en rojo y vuelve a calcular.</span>
             </div>
           )}
 
-          {/* Tabla de insumos a descontar */}
+          {/* Insumos que se descontarán */}
           <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Insumos a descontar</p>
-            <div className="border rounded-lg overflow-x-auto text-sm">
-              <table className="w-full">
-                <thead className="bg-muted/30">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs text-muted-foreground">Insumo</th>
-                    <th className="px-3 py-2 text-right text-xs text-muted-foreground">Cantidad</th>
-                    <th className="px-3 py-2 text-right text-xs text-muted-foreground">Stock tras descuento</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {insumos.filter(i => i.necesario > 0).map((i) => {
-                    const stockTras = i.stock_actual - i.necesario;
-                    return (
-                      <tr key={i.nombre} className={i.faltante > 0 ? "bg-red-50/40" : ""}>
-                        <td className="px-3 py-2">{i.nombre}</td>
-                        <td className="px-3 py-2 text-right text-muted-foreground">{fmt(i.necesario, i.unidad)}</td>
-                        <td className={`px-3 py-2 text-right font-semibold ${stockTras < 0 ? "text-red-600" : "text-green-700"}`}>
-                          {fmt(stockTras, i.unidad)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+              Insumos que se descontarán del stock
+            </p>
+            <div className="border rounded-lg divide-y divide-border/40 text-sm">
+              {lineas.map((l) => (
+                <div key={l.insumo_id} className={`px-3 py-2.5 ${!cargando && l.falta > 0 ? "bg-red-50/50" : ""}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{l.nombre}</span>
+                    {!cargando && l.falta > 0 && (
+                      <span className="text-xs font-medium text-red-600 whitespace-nowrap">
+                        Faltan {fmt(l.falta, l.unidad)}
+                      </span>
+                    )}
+                  </div>
+                  <dl className="mt-1.5 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Se descuenta</dt>
+                      <dd className="font-medium whitespace-nowrap">{fmt(l.necesario, l.unidad)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Stock actual</dt>
+                      <dd className="whitespace-nowrap">
+                        {cargando ? <Skeleton className="mt-0.5 h-4 w-14" /> : fmt(l.actual, l.unidad)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Quedará</dt>
+                      <dd className={`font-semibold whitespace-nowrap ${l.falta > 0 ? "text-red-600" : "text-green-700"}`}>
+                        {cargando
+                          ? <Skeleton className="mt-0.5 h-4 w-14" />
+                          : l.falta > 0 ? "No alcanza" : fmt(l.resultante, l.unidad)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -263,11 +300,11 @@ function FabricarDialog({
 
           {/* Acciones */}
           <div className="flex gap-2 justify-end pt-1">
-            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button variant="outline" className="h-11 sm:h-9" onClick={onClose}>Cancelar</Button>
             <Button
-              className="bg-[#4a2c1a] hover:bg-[#3a200f] text-white gap-2"
-              disabled={fabricarMut.isPending || !insumosData}
-              onClick={() => fabricarMut.mutate()}
+              className="h-11 sm:h-9 bg-[#4a2c1a] hover:bg-[#3a200f] text-white gap-2"
+              disabled={fabricarMut.isPending || fabricarMut.isSuccess || cargando || hayFaltantes || lineas.length === 0}
+              onClick={confirmar}
             >
               {fabricarMut.isPending
                 ? <Loader2 className="h-4 w-4 animate-spin" />

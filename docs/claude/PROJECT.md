@@ -54,4 +54,6 @@ Razón social, RUC, dirección, correo ARCO, horarios, WhatsApp, redes, logos of
 | Cabeceras e inputs | Hecho (2026-11-07): botones de cabecera a 44 px en móvil; `limitarDecimales` en Movimiento de stock y Stock mínimo; `MaterialesLista` con unidades formateadas |
 | Insumos MRP — F5 Stock | Hecho (2026-11-08): faltantes primero; rojo / verde / gris según `estadoStock`; mínimo se guarda como número |
 | Insumos MRP — F7 Calculadora | Hecho (2026-11-08): + / − de 44 px, piezas apiladas en móvil, resumen compacto con total de piezas, «Juegos» entero |
-| Pendiente | Prueba en navegador a 360/414/768 px con datos reales; historial de roles y tablas dentro de diálogos siguen con scroll horizontal |
+| F8 Fabricar (MRP) | Hecho (2026-11-08): `fabricar_mrp` atómica e idempotente (migración `20261108_fabricar_mrp.sql`, ejecutar en SQL Editor), diálogo con stock actual y bloqueo si falta |
+| F10 Proveedores | Hecho (2026-11-08): skeleton con la estructura del modal en lugar de «Cargando…» |
+| Pendiente | Ejecutar la migración `20261108_fabricar_mrp.sql` en Supabase; prueba en navegador a 360/414/768 px con datos reales; historial de roles y tablas dentro de diálogos siguen con scroll horizontal |

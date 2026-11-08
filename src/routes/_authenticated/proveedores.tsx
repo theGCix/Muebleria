@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { EmptyState, TableSkeleton } from "@/components/states";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RoleGate } from "@/components/RoleGate";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 
@@ -234,13 +235,42 @@ function ProveedorDetalle({ proveedorId, onClose }: { proveedorId: string; onClo
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              {isLoading ? "Cargando..." : p?.nombre}
+              <Building2 className="h-5 w-5 shrink-0" />
+              {isLoading || !p ? (
+                <>
+                  <Skeleton className="h-[18px] w-48" />
+                  <span className="sr-only">Cargando proveedor</span>
+                </>
+              ) : p.nombre}
             </DialogTitle>
           </DialogHeader>
 
           {isLoading || !p ? (
-            <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
+            // Esqueleto con la misma estructura y medidas que el contenido final (sin saltos al cargar)
+            <div className="space-y-4 mt-1" aria-busy="true">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-32" />
+                </div>
+                <Skeleton className="h-8 w-16 rounded-md" />
+              </div>
+              <div>
+                <Skeleton className="h-9 w-full max-w-sm rounded-lg" />
+                <div className="mt-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} className="h-[62px] rounded-lg" />
+                    ))}
+                  </div>
+                  <div className="flex gap-2 flex-wrap pt-1">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-24 rounded-md" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="space-y-4 mt-1">
               {/* Header info */}

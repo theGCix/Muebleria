@@ -771,7 +771,7 @@ export async function calcularMrp(input: {
 
   // Agregar necesidad total por insumo
   const necesidad: Record<string, {
-    nombre: string; unidad: string; stock_actual: number;
+    insumo_id: string; nombre: string; unidad: string; stock_actual: number;
     necesario: number; faltante: number;
   }> = {};
 
@@ -785,6 +785,7 @@ export async function calcularMrp(input: {
       if (!ins) continue;
       if (!necesidad[ins.id]) {
         necesidad[ins.id] = {
+          insumo_id: ins.id,
           nombre: ins.nombre,
           unidad: ins.unidad,
           stock_actual: Number(ins.stock_actual),
@@ -1256,12 +1257,16 @@ export async function getMarketingAnalytics(input?: {
 }
 
 // ── ENVIAR A PRODUCCIÓN DESDE MRP ────────────────────────────
-// Crea una orden en producción y descuenta los insumos del stock
+// Crea la orden interna, el registro de producción, el mueble a fabricar y la salida de
+// insumos en UNA sola transacción (función SQL `fabricar_mrp`, SECURITY INVOKER: rige el RLS
+// de quien llama). Si algo falla no queda nada a medias.
+// `order_number` es la clave de idempotencia: repetir la misma clave devuelve la orden ya
+// creada (duplicado = true) y NO vuelve a descontar stock.
 export async function enviarAProduccion(input: {
-  // Descripción del pedido (se crea una orden interna sin order_id de ecommerce)
+  order_number: string;
   descripcion: string;
-  // Insumos a descontar: [{insumo_id, cantidad, nombre}]
-  insumos: Array<{ insumo_id: string; cantidad: number; nombre: string }>;
+  // Insumos a descontar: [{insumo_id, cantidad}]
+  insumos: Array<{ insumo_id: string; cantidad: number }>;
   // Opcionales
   carpintero_id?: string;
   observaciones?: string;
@@ -1269,11 +1274,11 @@ export async function enviarAProduccion(input: {
   prioridad?: number;
 }) {
   const data = z.object({
+    order_number:        z.string().min(1).max(80),
     descripcion:         z.string().min(1),
     insumos:             z.array(z.object({
       insumo_id: z.string().uuid(),
       cantidad:  z.number().positive(),
-      nombre:    z.string(),
     })).min(1),
     carpintero_id:       z.string().uuid().optional(),
     observaciones:       z.string().max(2000).optional(),
@@ -1281,77 +1286,28 @@ export async function enviarAProduccion(input: {
     prioridad:           z.number().int().min(1).max(3).optional(),
   }).parse(input);
 
-  const { supabase, userId } = await getAuthenticatedClient();
+  const { supabase } = await getAuthenticatedClient();
 
-  // 1. Crear una order interna de tipo "fabricacion_mrp"
-  const orderNumber = `GM-${Date.now()}`;
-  const { data: order, error: orderErr } = await supabase
-    .from("orders")
-    .insert({
-      order_number: orderNumber,
-      status:    "pendiente",
-      nombre:    "Producción interna",
-      email:     "produccion@interno",
-      subtotal:  0,
-      envio:     0,
-      total:     0,
-      notas:     `[MRP] ${data.descripcion}`,
-    })
-    .select("id, order_number")
-    .single();
-  if (orderErr) throw new Error(orderErr.message);
+  const { data: res, error } = await supabase.rpc("fabricar_mrp", {
+    _order_number:       data.order_number,
+    _descripcion:        data.descripcion,
+    _insumos:            data.insumos,
+    _carpintero_id:      data.carpintero_id ?? null,
+    _observaciones:      data.observaciones ?? null,
+    _fecha_fin_estimada: data.fecha_fin_estimada || null,
+    _prioridad:          data.prioridad ?? 2,
+  } as any);
+  if (error) throw new Error(error.message);
 
-  // 2. Crear registro en producción
-  const { data: prod, error: prodErr } = await supabase
-    .from("produccion")
-    .insert({
-      order_id:           order.id,
-      asignado_a:         data.carpintero_id ?? null,
-      observaciones:      data.observaciones ?? null,
-      fecha_fin_estimada: data.fecha_fin_estimada ?? null,
-      prioridad:          data.prioridad ?? 2,
-      status:             "pendiente",
-      fecha_inicio:       new Date().toISOString().split("T")[0],
-    })
-    .select("id")
-    .single();
-  if (prodErr) throw new Error(prodErr.message);
-
-  // 2.5 Insertar el mueble a fabricar en order_items (UNA fila = un mueble)
-  // Los materiales se obtienen del BOM dinámicamente en la vista del carpintero.
-  const { error: itemsErr } = await supabase
-    .from("order_items")
-    .insert([{
-      order_id:   order.id,
-      sku:        null,
-      title:      data.descripcion,   // nombre del mueble, ej: "Sofá London 3 cuerpos"
-      qty:        1,
-      unit_price: 0,
-      total:      0,
-    }]);
-  if (itemsErr) throw new Error(itemsErr.message);
-
-  // 3. Descontar insumos del stock (salida por producción)
-  const motivo = `Fabricación MRP: ${data.descripcion}`;
-  const movimientos = data.insumos.map((ins) => ({
-    insumo_id:      ins.insumo_id,
-    tipo:           "salida" as const,
-    cantidad:       ins.cantidad,
-    motivo,
-    referencia:     order.order_number,
-    registrado_por: userId,
-  }));
-
-  const { error: movErr } = await supabase
-    .from("insumo_movimientos")
-    .insert(movimientos);
-  if (movErr) throw new Error(movErr.message);
-
+  const r = res as {
+    order_id: string; order_number: string; produccion_id: string | null; duplicado?: boolean;
+  };
   return {
-    ok:           true,
-    order_id:     order.id,
-    order_number: order.order_number,
-    produccion_id: prod.id,
+    ok:            true,
+    order_id:      r.order_id,
+    order_number:  r.order_number,
+    produccion_id: r.produccion_id,
+    duplicado:     !!r.duplicado,
   };
 }
 

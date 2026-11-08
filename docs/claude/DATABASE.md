@@ -81,3 +81,10 @@ id, nombre, descripcion, sku, precio, stock, categoria, imagen_url, imagen_publi
 - `products.esquema_url` (text, URL https de Cloudinary): creada con `20261105_medidas_producto.sql`, ejecutada y verificada por el dueño.
 - `products.alto_cm`, `ancho_cm`, `fondo_cm`, `plazas` (de la misma migración, todas en NULL): quedan **sin uso**; eliminarlas está pendiente de aprobación.
 - Las migraciones se corrieron en el SQL Editor y no están en `supabase/migrations/` del repo.
+
+## Función `fabricar_mrp` (2026-11-08)
+- Archivo: `supabase/migrations/20261108_fabricar_mrp.sql` (**ejecutar en el SQL Editor**, igual que las demás migraciones). No crea tablas ni columnas ni políticas.
+- `SECURITY INVOKER` (RLS del usuario que llama). `GRANT EXECUTE` solo a `authenticated`; `REVOKE` a `PUBLIC`.
+- Entrada: `_order_number` (clave de idempotencia), `_descripcion`, `_insumos` (`[{"insumo_id","cantidad"}]`), `_carpintero_id`, `_observaciones`, `_fecha_fin_estimada`, `_prioridad`.
+- Efecto: `orders` (interna, `[MRP] <descripcion>`) + `produccion` + `order_items` (1 fila) + `insumo_movimientos` (`salida`, referencia = `order_number`). El trigger `actualizar_stock_insumo` descuenta el stock.
+- Errores: «Stock insuficiente: …», «Insumo no encontrado o sin acceso: …», «El número de orden … ya está en uso por otra orden», «Datos inválidos en los insumos».
