@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, TrendingUp, Users, MapPin, ShoppingCart, RefreshCw } from "lucide-react";
+import { Loader2, TrendingUp, MapPin, ShoppingCart, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useMemo } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
@@ -28,8 +28,6 @@ const fmtShort = (n: number) =>
   n >= 1000 ? `S/ ${(n / 1000).toFixed(1)}k` : fmt(n);
 const pct = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
 
-const CANAL_COLORS:  Record<string, string> = { POS: "#378ADD", Ecommerce: "#1D9E75" };
-const SEGMENTO_COLORS: Record<string, string> = { vip: "#854F0B", recurrente: "#1D9E75", nuevo: "#378ADD", inactivo: "#888780" };
 const BAR_COLORS = ["#378ADD", "#185FA5", "#1D9E75", "#7F77DD", "#854F0B", "#E24B4A", "#0C447C", "#0F6E56", "#534AB7", "#993C1D"];
 
 function SectionCard({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
@@ -61,43 +59,56 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 // ── Funnel de conversión visual ───────────────────────────────
+// Etapas por SESIONES únicas (DISTINCT session_id). El último paso son los pedidos pagados (tabla orders).
 function ConversionFunnel({ funnel }: {
-  funnel: { vistas: number; productos_vistos: number; carritos: number; checkouts: number; compras: number } | null;
+  funnel: {
+    sesiones?: number; pedidos_pagados?: number;
+    vistas: number; productos_vistos: number; carritos: number; checkouts: number; compras: number;
+  } | null;
 }) {
   if (!funnel) return <p className="text-sm text-muted-foreground text-center py-6">Sin datos de tracking</p>;
 
-  const steps = [
-    { label: "Visitas",             value: funnel.vistas,          color: "#E6F1FB", text: "#185FA5" },
-    { label: "Productos vistos",    value: funnel.productos_vistos, color: "#EEEDFE", text: "#534AB7" },
-    { label: "Carrito iniciado",    value: funnel.carritos,         color: "#FAEEDA", text: "#854F0B" },
-    { label: "Checkout iniciado",   value: funnel.checkouts,        color: "#F0997B", text: "#993C1D" },
-    { label: "Compra completada",   value: funnel.compras,          color: "#5DCAA5", text: "#085041" },
+  const sesiones = funnel.sesiones ?? funnel.vistas;
+  // «Carrito iniciado» nunca se registra en el sitio (no hay evento): se muestra como «sin registrar»
+  // en vez de un 0 engañoso mientras haya etapas posteriores con datos.
+  const carritoSinRegistrar = funnel.carritos === 0 && funnel.checkouts > 0;
+  const steps: Array<{ label: string; value: number; color: string; text: string; sinRegistrar?: boolean }> = [
+    { label: "Sesiones únicas",     value: sesiones,                        color: "#E6F1FB", text: "#185FA5" },
+    { label: "Productos vistos",    value: funnel.productos_vistos,         color: "#EEEDFE", text: "#534AB7" },
+    { label: "Carrito iniciado",    value: funnel.carritos,                 color: "#FAEEDA", text: "#854F0B", sinRegistrar: carritoSinRegistrar },
+    { label: "Checkout iniciado",   value: funnel.checkouts,                color: "#F0997B", text: "#993C1D" },
+    { label: "Pedidos pagados",     value: funnel.pedidos_pagados ?? funnel.compras, color: "#5DCAA5", text: "#085041" },
   ];
-  const maxVal = Math.max(funnel.vistas, 1);
+  const maxVal = Math.max(sesiones, 1);
 
   return (
     <div className="space-y-2">
       {steps.map((step, i) => {
-        const prev = i > 0 ? steps[i - 1].value : step.value;
-        const dropPct = prev > 0 ? Math.round((1 - step.value / prev) * 100) : 0;
-        const barPct = Math.round((step.value / maxVal) * 100);
+        const prevStep = i > 0 ? steps[i - 1] : null;
+        const prev = prevStep && !prevStep.sinRegistrar ? prevStep.value : 0;
+        const dropPct = i > 0 && !step.sinRegistrar && prev > 0 ? Math.round((1 - step.value / prev) * 100) : 0;
+        const barPct = step.sinRegistrar ? 0 : Math.round((step.value / maxVal) * 100);
         return (
           <div key={step.label}>
             <div className="flex items-center justify-between text-xs mb-1">
               <span style={{ color: "var(--foreground)" }}>{step.label}</span>
               <div className="flex items-center gap-3">
-                {i > 0 && dropPct > 0 && (
+                {dropPct > 0 && (
                   <span className="text-[11px]" style={{ color: "#A32D2D" }}>↓ {dropPct}% drop</span>
                 )}
-                <span className="font-semibold tabular-nums" style={{ color: "var(--foreground)" }}>
-                  {step.value.toLocaleString()}
-                </span>
+                {step.sinRegistrar ? (
+                  <span className="text-[11px] text-muted-foreground">sin registrar</span>
+                ) : (
+                  <span className="font-semibold tabular-nums" style={{ color: "var(--foreground)" }}>
+                    {step.value.toLocaleString()}
+                  </span>
+                )}
               </div>
             </div>
             <div className="h-7 rounded-md overflow-hidden" style={{ background: "var(--muted)" }}>
               <div
                 className="h-full rounded-md flex items-center px-2 transition-all duration-500"
-                style={{ width: `${barPct}%`, background: step.color, minWidth: step.value > 0 ? "2%" : "0" }}
+                style={{ width: `${Math.min(barPct, 100)}%`, background: step.color, minWidth: step.value > 0 && !step.sinRegistrar ? "2%" : "0" }}
               >
                 {barPct > 12 && (
                   <span className="text-[10px] font-medium" style={{ color: step.text }}>
@@ -109,11 +120,8 @@ function ConversionFunnel({ funnel }: {
           </div>
         );
       })}
-      <div className="pt-2 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-        Tasa de conversión total:{" "}
-        <strong style={{ color: "var(--foreground)" }}>
-          {funnel.vistas > 0 ? `${((funnel.compras / funnel.vistas) * 100).toFixed(2)}%` : "—"}
-        </strong>
+      <div className="pt-2 border-t text-[11px]" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+        Etapas por sesiones únicas del período; «Pedidos pagados» viene de los pedidos web (no de eventos del navegador).
       </div>
     </div>
   );
@@ -131,8 +139,15 @@ function AnalyticsPage() {
     staleTime: 120_000,
   });
 
-  const totalIngresos = useMemo(() =>
-    (data?.canales ?? []).reduce((s, c) => s + Number(c.ingresos), 0), [data]);
+  // Conversión web = pedidos pagados ÷ sesiones únicas × 100.
+  //  · pedidos pagados: pedidos web con estado distinto de «pendiente» y «cancelado» (tabla orders).
+  //  · sesiones únicas: session_id distintos con cualquier evento en el período (≠ visitas ni páginas vistas;
+  //    session_id vive en sessionStorage: una persona que vuelve en otra sesión cuenta de nuevo).
+  const sesiones = data?.funnel?.sesiones ?? null;
+  const pedidosPagados = data?.funnel?.pedidos_pagados ?? null;
+  const conversion = sesiones !== null && pedidosPagados !== null && sesiones > 0
+    ? (pedidosPagados / sesiones) * 100
+    : null;
 
   const tasaRetencion = useMemo(() => {
     if (!data?.retencion) return null;
@@ -161,31 +176,32 @@ function AnalyticsPage() {
         </div>
       ) : data ? (
         <>
-          {/* ── Fila 1: KPIs de canales ── */}
+          {/* ── Métrica clave: Conversión web (+ complementarias) ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {(data.canales ?? []).map((c) => (
-              <Card key={c.canal} className="p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">{c.canal}</p>
-                <p className="font-display text-2xl font-semibold">{fmt(Number(c.ingresos))}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {c.transacciones} transacciones · ticket {fmt(Math.round(Number(c.ticket_promedio)))}
-                </p>
-                <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${totalIngresos > 0 ? pct(Number(c.ingresos), totalIngresos) : 0}%`,
-                      background: CANAL_COLORS[c.canal] ?? "#888",
-                    }}
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {totalIngresos > 0 ? pct(Number(c.ingresos), totalIngresos) : 0}% del total
-                </p>
-              </Card>
-            ))}
+            <Card className="p-5 col-span-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Conversión web</p>
+              <p className="font-display text-4xl font-semibold">
+                {conversion !== null ? `${conversion.toFixed(2)}%` : "—"}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {conversion !== null
+                  ? `${pedidosPagados} ${pedidosPagados === 1 ? "pedido pagado" : "pedidos pagados"} de ${sesiones!.toLocaleString()} sesiones únicas`
+                  : data.funnel ? "Sin sesiones registradas en el período" : "Activa el tracking"}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Fórmula: pedidos pagados ÷ sesiones únicas × 100
+                {conversion !== null && pedidosPagados! > sesiones! && " · hay más pedidos que sesiones registradas (pedidos sin tracking)"}
+              </p>
+            </Card>
             <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Retención</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Sesiones únicas</p>
+              <p className="font-display text-2xl font-semibold">{sesiones !== null ? sesiones.toLocaleString() : "—"}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {data.funnel ? `${data.funnel.vistas.toLocaleString()} con página vista` : "Sin datos"}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Clientes que repiten (POS)</p>
               <p className="font-display text-2xl font-semibold">
                 {tasaRetencion !== null ? `${tasaRetencion}%` : "—"}
               </p>
@@ -193,17 +209,6 @@ function AnalyticsPage() {
                 {data.retencion
                   ? `${data.retencion.clientes_recurrentes} de ${data.retencion.clientes_periodo} repiten`
                   : "Sin datos"}
-              </p>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Conversión web</p>
-              <p className="font-display text-2xl font-semibold">
-                {data.funnel && data.funnel.vistas > 0
-                  ? `${((data.funnel.compras / data.funnel.vistas) * 100).toFixed(2)}%`
-                  : "—"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {data.funnel ? `${data.funnel.vistas.toLocaleString()} visitas registradas` : "Activa el tracking"}
               </p>
             </Card>
           </div>
@@ -240,7 +245,7 @@ function AnalyticsPage() {
             </SectionCard>
           </div>
 
-          {/* ── Fila 3: Geo + Segmentos ── */}
+          {/* ── Fila 3: Geo + Mix por categoría ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SectionCard title="Pedidos por distrito (Lima)" icon={MapPin}>
               {!data.geo_distritos?.length ? (
@@ -264,34 +269,7 @@ function AnalyticsPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="Segmentación de clientes" icon={Users}>
-              {!data.segmentos?.length ? (
-                <p className="text-sm text-muted-foreground text-center py-6">Sin clientes segmentados</p>
-              ) : (
-                <div className="space-y-3">
-                  {data.segmentos.map((s) => {
-                    const totalClientes = data.segmentos!.reduce((acc, x) => acc + x.clientes, 0);
-                    const barPct = totalClientes > 0 ? pct(s.clientes, totalClientes) : 0;
-                    const color = SEGMENTO_COLORS[s.segmento] ?? "#888";
-                    return (
-                      <div key={s.segmento}>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="capitalize font-medium" style={{ color: "var(--foreground)" }}>{s.segmento}</span>
-                          <span style={{ color: "var(--muted-foreground)" }}>{s.clientes} clientes · {barPct}%</span>
-                        </div>
-                        <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
-                          <div className="h-full rounded-full" style={{ width: `${barPct}%`, background: color }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </SectionCard>
-          </div>
 
-          {/* ── Fila 4: Mix categorías + Top productos ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SectionCard title="Mix por categoría" icon={ShoppingCart}>
               {!data.categorias?.length ? (
                 <p className="text-sm text-muted-foreground text-center py-6">Sin categorías</p>
@@ -314,40 +292,9 @@ function AnalyticsPage() {
                 </div>
               )}
             </SectionCard>
-
-            <SectionCard title="Top 10 productos (POS + web)" icon={TrendingUp}>
-              {!data.top_productos?.length ? (
-                <p className="text-sm text-muted-foreground text-center py-6">Sin ventas</p>
-              ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                  {data.top_productos.map((p, i) => {
-                    const maxVal = Number(data.top_productos![0].ingresos);
-                    return (
-                      <div key={p.title} className="flex items-center gap-2.5">
-                        <span className="text-[11px] w-4 text-right text-muted-foreground flex-shrink-0">{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between text-xs mb-0.5">
-                            <span className="truncate font-medium" style={{ color: "var(--foreground)" }}>{p.title}</span>
-                            <span className="flex-shrink-0 ml-2" style={{ color: "var(--muted-foreground)" }}>{p.unidades} u.</span>
-                          </div>
-                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
-                            <div className="h-full rounded-full"
-                              style={{ width: `${pct(Number(p.ingresos), maxVal)}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
-                          </div>
-                        </div>
-                        <span className="text-xs font-medium flex-shrink-0 min-w-[52px] text-right"
-                          style={{ color: "var(--foreground)" }}>
-                          {fmtShort(Number(p.ingresos))}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </SectionCard>
           </div>
 
-          {/* ── Fila 5: Serie diaria ecommerce ── */}
+          {/* ── Fila 4: Serie diaria ecommerce ── */}
           {(data.serie_ec ?? []).length > 0 && (
             <Card className="p-5">
               <h3 className="font-semibold text-sm mb-4">Evolución de pedidos online</h3>

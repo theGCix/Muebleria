@@ -88,3 +88,9 @@ id, nombre, descripcion, sku, precio, stock, categoria, imagen_url, imagen_publi
 - Entrada: `_order_number` (clave de idempotencia), `_descripcion`, `_insumos` (`[{"insumo_id","cantidad"}]`), `_carpintero_id`, `_observaciones`, `_fecha_fin_estimada`, `_prioridad`.
 - Efecto: `orders` (interna, `[MRP] <descripcion>`) + `produccion` + `order_items` (1 fila) + `insumo_movimientos` (`salida`, referencia = `order_number`). El trigger `actualizar_stock_insumo` descuenta el stock.
 - Errores: «Stock insuficiente: …», «Insumo no encontrado o sin acceso: …», «El número de orden … ya está en uso por otra orden», «Datos inválidos en los insumos».
+
+## Funciones de métricas (2026-11-09)
+- Archivo: `supabase/migrations/20261109_metricas_conversion.sql` (**ejecutar en el SQL Editor**; antes guardar `pg_get_functiondef` de las dos funciones por si hay que volver atrás). Reemplaza `get_marketing_analytics(_desde text, _hasta text)` y `get_dashboard_kpis(_desde text, _hasta text)`; misma firma, `SECURITY DEFINER`, mismo guard de staff. No toca tablas ni políticas. `get_dashboard_series` no cambia.
+- `get_marketing_analytics`: `funnel` con `sesiones` y `pedidos_pagados`; zona horaria America/Lima; pedidos web sin pendientes/cancelados/`[MRP]`; ya no devuelve `segmentos` ni `top_productos`.
+- `get_dashboard_kpis`: zona horaria America/Lima; excluye órdenes `[MRP]` de las ventas; agrega `ord_control_calidad`, `ord_listo_despacho`, `ord_enviado`.
+- Políticas reales de `eventos_web` (confirmadas por consulta): INSERT para `anon` y `authenticated`; SELECT para staff (`Staff read eventos`). `policies.sql` del repo está desactualizado en este punto.

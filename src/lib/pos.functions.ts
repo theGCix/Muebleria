@@ -403,6 +403,9 @@ export async function getDashboardKpis(input?: {
     prod_vencidas:            number;
     prod_terminadas:          number;
     tiempo_prod_promedio_dias: number;
+    ord_control_calidad?:     number;
+    ord_listo_despacho?:      number;
+    ord_enviado?:             number;
     insumos_stock_bajo:       number;
     oc_pendientes:            number;
     oc_monto_pendiente:       number;
@@ -426,6 +429,8 @@ export async function getDashboardSeries(input?: {
   if (error) throw new Error(error.message);
   return data as {
     ingresos_serie:     Array<{ fecha: string; pos: number; ec: number; total: number }>;
+    // bruto (POS + web) − devoluciones = neto
+    totales?:           { pos: number; ec: number; bruto: number; devoluciones: number; neto: number };
     top_productos_pos:  Array<{ title: string; unidades: number; total: number }>;
     top_productos_ec:   Array<{ title: string; unidades: number; total: number }>;
     top_vendedores:     Array<{ vendedor_id: string; full_name: string; total: number; ventas: number }>;
@@ -1246,9 +1251,9 @@ export async function getMarketingAnalytics(input?: {
     utm_fuentes:   Array<{ fuente: string; pedidos: number; ingresos: number }> | null;
     geo_distritos: Array<{ distrito: string; pedidos: number; ingresos: number }> | null;
     categorias:    Array<{ categoria: string; pedidos: number; unidades: number; ingresos: number }> | null;
-    segmentos:     Array<{ segmento: string; clientes: number; ingresos_pos: number }> | null;
-    top_productos: Array<{ title: string; unidades: number; ingresos: number }> | null;
-    funnel:        { vistas: number; productos_vistos: number; carritos: number; checkouts: number; compras: number } | null;
+    // Funnel por sesiones únicas. `sesiones` y `pedidos_pagados` (desde `orders`) son la base de la
+    // conversión web: pedidos_pagados / sesiones × 100. `vistas` = sesiones con `pagina_vista`.
+    funnel:        { sesiones?: number; pedidos_pagados?: number; vistas: number; productos_vistos: number; carritos: number; checkouts: number; compras: number } | null;
     retencion:     { clientes_recurrentes: number; clientes_periodo: number } | null;
     serie_ec:      Array<{ fecha: string; pedidos: number; ingresos: number }> | null;
     periodo_desde: string;

@@ -199,7 +199,9 @@ function DashboardPage() {
             <KpiCard
               label="Ingresos totales"
               value={fmt(kpis.ingresos_totales)}
-              sub={`POS ${fmt(kpis.ventas_pos)} + Web ${fmt(kpis.ventas_ecommerce)}`}
+              sub={series?.totales && series.totales.devoluciones > 0
+                ? `Devoluciones −${fmt(series.totales.devoluciones)} · Neto ${fmt(series.totales.neto)}`
+                : "POS + ventas online"}
               icon={TrendingUp}
               trend={kpis.ingresos_var_pct}
             />
@@ -211,7 +213,7 @@ function DashboardPage() {
               onClick={() => navigate({ to: "/ventas" })}
             />
             <KpiCard
-              label="Pedidos online"
+              label="Ventas online"
               value={fmt(kpis.ventas_ecommerce)}
               sub={`${kpis.pedidos_ec_count} pedidos pagados`}
               icon={Globe}
@@ -223,38 +225,6 @@ function DashboardPage() {
               sub={`${kpis.clientes_total} clientes en total`}
               icon={Users}
               onClick={() => navigate({ to: "/clientes" })}
-            />
-          </div>
-
-          {/* ── KPIs operacionales ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              label="En producción"
-              value={String(kpis.prod_en_proceso)}
-              sub={`${kpis.prod_pendientes} pendientes`}
-              icon={Hammer}
-              onClick={() => navigate({ to: "/produccion" })}
-            />
-            <KpiCard
-              label="Terminadas (período)"
-              value={String(kpis.prod_terminadas)}
-              sub={kpis.tiempo_prod_promedio_dias > 0 ? `Promedio ${kpis.tiempo_prod_promedio_dias} días` : undefined}
-              icon={Hammer}
-            />
-            <KpiCard
-              label="Insumos bajo mínimo"
-              value={String(kpis.insumos_stock_bajo)}
-              icon={Package}
-              alert={kpis.insumos_stock_bajo > 0}
-              onClick={() => navigate({ to: "/insumos" })}
-            />
-            <KpiCard
-              label="OC pendientes"
-              value={String(kpis.oc_pendientes)}
-              sub={kpis.oc_pendientes > 0 ? fmt(kpis.oc_monto_pendiente) : "Todo al día"}
-              icon={Truck}
-              alert={kpis.oc_pendientes > 0}
-              onClick={() => navigate({ to: "/proveedores" })}
             />
           </div>
 

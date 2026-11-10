@@ -113,3 +113,8 @@
 - `enviarAProduccion({ order_number, descripcion, insumos:[{insumo_id, cantidad}], … })` → una sola llamada `rpc("fabricar_mrp")`; devuelve `{ ok, order_id, order_number, produccion_id, duplicado }`. `calcularMrp` incluye `insumo_id` en cada fila.
 - `FabricarDialog` (`insumos.tsx`): `r3()` redondea a 3 decimales; consulta `["insumos"]` con `staleTime: 0` y `refetchOnMount: "always"`; la clave de idempotencia se crea una vez por apertura (`useState`); `enviandoRef` evita toques repetidos.
 - `ProveedorDetalle` (`proveedores.tsx`): rama de carga con `Skeleton`; si se cambia el contenido final del modal, ajustar el esqueleto.
+
+**Métricas administrativas (2026-11-09)**
+- `getMarketingAnalytics().funnel`: `sesiones` (DISTINCT `session_id`, todos los eventos), `pedidos_pagados` (desde `orders`), `vistas` (sesiones con `pagina_vista`), `productos_vistos`, `carritos`, `checkouts`, `compras` (sesiones con `orden_pagada`). La conversión se calcula en `analytics.tsx` (`pedidosPagados / sesiones × 100`; «—» si no hay sesiones).
+- `getDashboardKpis()` suma `ord_control_calidad`, `ord_listo_despacho`, `ord_enviado` (conteo actual de `orders.status`) para el pipeline de Central.
+- Pantallas: **Dashboard** (`dashboard.tsx`, clave: Ingresos totales), **Analytics** (`analytics.tsx`, clave: Conversión web), **Central KPIs** (`central.tsx`, pantalla completa, clave: Órdenes en producción). Si se agrega una métrica, ubicarla en la pantalla cuya clave la explica; no repetirla en otra.

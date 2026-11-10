@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardKpis, getDashboardSeries } from "@/lib/pos.functions";
+import { getDashboardKpis } from "@/lib/pos.functions";
 import { useEffect, useRef, useState } from "react";
 import { format, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
@@ -8,7 +8,7 @@ import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { rangoParaSql } from "@/lib/periodo";
 import {
   Clock, Hammer, Package, CheckCircle2, Truck,
-  AlertTriangle, Box, ShoppingCart, Globe,
+  AlertTriangle, Box,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -60,66 +60,7 @@ function PipelineNode({
   );
 }
 
-// ── Barra de ranking ──────────────────────────────────────────
-function RankRow({ pos, name, total, maxTotal, color }: {
-  pos: number; name: string; total: number; maxTotal: number; color: string;
-}) {
-  const pct = Math.round((total / maxTotal) * 100);
-  return (
-    <div className="flex items-center gap-2.5 py-1.5 border-b last:border-0"
-      style={{ borderColor: "var(--border)" }}>
-      <span className="text-[11px] w-4 text-right flex-shrink-0"
-        style={{ color: "var(--muted-foreground)" }}>{pos}</span>
-      <span className="text-xs flex-[0_0_120px] md:flex-[0_0_82px] truncate" style={{ color: "var(--foreground)" }}>{name}</span>
-      <div className="flex-1 h-1.5 rounded-full overflow-hidden"
-        style={{ background: "var(--muted)" }}>
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-      </div>
-      <span className="text-xs font-medium flex-shrink-0 min-w-[52px] text-right"
-        style={{ color: "var(--foreground)" }}>
-        {fmtShort(total)}
-      </span>
-    </div>
-  );
-}
-
-// ── KPI Card grande ────────────────────────────────────────────
-function KpiCard({
-  label, value, sub, trend, alert,
-}: {
-  label: string; value: string; sub?: string;
-  trend?: { pct: number } | null; alert?: boolean;
-}) {
-  return (
-    <div
-      className="rounded-xl p-4 border min-w-0 overflow-hidden"
-      style={{
-        background: "var(--card)",
-        borderColor: alert ? "#FAC775" : "var(--border)",
-        backgroundColor: alert ? "oklch(0.985 0.025 80)" : undefined,
-      }}
-    >
-      <p className="text-[10px] uppercase tracking-widest mb-1"
-        style={{ color: "var(--muted-foreground)" }}>{label}</p>
-      <p className="font-display text-2xl sm:text-3xl font-semibold leading-none break-words"
-        style={{ color: "var(--foreground)" }}>{value}</p>
-      {sub && <p className="text-xs mt-1.5" style={{ color: "var(--muted-foreground)" }}>{sub}</p>}
-      {trend && (
-        <span
-          className="inline-block mt-2 text-[11px] px-2 py-0.5 rounded-full"
-          style={trend.pct >= 0
-            ? { background: "#EAF3DE", color: "#3B6D11" }
-            : { background: "#FAECE7", color: "#993C1D" }
-          }
-        >
-          {trend.pct >= 0 ? "↑" : "↓"} {Math.abs(trend.pct)}% vs mes ant.
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ── Alert pill ────────────────────────────────────────────────
+// ── Alerta operacional ───────────────────────────────────────
 function AlertPill({ icon: Icon, text, tipo }: {
   icon: React.ElementType; text: string; tipo: "warn" | "info" | "danger";
 }) {
@@ -187,8 +128,6 @@ function CentralPage() {
   const { valor: periodo, setValor: setPeriodo, rango } =
     usePeriodo({ granularidad: "mes", offset: 0 });
   const { desde, hasta } = rangoParaSql(rango);
-  // Con "Borrar" (todo el historial) la serie se agrupa por mes.
-  const agrupacion = rango.granularidad === "todo" ? "mes" : "dia";
 
   useEffect(() => {
     const channel = supabase
@@ -212,14 +151,12 @@ function CentralPage() {
     staleTime: 0,
   });
 
-  const seriesQ = useQuery({
-    queryKey: ["central-series", desde, hasta, agrupacion, refreshKey],
-    queryFn: () => getDashboardSeries({ desde, hasta, agrupacion }),
-    staleTime: 0,
-  });
-
   const kpis = kpisQ.data;
-  const series = seriesQ.data;
+  // Órdenes activas = suma de las cinco etapas que muestra el pipeline.
+  const ordenesActivas = kpis
+    ? (kpis.prod_pendientes ?? 0) + (kpis.prod_en_proceso ?? 0) + (kpis.ord_control_calidad ?? 0)
+      + (kpis.ord_listo_despacho ?? 0) + (kpis.ord_enviado ?? 0)
+    : null;
 
   const alertas = kpis ? [
     kpis.prod_vencidas > 0 && {
@@ -240,14 +177,6 @@ function CentralPage() {
   ].filter(Boolean) as Array<{ icon: React.ElementType; text: string; tipo: "warn" | "info" | "danger" }>
   : [];
 
-  const topProductos = series?.top_productos_pos?.slice(0, 5) ?? [];
-  const topVendedores = series?.top_vendedores?.slice(0, 3) ?? [];
-  const maxProducto = Math.max(...topProductos.map((p) => p.total), 1);
-  const maxVendedor = Math.max(...topVendedores.map((v) => v.total), 1);
-
-  const PRODUCT_COLORS = ["#378ADD", "#185FA5", "#0C447C", "#1D9E75", "#0F6E56"];
-  const VENDOR_COLORS  = ["#378ADD", "#1D9E75", "#7F77DD"];
-
   return (
     <div className="space-y-3 max-w-[1400px] mx-auto">
       {/* Header */}
@@ -267,42 +196,24 @@ function CentralPage() {
       {/* Periodo */}
       <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
-      {/* Fila 1: KPIs financieros */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="col-span-2">
-          <KpiCard
-            label="Ingresos del mes"
-            value={kpis ? fmt(kpis.ingresos_totales) : "—"}
-            sub={kpis
-              ? `POS ${fmt(kpis.ventas_pos)} · Web ${fmt(kpis.ventas_ecommerce)}`
-              : undefined}
-            trend={kpis?.ingresos_var_pct != null ? { pct: kpis.ingresos_var_pct } : null}
-          />
-        </div>
-        <KpiCard
-          label="Ticket promedio POS"
-          value={kpis ? fmt(kpis.ticket_promedio_pos) : "—"}
-          sub={kpis ? `${kpis.ventas_pos_count} transacciones` : undefined}
-        />
-        <KpiCard
-          label="Pedidos online pagados"
-          value={kpis ? String(kpis.pedidos_ec_count) : "—"}
-          sub={kpis ? `${kpis.clientes_nuevos} clientes nuevos` : undefined}
-        />
-      </div>
-
-      {/* Fila 2: Pipeline de producción */}
+      {/* Métrica clave: órdenes activas en el pipeline de producción */}
       <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <p className="text-[10px] uppercase tracking-widest mb-4"
-          style={{ color: "var(--muted-foreground)" }}>
-          Pipeline de producción · órdenes activas
-        </p>
+        <div className="flex items-end justify-between gap-3 mb-4">
+          <p className="text-[10px] uppercase tracking-widest"
+            style={{ color: "var(--muted-foreground)" }}>
+            Órdenes en producción · pipeline
+          </p>
+          <p className="leading-none text-right" style={{ color: "var(--foreground)" }}>
+            <span className="font-display text-4xl font-semibold tabular-nums">{ordenesActivas ?? "—"}</span>
+            <span className="text-xs ml-1.5" style={{ color: "var(--muted-foreground)" }}>órdenes activas</span>
+          </p>
+        </div>
         <div className="flex items-start sm:px-4">
           <PipelineNode icon={Clock}        label="Pendiente"       count={kpis?.prod_pendientes ?? 0} color="#854F0B" bg="#FAEEDA" />
           <PipelineNode icon={Hammer}       label="En proceso"      count={kpis?.prod_en_proceso ?? 0} color="#185FA5" bg="#E6F1FB" />
-          <PipelineNode icon={CheckCircle2} label="Control calidad" count={0}                          color="#534AB7" bg="#EEEDFE" />
-          <PipelineNode icon={Package}      label="Listo despacho"  count={0}                          color="#0F6E56" bg="#E1F5EE" />
-          <PipelineNode icon={Truck}        label="Enviado"         count={0}                          color="#3B6D11" bg="#EAF3DE" isLast />
+          <PipelineNode icon={CheckCircle2} label="Control calidad" count={kpis?.ord_control_calidad ?? 0} color="#534AB7" bg="#EEEDFE" />
+          <PipelineNode icon={Package}      label="Listo despacho"  count={kpis?.ord_listo_despacho ?? 0}  color="#0F6E56" bg="#E1F5EE" />
+          <PipelineNode icon={Truck}        label="Enviado"         count={kpis?.ord_enviado ?? 0}         color="#3B6D11" bg="#EAF3DE" isLast />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
           <span>Tiempo promedio: <strong style={{ color: "var(--foreground)" }}>
@@ -310,7 +221,7 @@ function CentralPage() {
               ? `${kpis.tiempo_prod_promedio_dias} días`
               : "—"}
           </strong></span>
-          <span>Terminadas este mes: <strong style={{ color: "var(--foreground)" }}>
+          <span>Terminadas ({rango.etiqueta}): <strong style={{ color: "var(--foreground)" }}>
             {kpis?.prod_terminadas ?? "—"}
           </strong></span>
           {(kpis?.prod_vencidas ?? 0) > 0 && (
@@ -322,79 +233,22 @@ function CentralPage() {
         </div>
       </div>
 
-      {/* Fila 3: Rankings + alertas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <p className="text-[10px] uppercase tracking-widest mb-3"
-            style={{ color: "var(--muted-foreground)" }}>Top productos (mes)</p>
-          {topProductos.length === 0 ? (
-            <p className="text-xs text-center py-4" style={{ color: "var(--muted-foreground)" }}>Sin ventas</p>
-          ) : topProductos.map((p, i) => (
-            <RankRow
-              key={p.title}
-              pos={i + 1}
-              name={p.title}
-              total={p.total}
-              maxTotal={maxProducto}
-              color={PRODUCT_COLORS[i % PRODUCT_COLORS.length]}
-            />
-          ))}
-        </div>
-
-        <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <p className="text-[10px] uppercase tracking-widest mb-3"
-            style={{ color: "var(--muted-foreground)" }}>Top vendedores</p>
-          {topVendedores.length === 0 ? (
-            <p className="text-xs text-center py-4" style={{ color: "var(--muted-foreground)" }}>Sin datos</p>
-          ) : topVendedores.map((v, i) => (
-            <RankRow
-              key={v.vendedor_id}
-              pos={i + 1}
-              name={v.full_name}
-              total={v.total}
-              maxTotal={maxVendedor}
-              color={VENDOR_COLORS[i % VENDOR_COLORS.length]}
-            />
-          ))}
-        </div>
-
-        <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <p className="text-[10px] uppercase tracking-widest mb-3"
-            style={{ color: "var(--muted-foreground)" }}>Alertas operacionales</p>
-          {alertas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-4 gap-1.5">
-              <CheckCircle2 className="h-6 w-6" style={{ color: "#3B6D11" }} />
-              <p className="text-xs" style={{ color: "#3B6D11" }}>Todo en orden</p>
-            </div>
-          ) : alertas.map((a, i) => (
-            <AlertPill key={i} {...a} />
-          ))}
-        </div>
-      </div>
-
-      {/* Fila 4: KPIs operacionales */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard
-          label="Insumos bajo mínimo"
-          value={kpis ? String(kpis.insumos_stock_bajo) : "—"}
-          sub={kpis?.insumos_stock_bajo > 0 ? "Requiere reposición" : "Stock OK"}
-          alert={kpis ? kpis.insumos_stock_bajo > 0 : false}
-        />
-        <KpiCard
-          label="OC pendientes"
-          value={kpis ? String(kpis.oc_pendientes) : "—"}
-          sub={kpis?.oc_pendientes > 0 ? fmt(kpis.oc_monto_pendiente) + " comprometido" : "Al día"}
-        />
-        <KpiCard
-          label="Clientes totales"
-          value={kpis ? String(kpis.clientes_total) : "—"}
-          sub={kpis ? `${kpis.clientes_nuevos} nuevos este mes` : undefined}
-        />
-        <KpiCard
-          label="Órdenes terminadas"
-          value={kpis ? String(kpis.prod_terminadas) : "—"}
-          sub="este mes"
-        />
+      {/* Información complementaria: alertas operacionales */}
+      <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="text-[10px] uppercase tracking-widest mb-3"
+          style={{ color: "var(--muted-foreground)" }}>Alertas operacionales</p>
+        {alertas.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-4 gap-1.5">
+            <CheckCircle2 className="h-6 w-6" style={{ color: "#3B6D11" }} />
+            <p className="text-xs" style={{ color: "#3B6D11" }}>Todo en orden</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {alertas.map((a, i) => (
+              <AlertPill key={i} {...a} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
