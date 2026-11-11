@@ -14,10 +14,11 @@ import { useSidebarCounts, type CountKey, type SidebarCounts } from "@/hooks/use
 
 const fmtCount = (n: number) => (n > 99 ? "99+" : String(n));
 
-// Insumos bajo mínimo es una alerta (rojo); el resto son pendientes (ámbar).
+// Insumos bajo mínimo y caja con alerta son alertas (rojo); el resto son pendientes (ámbar).
+const esAlerta = (key: CountKey) => key === "insumos" || key === "caja";
 const badgeClass = (key: CountKey) =>
-  key === "insumos" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800";
-const dotClass = (key: CountKey) => (key === "insumos" ? "bg-red-500" : "bg-amber-500");
+  esAlerta(key) ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800";
+const dotClass = (key: CountKey) => (esAlerta(key) ? "bg-red-500" : "bg-amber-500");
 
 // Ítem activo: fondo suave + barra de color a la izquierda.
 const ACTIVE_ITEM =

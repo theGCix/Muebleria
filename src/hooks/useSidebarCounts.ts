@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppRole } from "@/hooks/useAuth";
+import { evaluarCaja } from "@/lib/cajaAlerta";
 
-export type CountKey = "pedidos" | "leads" | "carritos" | "resenas" | "testimonios" | "insumos";
+export type CountKey = "pedidos" | "leads" | "carritos" | "resenas" | "testimonios" | "insumos" | "caja";
 export type SidebarCounts = Partial<Record<CountKey, number>>;
 
 // Cuenta filas sin traer datos (head + count exact).
@@ -47,6 +48,14 @@ async function fetchCounts(): Promise<SidebarCounts> {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from("galeria_clientes").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
       ),
+    // Caja con alerta: abierta más de 24 h, o abierta pasada la hora de cierre diario (1 = avisar)
+    caja: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("caja_turnos").select("abierta_at").eq("estado", "abierta").maybeSingle();
+      if (error) throw error;
+      return evaluarCaja(data?.abierta_at).nivel === "ok" ? 0 : 1;
+    },
     // Insumos bajo el stock mínimo
     insumos: () =>
       countRows(() =>

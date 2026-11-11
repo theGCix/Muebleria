@@ -403,6 +403,9 @@ export async function getDashboardKpis(input?: {
     prod_vencidas:            number;
     prod_terminadas:          number;
     tiempo_prod_promedio_dias: number;
+    prod_activas?:            number;   // producción distinta de «terminado» (estado actual)
+    prod_pausadas?:           number;
+    prod_rechazadas?:         number;
     ord_control_calidad?:     number;
     ord_listo_despacho?:      number;
     ord_enviado?:             number;

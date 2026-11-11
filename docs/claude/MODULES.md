@@ -118,3 +118,8 @@
 - `getMarketingAnalytics().funnel`: `sesiones` (DISTINCT `session_id`, todos los eventos), `pedidos_pagados` (desde `orders`), `vistas` (sesiones con `pagina_vista`), `productos_vistos`, `carritos`, `checkouts`, `compras` (sesiones con `orden_pagada`). La conversión se calcula en `analytics.tsx` (`pedidosPagados / sesiones × 100`; «—» si no hay sesiones).
 - `getDashboardKpis()` suma `ord_control_calidad`, `ord_listo_despacho`, `ord_enviado` (conteo actual de `orders.status`) para el pipeline de Central.
 - Pantallas: **Dashboard** (`dashboard.tsx`, clave: Ingresos totales), **Analytics** (`analytics.tsx`, clave: Conversión web), **Central KPIs** (`central.tsx`, pantalla completa, clave: Órdenes en producción). Si se agrega una métrica, ubicarla en la pantalla cuya clave la explica; no repetirla en otra.
+
+**Pipeline, período compartido y caja (2026-11-10)**
+- `usePeriodo(inicial, { compartido?: string, zonaLima?: boolean })` (`PeriodFilter.tsx`): con `compartido` (hoy `"analisis"`: Dashboard, Analytics, Central) el período se guarda en un store en memoria + `sessionStorage:periodo:<clave>`; sin clave es el filtro local de siempre. `periodo.ts`: `hoyLima()`, `ahoraLima()`, `restarDias()`, `rangoParaSql(rango, hoy?)`.
+- Dashboard: `range.serieDesde` (≤ 399 días atrás con «todo») para `getDashboardSeries`; `range.desde` para `getDashboardKpis`. Central: bloques «Estado actual» (pipeline, alertas) y «Histórico» (con `PeriodFilter`).
+- Caja: `src/lib/cajaAlerta.ts` (`evaluarCaja`, `antiguedadTexto`, `UMBRAL_CAJA_HORAS = 24`, `HORA_RECORDATORIO_CIERRE = 21`), `src/hooks/useAhora.ts`, `src/hooks/useCajaAlerta.ts`, `src/components/admin/CajaAlertBanner.tsx` (montado en `_authenticated.tsx`), clave `caja` en `useSidebarCounts` / `nav-config`.

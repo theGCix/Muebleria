@@ -43,7 +43,7 @@ export const groups: NavGroup[] = [
       { title: "Correos de pedidos", url: "/correos-pedidos", icon: MailCheck, roles: ADMIN_VENDEDOR },
       { title: "Despachos", url: "/despachos", icon: Navigation, roles: ADMIN_VENDEDOR },
       { title: "Ventas Realizadas", url: "/ventas", icon: Receipt, roles: ADMIN_VENDEDOR },
-      { title: "Caja y gastos", url: "/caja", icon: Wallet, roles: ADMIN_VENDEDOR },
+      { title: "Caja y gastos", url: "/caja", icon: Wallet, roles: ADMIN_VENDEDOR, countKey: "caja" },
       { title: "Devoluciones", url: "/devoluciones", icon: Undo2, roles: ADMIN_VENDEDOR },
     ],
   },

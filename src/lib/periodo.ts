@@ -92,8 +92,9 @@ export function textoViendo(v: PeriodoValor, ahora: Date = new Date()): string {
 }
 
 /** Rango para funciones SQL que piden fechas: con "todo" abarca desde el año 2000 hasta hoy. */
-export function rangoParaSql(r: RangoPeriodo): { desde: string; hasta: string } {
-  const hoy = format(new Date(), "yyyy-MM-dd");
+export function rangoParaSql(r: RangoPeriodo, hoyFecha?: string): { desde: string; hasta: string } {
+  // `hoyFecha` permite fijar «hoy» (p. ej. en hora de Lima, como hacen las funciones SQL).
+  const hoy = hoyFecha ?? format(new Date(), "yyyy-MM-dd");
   return {
     desde: r.desdeFecha ?? "2000-01-01",
     // No se piden días futuros (evita gráficos con días vacíos en "Esta semana" / "Este mes").
@@ -138,4 +139,36 @@ export function calcularRango(v: PeriodoValor, ahora: Date = new Date()): RangoP
       return !Number.isNaN(t) && t >= ini && t <= fin;
     },
   };
+}
+
+// ── Hora de Lima ──────────────────────────────────────────────
+// Las funciones SQL de métricas cortan los días en America/Lima. Para que el rango que pide el
+// navegador coincida (aunque el equipo esté en otra zona horaria) se usan estas ayudas.
+const ZONA_LIMA = "America/Lima";
+
+function partesLima(base: Date) {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: ZONA_LIMA, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(base);
+  const g = (t: string) => Number(p.find((x) => x.type === t)?.value);
+  return { y: g("year"), m: g("month"), d: g("day"), h: g("hour"), mi: g("minute"), s: g("second") };
+}
+
+/** Un Date cuyos campos locales (año, mes, día, hora…) son los del reloj de Lima. */
+export function ahoraLima(base: Date = new Date()): Date {
+  const { y, m, d, h, mi, s } = partesLima(base);
+  return new Date(y, m - 1, d, h, mi, s);
+}
+
+/** «Hoy» en Lima como yyyy-MM-dd. */
+export function hoyLima(base: Date = new Date()): string {
+  const { y, m, d } = partesLima(base);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Resta días a una fecha yyyy-MM-dd (sin depender de la zona horaria). */
+export function restarDias(fecha: string, dias: number): string {
+  const [y, m, d] = fecha.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - dias)).toISOString().slice(0, 10);
 }

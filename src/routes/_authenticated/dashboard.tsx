@@ -16,10 +16,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useState, useMemo } from "react";
-import { format, subDays, startOfMonth, startOfWeek, subMonths } from "date-fns";
+import { format, parseISO, subDays, startOfMonth, startOfWeek, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
-import { rangoParaSql } from "@/lib/periodo";
+import { hoyLima, rangoParaSql, restarDias } from "@/lib/periodo";
 
 
 
@@ -90,13 +90,22 @@ function CustomTooltip({ active, payload, label }: any) {
 // ── Página principal ──────────────────────────────────────────
 function DashboardPage() {
   const navigate = useNavigate();
+  // Período compartido con Analytics y Central KPIs (hora de Lima).
   const { valor: periodo, setValor: setPeriodo, rango } =
-    usePeriodo({ granularidad: "mes", offset: 0 });
-  const range = useMemo(() => ({
-    ...rangoParaSql(rango),
-    // Con "Borrar" (todo el historial) la serie se agrupa por mes para que el gráfico se lea bien.
-    agrupacion: (rango.granularidad === "todo" ? "mes" : "dia") as "dia" | "semana" | "mes",
-  }), [rango]);
+    usePeriodo({ granularidad: "mes", offset: 0 }, { compartido: "analisis" });
+  const range = useMemo(() => {
+    const sql = rangoParaSql(rango, hoyLima());
+    // get_dashboard_series acepta como máximo 400 días: con "Borrar" (todo el historial) las
+    // tarjetas abarcan todo, pero los gráficos se recortan a los últimos 400 días (y se avisa).
+    const recortada = rango.granularidad === "todo";
+    return {
+      ...sql,
+      serieDesde: recortada ? restarDias(sql.hasta, 399) : sql.desde,
+      recortada,
+      // Con "Borrar" la serie se agrupa por mes para que el gráfico se lea bien.
+      agrupacion: (rango.granularidad === "todo" ? "mes" : "dia") as "dia" | "semana" | "mes",
+    };
+  }, [rango]);
 
   const kpisQuery = useQuery({
     queryKey: ["dashboard-kpis", range.desde, range.hasta],
@@ -105,8 +114,8 @@ function DashboardPage() {
   });
 
   const seriesQuery = useQuery({
-    queryKey: ["dashboard-series", range.desde, range.hasta, range.agrupacion],
-    queryFn: () => getDashboardSeries({ desde: range.desde, hasta: range.hasta, agrupacion: range.agrupacion }),
+    queryKey: ["dashboard-series", range.serieDesde, range.hasta, range.agrupacion],
+    queryFn: () => getDashboardSeries({ desde: range.serieDesde, hasta: range.hasta, agrupacion: range.agrupacion }),
     staleTime: 60_000,
   });
 
@@ -129,7 +138,7 @@ function DashboardPage() {
           <h1 className="text-3xl font-display font-semibold">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             {kpis
-              ? `${format(new Date(kpis.periodo_desde), "d MMM", { locale: es })} — ${format(new Date(kpis.periodo_hasta), "d MMM yyyy", { locale: es })}`
+              ? `${format(parseISO(kpis.periodo_desde), "d MMM", { locale: es })} — ${format(parseISO(kpis.periodo_hasta), "d MMM yyyy", { locale: es })}`
               : "Cargando período..."}
           </p>
         </div>
@@ -143,6 +152,17 @@ function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {range.recortada && (
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Gráficos: últimos 400 días (límite del servidor). Las tarjetas abarcan todo el historial.
+        </p>
+      )}
+      {seriesQuery.isError && (
+        <p role="alert" className="-mt-3 text-xs text-red-600">
+          No se pudieron cargar los gráficos: {(seriesQuery.error as Error)?.message}
+        </p>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
@@ -163,6 +183,10 @@ function DashboardPage() {
         <>
           {/* ── Alertas operacionales ── */}
           {(kpis.prod_vencidas > 0 || kpis.insumos_stock_bajo > 0 || kpis.oc_pendientes > 0) && (
+            <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              Estado actual · no depende del período
+            </p>
             <div className="flex gap-3 flex-wrap">
               {kpis.prod_vencidas > 0 && (
                 <button
@@ -191,6 +215,7 @@ function DashboardPage() {
                   <strong>{kpis.oc_pendientes}</strong> OC pendiente{kpis.oc_pendientes > 1 ? "s" : ""} — {fmt(kpis.oc_monto_pendiente)}
                 </button>
               )}
+            </div>
             </div>
           )}
 

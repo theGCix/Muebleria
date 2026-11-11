@@ -4,7 +4,7 @@
 //   Semana: Esta semana, Semana pasada y las semanas anteriores (lunes a domingo)
 //   Mes:    Este mes, Mes pasado y los meses anteriores
 //   Borrar: botón pequeño que quita el filtro para ver todo el historial
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -12,16 +12,67 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  calcularRango, etiquetaCompleta, LIMITES_POR_DEFECTO, textoViendo,
+  ahoraLima, calcularRango, etiquetaCompleta, LIMITES_POR_DEFECTO, textoViendo,
   type Granularidad, type PeriodoValor,
 } from "@/lib/periodo";
 
 export type { Granularidad, PeriodoValor } from "@/lib/periodo";
 
+// ── Período compartido entre pantallas ───────────────────────
+// Dashboard, Analytics y Central KPIs comparten UN solo período de análisis (se recuerda durante
+// la sesión del navegador). El resto de ventanas sigue con su filtro propio.
+interface Almacen { valor: PeriodoValor; oyentes: Set<() => void> }
+const almacenes = new Map<string, Almacen>();
+
+function leerGuardado(clave: string): PeriodoValor | null {
+  try {
+    const t = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(`periodo:${clave}`) : null;
+    const v = t ? JSON.parse(t) : null;
+    const ok = v && ["dia", "semana", "mes", "todo"].includes(v.granularidad) && Number.isInteger(v.offset) && v.offset >= 0;
+    return ok ? { granularidad: v.granularidad, offset: v.offset } : null;
+  } catch { return null; }
+}
+
+function almacen(clave: string, inicial: PeriodoValor): Almacen {
+  let a = almacenes.get(clave);
+  if (!a) { a = { valor: leerGuardado(clave) ?? inicial, oyentes: new Set() }; almacenes.set(clave, a); }
+  return a;
+}
+
+const SIN_ALMACEN = { subscribe: () => () => {}, get: (): PeriodoValor | null => null };
+
+export interface OpcionesPeriodo {
+  /** Clave de período compartido: todas las pantallas con la misma clave muestran el mismo período. */
+  compartido?: string;
+  /** Calcula el rango con el reloj de Lima. Por defecto, solo si es compartido. */
+  zonaLima?: boolean;
+}
+
 /** Estado del filtro + el rango ya calculado (para consultas y para filtrar listas). */
-export function usePeriodo(inicial: PeriodoValor = { granularidad: "dia", offset: 0 }) {
-  const [valor, setValor] = useState<PeriodoValor>(inicial);
-  const rango = useMemo(() => calcularRango(valor), [valor]);
+export function usePeriodo(inicial: PeriodoValor = { granularidad: "dia", offset: 0 }, opciones: OpcionesPeriodo = {}) {
+  const { compartido, zonaLima = !!compartido } = opciones;
+  const [local, setLocal] = useState<PeriodoValor>(inicial);
+  const a = compartido ? almacen(compartido, inicial) : null;
+  const fuente = a
+    ? { subscribe: (cb: () => void) => { a.oyentes.add(cb); return () => { a.oyentes.delete(cb); }; }, get: () => a.valor }
+    : SIN_ALMACEN;
+  const compartidoValor = useSyncExternalStore(fuente.subscribe, fuente.get, fuente.get);
+  const valor = compartidoValor ?? local;
+
+  const setValor = (v: PeriodoValor) => {
+    if (a && compartido) {
+      a.valor = v;
+      try { sessionStorage.setItem(`periodo:${compartido}`, JSON.stringify(v)); } catch { /* sin almacenamiento */ }
+      a.oyentes.forEach((cb) => cb());
+    } else {
+      setLocal(v);
+    }
+  };
+
+  const rango = useMemo(
+    () => calcularRango(valor, zonaLima ? ahoraLima() : new Date()),
+    [valor, zonaLima],
+  );
   return { valor, setValor, rango };
 }
 

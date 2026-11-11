@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  Wallet, Lock, Unlock, Plus, Ban, Download, Loader2, ArrowDownCircle, ArrowUpCircle, HandCoins, Eye,
+  Wallet, Lock, Unlock, Plus, Ban, Download, Loader2, ArrowDownCircle, ArrowUpCircle, HandCoins, Eye, AlertTriangle, Clock,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,8 @@ import {
   type Turno, type Movimiento, type ResumenTurno, type MetodoPago, type TipoMov, type TipoManual,
 } from "@/lib/caja.functions";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
+import { useAhora } from "@/hooks/useAhora";
+import { evaluarCaja, HORA_RECORDATORIO_CIERRE } from "@/lib/cajaAlerta";
 
 export const Route = createFileRoute("/_authenticated/caja")({
   head: () => ({ meta: [{ title: "Caja y gastos — G&M" }] }),
@@ -50,6 +52,9 @@ function CajaPage() {
 
   const refrescar = () => {
     qc.invalidateQueries({ queryKey: ["caja"] });
+    // El aviso global y el contador del menú se recalculan al abrir o cerrar la caja
+    qc.invalidateQueries({ queryKey: ["caja-alerta"] });
+    qc.invalidateQueries({ queryKey: ["sidebar-counts"] });
   };
 
   return (
@@ -92,7 +97,8 @@ function TurnoActual({ isAdmin, userId, onChange }: { isAdmin: boolean; userId: 
   const [cierreOpen, setCierreOpen] = useState(false);
   const [anular, setAnular] = useState<Movimiento | null>(null);
 
-  const { data: turno, isLoading } = useQuery({ queryKey: ["caja", "turno"], queryFn: getTurnoActual });
+  const { data: turno, isLoading, isError, error, refetch } = useQuery({ queryKey: ["caja", "turno"], queryFn: getTurnoActual });
+  const ahora = useAhora(60_000);
 
   const { data: resumen } = useQuery({
     queryKey: ["caja", "resumen", turno?.id],
@@ -108,28 +114,67 @@ function TurnoActual({ isAdmin, userId, onChange }: { isAdmin: boolean; userId: 
   });
 
   if (isLoading) return <TableSkeleton rows={4} cols={4} />;
+  // Un error de carga NO es «no hay caja abierta»: antes caía en «Abrir caja» aunque hubiera una abierta.
+  if (isError) {
+    return (
+      <Card className="space-y-3 p-6 text-center">
+        <p className="font-medium text-destructive">No se pudo cargar el estado de la caja</p>
+        <p className="text-sm text-muted-foreground">{(error as Error)?.message}</p>
+        <Button className={BTN_TACTIL} onClick={() => refetch()}>Reintentar</Button>
+      </Card>
+    );
+  }
   if (!turno) return <AbrirCaja onOpened={onChange} />;
 
   const puedeCerrar = isAdmin || turno.abierto_por === userId;
+  const alerta = evaluarCaja(turno.abierta_at, ahora);
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+      {/* Caja abierta desde hace demasiado: se avisa, pero nunca se cierra sola */}
+      {alerta.nivel === "vencida" && (
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-medium">Esta caja lleva abierta {alerta.antiguedad}.</p>
+            <p>
+              El efectivo esperado suma todas las ventas, gastos y retiros desde el {fmtFechaHora(turno.abierta_at)}.
+              Cuenta el efectivo real al cerrar; si hay diferencia, explícala en las notas. La caja no se cierra sola.
+            </p>
+          </div>
+        </div>
+      )}
+      {alerta.nivel === "recordatorio" && (
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>
+            <strong>Recordatorio de cierre:</strong> son más de las {HORA_RECORDATORIO_CIERRE}:00 y la caja sigue abierta.
+            Ciérrala al terminar el día.
+          </p>
+        </div>
+      )}
+
+      <Card className={`flex flex-wrap items-center justify-between gap-3 p-4 ${alerta.nivel === "vencida" ? "border-red-300" : ""}`}>
         <div className="flex items-center gap-3">
           <div className="rounded-full bg-emerald-100 p-2 text-emerald-700"><Unlock className="h-4 w-4" /></div>
           <div>
             <div className="font-medium">Caja abierta</div>
             <div className="text-xs text-muted-foreground">
-              Desde {fmtFechaHora(turno.abierta_at)} · apertura {fmtPEN(turno.monto_apertura)}
+              Desde {fmtFechaHora(turno.abierta_at)} (hace {alerta.antiguedad}) · apertura {fmtPEN(turno.monto_apertura)}
               {turno.notas_apertura ? ` · ${turno.notas_apertura}` : ""}
             </div>
+            {!puedeCerrar && (
+              <div className="mt-1 text-xs text-amber-700">
+                Solo quien abrió la caja o un administrador puede cerrarla.
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setMovOpen(true)}>
+          <Button variant="outline" size="sm" className="h-11 sm:h-8" onClick={() => setMovOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" /> Gasto / retiro / ingreso
           </Button>
-          <Button size="sm" onClick={() => setCierreOpen(true)} disabled={!resumen || !puedeCerrar}
+          <Button size="sm" className="h-11 sm:h-8" onClick={() => setCierreOpen(true)} disabled={!resumen || !puedeCerrar}
                   title={puedeCerrar ? "" : "Solo quien abrió la caja o un administrador puede cerrarla"}>
             <Lock className="mr-1.5 h-4 w-4" /> Cerrar caja
           </Button>
@@ -449,6 +494,8 @@ function CierreDialog({
   const [notas, setNotas] = useState("");
   const tiene = contado !== "";
   const dif = tiene ? Math.round((Number(contado) - resumen.esperado) * 100) / 100 : 0;
+  const ahora = useAhora(60_000);
+  const alertaCierre = evaluarCaja(turno.abierta_at, ahora);
 
   const cerrar = useMutation({
     mutationFn: () => cerrarCaja({ turnoId: turno.id, contado: Number(contado), notas }),
@@ -464,6 +511,15 @@ function CierreDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Cerrar caja</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          {alertaCierre.nivel === "vencida" && (
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                Este turno abarca <strong>{alertaCierre.antiguedad}</strong> (desde {fmtFechaHora(turno.abierta_at)}).
+                El efectivo esperado incluye todo ese período: cuenta el efectivo real y explica cualquier diferencia en las notas.
+              </p>
+            </div>
+          )}
           <div className="rounded-md bg-muted/50 px-3 py-2.5 text-sm">
             <div className="flex justify-between"><span>Apertura</span><span>{fmtPEN(resumen.apertura)}</span></div>
             <div className="flex justify-between"><span>+ Ventas en efectivo</span><span>{fmtPEN(resumen.ventas.efectivo?.total ?? 0)}</span></div>

@@ -5,10 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { format, startOfMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
-import { rangoParaSql } from "@/lib/periodo";
+import { hoyLima, rangoParaSql } from "@/lib/periodo";
 import {
   Clock, Hammer, Package, CheckCircle2, Truck,
-  AlertTriangle, Box,
+  AlertTriangle, Box, PauseCircle, XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -126,8 +126,8 @@ function LiveClock({ onRefresh }: { onRefresh: () => void }) {
 function CentralPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const { valor: periodo, setValor: setPeriodo, rango } =
-    usePeriodo({ granularidad: "mes", offset: 0 });
-  const { desde, hasta } = rangoParaSql(rango);
+    usePeriodo({ granularidad: "mes", offset: 0 }, { compartido: "analisis" });
+  const { desde, hasta } = rangoParaSql(rango, hoyLima());
 
   useEffect(() => {
     const channel = supabase
@@ -152,10 +152,15 @@ function CentralPage() {
   });
 
   const kpis = kpisQ.data;
-  // Órdenes activas = suma de las cinco etapas que muestra el pipeline.
-  const ordenesActivas = kpis
-    ? (kpis.prod_pendientes ?? 0) + (kpis.prod_en_proceso ?? 0) + (kpis.ord_control_calidad ?? 0)
-      + (kpis.ord_listo_despacho ?? 0) + (kpis.ord_enviado ?? 0)
+  // ESTADO ACTUAL (no depende del período). Órdenes activas = producción no terminada (pendiente, en proceso,
+  // pausada, rechazada en calidad) + control de calidad + listo para despacho. «En ruta» (enviado, aún no
+  // entregado) se muestra aparte: ya salió del taller. Si la función SQL aún no devuelve `prod_activas`
+  // (migración sin ejecutar), se usa la suma de lo que sí devuelve.
+  const produccionActiva = kpis
+    ? kpis.prod_activas ?? ((kpis.prod_pendientes ?? 0) + (kpis.prod_en_proceso ?? 0))
+    : null;
+  const ordenesActivas = kpis && produccionActiva !== null
+    ? produccionActiva + (kpis.ord_control_calidad ?? 0) + (kpis.ord_listo_despacho ?? 0)
     : null;
 
   const alertas = kpis ? [
@@ -186,22 +191,16 @@ function CentralPage() {
             G&M Mueblería
           </h1>
           <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>Central de KPIs</span>
-          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            · {rango.etiqueta}
-          </span>
         </div>
         <LiveClock onRefresh={() => setRefreshKey((k) => k + 1)} />
       </div>
-
-      {/* Periodo */}
-      <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
       {/* Métrica clave: órdenes activas en el pipeline de producción */}
       <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
         <div className="flex items-end justify-between gap-3 mb-4">
           <p className="text-[10px] uppercase tracking-widest"
             style={{ color: "var(--muted-foreground)" }}>
-            Órdenes en producción · pipeline
+            Órdenes en producción · pipeline · estado actual
           </p>
           <p className="leading-none text-right" style={{ color: "var(--foreground)" }}>
             <span className="font-display text-4xl font-semibold tabular-nums">{ordenesActivas ?? "—"}</span>
@@ -211,18 +210,14 @@ function CentralPage() {
         <div className="flex items-start sm:px-4">
           <PipelineNode icon={Clock}        label="Pendiente"       count={kpis?.prod_pendientes ?? 0} color="#854F0B" bg="#FAEEDA" />
           <PipelineNode icon={Hammer}       label="En proceso"      count={kpis?.prod_en_proceso ?? 0} color="#185FA5" bg="#E6F1FB" />
+          <PipelineNode icon={PauseCircle}  label="Pausada"         count={kpis?.prod_pausadas ?? 0}   color="#5F5E5A" bg="#F1EFE8" />
+          <PipelineNode icon={XCircle}      label="Rechazo calidad" count={kpis?.prod_rechazadas ?? 0} color="#A32D2D" bg="#FCEBEB" />
           <PipelineNode icon={CheckCircle2} label="Control calidad" count={kpis?.ord_control_calidad ?? 0} color="#534AB7" bg="#EEEDFE" />
-          <PipelineNode icon={Package}      label="Listo despacho"  count={kpis?.ord_listo_despacho ?? 0}  color="#0F6E56" bg="#E1F5EE" />
-          <PipelineNode icon={Truck}        label="Enviado"         count={kpis?.ord_enviado ?? 0}         color="#3B6D11" bg="#EAF3DE" isLast />
+          <PipelineNode icon={Package}      label="Listo despacho"  count={kpis?.ord_listo_despacho ?? 0}  color="#0F6E56" bg="#E1F5EE" isLast />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-          <span>Tiempo promedio: <strong style={{ color: "var(--foreground)" }}>
-            {kpis?.tiempo_prod_promedio_dias
-              ? `${kpis.tiempo_prod_promedio_dias} días`
-              : "—"}
-          </strong></span>
-          <span>Terminadas ({rango.etiqueta}): <strong style={{ color: "var(--foreground)" }}>
-            {kpis?.prod_terminadas ?? "—"}
+          <span>En ruta (enviadas, sin entregar): <strong style={{ color: "var(--foreground)" }}>
+            {kpis?.ord_enviado ?? "—"}
           </strong></span>
           {(kpis?.prod_vencidas ?? 0) > 0 && (
             <span style={{ color: "#A32D2D", background: "#FCEBEB" }}
@@ -233,10 +228,10 @@ function CentralPage() {
         </div>
       </div>
 
-      {/* Información complementaria: alertas operacionales */}
+      {/* Información complementaria: alertas operacionales (estado actual) */}
       <div className="rounded-xl border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
         <p className="text-[10px] uppercase tracking-widest mb-3"
-          style={{ color: "var(--muted-foreground)" }}>Alertas operacionales</p>
+          style={{ color: "var(--muted-foreground)" }}>Alertas operacionales · estado actual</p>
         {alertas.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-4 gap-1.5">
             <CheckCircle2 className="h-6 w-6" style={{ color: "#3B6D11" }} />
@@ -249,6 +244,26 @@ function CentralPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Histórico: SÍ depende del período (compartido con Dashboard y Analytics) */}
+      <div className="rounded-xl border p-4 space-y-3" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] uppercase tracking-widest" style={{ color: "var(--muted-foreground)" }}>
+            Histórico · {rango.etiqueta}
+          </p>
+          <PeriodFilter valor={periodo} onChange={setPeriodo} />
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
+          <span>Terminadas en el período: <strong style={{ color: "var(--foreground)" }}>
+            {kpis?.prod_terminadas ?? "—"}
+          </strong></span>
+          <span>Tiempo promedio de producción: <strong style={{ color: "var(--foreground)" }}>
+            {kpis?.tiempo_prod_promedio_dias
+              ? `${kpis.tiempo_prod_promedio_dias} días`
+              : "—"}
+          </strong></span>
+        </div>
       </div>
     </div>
   );

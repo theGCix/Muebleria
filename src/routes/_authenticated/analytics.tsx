@@ -15,7 +15,7 @@ import { useState, useMemo } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
-import { rangoParaSql } from "@/lib/periodo";
+import { hoyLima, rangoParaSql } from "@/lib/periodo";
 
 export const Route = createFileRoute("/_authenticated/analytics")({
   head: () => ({ meta: [{ title: "Analytics — G&M" }] }),
@@ -130,8 +130,8 @@ function ConversionFunnel({ funnel }: {
 // ── Página ────────────────────────────────────────────────────
 function AnalyticsPage() {
   const { valor: periodo, setValor: setPeriodo, rango } =
-    usePeriodo({ granularidad: "mes", offset: 0 });
-  const { desde, hasta } = rangoParaSql(rango);
+    usePeriodo({ granularidad: "mes", offset: 0 }, { compartido: "analisis" });
+  const { desde, hasta } = rangoParaSql(rango, hoyLima());
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["marketing-analytics", desde, hasta],

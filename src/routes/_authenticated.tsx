@@ -5,6 +5,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AdminTopbar } from "@/components/AdminTopbar";
 import { MobileBottomBar } from "@/components/MobileBottomBar";
+import { CajaAlertBanner } from "@/components/admin/CajaAlertBanner";
 import { useNewActivityAlerts } from "@/hooks/useNewActivityAlerts";
 import { useSidebarCountsRealtime } from "@/hooks/useSidebarCounts";
 import { Loader2 } from "lucide-react";
@@ -49,6 +50,8 @@ const isFullscreen = currentPath === "/central";
           <AdminTopbar roles={roles} />
           {/* En móvil se deja espacio abajo para la barra de navegación rápida */}
           <main className={`${isFullscreen ? "flex-1 p-4 overflow-auto" : "flex-1 p-6 overflow-auto"} max-md:pb-24`}>
+            {/* Aviso de caja abierta (no se repite en /caja ni en la pantalla completa de Central) */}
+            {!isFullscreen && currentPath !== "/caja" && <CajaAlertBanner roles={roles} />}
             <Outlet />
           </main>
         </div>
