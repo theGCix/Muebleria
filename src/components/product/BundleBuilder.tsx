@@ -72,7 +72,7 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
             <div className="gmx-bimg">{base.image && <img src={base.image} alt="" />}</div>
             <div className="gmx-bbody">
               <div className="gmx-bname">{base.nombre}</div>
-              <div style={{ fontSize: 11, color: "var(--gm-muted)" }}>Tu elección</div>
+              <div style={{ fontSize: 12, color: "var(--gm-muted)" }}>Tu elección</div>
               <div className="gmx-bprice">{fmtPEN(base.precio)}</div>
             </div>
           </div>
@@ -83,10 +83,10 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
               <div className="gmx-bimg">{img && <img src={img} alt="" loading="lazy" />}</div>
               <div className="gmx-bbody">
                 <div className="gmx-bname">{p.nombre}</div>
-                {p.categoria && <div style={{ fontSize: 11, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
+                {p.categoria && <div style={{ fontSize: 12, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
                 <div className="gmx-bprice">{fmtPEN(precio)}</div>
                 <Link to="/product/$handle" params={{ handle: p.id }} onClick={(e) => e.stopPropagation()}
-                  style={{ fontSize: 11, color: "var(--gmx-accent)", textDecoration: "underline", marginTop: 2 }}>
+                  style={{ fontSize: 12, color: "var(--gmx-accent)", textDecoration: "underline", marginTop: 2 }}>
                   Ver detalle
                 </Link>
               </div>

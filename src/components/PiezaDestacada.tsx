@@ -97,7 +97,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
       {/* Contenido */}
       <div className="pointer-events-none relative z-10 flex flex-col gap-3 p-5 md:p-7">
         {p.categoria && (
-          <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/70">
+          <span className="text-xs font-medium uppercase tracking-[0.22em] text-white/70">
             {p.categoria}
           </span>
         )}

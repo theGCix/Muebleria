@@ -92,7 +92,12 @@ function RootComponent() {
         <AsistenteChat />
         <ExitCouponDialog />
         <GlobalLoginModal />
-        <Toaster position="top-center" closeButton />
+        <Toaster
+          position="top-center"
+          closeButton
+          offset={{ top: 24, right: 24, bottom: 24, left: 24 }}
+          mobileOffset={{ top: 16, right: 16, bottom: 96, left: 16 }}
+        />
       </WishlistProvider>
     </QueryClientProvider>
   );

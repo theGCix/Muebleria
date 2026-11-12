@@ -35,14 +35,14 @@ export function MobileBottomBar({ roles }: { roles: AppRole[] }) {
       <Link
         key={t.to}
         to={t.to}
-        className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
+        className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium ${
           active ? "text-primary" : "text-muted-foreground"
         }`}
       >
         <t.icon className="h-5 w-5" />
         {t.label}
         {!!t.badge && t.badge > 0 && (
-          <span className="absolute right-[calc(50%-20px)] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
+          <span className="absolute right-[calc(50%-20px)] top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold leading-none text-white tabular-nums">
             {t.badge > 99 ? "99+" : t.badge}
           </span>
         )}
@@ -60,7 +60,7 @@ export function MobileBottomBar({ roles }: { roles: AppRole[] }) {
       {isStaff && (
         <Link
           to="/pos"
-          className="relative -top-3 mx-1 flex flex-col items-center gap-0.5 text-[11px] font-semibold text-primary"
+          className="relative -top-3 mx-1 flex flex-col items-center gap-0.5 text-xs font-semibold text-primary"
         >
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
             <ShoppingCart className="h-6 w-6" />
@@ -74,7 +74,7 @@ export function MobileBottomBar({ roles }: { roles: AppRole[] }) {
       <button
         type="button"
         onClick={() => setOpenMobile(true)}
-        className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-muted-foreground"
+        className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium text-muted-foreground"
       >
         <Menu className="h-5 w-5" />
         Más

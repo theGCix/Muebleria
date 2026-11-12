@@ -299,7 +299,7 @@ export function PagoExitoso({
           </p>
 
           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
             <p className="font-display text-5xl font-semibold tabular-nums sm:text-6xl" aria-label={fmtPEN(total)}>
               {fmtPEN(total)}
             </p>
@@ -330,13 +330,13 @@ export function PagoExitoso({
               <span className="gmp-stamp" aria-hidden>Pagado</span>
 
               <div className="p-5 pb-5 pr-28 sm:p-6 sm:pr-40">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{idPedido}</span>
                   <button
                     type="button"
                     onClick={copiar}
-                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
                     aria-label="Copiar número de pedido"
                   >
                     {copiado ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
@@ -360,7 +360,7 @@ export function PagoExitoso({
                             <PackageCheck className="m-auto mt-5 h-6 w-6 text-muted-foreground" />
                           )}
                           {it.qty > 1 && (
-                            <span className="absolute -right-0 -top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">×{it.qty}</span>
+                            <span className="absolute -right-0 -top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-foreground">×{it.qty}</span>
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -413,7 +413,7 @@ export function PagoExitoso({
           {/* Línea de tiempo */}
           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1.65s" }} aria-label="Lo que sigue">
             <div className="gmp-card h-full p-5 sm:p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
               <h2 className="font-display mt-1 mb-5 text-2xl font-semibold leading-tight">El camino de tu pedido</h2>
               <ol>
                 {pasosMostrados.map((p) => {
@@ -424,7 +424,7 @@ export function PagoExitoso({
                       <div className="min-w-0 pt-0.5">
                         <p className={`text-sm font-semibold ${p.estado === "todo" ? "text-muted-foreground" : ""}`}>
                           {p.titulo}
-                          {p.estado === "now" && <span className="ml-2 rounded-full bg-[#f0a020]/20 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8a5a00]">Siguiente</span>}
+                          {p.estado === "now" && <span className="ml-2 rounded-full bg-[#f0a020]/20 px-2 py-0.5 align-middle text-xs font-bold uppercase tracking-wide text-[#8a5a00]">Siguiente</span>}
                         </p>
                         <p className={`text-xs leading-relaxed ${p.estado === "goal" ? "font-medium text-foreground" : "text-muted-foreground"}`}>{p.detalle}</p>
                       </div>
@@ -462,7 +462,7 @@ export function PagoExitoso({
           <section className="gmp-rise mt-10" style={{ ["--gmp-d" as string]: "1.95s" }} aria-label="Completa tu espacio">
             <div className="mb-4 flex items-end justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mientras fabricamos tu pedido</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mientras fabricamos tu pedido</p>
                 <h2 className="font-display text-2xl font-semibold sm:text-3xl">Completa tu espacio</h2>
               </div>
               <Link to="/catalogo" className="shrink-0 text-sm text-primary underline-offset-4 hover:underline">Ver catálogo</Link>
@@ -477,7 +477,7 @@ export function PagoExitoso({
                       {img && <img src={img} alt={p.nombre} loading="lazy" className="h-full w-full object-cover mix-blend-multiply transition-transform duration-700 group-hover:scale-105" />}
                     </div>
                     <div className="p-4">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</p>
+                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</p>
                       <p className="font-display mt-0.5 text-lg font-semibold leading-snug line-clamp-1">{p.nombre}</p>
                       <p className="mt-1 flex items-baseline gap-2">
                         <span className={`font-display text-xl font-bold ${activa ? "text-destructive" : ""}`}>{fmtPEN(precioFinal)}</span>

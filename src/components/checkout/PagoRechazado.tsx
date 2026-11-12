@@ -166,7 +166,7 @@ export function PagoRechazado({
           {/* Qué pasó + qué hacer */}
           <section className="gmp-rise lg:col-span-3" style={{ ["--gmp-d" as string]: "0.85s" }} aria-label="Qué pasó">
             <div className="gmp-card h-full p-5 sm:p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">¿Qué pasó?</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">¿Qué pasó?</p>
               <h2 className="font-display mt-1 text-2xl font-semibold leading-tight sm:text-3xl">
                 {datos.sinConfirmar ? "No pudimos confirmar tu pago" : motivo.titulo}
               </h2>
@@ -192,7 +192,7 @@ export function PagoRechazado({
 
               {!datos.sinConfirmar && (
                 <>
-                  <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     {motivo.nuestro ? "Qué puedes hacer" : "Cómo resolverlo"}
                   </p>
                   <ol className="mt-3 space-y-3">
@@ -207,7 +207,7 @@ export function PagoRechazado({
               )}
 
               {(code || datos.date) && (
-                <p className="mt-6 border-t border-dashed border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-6 border-t border-dashed border-border pt-3 text-xs leading-relaxed text-muted-foreground">
                   Referencia para soporte{code ? ` · código ${code}` : ""}{datos.actionDesc ? ` · ${datos.actionDesc}` : ""}{datos.date ? ` · ${datos.date}` : ""}
                 </p>
               )}
@@ -217,7 +217,7 @@ export function PagoRechazado({
           {/* Tu pedido sigue aquí */}
           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1s" }} aria-label="Tu pedido">
             <div className="gmp-card h-full p-5 sm:p-6">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido sigue aquí</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido sigue aquí</p>
               <h2 className="font-display mt-1 mb-4 text-xl font-semibold leading-tight">Nada se perdió</h2>
 
               {items.length > 0 ? (
@@ -228,7 +228,7 @@ export function PagoRechazado({
                         {it.image
                           ? <img src={it.image} alt="" className="h-full w-full object-cover mix-blend-multiply" loading="lazy" />
                           : <ShoppingBag className="m-auto mt-4 h-5 w-5 text-muted-foreground" />}
-                        {it.qty > 1 && <span className="absolute right-0 top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">×{it.qty}</span>}
+                        {it.qty > 1 && <span className="absolute right-0 top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-foreground">×{it.qty}</span>}
                       </div>
                       <p className="font-display min-w-0 flex-1 text-[15px] font-semibold leading-snug line-clamp-2">{it.title}</p>
                       <p className="shrink-0 text-sm font-semibold tabular-nums">{fmtPEN(it.price * it.qty)}</p>

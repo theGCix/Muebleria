@@ -50,7 +50,7 @@ export function SelectorReacciones({
               }`}
             >
               <span className="text-xl leading-none" aria-hidden="true">{r.emoji}</span>
-              <span className="text-[11px] leading-tight text-foreground">{r.etiqueta}</span>
+              <span className="text-xs leading-tight text-foreground">{r.etiqueta}</span>
               {n > 0 && <span className="text-xs font-semibold leading-none text-foreground">{n}</span>}
             </button>
           );

@@ -19,7 +19,7 @@ export function OpcionesPedido({
       {opciones.map((o) => (
         <li
           key={o.valor_id ?? `${o.tipo}-${o.valor}`}
-          className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-tight text-foreground/80"
+          className="rounded-full bg-muted px-2 py-0.5 text-xs leading-tight text-foreground/80"
         >
           <span className="text-muted-foreground">{o.etiqueta}:</span> {o.valor}
           {conMaterial && o.material && o.material.toLowerCase() !== o.valor.toLowerCase() ? ` · ${o.material}` : ""}

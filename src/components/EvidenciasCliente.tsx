@@ -56,7 +56,7 @@ export function EvidenciasCliente({
               className="h-16 w-16 rounded-md border object-cover transition-opacity group-hover:opacity-90"
               loading="lazy"
             />
-            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
               {ESTADO_CORTO[f.estado] ?? f.estado}
             </span>
           </button>

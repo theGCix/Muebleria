@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { toast } from "sonner";
+import { avisoFavorito } from "@/lib/avisoFavorito";
 import { ofertaInfo } from "@/lib/pricing";
 
 const fmt = (n: number) =>
@@ -27,7 +28,7 @@ export function WishlistDrawer() {
   const [isOpen, setIsOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const { user } = useAuth();
-  const { items, loading, removeFromWishlist } = useWishlist();
+  const { items, loading, addToWishlist, removeFromWishlist } = useWishlist();
   const addItem = useCartStore((s) => s.addItem);
   const cartItems = useCartStore((s) => s.items);
 
@@ -50,7 +51,7 @@ export function WishlistDrawer() {
 
   const handleRemove = async (productId: string, nombre: string) => {
     await removeFromWishlist(productId);
-    toast.success(`"${nombre}" eliminado de favoritos`);
+    avisoFavorito(nombre, false, () => addToWishlist(productId));
   };
 
   const handleOpenDrawer = () => {

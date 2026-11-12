@@ -7,6 +7,7 @@ import {
   ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { avisoFavorito } from "@/lib/avisoFavorito";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import type { Product } from "@/hooks/useProducts";
 import { useWishlist } from "@/context/WishlistContext";
@@ -104,7 +105,7 @@ export function ProductCard({ product: p }: Props) {
   const updateQty = useCartStore((s) => s.updateQty);
   const removeItem = useCartStore((s) => s.removeItem);
   const items = useCartStore((s) => s.items);
-  const { toggleWishlist, isWishlisted } = useWishlist();
+  const { toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
   const [medidaOpen, setMedidaOpen] = useState(false);
   // Distrito compartido con la ficha y el checkout (nunca se asume uno)
@@ -197,8 +198,10 @@ export function ProductCard({ product: p }: Props) {
     e.preventDefault();
     e.stopPropagation();
     setWishPending(true);
+    const estaba = isWishlisted(p.id);
     const added = await toggleWishlist(p.id);
-    toast.success(added ? `"${p.nombre}" guardado en favoritos` : `"${p.nombre}" eliminado de favoritos`);
+    if (!estaba && !added) toast.error("No pudimos guardar el favorito");
+    else avisoFavorito(p.nombre, added, () => (added ? removeFromWishlist(p.id) : addToWishlist(p.id)));
     setWishPending(false);
   };
 
@@ -256,7 +259,7 @@ export function ProductCard({ product: p }: Props) {
                 {insignias.map((b) => (
                   <span
                     key={b.key}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide shadow-sm ${b.cls}`}
+                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${b.cls}`}
                   >
                     {b.icono === "estrella" && <Star className="h-3 w-3 fill-current" />}
                     {b.icono === "chispa" && <Sparkles className="h-3 w-3" />}
@@ -291,11 +294,11 @@ export function ProductCard({ product: p }: Props) {
 
             {/* Vista rápida (solo con mouse) */}
             <div className="gmc-quick" aria-hidden>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">Vista rápida</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Vista rápida</p>
               {atributos.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {atributos.map((a) => (
-                    <span key={a} className="rounded-full border border-white/35 px-2 py-0.5 text-[11px] text-white/95">{a}</span>
+                    <span key={a} className="rounded-full border border-white/35 px-2 py-0.5 text-xs text-white/95">{a}</span>
                   ))}
                 </div>
               )}
@@ -308,7 +311,7 @@ export function ProductCard({ product: p }: Props) {
           {/* ───────── Información ───────── */}
           <div className="flex flex-1 flex-col p-2.5 @[13rem]:p-4 @[13rem]:pt-3.5">
             {p.categoria && (
-              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</span>
+              <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</span>
             )}
             <h3 className="mt-1 text-sm font-semibold leading-snug line-clamp-2 @[13rem]:text-[17px]">{p.nombre}</h3>
 
@@ -326,7 +329,7 @@ export function ProductCard({ product: p }: Props) {
               atributos.length > 0 && (
                 <div className="mt-2 hidden flex-wrap gap-1.5 @[13rem]:flex">
                   {atributos.map((a) => (
-                    <span key={a} className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground">{a}</span>
+                    <span key={a} className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-xs text-muted-foreground">{a}</span>
                   ))}
                 </div>
               )
@@ -342,7 +345,7 @@ export function ProductCard({ product: p }: Props) {
                     Ahorras {fmtPEN(p.precio - precioOferta)}
                   </span>
                   {cuentaRegresiva && (
-                    <span className="flex basis-full items-center gap-1.5 text-[11px] font-semibold text-destructive">
+                    <span className="flex basis-full items-center gap-1.5 text-xs font-semibold text-destructive">
                       <span className="gmc-dot" /> {cuentaRegresiva}
                     </span>
                   )}
@@ -414,7 +417,7 @@ export function ProductCard({ product: p }: Props) {
                         <span className="hidden @[13rem]:inline">En el carrito</span>
                       </span>
                     </span>
-                    <span className="hidden whitespace-nowrap text-[11px] text-primary/70 @[13rem]:block">
+                    <span className="hidden whitespace-nowrap text-xs text-primary/70 @[13rem]:block">
                       {qty} {qty === 1 ? "unidad" : "unidades"} · {fmtPEN(precioOferta * qty)}
                     </span>
                   </div>

@@ -467,7 +467,7 @@ function AuthExperience({
 
   const lastBadge = (m: LastMethod) =>
     lastMethod === m ? (
-      <span className="absolute right-3 rounded-full bg-[#C9A24B]/20 px-2 py-0.5 text-[10px] font-medium text-[#8A6A1F] dark:text-[#E3C170]">
+      <span className="absolute right-3 rounded-full bg-[#C9A24B]/20 px-2 py-0.5 text-xs font-medium text-[#8A6A1F] dark:text-[#E3C170]">
         Último usado
       </span>
     ) : null;

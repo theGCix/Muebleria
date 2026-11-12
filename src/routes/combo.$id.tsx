@@ -431,7 +431,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
                     : `${piezas[sel].nombre}${piezas[sel].cantidad > 1 ? ` ×${piezas[sel].cantidad}` : ""}`}
                 </span>
                 {tour && piezas.length > 1 && !reducedMotion() && (
-                  <span className="rounded-full bg-background/90 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+                  <span className="rounded-full bg-background/90 px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
                     Recorriendo el combo…
                   </span>
                 )}
@@ -524,7 +524,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
                   <Icon className="h-4 w-4 flex-shrink-0 text-accent-strong" />
                   <div className="min-w-0">
                     <p className="text-xs font-semibold">{titulo}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">{detalle}</p>
+                    <p className="truncate text-xs text-muted-foreground">{detalle}</p>
                   </div>
                 </div>
               ))}
@@ -561,7 +561,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
                         <p className="truncate text-sm font-medium">
                           {p.nombre}
                           {p.cantidad > 1 && (
-                            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
+                            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
                               ×{p.cantidad}
                             </span>
                           )}

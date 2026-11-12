@@ -1,10 +1,19 @@
 // src/lib/entrega.ts
-// Promesa de entrega: ÚNICA fuente de verdad para la ficha (DeliveryPromise) y la tarjeta (ProductCard).
-// Si cambia el plazo, se cambia aquí y se actualizan ambas.
+// Promesa de entrega: ÚNICA fuente de verdad para la ficha (DeliveryPromise, pestaña «Entrega y pagos») y la tarjeta (ProductCard).
+// Si cambia el plazo, se cambia aquí y se actualizan todas.
 
 /** Lima Metropolitana: 5–7 días hábiles. */
 export const ENTREGA_MIN_DIAS = 5;
 export const ENTREGA_MAX_DIAS = 7;
+
+/** Provincias: 10–15 días hábiles. */
+export const ENTREGA_PROV_MIN_DIAS = 10;
+export const ENTREGA_PROV_MAX_DIAS = 15;
+
+/** «5–7 días hábiles» */
+export const textoPlazoLima = () => `${ENTREGA_MIN_DIAS}–${ENTREGA_MAX_DIAS} días hábiles`;
+/** «10–15 días hábiles» */
+export const textoPlazoProvincias = () => `${ENTREGA_PROV_MIN_DIAS}–${ENTREGA_PROV_MAX_DIAS} días hábiles`;
 
 /** Clave de localStorage donde la ficha guarda el distrito que eligió el cliente. */
 export const DISTRITO_STORAGE_KEY = "gm_distrito_envio";

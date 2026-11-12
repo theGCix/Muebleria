@@ -104,7 +104,7 @@ function ProyectosPage() {
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                         />
                         {p.etiqueta && (
-                          <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-[11px] font-medium shadow-sm">
+                          <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-medium shadow-sm">
                             {p.etiqueta}
                           </span>
                         )}

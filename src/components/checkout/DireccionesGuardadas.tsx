@@ -47,7 +47,7 @@ export function DireccionesGuardadas({
                 <span className="flex items-center gap-2 text-sm font-medium">
                   {a.etiqueta}
                   {a.predeterminada && (
-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
                       Predeterminada
                     </span>
                   )}

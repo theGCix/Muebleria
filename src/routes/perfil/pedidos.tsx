@@ -232,7 +232,7 @@ function PedidoCard({ order }: { order: any }) {
             </div>
             <div className="flex justify-between mt-1">
               {pasos.map((step) => (
-                <p key={step} className="text-[10px] text-muted-foreground text-center" style={{ flex: step === "entregado" ? "none" : 1 }}>
+                <p key={step} className="text-xs text-muted-foreground text-center" style={{ flex: step === "entregado" ? "none" : 1 }}>
                   {stepLabel(step, recojo)}
                 </p>
               ))}

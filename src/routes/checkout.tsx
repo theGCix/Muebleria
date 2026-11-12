@@ -24,7 +24,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { getStoredUtm } from "@/hooks/useUtm";
 import { supabase } from "@/integrations/supabase/client";
-import { DISTRITOS_ENVIO, getPrecioEnvio, ORIGEN_ENVIO, ciudadDeDistrito, precioEnvioDesde } from "@/lib/envios";
+import { DistritoCombobox } from "@/components/DistritoCombobox";
+import { getPrecioEnvio, ORIGEN_ENVIO, ciudadDeDistrito, precioEnvioDesde } from "@/lib/envios";
 import { guardarDistrito, leerDistritoGuardado } from "@/lib/entrega";
 import {
   DEPARTAMENTOS_PROVINCIA, provinciasDe, estimarEnvioProvincia, nombreZona,
@@ -711,7 +712,7 @@ useEffect(() => {
                         }`}
                       >
                         <p className="text-sm font-medium">{titulo}</p>
-                        <p className="text-[11px] text-muted-foreground">{sub}</p>
+                        <p className="text-xs text-muted-foreground">{sub}</p>
                       </button>
                     ))}
                   </div>
@@ -731,21 +732,11 @@ useEffect(() => {
                     <>
                         <div className="space-y-1.5 sm:col-span-2">
                           <Label htmlFor="distrito">Distrito</Label>
-                          <Select
-                            value={form.distrito || undefined}
-                            onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
-                          >
-                            <SelectTrigger id="distrito" className="h-11">
-                              <SelectValue placeholder="Selecciona tu distrito…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {DISTRITOS_ENVIO.map((d) => (
-                                <SelectItem key={d.destino} value={d.destino}>
-                                  {d.destino} — {fmt(d.precio)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <DistritoCombobox
+                            id="distrito"
+                            value={form.distrito}
+                            onChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
+                          />
                           <p className="text-xs text-muted-foreground">
                             {form.distrito
                               ? <>Envío a {form.distrito}: <b className="text-foreground">{fmt(getPrecioEnvio(form.distrito) ?? 0)}</b>{form.distrito === distritoFicha ? " · el distrito que elegiste en el producto" : ""}</>
@@ -1050,7 +1041,6 @@ useEffect(() => {
                   <span>Total</span>
                   <span className="font-display text-lg">{fmt(totalFinal)}</span>
                 </div>
-                <p className="text-xs text-muted-foreground text-center pt-1">Moneda: Soles (PEN)</p>
               </div>
             </div>
           </aside>

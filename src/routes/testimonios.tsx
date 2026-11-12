@@ -101,7 +101,7 @@ function TestimoniosPage() {
                     <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 pt-8 text-white sm:p-4 sm:pt-12">
                       <p className="text-sm font-medium leading-tight">{f.autor_nombre}</p>
                       {f.producto_nombre && <p className="mt-0.5 line-clamp-1 text-xs text-white/80">{f.producto_nombre}</p>}
-                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/85">
+                      <div className="mt-1.5 flex items-center gap-2 text-xs text-white/85">
                         {f.calificacion > 0 && (
                           <span className="inline-flex items-center gap-0.5" aria-label={`${f.calificacion} de 5 estrellas`}>
                             <Star className="h-3 w-3 fill-[var(--color-gold)] text-[var(--color-gold)]" /> {f.calificacion}

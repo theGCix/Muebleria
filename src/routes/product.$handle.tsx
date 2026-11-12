@@ -8,9 +8,10 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Loader2, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
+import { Loader2, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
 import { calcLineId, useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
+import { avisoFavorito } from "@/lib/avisoFavorito";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { useSeo, absolutizar, migasJsonLd } from "@/lib/seo";
@@ -20,6 +21,7 @@ import { getCategoria } from "@/lib/categories";
 import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
 import { ModelViewer3D } from "@/components/ModelViewer3D";
 import { ofertaInfo } from "@/lib/pricing";
+import { textoPlazoLima, textoPlazoProvincias } from "@/lib/entrega";
 import { LeadFormDialog } from "@/components/LeadFormDialog";
 import { WHATSAPP_NUMBER } from "@/config";
 import { resolveProfile, type ProductProfile } from "@/lib/productProfiles";
@@ -94,6 +96,61 @@ function AccordionItem({ title, children }: { title: string; children: React.Rea
 /* ─── tab panel ───────────────────────────────────── */
 const TABS = ["Especificaciones", "Reseñas", "Entrega y pagos"] as const;
 
+/* M1b: lista de pestañas con indicador (degradado + flecha) cuando hay más pestañas fuera de pantalla */
+function TabList({ active, onChange }: { active: number; onChange: (i: number) => void }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const primera = useRef(true);
+  const [hay, setHay] = useState({ izq: false, der: false });
+
+  const medir = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setHay({ izq: el.scrollLeft > 2, der: el.scrollLeft < max - 2 });
+  }, []);
+
+  useEffect(() => {
+    medir();
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [medir]);
+
+  // Al cambiar de pestaña, se centra la activa dentro de la lista (sin mover la página)
+  useEffect(() => {
+    if (primera.current) { primera.current = false; return; }
+    const el = listRef.current;
+    const btn = el?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!el || !btn) return;
+    el.scrollTo({ left: btn.offsetLeft - (el.clientWidth - btn.offsetWidth) / 2, behavior: "smooth" });
+  }, [active]);
+
+  return (
+    <div className="gm-tab-wrap">
+      <div className="gm-tab-list" role="tablist" aria-label="Información del producto" ref={listRef} onScroll={medir}>
+        {TABS.map((t, i) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            id={`gm-tab-${i}`}
+            aria-selected={active === i}
+            aria-controls="gm-tabpanel"
+            className={`gm-tab-btn${active === i ? " active" : ""}`}
+            onClick={() => onChange(i)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <span className={`gm-tab-more izq${hay.izq ? " on" : ""}`} aria-hidden><ChevronLeft size={16} /></span>
+      <span className={`gm-tab-more der${hay.der ? " on" : ""}`} aria-hidden><ChevronRight size={16} /></span>
+    </div>
+  );
+}
+
 function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["data"]; profile: ProductProfile }) {
   const [active, setActive] = useState(0);
 
@@ -137,12 +194,9 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
   return (
     <div className="gm-tabs-section">
       <div className="gm-container">
-        <div className="gm-tab-list">
-          {TABS.map((t, i) => (
-            <button key={t} className={`gm-tab-btn${active === i ? " active" : ""}`} onClick={() => setActive(i)}>{t}</button>
-          ))}
-        </div>
+        <TabList active={active} onChange={setActive} />
 
+        <div id="gm-tabpanel" role="tabpanel" aria-labelledby={`gm-tab-${active}`}>
         {active === 0 && (
           <div className="gm-details-grid">
             <div>
@@ -255,8 +309,8 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
               <table className="gm-detail-table">
                 <tbody>
                   {[
-                    ["Lima Metropolitana", "5–7 días hábiles"],
-                    ["Provincias", "10–15 días hábiles"],
+                    ["Lima Metropolitana", textoPlazoLima()],
+                    ["Provincias", textoPlazoProvincias()],
                     ["Armado e instalación", "Incluido en Lima"],
                     ["Envío Lima", "Gratis en pedidos +S/ 800"],
                     ["Seguimiento", "WhatsApp en tiempo real"],
@@ -268,6 +322,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
@@ -320,13 +375,13 @@ const PAGE_CSS = `
         .gm-badge-cat {
           position:absolute; top:20px; left:20px;
           background: rgba(247,244,239,.9); backdrop-filter:blur(8px);
-          font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+          font-size:12px; letter-spacing:.18em; text-transform:uppercase;
           color:var(--gm-walnut-mid); padding:5px 12px;
           border-radius:20px; border:1px solid var(--gm-gold-light);
         }
         .gm-badge-new {
           position:absolute; top:20px; right:20px;
-          background:var(--gm-walnut); font-size:10px;
+          background:var(--gm-walnut); font-size:12px;
           letter-spacing:.1em; text-transform:uppercase;
           color:#fff; padding:5px 12px; border-radius:20px;
         }
@@ -367,7 +422,7 @@ const PAGE_CSS = `
 
         /* info col */
         .gm-info-col { padding-left:16px; min-width:0; }
-        .gm-sku { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:10px; }
+        .gm-sku { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:10px; }
         .gm-product-title { font-family:var(--font-display); font-size:38px; font-weight:400; line-height:1.15; color:var(--gm-dark); margin-bottom:6px; }
         .gm-product-sub { font-size:14px; color:var(--gm-muted); letter-spacing:.04em; margin-bottom:24px; }
 
@@ -384,7 +439,7 @@ const PAGE_CSS = `
         .gm-divider { height:1px; background:var(--gm-border); margin:24px 0; }
 
         /* specs */
-        .gm-specs-label { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
+        .gm-specs-label { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
         .gm-specs-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:24px; }
         .gm-spec-pill {
           display:flex; align-items:flex-start; gap:10px;
@@ -393,11 +448,11 @@ const PAGE_CSS = `
         }
         .gm-spec-pill:hover { border-color:var(--gm-gold-light); }
         .gm-spec-icon { font-size:18px; color:var(--gmx-accent, var(--gm-gold)); flex-shrink:0; margin-top:1px; }
-        .gm-spec-pill-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:2px; }
+        .gm-spec-pill-label { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:2px; }
         .gm-spec-pill-val { font-size:13px; font-weight:500; color:var(--gm-dark); }
 
         /* color picker */
-        .gm-color-label { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
+        .gm-color-label { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
         .gm-color-row { display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
         .gm-swatch {
           width:32px; height:32px; border-radius:50%; cursor:pointer;
@@ -407,7 +462,7 @@ const PAGE_CSS = `
         .gm-swatch:hover { transform:scale(1.1); }
 
         /* includes */
-        .gm-includes-label { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
+        .gm-includes-label { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
         .gm-includes-grid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:28px; }
         .gm-includes-tag {
           font-size:12px; color:var(--gm-mid);
@@ -472,9 +527,14 @@ const PAGE_CSS = `
         /* tabs section */
         .gm-tabs-section { max-width:1300px; margin:0 auto; padding:48px 48px 80px; }
         @media(max-width:768px){ .gm-tabs-section{ padding:32px 20px 60px; } }
-        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; overflow-x:auto; scrollbar-width:none; }
+        .gm-tab-wrap { position:relative; margin-bottom:40px; }
+        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); overflow-x:auto; scrollbar-width:none; }
+        .gm-tab-more { position:absolute; top:0; bottom:1px; width:44px; display:flex; align-items:center; pointer-events:none; opacity:0; transition:opacity .2s; color:var(--gm-walnut); }
+        .gm-tab-more.on { opacity:1; }
+        .gm-tab-more.der { right:0; justify-content:flex-end; background:linear-gradient(to left, var(--background) 35%, transparent); }
+        .gm-tab-more.izq { left:0; background:linear-gradient(to right, var(--background) 35%, transparent); }
         .gm-tab-list::-webkit-scrollbar { display:none; }
-        @media(max-width:640px){ .gm-tab-list{ justify-content:space-between; } .gm-tab-btn{ padding:14px 6px !important; font-size:11px !important; letter-spacing:.02em !important; } }
+        @media(max-width:640px){ .gm-tab-list{ justify-content:space-between; } .gm-tab-btn{ padding:14px 6px !important; font-size:12px !important; letter-spacing:.02em !important; } }
         .gm-tab-btn {
           flex:none; white-space:nowrap;
           background:none; border:none; padding:14px 24px;
@@ -515,7 +575,7 @@ const PAGE_CSS = `
         .gm-rating-avg-num { font-family:var(--font-display,inherit); font-size:42px; font-weight:600; color:var(--gm-walnut); line-height:1; }
         .gm-rating-count { font-size:12px; color:var(--gm-muted); }
         .gm-rating-bars { flex:1; min-width:220px; max-width:360px; display:flex; flex-direction:column; gap:6px; }
-        .gm-rating-bar-row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--gm-muted); }
+        .gm-rating-bar-row { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--gm-muted); }
         .gm-rating-bar-track { flex:1; height:6px; border-radius:3px; background:var(--gm-border); overflow:hidden; }
         .gm-rating-bar-fill { height:100%; background:var(--gm-gold); border-radius:3px; }
         .gm-rating-bar-count { width:20px; text-align:right; }
@@ -523,7 +583,7 @@ const PAGE_CSS = `
         /* recommended */
         .gm-recommended { background:var(--gm-cream); padding:80px 0; }
         @media(max-width:768px){ .gm-recommended{ padding:60px 0; } }
-        .gm-eyebrow { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--gm-gold); margin-bottom:10px; }
+        .gm-eyebrow { font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--gm-gold); margin-bottom:10px; }
         .gm-section-title { font-family:var(--font-display); font-size:30px; font-weight:400; color:var(--gm-walnut); margin-bottom:6px; }
         .gm-section-sub { font-size:14px; color:var(--gm-muted); margin-bottom:40px; }
         .gm-rec-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
@@ -540,7 +600,7 @@ const PAGE_CSS = `
         .gm-rec-card:hover .gm-rec-img img { transform:scale(1.06); }
         .gm-rec-img-placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:40px; }
         .gm-rec-tag {
-          position:absolute; bottom:10px; left:10px; font-size:10px;
+          position:absolute; bottom:10px; left:10px; font-size:12px;
           letter-spacing:.12em; text-transform:uppercase;
           background:rgba(253,250,246,.9); color:var(--gm-walnut-mid);
           padding:4px 10px; border-radius:20px; backdrop-filter:blur(4px);
@@ -592,7 +652,7 @@ function ProductView({ product: base }: { product: ProductData }) {
   const product = base as ProductData & ProductExtra;
   const addItem = useCartStore((s) => s.addItem);
   const itemsCarrito = useCartStore((s) => s.items);
-  const { toggleWishlist, isWishlisted } = useWishlist();
+  const { toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
   const [adding, setAdding] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
@@ -1023,8 +1083,10 @@ function ProductView({ product: base }: { product: ProductData }) {
                   e.preventDefault();
                   e.stopPropagation();
                   setWishPending(true);
+                  const estaba = isWishlisted(product.id);
                   const added = await toggleWishlist(product.id);
-                  toast.success(added ? `"${product.nombre}" guardado en favoritos` : `"${product.nombre}" eliminado de favoritos`);
+                  if (!estaba && !added) toast.error("No pudimos guardar el favorito");
+                  else avisoFavorito(product.nombre, added, () => (added ? removeFromWishlist(product.id) : addToWishlist(product.id)));
                   setWishPending(false);
                 }}
                 title={isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}

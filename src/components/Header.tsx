@@ -142,7 +142,7 @@ export function Header() {
           {...(barraOculta ? ({ inert: "" } as Record<string, string>) : {})}
         >
           <div className="container mx-auto flex h-8 items-center justify-center px-4 md:px-6">
-            <p className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium tracking-wide text-center">
+            <p className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-center">
               <CampanaTicker
                 fallback={
                   <>
@@ -161,7 +161,7 @@ export function Header() {
             {/* Logo */}
             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
-              <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
+              <span className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
             </Link>
 
             {/* Desktop nav */}

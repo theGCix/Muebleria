@@ -194,7 +194,7 @@ function ConformidadPage() {
                     className="flex aspect-square flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
                   >
                     {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
-                    <span className="mt-1 text-[10px]">{subiendo ? "Subiendo…" : "Agregar"}</span>
+                    <span className="mt-1 text-xs">{subiendo ? "Subiendo…" : "Agregar"}</span>
                   </button>
                 )}
               </div>

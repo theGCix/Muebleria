@@ -48,10 +48,6 @@ export interface ProductProfile {
 
 const MADERA = "Madera tornillo seca y tratada";
 
-const FAQ_ENTREGA: Faq = {
-  q: "Tiempos de entrega",
-  a: "Lima Metropolitana: 5–7 días hábiles. Provincias: 10–15 días hábiles. Este modelo se fabrica a pedido — coordinamos la fecha exacta al confirmar tu compra.",
-};
 const FAQ_DEVOLUCION: Faq = {
   q: "Política de devoluciones",
   a: "Al ser una pieza fabricada a medida, no se aceptan cambios una vez confirmado el pedido. Si hay un defecto de fabricación, reparamos o reponemos sin costo dentro del período de garantía.",
@@ -84,7 +80,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     faqs: [
       { q: "¿Se adapta a mi TV y a mi pared?", a: "Sí. Usa el medidor de arriba para ver el ancho recomendado según tus pulgadas, y cuéntanos las medidas de tu pared al cotizar: ajustamos el diseño." },
       { q: "Cuidado y mantenimiento", a: "Limpia con paño suave y seco o apenas húmedo. Evita químicos abrasivos y deja ventilación detrás de equipos que se calienten." },
-      FAQ_ENTREGA, FAQ_DEVOLUCION,
+      FAQ_DEVOLUCION,
     ],
     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Paso de cables integrado", "Iluminación LED según diseño", "Garantía de 2 años en estructura"],
   },
@@ -115,7 +111,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     bundleSub: "Mesas, puffs y detalles que cierran el ambiente",
     faqs: [
       { q: "Cuidado y mantenimiento", a: "Limpia con paño húmedo sin químicos agresivos y evita el sol directo. Para el velvet, usa un cepillo suave en dirección del pelo. La estructura de madera puede aceitarse una vez al año." },
-      FAQ_ENTREGA, FAQ_DEVOLUCION,
+      FAQ_DEVOLUCION,
     ],
     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal dorado o negro a elección", "Garantía de 2 años en estructura"],
   },
@@ -146,7 +142,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     faqs: [
       { q: "¿Cuántas personas entran cómodas?", a: "Usa el simulador de arriba. Como regla, cuenta unos 60 cm de ancho de mesa por comensal." },
       { q: "Cuidado y mantenimiento", a: "Limpia con paño suave. Usa individuales o posavasos con bebidas calientes y seca derrames de inmediato." },
-      FAQ_ENTREGA, FAQ_DEVOLUCION,
+      FAQ_DEVOLUCION,
     ],
     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Acabado protector resistente al uso diario", "Garantía de 2 años en estructura"],
   },
@@ -177,7 +173,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     faqs: [
       { q: "¿Qué tamaño de cama me conviene?", a: "Usa el visor de arriba: te muestra el espacio libre que necesitas alrededor. Confirmamos medidas y disponibilidad al cotizar." },
       { q: "Cuidado y mantenimiento", a: "Aspira o cepilla suavemente el tapizado y limpia manchas de inmediato. Evita sol directo prolongado." },
-      FAQ_ENTREGA, FAQ_DEVOLUCION,
+      FAQ_DEVOLUCION,
     ],
     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tamaños estándar o a medida", "Garantía de 2 años en estructura"],
   },
@@ -208,7 +204,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     faqs: [
       { q: "¿Se hace a la medida de mi espacio?", a: "Sí. Indica ancho y alto de tu espacio arriba y un asesor te devuelve una cotización con el diseño ajustado." },
       { q: "Cuidado y mantenimiento", a: "Limpia el polvo con paño seco o ligeramente húmedo. Evita químicos abrasivos." },
-      FAQ_ENTREGA, FAQ_DEVOLUCION,
+      FAQ_DEVOLUCION,
     ],
     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Diseño a medida del espacio", "Garantía de 2 años en estructura"],
   },
@@ -238,7 +234,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     bundleSub: "Piezas que se llevan bien con esta",
     faqs: [
       { q: "Cuidado y mantenimiento", a: "Limpia con paño suave. Evita sol directo prolongado y químicos agresivos." },
-      FAQ_ENTREGA, FAQ_DEVOLUCION,
+      FAQ_DEVOLUCION,
     ],
     features: ["Fabricado artesanalmente en Perú", "Acabado resistente al uso diario", "Garantía de 2 años en estructura"],
   },
@@ -265,7 +261,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
     module: "none",
     bundleTitle: "Completa el ambiente",
     bundleSub: "Piezas que combinan con tu elección",
-    faqs: [FAQ_ENTREGA, FAQ_DEVOLUCION],
+    faqs: [FAQ_DEVOLUCION],
     features: ["Fabricado artesanalmente en Perú", "Garantía de 2 años en estructura"],
   },
 };

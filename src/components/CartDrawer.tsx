@@ -157,7 +157,7 @@ export const CartDrawer = () => {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-accent-strong px-2 py-0.5 text-[11px] font-bold text-accent-foreground">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-accent-strong px-2 py-0.5 text-xs font-bold text-accent-foreground">
                                 <PackageCheck className="h-3 w-3" /> Combo
                               </span>
                               <h4 className="mt-1 truncate font-display text-lg font-semibold text-foreground">
@@ -190,7 +190,7 @@ export const CartDrawer = () => {
                                 </div>
                                 <p className="min-w-0 flex-1 truncate text-sm text-foreground">{it.title}</p>
                                 {it.qty > 1 && (
-                                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
+                                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
                                     ×{it.qty}
                                   </span>
                                 )}

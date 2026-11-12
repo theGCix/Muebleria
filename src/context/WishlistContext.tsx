@@ -15,6 +15,7 @@ interface WishlistContextValue {
   items: WishlistItem[];
   loading: boolean;
   toggleWishlist: (productId: string) => Promise<boolean>;
+  addToWishlist: (productId: string) => Promise<boolean>;
   removeFromWishlist: (productId: string) => Promise<void>;
   isWishlisted: (productId: string) => boolean;
   refetch: () => Promise<void>;
@@ -163,7 +164,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const refetch = user ? fetchWishlistDB : fetchWishlistGuest;
 
   return (
-    <WishlistContext.Provider value={{ items, loading, toggleWishlist, removeFromWishlist, isWishlisted, refetch }}>
+    <WishlistContext.Provider value={{ items, loading, toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted, refetch }}>
       {children}
     </WishlistContext.Provider>
   );

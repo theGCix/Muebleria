@@ -49,3 +49,11 @@
 - **`--gradient-warm`:** el extremo naranja usa el mismo valor oscuro para que el texto claro sobre el degradado cumpla 4.5:1.
 - **Fotos:** `cloudinaryUrl(id, { w, h })` recorta con `c_fill,g_auto` (antes w+h estiraba la imagen). Fotos de clientes: `liviana(url, w, h)`. Tarjetas de producto, categoría y reseña en 4:3; galería de clientes cuadrada.
 - **Barra de promoción del header:** se oculta al bajar > 80 px y vuelve al llegar a < 24 px (`top-0` ↔ `-top-8`, sin cambiar la altura del header).
+
+## Reglas visuales (Parte 7.3)
+- **Tamaño mínimo de texto en la tienda pública: 12 px** (`text-xs` o `font-size: 12px`); nunca `text-[9–11px]`. Aplica a ficha, tarjetas, carrito, checkout y páginas públicas; el admin queda aparte.
+- **Plazos de entrega:** una sola fuente, `src/lib/entrega.ts` (`textoPlazoLima()`, `textoPlazoProvincias()`); no escribir «5–7 días» a mano. «Tiempos de entrega» vive solo en la tarjeta `DeliveryPromise`.
+- **Distrito:** se elige con `DistritoCombobox` (ficha y checkout); la búsqueda ignora tildes y mayúsculas (`lib/buscarDistrito.ts`).
+- **Favoritos:** el aviso sale con `avisoFavorito()` (abajo, con «Deshacer»); «Deshacer» usa `addToWishlist` / `removeFromWishlist`, nunca `toggleWishlist` (usaría un estado viejo).
+- **Moneda:** el monto se muestra con «S/»; no se escribe «PEN» como texto.
+- **Pestañas con desplazamiento horizontal:** llevan indicador (degradado + flecha) visible solo si hay contenido oculto.

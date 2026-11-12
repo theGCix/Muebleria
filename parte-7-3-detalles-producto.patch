@@ -1,0 +1,1366 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index c48ff26..058c7cb 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -49,3 +49,11 @@
+ - **`--gradient-warm`:** el extremo naranja usa el mismo valor oscuro para que el texto claro sobre el degradado cumpla 4.5:1.
+ - **Fotos:** `cloudinaryUrl(id, { w, h })` recorta con `c_fill,g_auto` (antes w+h estiraba la imagen). Fotos de clientes: `liviana(url, w, h)`. Tarjetas de producto, categoría y reseña en 4:3; galería de clientes cuadrada.
+ - **Barra de promoción del header:** se oculta al bajar > 80 px y vuelve al llegar a < 24 px (`top-0` ↔ `-top-8`, sin cambiar la altura del header).
++
++## Reglas visuales (Parte 7.3)
++- **Tamaño mínimo de texto en la tienda pública: 12 px** (`text-xs` o `font-size: 12px`); nunca `text-[9–11px]`. Aplica a ficha, tarjetas, carrito, checkout y páginas públicas; el admin queda aparte.
++- **Plazos de entrega:** una sola fuente, `src/lib/entrega.ts` (`textoPlazoLima()`, `textoPlazoProvincias()`); no escribir «5–7 días» a mano. «Tiempos de entrega» vive solo en la tarjeta `DeliveryPromise`.
++- **Distrito:** se elige con `DistritoCombobox` (ficha y checkout); la búsqueda ignora tildes y mayúsculas (`lib/buscarDistrito.ts`).
++- **Favoritos:** el aviso sale con `avisoFavorito()` (abajo, con «Deshacer»); «Deshacer» usa `addToWishlist` / `removeFromWishlist`, nunca `toggleWishlist` (usaría un estado viejo).
++- **Moneda:** el monto se muestra con «S/»; no se escribe «PEN» como texto.
++- **Pestañas con desplazamiento horizontal:** llevan indicador (degradado + flecha) visible solo si hay contenido oculto.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index b83ec84..2473a81 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -189,3 +189,20 @@
+ - **Verificación:** `tsc --noEmit` sin errores nuevos (solo los preexistentes de `types.ts`); `vite build` OK; contrastes recalculados con script. Sin pruebas de render (no hay librería de pruebas instalada en el repo) y **sin probar en navegador** (360/414/768 px).
+ - **Riesgos / pendientes:** `cloudinaryUrl` cambia el recorte de todas las fotos con `h` (corrige el estiramiento, pero se verá distinto); el naranja de texto es más oscuro que el de los fondos; `text-accent` sigue en pantallas fuera de alcance (product.$handle, nosotros, catálogo, categoría, panel); `g_auto` solo aplica a fotos de Cloudinary; al ocultarse la barra, `scroll-mt-28` deja 32 px de margen extra en los anclajes; probar `inert` con teclado.
+ 
++
++## 2026-11-12 — Parte 7.2: Checkout y pedidos — registro retroactivo
++- **Nota:** esta entrada se agregó al cerrar la 7.3, reconstruida solo a partir de `parte-7-2-checkout-pedidos.patch` (el patch revierte limpio sobre el repo, así que está aplicado). El detalle de verificación original no quedó registrado.
++- **Archivos que toca el patch:** `server/notificaciones.js` y su prueba (reintento si n8n no responde o falla; si ambos fallan el pedido queda con `correo_confirmacion_enviado_at` vacío y se ve en «Correos de pedidos»), `src/lib/fechas.ts` (columnas `date` leídas tal cual, sin zona horaria), `src/lib/pedidoId.ts`, `routes/checkout.tsx` (barra fija inferior móvil con total + Pagar), `components/checkout/PagoExitoso.tsx`, `routes/perfil/pedidos.tsx`, `routes/_authenticated/correos-pedidos.tsx`.
++
++## 2026-11-12 — Parte 7.3: Detalles de producto y experiencia de compra (M1, D10, D11, D13, D14) — plan aprobado e implementado
++- **Decisiones del usuario:** M1 solo en la tienda pública (no admin), incluyendo también testimonios, proyectos, perfil/pedidos y conformidad; «PEN» = la línea «Moneda: Soles (PEN)»; combobox en ficha **y** checkout; el indicador de desplazamiento se aplica a las pestañas de la ficha; se agrega esta entrada y la de la 7.2.
++- **M1a — etiquetas ≥ 12 px:** todo `text-[9–11px]` pasó a `text-xs` y todo `font-size` 9–11 px a 12 px en ficha (`product.$handle.tsx`, `product-experience.css`, `product-breadcrumb.css`, `BundleBuilder`), tarjetas, carrito, cabecera, barra inferior móvil, checkout (`checkout.tsx`, `checkout/*`), `combo.$id`, `PiezaDestacada`, `OpcionesPedido`, `ClientesSatisfechos`, `EvidenciasCliente`, `LoginModal`, `NotificationsBell`, `ReaccionesProyecto`, testimonios, proyectos, perfil/pedidos y conformidad. Contadores numéricos (barra inferior, campana) de `h-4 min-w-4` a `h-5 min-w-5`. Reloj de la oferta: caja de 54 px y `letter-spacing` de .04em. Admin y `components/ui/*` no se tocaron.
++- **M1b — pestañas de la ficha:** componente `TabList` (en `product.$handle.tsx`) con degradado y flecha en el borde donde queda contenido oculto (se mide con `scroll` + `ResizeObserver`; solo aparece si hay desborde); centra la pestaña activa dentro de la lista sin mover la página; `role="tablist"` / `tab` / `tabpanel`, `aria-selected`, `aria-controls`.
++- **M1c — «PEN»:** eliminada la línea de `checkout.tsx`. Los montos siguen con `Intl` (se muestran «S/»); no había otro «PEN» visible.
++- **D10 — entrega unificada:** `FAQ_ENTREGA` ya no existe (se quitó de los 7 perfiles de `productProfiles.ts`). La tarjeta `DeliveryPromise` muestra Lima, provincias y «fabricamos a pedido; coordinamos la fecha exacta». Los plazos salen de `lib/entrega.ts` (`ENTREGA_MIN/MAX_DIAS`, nuevos `ENTREGA_PROV_MIN/MAX_DIAS`, `textoPlazoLima()`, `textoPlazoProvincias()`), también en la pestaña «Entrega y pagos».
++- **D11 — favoritos:** `lib/avisoFavorito.ts` (aviso abajo, 6 s, «Deshacer») usado por `ProductCard`, ficha y `WishlistDrawer`. «Deshacer» usa `addToWishlist` / `removeFromWishlist` (el contexto ahora expone `addToWishlist`; no dependen de `items`, así no usan un estado viejo). Si guardar falla, avisa con error en vez de decir «eliminado». `Toaster`: `mobileOffset.bottom = 96` para no tapar la barra inferior ni la barra de compra (solo afecta avisos abajo).
++- **D13 — progreso de 4 pasos:** `.gmx-track` es una lista ordenada (`ol`, `aria-label`, `aria-current` en «Pedido»); texto de 12 px; `overflow-wrap` y menos relleno a ≤ 400 px.
++- **D14 — distrito con búsqueda:** `components/DistritoCombobox.tsx` (Popover + Command, sin dependencias nuevas) en `DeliveryPromise` y `checkout.tsx`; búsqueda sin tildes ni mayúsculas (`lib/buscarDistrito.ts`); tarifa por distrito a la derecha; buscador a 16 px (sin zoom en iOS); filas de 44 px. El valor sigue en `useDistritoEnvio` / `form.distrito`; no se tocó `envios.ts` ni las tarifas.
++- **No se tocó:** cálculos fiscales, `pagos.js`, RLS, colores.
++- **Verificación:** `tsc --noEmit` sin errores nuevos; `vite build` OK; filtro de distritos probado sobre el archivo real (6 casos); en Chromium a 360 px (arnés temporal ya borrado): sin desborde horizontal, pasos a 12 px, «ancon» → solo «Ancón», Enter elige y muestra S/ 130.00, «zzz» → «No encontramos ese distrito», sin errores de consola. **Sin probar en navegador con datos reales:** `TabList`, el aviso con «Deshacer» (invitado y con sesión) ni el checkout completo.
++- **Riesgos / pendientes:** a 12 px los rótulos en mayúsculas y las insignias pueden envolver (revisar a 360/414/768 px); el aviso inferior puede coincidir con el botón flotante del asistente en pantallas chicas; `ProductDetail.tsx` es código muerto (nadie lo importa) y conserva textos < 12 px y el acordeón antiguo; `text-xs` sigue fuera del admin; «Deshacer» repetido muy rápido puede intentar insertar un favorito ya existente (la inserción fallida no rompe nada, pero no se probó contra Supabase).
+diff --git a/src/components/CartDrawer.tsx b/src/components/CartDrawer.tsx
+index 77316d2..6803261 100644
+--- a/src/components/CartDrawer.tsx
++++ b/src/components/CartDrawer.tsx
+@@ -157,7 +157,7 @@ export const CartDrawer = () => {
+                         >
+                           <div className="flex items-start justify-between gap-2">
+                             <div className="min-w-0">
+-                              <span className="inline-flex items-center gap-1 rounded-full bg-accent-strong px-2 py-0.5 text-[11px] font-bold text-accent-foreground">
++                              <span className="inline-flex items-center gap-1 rounded-full bg-accent-strong px-2 py-0.5 text-xs font-bold text-accent-foreground">
+                                 <PackageCheck className="h-3 w-3" /> Combo
+                               </span>
+                               <h4 className="mt-1 truncate font-display text-lg font-semibold text-foreground">
+@@ -190,7 +190,7 @@ export const CartDrawer = () => {
+                                 </div>
+                                 <p className="min-w-0 flex-1 truncate text-sm text-foreground">{it.title}</p>
+                                 {it.qty > 1 && (
+-                                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
++                                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
+                                     ×{it.qty}
+                                   </span>
+                                 )}
+diff --git a/src/components/ClientesSatisfechos.tsx b/src/components/ClientesSatisfechos.tsx
+index 4e7a7b7..aabc8d5 100644
+--- a/src/components/ClientesSatisfechos.tsx
++++ b/src/components/ClientesSatisfechos.tsx
+@@ -48,7 +48,7 @@ export function ClientesSatisfechos() {
+               <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 pt-8 text-white sm:p-4 sm:pt-12">
+                 <p className="text-sm font-medium leading-tight">{f.autor_nombre}</p>
+                 {f.producto_nombre && <p className="mt-0.5 line-clamp-1 text-xs text-white/80">{f.producto_nombre}</p>}
+-                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/85">
++                <div className="mt-1.5 flex items-center gap-2 text-xs text-white/85">
+                   {f.calificacion > 0 && (
+                     <span className="inline-flex items-center gap-0.5" aria-label={`${f.calificacion} de 5 estrellas`}>
+                       <Star className="h-3 w-3 fill-[var(--color-gold)] text-[var(--color-gold)]" /> {f.calificacion}
+diff --git a/src/components/DistritoCombobox.tsx b/src/components/DistritoCombobox.tsx
+new file mode 100644
+index 0000000..c838d63
+--- /dev/null
++++ b/src/components/DistritoCombobox.tsx
+@@ -0,0 +1,85 @@
++// src/components/DistritoCombobox.tsx
++// D14: selector de distrito con búsqueda (51 distritos del tarifario). Lo usan la ficha (DeliveryPromise)
++// y el checkout. Solo cambia cómo se elige: la fuente del valor sigue siendo useDistritoEnvio / form.distrito
++// y las tarifas salen de DISTRITOS_ENVIO (src/lib/envios.ts).
++import { useId, useState } from "react";
++import { Check, ChevronsUpDown } from "lucide-react";
++import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
++import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
++import { DISTRITOS_ENVIO } from "@/lib/envios";
++import { filtrarDistrito } from "@/lib/buscarDistrito";
++import { fmtPEN } from "@/lib/pricing";
++import { cn } from "@/lib/utils";
++
++interface Props {
++  value: string;
++  onChange: (distrito: string) => void;
++  /** id del botón, para enlazarlo con un <label htmlFor>. */
++  id?: string;
++  placeholder?: string;
++  /** Muestra la tarifa a la derecha de cada distrito. */
++  mostrarTarifa?: boolean;
++  className?: string;
++}
++
++export function DistritoCombobox({
++  value,
++  onChange,
++  id,
++  placeholder = "Selecciona tu distrito…",
++  mostrarTarifa = true,
++  className,
++}: Props) {
++  const [open, setOpen] = useState(false);
++  const listId = useId();
++
++  return (
++    <Popover open={open} onOpenChange={setOpen}>
++      <PopoverTrigger asChild>
++        <button
++          type="button"
++          id={id}
++          role="combobox"
++          aria-haspopup="listbox"
++          aria-expanded={open}
++          aria-controls={listId}
++          className={cn(
++            "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm text-foreground shadow-sm",
++            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
++            !value && "text-muted-foreground",
++            className,
++          )}
++        >
++          <span className="truncate">{value || placeholder}</span>
++          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
++        </button>
++      </PopoverTrigger>
++      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-[16rem] p-0">
++        <Command filter={filtrarDistrito}>
++          {/* 16 px: evita el zoom automático de iOS al enfocar el buscador */}
++          <CommandInput placeholder="Busca tu distrito…" className="h-11 text-base" aria-label="Buscar distrito" />
++          <CommandList id={listId} className="max-h-[min(18rem,50vh)]">
++            <CommandEmpty>No encontramos ese distrito.</CommandEmpty>
++            <CommandGroup>
++              {DISTRITOS_ENVIO.map((d) => (
++                <CommandItem
++                  key={d.destino}
++                  value={d.destino}
++                  onSelect={() => {
++                    onChange(d.destino);
++                    setOpen(false);
++                  }}
++                  className="min-h-11 text-sm data-[selected=true]:bg-secondary data-[selected=true]:text-foreground"
++                >
++                  <Check className={cn("h-4 w-4", value === d.destino ? "opacity-100" : "opacity-0")} aria-hidden />
++                  <span className="flex-1">{d.destino}</span>
++                  {mostrarTarifa && <span className="text-xs text-muted-foreground">{fmtPEN(d.precio)}</span>}
++                </CommandItem>
++              ))}
++            </CommandGroup>
++          </CommandList>
++        </Command>
++      </PopoverContent>
++    </Popover>
++  );
++}
+diff --git a/src/components/EvidenciasCliente.tsx b/src/components/EvidenciasCliente.tsx
+index 885da18..fdcadd1 100644
+--- a/src/components/EvidenciasCliente.tsx
++++ b/src/components/EvidenciasCliente.tsx
+@@ -56,7 +56,7 @@ export function EvidenciasCliente({
+               className="h-16 w-16 rounded-md border object-cover transition-opacity group-hover:opacity-90"
+               loading="lazy"
+             />
+-            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
++            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+               {ESTADO_CORTO[f.estado] ?? f.estado}
+             </span>
+           </button>
+diff --git a/src/components/Header.tsx b/src/components/Header.tsx
+index efe2d04..b174202 100644
+--- a/src/components/Header.tsx
++++ b/src/components/Header.tsx
+@@ -142,7 +142,7 @@ export function Header() {
+           {...(barraOculta ? ({ inert: "" } as Record<string, string>) : {})}
+         >
+           <div className="container mx-auto flex h-8 items-center justify-center px-4 md:px-6">
+-            <p className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium tracking-wide text-center">
++            <p className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-center">
+               <CampanaTicker
+                 fallback={
+                   <>
+@@ -161,7 +161,7 @@ export function Header() {
+             {/* Logo */}
+             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
+               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
+-              <span className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
++              <span className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
+             </Link>
+ 
+             {/* Desktop nav */}
+diff --git a/src/components/LoginModal.tsx b/src/components/LoginModal.tsx
+index bfc724d..43e68c4 100644
+--- a/src/components/LoginModal.tsx
++++ b/src/components/LoginModal.tsx
+@@ -467,7 +467,7 @@ function AuthExperience({
+ 
+   const lastBadge = (m: LastMethod) =>
+     lastMethod === m ? (
+-      <span className="absolute right-3 rounded-full bg-[#C9A24B]/20 px-2 py-0.5 text-[10px] font-medium text-[#8A6A1F] dark:text-[#E3C170]">
++      <span className="absolute right-3 rounded-full bg-[#C9A24B]/20 px-2 py-0.5 text-xs font-medium text-[#8A6A1F] dark:text-[#E3C170]">
+         Último usado
+       </span>
+     ) : null;
+diff --git a/src/components/MobileBottomBar.tsx b/src/components/MobileBottomBar.tsx
+index 216a678..8c429b4 100644
+--- a/src/components/MobileBottomBar.tsx
++++ b/src/components/MobileBottomBar.tsx
+@@ -35,14 +35,14 @@ export function MobileBottomBar({ roles }: { roles: AppRole[] }) {
+       <Link
+         key={t.to}
+         to={t.to}
+-        className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
++        className={`relative flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium ${
+           active ? "text-primary" : "text-muted-foreground"
+         }`}
+       >
+         <t.icon className="h-5 w-5" />
+         {t.label}
+         {!!t.badge && t.badge > 0 && (
+-          <span className="absolute right-[calc(50%-20px)] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
++          <span className="absolute right-[calc(50%-20px)] top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold leading-none text-white tabular-nums">
+             {t.badge > 99 ? "99+" : t.badge}
+           </span>
+         )}
+@@ -60,7 +60,7 @@ export function MobileBottomBar({ roles }: { roles: AppRole[] }) {
+       {isStaff && (
+         <Link
+           to="/pos"
+-          className="relative -top-3 mx-1 flex flex-col items-center gap-0.5 text-[11px] font-semibold text-primary"
++          className="relative -top-3 mx-1 flex flex-col items-center gap-0.5 text-xs font-semibold text-primary"
+         >
+           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+             <ShoppingCart className="h-6 w-6" />
+@@ -74,7 +74,7 @@ export function MobileBottomBar({ roles }: { roles: AppRole[] }) {
+       <button
+         type="button"
+         onClick={() => setOpenMobile(true)}
+-        className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-muted-foreground"
++        className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium text-muted-foreground"
+       >
+         <Menu className="h-5 w-5" />
+         Más
+diff --git a/src/components/NotificationsBell.tsx b/src/components/NotificationsBell.tsx
+index 92f60fd..016e9aa 100644
+--- a/src/components/NotificationsBell.tsx
++++ b/src/components/NotificationsBell.tsx
+@@ -29,7 +29,7 @@ export function NotificationsBell({ roles }: { roles: AppRole[] }) {
+         >
+           <Bell className="h-5 w-5" />
+           {total > 0 && (
+-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
++            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold leading-none text-white tabular-nums">
+               {total > 99 ? "99+" : total}
+             </span>
+           )}
+diff --git a/src/components/OpcionesPedido.tsx b/src/components/OpcionesPedido.tsx
+index e46d3a5..674c57d 100644
+--- a/src/components/OpcionesPedido.tsx
++++ b/src/components/OpcionesPedido.tsx
+@@ -19,7 +19,7 @@ export function OpcionesPedido({
+       {opciones.map((o) => (
+         <li
+           key={o.valor_id ?? `${o.tipo}-${o.valor}`}
+-          className="rounded-full bg-muted px-2 py-0.5 text-[11px] leading-tight text-foreground/80"
++          className="rounded-full bg-muted px-2 py-0.5 text-xs leading-tight text-foreground/80"
+         >
+           <span className="text-muted-foreground">{o.etiqueta}:</span> {o.valor}
+           {conMaterial && o.material && o.material.toLowerCase() !== o.valor.toLowerCase() ? ` · ${o.material}` : ""}
+diff --git a/src/components/PiezaDestacada.tsx b/src/components/PiezaDestacada.tsx
+index f7bda0c..f62f256 100644
+--- a/src/components/PiezaDestacada.tsx
++++ b/src/components/PiezaDestacada.tsx
+@@ -97,7 +97,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
+       {/* Contenido */}
+       <div className="pointer-events-none relative z-10 flex flex-col gap-3 p-5 md:p-7">
+         {p.categoria && (
+-          <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/70">
++          <span className="text-xs font-medium uppercase tracking-[0.22em] text-white/70">
+             {p.categoria}
+           </span>
+         )}
+diff --git a/src/components/ProductCard.tsx b/src/components/ProductCard.tsx
+index 563c38b..6e20344 100644
+--- a/src/components/ProductCard.tsx
++++ b/src/components/ProductCard.tsx
+@@ -7,6 +7,7 @@ import {
+   ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2, Zap,
+ } from "lucide-react";
+ import { toast } from "sonner";
++import { avisoFavorito } from "@/lib/avisoFavorito";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import type { Product } from "@/hooks/useProducts";
+ import { useWishlist } from "@/context/WishlistContext";
+@@ -104,7 +105,7 @@ export function ProductCard({ product: p }: Props) {
+   const updateQty = useCartStore((s) => s.updateQty);
+   const removeItem = useCartStore((s) => s.removeItem);
+   const items = useCartStore((s) => s.items);
+-  const { toggleWishlist, isWishlisted } = useWishlist();
++  const { toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted } = useWishlist();
+   const [wishPending, setWishPending] = useState(false);
+   const [medidaOpen, setMedidaOpen] = useState(false);
+   // Distrito compartido con la ficha y el checkout (nunca se asume uno)
+@@ -197,8 +198,10 @@ export function ProductCard({ product: p }: Props) {
+     e.preventDefault();
+     e.stopPropagation();
+     setWishPending(true);
++    const estaba = isWishlisted(p.id);
+     const added = await toggleWishlist(p.id);
+-    toast.success(added ? `"${p.nombre}" guardado en favoritos` : `"${p.nombre}" eliminado de favoritos`);
++    if (!estaba && !added) toast.error("No pudimos guardar el favorito");
++    else avisoFavorito(p.nombre, added, () => (added ? removeFromWishlist(p.id) : addToWishlist(p.id)));
+     setWishPending(false);
+   };
+ 
+@@ -256,7 +259,7 @@ export function ProductCard({ product: p }: Props) {
+                 {insignias.map((b) => (
+                   <span
+                     key={b.key}
+-                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide shadow-sm ${b.cls}`}
++                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${b.cls}`}
+                   >
+                     {b.icono === "estrella" && <Star className="h-3 w-3 fill-current" />}
+                     {b.icono === "chispa" && <Sparkles className="h-3 w-3" />}
+@@ -291,11 +294,11 @@ export function ProductCard({ product: p }: Props) {
+ 
+             {/* Vista rápida (solo con mouse) */}
+             <div className="gmc-quick" aria-hidden>
+-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">Vista rápida</p>
++              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Vista rápida</p>
+               {atributos.length > 0 && (
+                 <div className="mt-1.5 flex flex-wrap gap-1.5">
+                   {atributos.map((a) => (
+-                    <span key={a} className="rounded-full border border-white/35 px-2 py-0.5 text-[11px] text-white/95">{a}</span>
++                    <span key={a} className="rounded-full border border-white/35 px-2 py-0.5 text-xs text-white/95">{a}</span>
+                   ))}
+                 </div>
+               )}
+@@ -308,7 +311,7 @@ export function ProductCard({ product: p }: Props) {
+           {/* ───────── Información ───────── */}
+           <div className="flex flex-1 flex-col p-2.5 @[13rem]:p-4 @[13rem]:pt-3.5">
+             {p.categoria && (
+-              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</span>
++              <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</span>
+             )}
+             <h3 className="mt-1 text-sm font-semibold leading-snug line-clamp-2 @[13rem]:text-[17px]">{p.nombre}</h3>
+ 
+@@ -326,7 +329,7 @@ export function ProductCard({ product: p }: Props) {
+               atributos.length > 0 && (
+                 <div className="mt-2 hidden flex-wrap gap-1.5 @[13rem]:flex">
+                   {atributos.map((a) => (
+-                    <span key={a} className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground">{a}</span>
++                    <span key={a} className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-xs text-muted-foreground">{a}</span>
+                   ))}
+                 </div>
+               )
+@@ -342,7 +345,7 @@ export function ProductCard({ product: p }: Props) {
+                     Ahorras {fmtPEN(p.precio - precioOferta)}
+                   </span>
+                   {cuentaRegresiva && (
+-                    <span className="flex basis-full items-center gap-1.5 text-[11px] font-semibold text-destructive">
++                    <span className="flex basis-full items-center gap-1.5 text-xs font-semibold text-destructive">
+                       <span className="gmc-dot" /> {cuentaRegresiva}
+                     </span>
+                   )}
+@@ -414,7 +417,7 @@ export function ProductCard({ product: p }: Props) {
+                         <span className="hidden @[13rem]:inline">En el carrito</span>
+                       </span>
+                     </span>
+-                    <span className="hidden whitespace-nowrap text-[11px] text-primary/70 @[13rem]:block">
++                    <span className="hidden whitespace-nowrap text-xs text-primary/70 @[13rem]:block">
+                       {qty} {qty === 1 ? "unidad" : "unidades"} · {fmtPEN(precioOferta * qty)}
+                     </span>
+                   </div>
+diff --git a/src/components/WishlistDrawer.tsx b/src/components/WishlistDrawer.tsx
+index a086fc5..ba5f8d3 100644
+--- a/src/components/WishlistDrawer.tsx
++++ b/src/components/WishlistDrawer.tsx
+@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
+ import { LoginModal } from "./LoginModal";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { toast } from "sonner";
++import { avisoFavorito } from "@/lib/avisoFavorito";
+ import { ofertaInfo } from "@/lib/pricing";
+ 
+ const fmt = (n: number) =>
+@@ -27,7 +28,7 @@ export function WishlistDrawer() {
+   const [isOpen, setIsOpen] = useState(false);
+   const [loginOpen, setLoginOpen] = useState(false);
+   const { user } = useAuth();
+-  const { items, loading, removeFromWishlist } = useWishlist();
++  const { items, loading, addToWishlist, removeFromWishlist } = useWishlist();
+   const addItem = useCartStore((s) => s.addItem);
+   const cartItems = useCartStore((s) => s.items);
+ 
+@@ -50,7 +51,7 @@ export function WishlistDrawer() {
+ 
+   const handleRemove = async (productId: string, nombre: string) => {
+     await removeFromWishlist(productId);
+-    toast.success(`"${nombre}" eliminado de favoritos`);
++    avisoFavorito(nombre, false, () => addToWishlist(productId));
+   };
+ 
+   const handleOpenDrawer = () => {
+diff --git a/src/components/checkout/CheckoutHeader.tsx b/src/components/checkout/CheckoutHeader.tsx
+index 171829b..b6d8092 100644
+--- a/src/components/checkout/CheckoutHeader.tsx
++++ b/src/components/checkout/CheckoutHeader.tsx
+@@ -14,7 +14,7 @@ export function CheckoutHeader() {
+           className="flex min-h-[44px] flex-col justify-center leading-none"
+         >
+           <span className="font-display text-xl font-bold tracking-tight text-foreground">G&amp;M</span>
+-          <span className="text-[10px] uppercase tracking-[0.25em] text-foreground/80">Mueblería</span>
++          <span className="text-xs uppercase tracking-[0.25em] text-foreground/80">Mueblería</span>
+         </Link>
+         <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+           <Lock className="h-4 w-4 text-primary" aria-hidden /> Compra segura
+diff --git a/src/components/checkout/DireccionesGuardadas.tsx b/src/components/checkout/DireccionesGuardadas.tsx
+index dfdfae9..de6d6ae 100644
+--- a/src/components/checkout/DireccionesGuardadas.tsx
++++ b/src/components/checkout/DireccionesGuardadas.tsx
+@@ -47,7 +47,7 @@ export function DireccionesGuardadas({
+                 <span className="flex items-center gap-2 text-sm font-medium">
+                   {a.etiqueta}
+                   {a.predeterminada && (
+-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
++                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                       Predeterminada
+                     </span>
+                   )}
+diff --git a/src/components/checkout/PagoExitoso.tsx b/src/components/checkout/PagoExitoso.tsx
+index aab9183..9aa559f 100644
+--- a/src/components/checkout/PagoExitoso.tsx
++++ b/src/components/checkout/PagoExitoso.tsx
+@@ -299,7 +299,7 @@ export function PagoExitoso({
+           </p>
+ 
+           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
+-            <p className="text-[11px] uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
++            <p className="text-xs uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
+             <p className="font-display text-5xl font-semibold tabular-nums sm:text-6xl" aria-label={fmtPEN(total)}>
+               {fmtPEN(total)}
+             </p>
+@@ -330,13 +330,13 @@ export function PagoExitoso({
+               <span className="gmp-stamp" aria-hidden>Pagado</span>
+ 
+               <div className="p-5 pb-5 pr-28 sm:p-6 sm:pr-40">
+-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
++                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
+                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                   <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{idPedido}</span>
+                   <button
+                     type="button"
+                     onClick={copiar}
+-                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
++                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                     aria-label="Copiar número de pedido"
+                   >
+                     {copiado ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+@@ -360,7 +360,7 @@ export function PagoExitoso({
+                             <PackageCheck className="m-auto mt-5 h-6 w-6 text-muted-foreground" />
+                           )}
+                           {it.qty > 1 && (
+-                            <span className="absolute -right-0 -top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">×{it.qty}</span>
++                            <span className="absolute -right-0 -top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-foreground">×{it.qty}</span>
+                           )}
+                         </div>
+                         <div className="min-w-0 flex-1">
+@@ -413,7 +413,7 @@ export function PagoExitoso({
+           {/* Línea de tiempo */}
+           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1.65s" }} aria-label="Lo que sigue">
+             <div className="gmp-card h-full p-5 sm:p-6">
+-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
++              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
+               <h2 className="font-display mt-1 mb-5 text-2xl font-semibold leading-tight">El camino de tu pedido</h2>
+               <ol>
+                 {pasosMostrados.map((p) => {
+@@ -424,7 +424,7 @@ export function PagoExitoso({
+                       <div className="min-w-0 pt-0.5">
+                         <p className={`text-sm font-semibold ${p.estado === "todo" ? "text-muted-foreground" : ""}`}>
+                           {p.titulo}
+-                          {p.estado === "now" && <span className="ml-2 rounded-full bg-[#f0a020]/20 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8a5a00]">Siguiente</span>}
++                          {p.estado === "now" && <span className="ml-2 rounded-full bg-[#f0a020]/20 px-2 py-0.5 align-middle text-xs font-bold uppercase tracking-wide text-[#8a5a00]">Siguiente</span>}
+                         </p>
+                         <p className={`text-xs leading-relaxed ${p.estado === "goal" ? "font-medium text-foreground" : "text-muted-foreground"}`}>{p.detalle}</p>
+                       </div>
+@@ -462,7 +462,7 @@ export function PagoExitoso({
+           <section className="gmp-rise mt-10" style={{ ["--gmp-d" as string]: "1.95s" }} aria-label="Completa tu espacio">
+             <div className="mb-4 flex items-end justify-between gap-3">
+               <div>
+-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mientras fabricamos tu pedido</p>
++                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mientras fabricamos tu pedido</p>
+                 <h2 className="font-display text-2xl font-semibold sm:text-3xl">Completa tu espacio</h2>
+               </div>
+               <Link to="/catalogo" className="shrink-0 text-sm text-primary underline-offset-4 hover:underline">Ver catálogo</Link>
+@@ -477,7 +477,7 @@ export function PagoExitoso({
+                       {img && <img src={img} alt={p.nombre} loading="lazy" className="h-full w-full object-cover mix-blend-multiply transition-transform duration-700 group-hover:scale-105" />}
+                     </div>
+                     <div className="p-4">
+-                      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</p>
++                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</p>
+                       <p className="font-display mt-0.5 text-lg font-semibold leading-snug line-clamp-1">{p.nombre}</p>
+                       <p className="mt-1 flex items-baseline gap-2">
+                         <span className={`font-display text-xl font-bold ${activa ? "text-destructive" : ""}`}>{fmtPEN(precioFinal)}</span>
+diff --git a/src/components/checkout/PagoRechazado.tsx b/src/components/checkout/PagoRechazado.tsx
+index bd101e4..2ec4072 100644
+--- a/src/components/checkout/PagoRechazado.tsx
++++ b/src/components/checkout/PagoRechazado.tsx
+@@ -166,7 +166,7 @@ export function PagoRechazado({
+           {/* Qué pasó + qué hacer */}
+           <section className="gmp-rise lg:col-span-3" style={{ ["--gmp-d" as string]: "0.85s" }} aria-label="Qué pasó">
+             <div className="gmp-card h-full p-5 sm:p-6">
+-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">¿Qué pasó?</p>
++              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">¿Qué pasó?</p>
+               <h2 className="font-display mt-1 text-2xl font-semibold leading-tight sm:text-3xl">
+                 {datos.sinConfirmar ? "No pudimos confirmar tu pago" : motivo.titulo}
+               </h2>
+@@ -192,7 +192,7 @@ export function PagoRechazado({
+ 
+               {!datos.sinConfirmar && (
+                 <>
+-                  <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
++                  <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                     {motivo.nuestro ? "Qué puedes hacer" : "Cómo resolverlo"}
+                   </p>
+                   <ol className="mt-3 space-y-3">
+@@ -207,7 +207,7 @@ export function PagoRechazado({
+               )}
+ 
+               {(code || datos.date) && (
+-                <p className="mt-6 border-t border-dashed border-border pt-3 text-[11px] leading-relaxed text-muted-foreground">
++                <p className="mt-6 border-t border-dashed border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+                   Referencia para soporte{code ? ` · código ${code}` : ""}{datos.actionDesc ? ` · ${datos.actionDesc}` : ""}{datos.date ? ` · ${datos.date}` : ""}
+                 </p>
+               )}
+@@ -217,7 +217,7 @@ export function PagoRechazado({
+           {/* Tu pedido sigue aquí */}
+           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1s" }} aria-label="Tu pedido">
+             <div className="gmp-card h-full p-5 sm:p-6">
+-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido sigue aquí</p>
++              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido sigue aquí</p>
+               <h2 className="font-display mt-1 mb-4 text-xl font-semibold leading-tight">Nada se perdió</h2>
+ 
+               {items.length > 0 ? (
+@@ -228,7 +228,7 @@ export function PagoRechazado({
+                         {it.image
+                           ? <img src={it.image} alt="" className="h-full w-full object-cover mix-blend-multiply" loading="lazy" />
+                           : <ShoppingBag className="m-auto mt-4 h-5 w-5 text-muted-foreground" />}
+-                        {it.qty > 1 && <span className="absolute right-0 top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">×{it.qty}</span>}
++                        {it.qty > 1 && <span className="absolute right-0 top-0 rounded-bl-lg bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-foreground">×{it.qty}</span>}
+                       </div>
+                       <p className="font-display min-w-0 flex-1 text-[15px] font-semibold leading-snug line-clamp-2">{it.title}</p>
+                       <p className="shrink-0 text-sm font-semibold tabular-nums">{fmtPEN(it.price * it.qty)}</p>
+diff --git a/src/components/product/BundleBuilder.tsx b/src/components/product/BundleBuilder.tsx
+index 04a600a..c587fb2 100644
+--- a/src/components/product/BundleBuilder.tsx
++++ b/src/components/product/BundleBuilder.tsx
+@@ -72,7 +72,7 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
+             <div className="gmx-bimg">{base.image && <img src={base.image} alt="" />}</div>
+             <div className="gmx-bbody">
+               <div className="gmx-bname">{base.nombre}</div>
+-              <div style={{ fontSize: 11, color: "var(--gm-muted)" }}>Tu elección</div>
++              <div style={{ fontSize: 12, color: "var(--gm-muted)" }}>Tu elección</div>
+               <div className="gmx-bprice">{fmtPEN(base.precio)}</div>
+             </div>
+           </div>
+@@ -83,10 +83,10 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
+               <div className="gmx-bimg">{img && <img src={img} alt="" loading="lazy" />}</div>
+               <div className="gmx-bbody">
+                 <div className="gmx-bname">{p.nombre}</div>
+-                {p.categoria && <div style={{ fontSize: 11, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
++                {p.categoria && <div style={{ fontSize: 12, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
+                 <div className="gmx-bprice">{fmtPEN(precio)}</div>
+                 <Link to="/product/$handle" params={{ handle: p.id }} onClick={(e) => e.stopPropagation()}
+-                  style={{ fontSize: 11, color: "var(--gmx-accent)", textDecoration: "underline", marginTop: 2 }}>
++                  style={{ fontSize: 12, color: "var(--gmx-accent)", textDecoration: "underline", marginTop: 2 }}>
+                   Ver detalle
+                 </Link>
+               </div>
+diff --git a/src/components/product/DeliveryPromise.tsx b/src/components/product/DeliveryPromise.tsx
+index 4a676dc..0b08569 100644
+--- a/src/components/product/DeliveryPromise.tsx
++++ b/src/components/product/DeliveryPromise.tsx
+@@ -1,7 +1,8 @@
+ // src/components/product/DeliveryPromise.tsx
+ // Promesa de entrega con fechas calculadas desde HOY + costo de envío real por distrito.
++// D10: también reúne los plazos (Lima y provincias) que antes estaban en el acordeón «Tiempos de entrega».
+ import { Truck } from "lucide-react";
+-import { DISTRITOS_ENVIO } from "@/lib/envios";
++import { DistritoCombobox } from "@/components/DistritoCombobox";
+ import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
+ import { fmtPEN } from "@/lib/pricing";
+ import {
+@@ -9,13 +10,14 @@ import {
+   ENTREGA_MAX_DIAS as MAX_DIAS,
+   addBusinessDays,
+   fmtDia,
++  textoPlazoLima,
++  textoPlazoProvincias,
+ } from "@/lib/entrega";
+ import "./product-experience.css";
+ 
+ export function DeliveryPromise() {
+   // Distrito compartido con la tarjeta de producto y el checkout
+   const { distrito, envio, desde: envioDesde, setDistrito } = useDistritoEnvio();
+-  const onChange = setDistrito;
+ 
+   const hoy = new Date();
+   const desde = addBusinessDays(hoy, MIN_DIAS);
+@@ -28,24 +30,29 @@ export function DeliveryPromise() {
+         <span>Si lo pides hoy, llega entre el <b>{fmtDia(desde)}</b> y el <b>{fmtDia(hasta)}</b></span>
+       </div>
+ 
+-      <div className="gmx-track" aria-hidden>
+-        <div className="gmx-step done"><div className="gmx-dot" /><b>Pedido</b>Hoy</div>
+-        <div className="gmx-step"><div className="gmx-dot" /><b>Fabricación</b>A mano</div>
+-        <div className="gmx-step"><div className="gmx-dot" /><b>Control</b>Calidad</div>
+-        <div className="gmx-step"><div className="gmx-dot" /><b>Entrega</b>A domicilio</div>
+-      </div>
++      {/* D13: 4 pasos con texto de 12 px; lista ordenada para lectores de pantalla */}
++      <ol className="gmx-track" aria-label="Etapas de tu pedido">
++        <li className="gmx-step done" aria-current="step"><div className="gmx-dot" /><b>Pedido</b>Hoy</li>
++        <li className="gmx-step"><div className="gmx-dot" /><b>Fabricación</b>A mano</li>
++        <li className="gmx-step"><div className="gmx-dot" /><b>Control</b>Calidad</li>
++        <li className="gmx-step"><div className="gmx-dot" /><b>Entrega</b>A domicilio</li>
++      </ol>
+ 
+       <div className="gmx-ship">
+         <label htmlFor="gmx-distrito">Calcula tu envío:</label>
+-        <select id="gmx-distrito" value={distrito} onChange={(e) => onChange(e.target.value)}>
+-          <option value="">Elige tu distrito</option>
+-          {DISTRITOS_ENVIO.map((d) => <option key={d.destino} value={d.destino}>{d.destino}</option>)}
+-        </select>
+-        {envio != null
+-          ? <b style={{ color: "var(--gm-walnut)" }}>{fmtPEN(envio)}</b>
+-          : <span className="gmx-note">Desde {fmtPEN(envioDesde)}</span>}
++        <div className="gmx-ship-select">
++          <DistritoCombobox id="gmx-distrito" value={distrito} onChange={setDistrito} placeholder="Elige tu distrito" />
++        </div>
++        <span aria-live="polite">
++          {envio != null
++            ? <b style={{ color: "var(--gm-walnut)" }}>{fmtPEN(envio)}</b>
++            : <span className="gmx-note">Desde {fmtPEN(envioDesde)}</span>}
++        </span>
+       </div>
+-      <p className="gmx-note" style={{ marginTop: 8 }}>Fechas estimadas para Lima Metropolitana (días hábiles). Provincias: 10–15 días.</p>
++      <p className="gmx-note" style={{ marginTop: 8 }}>
++        Lima Metropolitana: {textoPlazoLima()} (fechas estimadas). Provincias: {textoPlazoProvincias()}.
++        Fabricamos a pedido; coordinamos la fecha exacta al confirmar tu compra.
++      </p>
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/components/product/product-breadcrumb.css b/src/components/product/product-breadcrumb.css
+index 6861887..3a24a40 100644
+--- a/src/components/product/product-breadcrumb.css
++++ b/src/components/product/product-breadcrumb.css
+@@ -123,7 +123,7 @@
+ .gmb-peek-img { flex: none; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; background: #f3eadc; }
+ .gmb-peek-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+ .gmb-peek-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+-.gmb-peek-eyebrow { font-size: 11px; color: var(--b-mid); }
++.gmb-peek-eyebrow { font-size:12px; color: var(--b-mid); }
+ .gmb-peek-name { font-size: 13px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+ .gmb-peek-price { font-size: 13px; color: var(--b-mid); font-variant-numeric: tabular-nums; }
+ 
+diff --git a/src/components/product/product-experience.css b/src/components/product/product-experience.css
+index 2b56fea..4b7e98c 100644
+--- a/src/components/product/product-experience.css
++++ b/src/components/product/product-experience.css
+@@ -12,7 +12,7 @@
+ }
+ .gmx-eyebrow {
+   display: inline-flex; align-items: center; gap: 8px;
+-  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
++  font-size:12px; letter-spacing: .16em; text-transform: uppercase;
+   color: var(--gmx-accent); font-weight: 600; margin-bottom: 10px;
+ }
+ .gmx-eyebrow::before {
+@@ -44,12 +44,12 @@
+   }
+ }
+ .gmx-counter {
+-  position: absolute; bottom: 14px; right: 14px; font-size: 11px; letter-spacing: .08em;
++  position: absolute; bottom: 14px; right: 14px; font-size:12px; letter-spacing: .08em;
+   background: rgba(28,20,16,.62); color: #fff; padding: 4px 10px; border-radius: 20px;
+   backdrop-filter: blur(6px);
+ }
+ .gmx-hint {
+-  position: absolute; bottom: 14px; left: 14px; font-size: 11px;
++  position: absolute; bottom: 14px; left: 14px; font-size:12px;
+   background: rgba(253,250,246,.88); color: var(--gm-mid);
+   padding: 4px 10px; border-radius: 20px; backdrop-filter: blur(6px);
+ }
+@@ -78,11 +78,11 @@
+ .gmx-clock-label { font-size: 12px; font-weight: 600; color: #b3332a; letter-spacing: .02em; }
+ .gmx-clock-boxes { display: flex; gap: 6px; }
+ .gmx-clock-box {
+-  min-width: 46px; text-align: center; background: var(--gm-dark); color: #fff;
++  min-width: 54px; text-align: center; background: var(--gm-dark); color: #fff;
+   border-radius: 6px; padding: 6px 4px 5px;
+ }
+ .gmx-clock-box b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+-.gmx-clock-box span { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
++.gmx-clock-box span { font-size:12px; letter-spacing: .04em; text-transform: uppercase; opacity: .65; }
+ 
+ .gmx-stock {
+   display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+@@ -131,7 +131,7 @@
+   background: linear-gradient(180deg, #fff, var(--gm-warm));
+   border-radius: 10px; padding: 18px 20px 20px; margin: 4px 0 24px;
+ }
+-.gmx-module-kicker { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gmx-accent); font-weight: 600; }
++.gmx-module-kicker { font-size:12px; letter-spacing: .14em; text-transform: uppercase; color: var(--gmx-accent); font-weight: 600; }
+ .gmx-module-title { font-family: var(--font-display); font-size: 22px; color: var(--gm-walnut); margin: 2px 0 12px; }
+ .gmx-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+ .gmx-chip {
+@@ -169,7 +169,7 @@
+ .gmx-switch[aria-checked="true"] .gmx-switch-track::after { transform: translateX(18px); }
+ 
+ .gmx-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+-.gmx-field label { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gm-muted); margin-bottom: 4px; }
++.gmx-field label { display: block; font-size:12px; letter-spacing: .08em; text-transform: uppercase; color: var(--gm-muted); margin-bottom: 4px; }
+ .gmx-field input {
+   width: 100%; border: 1px solid var(--gm-border); border-radius: 6px; padding: 9px 12px;
+   font-size: 14px; background: #fff; color: var(--gm-dark);
+@@ -180,8 +180,8 @@
+ .gmx-delivery { border: 1px solid var(--gm-border); border-radius: 10px; padding: 16px 18px; margin: 18px 0; background: #fff; }
+ .gmx-delivery-head { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--gm-dark); }
+ .gmx-delivery-head b { color: var(--gm-walnut); }
+-.gmx-track { display: flex; align-items: flex-start; margin: 16px 0 6px; }
+-.gmx-step { flex: 1; text-align: center; position: relative; font-size: 11px; color: var(--gm-muted); }
++.gmx-track { display: flex; align-items: flex-start; margin: 16px 0 6px; padding: 0; list-style: none; }
++.gmx-step { flex: 1; min-width: 0; text-align: center; position: relative; font-size:12px; line-height: 1.3; color: var(--gm-muted); overflow-wrap: anywhere; }
+ .gmx-step::before {
+   content: ""; position: absolute; top: 6px; left: -50%; width: 100%; height: 2px; background: var(--gm-border);
+ }
+@@ -189,11 +189,10 @@
+ .gmx-dot { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--gm-border); margin: 0 auto 6px; position: relative; z-index: 1; }
+ .gmx-step.done .gmx-dot { background: var(--gmx-accent); border-color: var(--gmx-accent); }
+ .gmx-step.done::before { background: var(--gmx-accent); }
+-.gmx-step b { display: block; color: var(--gm-dark); font-weight: 600; font-size: 11px; }
++.gmx-step b { display: block; color: var(--gm-dark); font-weight: 600; font-size:12px; }
+ .gmx-ship { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--gm-mid); }
+-.gmx-ship select {
+-  border: 1px solid var(--gm-border); border-radius: 6px; padding: 7px 10px; font-size: 13px; background: #fff; color: var(--gm-dark);
+-}
++.gmx-ship-select { flex: 1 1 200px; min-width: 200px; max-width: 320px; }
++@media (max-width: 400px) { .gmx-delivery { padding: 16px 12px; } }
+ 
+ /* ── CTAs extra ─────────────────────────────────────────────────────────── */
+ .gmx-wa {
+@@ -369,10 +368,10 @@
+ 
+ /* Etiquetas inferiores */
+ .gmg-meta { position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; justify-content: space-between; align-items: center; z-index: 3; pointer-events: none; }
+-.gmg-count { font-size: 11px; letter-spacing: .1em; background: rgba(28,20,16,.62); color: #fff; padding: 5px 11px; border-radius: 20px; backdrop-filter: blur(6px); }
++.gmg-count { font-size:12px; letter-spacing: .1em; background: rgba(28,20,16,.62); color: #fff; padding: 5px 11px; border-radius: 20px; backdrop-filter: blur(6px); }
+ .gmg-expand {
+   pointer-events: auto; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+-  font-size: 11px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,.55);
++  font-size:12px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid rgba(255,255,255,.55);
+   background: rgba(253,250,246,.82); color: var(--gm-walnut); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px);
+   transition: background .2s, transform .2s;
+ }
+diff --git a/src/components/proyectos/ReaccionesProyecto.tsx b/src/components/proyectos/ReaccionesProyecto.tsx
+index ddb3ff1..5fdd5e7 100644
+--- a/src/components/proyectos/ReaccionesProyecto.tsx
++++ b/src/components/proyectos/ReaccionesProyecto.tsx
+@@ -50,7 +50,7 @@ export function SelectorReacciones({
+               }`}
+             >
+               <span className="text-xl leading-none" aria-hidden="true">{r.emoji}</span>
+-              <span className="text-[11px] leading-tight text-foreground">{r.etiqueta}</span>
++              <span className="text-xs leading-tight text-foreground">{r.etiqueta}</span>
+               {n > 0 && <span className="text-xs font-semibold leading-none text-foreground">{n}</span>}
+             </button>
+           );
+diff --git a/src/context/WishlistContext.tsx b/src/context/WishlistContext.tsx
+index ab2c714..885566a 100644
+--- a/src/context/WishlistContext.tsx
++++ b/src/context/WishlistContext.tsx
+@@ -15,6 +15,7 @@ interface WishlistContextValue {
+   items: WishlistItem[];
+   loading: boolean;
+   toggleWishlist: (productId: string) => Promise<boolean>;
++  addToWishlist: (productId: string) => Promise<boolean>;
+   removeFromWishlist: (productId: string) => Promise<void>;
+   isWishlisted: (productId: string) => boolean;
+   refetch: () => Promise<void>;
+@@ -163,7 +164,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
+   const refetch = user ? fetchWishlistDB : fetchWishlistGuest;
+ 
+   return (
+-    <WishlistContext.Provider value={{ items, loading, toggleWishlist, removeFromWishlist, isWishlisted, refetch }}>
++    <WishlistContext.Provider value={{ items, loading, toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted, refetch }}>
+       {children}
+     </WishlistContext.Provider>
+   );
+diff --git a/src/lib/avisoFavorito.ts b/src/lib/avisoFavorito.ts
+new file mode 100644
+index 0000000..4c61750
+--- /dev/null
++++ b/src/lib/avisoFavorito.ts
+@@ -0,0 +1,21 @@
++// src/lib/avisoFavorito.ts
++// D11: aviso de favoritos en la parte inferior de la pantalla, con la opción «Deshacer».
++// El Toaster (src/routes/__root.tsx) deja libre la barra inferior móvil y la barra de compra de la ficha.
++import { toast } from "sonner";
++
++/**
++ * @param agregado  true si el producto quedó guardado; false si se quitó.
++ * @param deshacer  acción contraria (quitarlo si se guardó, guardarlo si se quitó).
++ */
++export function avisoFavorito(nombre: string, agregado: boolean, deshacer: () => Promise<unknown> | void) {
++  toast.success(agregado ? `"${nombre}" guardado en favoritos` : `"${nombre}" eliminado de favoritos`, {
++    position: "bottom-center",
++    duration: 6000,
++    action: {
++      label: "Deshacer",
++      onClick: () => {
++        void deshacer();
++      },
++    },
++  });
++}
+diff --git a/src/lib/buscarDistrito.ts b/src/lib/buscarDistrito.ts
+new file mode 100644
+index 0000000..215dcfd
+--- /dev/null
++++ b/src/lib/buscarDistrito.ts
+@@ -0,0 +1,15 @@
++// src/lib/buscarDistrito.ts
++// Búsqueda del selector de distrito (DistritoCombobox): sin tildes ni mayúsculas.
++
++/** Minúsculas y sin tildes: «ancon» encuentra «Ancón». */
++export const normalizarBusqueda = (t: string) =>
++  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
++
++/** Filtro de cmdk: 1 si el distrito empieza con lo escrito, 0.5 si lo contiene, 0 si no coincide. */
++export function filtrarDistrito(valor: string, busqueda: string): number {
++  const q = normalizarBusqueda(busqueda);
++  if (!q) return 1;
++  const v = normalizarBusqueda(valor);
++  if (v.startsWith(q)) return 1;
++  return v.includes(q) ? 0.5 : 0;
++}
+diff --git a/src/lib/entrega.ts b/src/lib/entrega.ts
+index 596f3b7..7793b93 100644
+--- a/src/lib/entrega.ts
++++ b/src/lib/entrega.ts
+@@ -1,11 +1,20 @@
+ // src/lib/entrega.ts
+-// Promesa de entrega: ÚNICA fuente de verdad para la ficha (DeliveryPromise) y la tarjeta (ProductCard).
+-// Si cambia el plazo, se cambia aquí y se actualizan ambas.
++// Promesa de entrega: ÚNICA fuente de verdad para la ficha (DeliveryPromise, pestaña «Entrega y pagos») y la tarjeta (ProductCard).
++// Si cambia el plazo, se cambia aquí y se actualizan todas.
+ 
+ /** Lima Metropolitana: 5–7 días hábiles. */
+ export const ENTREGA_MIN_DIAS = 5;
+ export const ENTREGA_MAX_DIAS = 7;
+ 
++/** Provincias: 10–15 días hábiles. */
++export const ENTREGA_PROV_MIN_DIAS = 10;
++export const ENTREGA_PROV_MAX_DIAS = 15;
++
++/** «5–7 días hábiles» */
++export const textoPlazoLima = () => `${ENTREGA_MIN_DIAS}–${ENTREGA_MAX_DIAS} días hábiles`;
++/** «10–15 días hábiles» */
++export const textoPlazoProvincias = () => `${ENTREGA_PROV_MIN_DIAS}–${ENTREGA_PROV_MAX_DIAS} días hábiles`;
++
+ /** Clave de localStorage donde la ficha guarda el distrito que eligió el cliente. */
+ export const DISTRITO_STORAGE_KEY = "gm_distrito_envio";
+ 
+diff --git a/src/lib/productProfiles.ts b/src/lib/productProfiles.ts
+index 947629c..28a7964 100644
+--- a/src/lib/productProfiles.ts
++++ b/src/lib/productProfiles.ts
+@@ -48,10 +48,6 @@ export interface ProductProfile {
+ 
+ const MADERA = "Madera tornillo seca y tratada";
+ 
+-const FAQ_ENTREGA: Faq = {
+-  q: "Tiempos de entrega",
+-  a: "Lima Metropolitana: 5–7 días hábiles. Provincias: 10–15 días hábiles. Este modelo se fabrica a pedido — coordinamos la fecha exacta al confirmar tu compra.",
+-};
+ const FAQ_DEVOLUCION: Faq = {
+   q: "Política de devoluciones",
+   a: "Al ser una pieza fabricada a medida, no se aceptan cambios una vez confirmado el pedido. Si hay un defecto de fabricación, reparamos o reponemos sin costo dentro del período de garantía.",
+@@ -84,7 +80,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     faqs: [
+       { q: "¿Se adapta a mi TV y a mi pared?", a: "Sí. Usa el medidor de arriba para ver el ancho recomendado según tus pulgadas, y cuéntanos las medidas de tu pared al cotizar: ajustamos el diseño." },
+       { q: "Cuidado y mantenimiento", a: "Limpia con paño suave y seco o apenas húmedo. Evita químicos abrasivos y deja ventilación detrás de equipos que se calienten." },
+-      FAQ_ENTREGA, FAQ_DEVOLUCION,
++      FAQ_DEVOLUCION,
+     ],
+     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Paso de cables integrado", "Iluminación LED según diseño", "Garantía de 2 años en estructura"],
+   },
+@@ -115,7 +111,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     bundleSub: "Mesas, puffs y detalles que cierran el ambiente",
+     faqs: [
+       { q: "Cuidado y mantenimiento", a: "Limpia con paño húmedo sin químicos agresivos y evita el sol directo. Para el velvet, usa un cepillo suave en dirección del pelo. La estructura de madera puede aceitarse una vez al año." },
+-      FAQ_ENTREGA, FAQ_DEVOLUCION,
++      FAQ_DEVOLUCION,
+     ],
+     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal dorado o negro a elección", "Garantía de 2 años en estructura"],
+   },
+@@ -146,7 +142,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     faqs: [
+       { q: "¿Cuántas personas entran cómodas?", a: "Usa el simulador de arriba. Como regla, cuenta unos 60 cm de ancho de mesa por comensal." },
+       { q: "Cuidado y mantenimiento", a: "Limpia con paño suave. Usa individuales o posavasos con bebidas calientes y seca derrames de inmediato." },
+-      FAQ_ENTREGA, FAQ_DEVOLUCION,
++      FAQ_DEVOLUCION,
+     ],
+     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Acabado protector resistente al uso diario", "Garantía de 2 años en estructura"],
+   },
+@@ -177,7 +173,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     faqs: [
+       { q: "¿Qué tamaño de cama me conviene?", a: "Usa el visor de arriba: te muestra el espacio libre que necesitas alrededor. Confirmamos medidas y disponibilidad al cotizar." },
+       { q: "Cuidado y mantenimiento", a: "Aspira o cepilla suavemente el tapizado y limpia manchas de inmediato. Evita sol directo prolongado." },
+-      FAQ_ENTREGA, FAQ_DEVOLUCION,
++      FAQ_DEVOLUCION,
+     ],
+     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tamaños estándar o a medida", "Garantía de 2 años en estructura"],
+   },
+@@ -208,7 +204,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     faqs: [
+       { q: "¿Se hace a la medida de mi espacio?", a: "Sí. Indica ancho y alto de tu espacio arriba y un asesor te devuelve una cotización con el diseño ajustado." },
+       { q: "Cuidado y mantenimiento", a: "Limpia el polvo con paño seco o ligeramente húmedo. Evita químicos abrasivos." },
+-      FAQ_ENTREGA, FAQ_DEVOLUCION,
++      FAQ_DEVOLUCION,
+     ],
+     features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Diseño a medida del espacio", "Garantía de 2 años en estructura"],
+   },
+@@ -238,7 +234,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     bundleSub: "Piezas que se llevan bien con esta",
+     faqs: [
+       { q: "Cuidado y mantenimiento", a: "Limpia con paño suave. Evita sol directo prolongado y químicos agresivos." },
+-      FAQ_ENTREGA, FAQ_DEVOLUCION,
++      FAQ_DEVOLUCION,
+     ],
+     features: ["Fabricado artesanalmente en Perú", "Acabado resistente al uso diario", "Garantía de 2 años en estructura"],
+   },
+@@ -265,7 +261,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
+     module: "none",
+     bundleTitle: "Completa el ambiente",
+     bundleSub: "Piezas que combinan con tu elección",
+-    faqs: [FAQ_ENTREGA, FAQ_DEVOLUCION],
++    faqs: [FAQ_DEVOLUCION],
+     features: ["Fabricado artesanalmente en Perú", "Garantía de 2 años en estructura"],
+   },
+ };
+diff --git a/src/routes/__root.tsx b/src/routes/__root.tsx
+index 6d273f7..ab8d781 100644
+--- a/src/routes/__root.tsx
++++ b/src/routes/__root.tsx
+@@ -92,7 +92,12 @@ function RootComponent() {
+         <AsistenteChat />
+         <ExitCouponDialog />
+         <GlobalLoginModal />
+-        <Toaster position="top-center" closeButton />
++        <Toaster
++          position="top-center"
++          closeButton
++          offset={{ top: 24, right: 24, bottom: 24, left: 24 }}
++          mobileOffset={{ top: 16, right: 16, bottom: 96, left: 16 }}
++        />
+       </WishlistProvider>
+     </QueryClientProvider>
+   );
+diff --git a/src/routes/checkout.tsx b/src/routes/checkout.tsx
+index e30933b..4ab3cd1 100644
+--- a/src/routes/checkout.tsx
++++ b/src/routes/checkout.tsx
+@@ -24,7 +24,8 @@ import { toast } from "sonner";
+ import { useAuth } from "@/hooks/useAuth";
+ import { getStoredUtm } from "@/hooks/useUtm";
+ import { supabase } from "@/integrations/supabase/client";
+-import { DISTRITOS_ENVIO, getPrecioEnvio, ORIGEN_ENVIO, ciudadDeDistrito, precioEnvioDesde } from "@/lib/envios";
++import { DistritoCombobox } from "@/components/DistritoCombobox";
++import { getPrecioEnvio, ORIGEN_ENVIO, ciudadDeDistrito, precioEnvioDesde } from "@/lib/envios";
+ import { guardarDistrito, leerDistritoGuardado } from "@/lib/entrega";
+ import {
+   DEPARTAMENTOS_PROVINCIA, provinciasDe, estimarEnvioProvincia, nombreZona,
+@@ -711,7 +712,7 @@ useEffect(() => {
+                         }`}
+                       >
+                         <p className="text-sm font-medium">{titulo}</p>
+-                        <p className="text-[11px] text-muted-foreground">{sub}</p>
++                        <p className="text-xs text-muted-foreground">{sub}</p>
+                       </button>
+                     ))}
+                   </div>
+@@ -731,21 +732,11 @@ useEffect(() => {
+                     <>
+                         <div className="space-y-1.5 sm:col-span-2">
+                           <Label htmlFor="distrito">Distrito</Label>
+-                          <Select
+-                            value={form.distrito || undefined}
+-                            onValueChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
+-                          >
+-                            <SelectTrigger id="distrito" className="h-11">
+-                              <SelectValue placeholder="Selecciona tu distrito…" />
+-                            </SelectTrigger>
+-                            <SelectContent>
+-                              {DISTRITOS_ENVIO.map((d) => (
+-                                <SelectItem key={d.destino} value={d.destino}>
+-                                  {d.destino} — {fmt(d.precio)}
+-                                </SelectItem>
+-                              ))}
+-                            </SelectContent>
+-                          </Select>
++                          <DistritoCombobox
++                            id="distrito"
++                            value={form.distrito}
++                            onChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
++                          />
+                           <p className="text-xs text-muted-foreground">
+                             {form.distrito
+                               ? <>Envío a {form.distrito}: <b className="text-foreground">{fmt(getPrecioEnvio(form.distrito) ?? 0)}</b>{form.distrito === distritoFicha ? " · el distrito que elegiste en el producto" : ""}</>
+@@ -1050,7 +1041,6 @@ useEffect(() => {
+                   <span>Total</span>
+                   <span className="font-display text-lg">{fmt(totalFinal)}</span>
+                 </div>
+-                <p className="text-xs text-muted-foreground text-center pt-1">Moneda: Soles (PEN)</p>
+               </div>
+             </div>
+           </aside>
+diff --git a/src/routes/combo.$id.tsx b/src/routes/combo.$id.tsx
+index 69d3c64..dd951c8 100644
+--- a/src/routes/combo.$id.tsx
++++ b/src/routes/combo.$id.tsx
+@@ -431,7 +431,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
+                     : `${piezas[sel].nombre}${piezas[sel].cantidad > 1 ? ` ×${piezas[sel].cantidad}` : ""}`}
+                 </span>
+                 {tour && piezas.length > 1 && !reducedMotion() && (
+-                  <span className="rounded-full bg-background/90 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
++                  <span className="rounded-full bg-background/90 px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                     Recorriendo el combo…
+                   </span>
+                 )}
+@@ -524,7 +524,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
+                   <Icon className="h-4 w-4 flex-shrink-0 text-accent-strong" />
+                   <div className="min-w-0">
+                     <p className="text-xs font-semibold">{titulo}</p>
+-                    <p className="truncate text-[11px] text-muted-foreground">{detalle}</p>
++                    <p className="truncate text-xs text-muted-foreground">{detalle}</p>
+                   </div>
+                 </div>
+               ))}
+@@ -561,7 +561,7 @@ function ComboDetail({ combo }: { combo: Combo }) {
+                         <p className="truncate text-sm font-medium">
+                           {p.nombre}
+                           {p.cantidad > 1 && (
+-                            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold">
++                            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-semibold">
+                               ×{p.cantidad}
+                             </span>
+                           )}
+diff --git a/src/routes/conformidad.$orderId.tsx b/src/routes/conformidad.$orderId.tsx
+index 5555c86..4a76b94 100644
+--- a/src/routes/conformidad.$orderId.tsx
++++ b/src/routes/conformidad.$orderId.tsx
+@@ -194,7 +194,7 @@ function ConformidadPage() {
+                     className="flex aspect-square flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                   >
+                     {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+-                    <span className="mt-1 text-[10px]">{subiendo ? "Subiendo…" : "Agregar"}</span>
++                    <span className="mt-1 text-xs">{subiendo ? "Subiendo…" : "Agregar"}</span>
+                   </button>
+                 )}
+               </div>
+diff --git a/src/routes/perfil/pedidos.tsx b/src/routes/perfil/pedidos.tsx
+index 06245b7..1e0bc95 100644
+--- a/src/routes/perfil/pedidos.tsx
++++ b/src/routes/perfil/pedidos.tsx
+@@ -232,7 +232,7 @@ function PedidoCard({ order }: { order: any }) {
+             </div>
+             <div className="flex justify-between mt-1">
+               {pasos.map((step) => (
+-                <p key={step} className="text-[10px] text-muted-foreground text-center" style={{ flex: step === "entregado" ? "none" : 1 }}>
++                <p key={step} className="text-xs text-muted-foreground text-center" style={{ flex: step === "entregado" ? "none" : 1 }}>
+                   {stepLabel(step, recojo)}
+                 </p>
+               ))}
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index c3abd29..5af5edf 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -8,9 +8,10 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
+ import { supabase } from "@/integrations/supabase/client";
+ import { Header } from "@/components/Header";
+ import { Footer } from "@/components/Footer";
+-import { Loader2, Heart, ShoppingBag, Check, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
++import { Loader2, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
+ import { calcLineId, useCartStore } from "@/stores/cartStore";
+ import { toast } from "sonner";
++import { avisoFavorito } from "@/lib/avisoFavorito";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+ import { trackEvent } from "@/hooks/useEventTracking";
+ import { useSeo, absolutizar, migasJsonLd } from "@/lib/seo";
+@@ -20,6 +21,7 @@ import { getCategoria } from "@/lib/categories";
+ import { ProductRecomendaciones } from "@/components/ProductRecomendaciones";
+ import { ModelViewer3D } from "@/components/ModelViewer3D";
+ import { ofertaInfo } from "@/lib/pricing";
++import { textoPlazoLima, textoPlazoProvincias } from "@/lib/entrega";
+ import { LeadFormDialog } from "@/components/LeadFormDialog";
+ import { WHATSAPP_NUMBER } from "@/config";
+ import { resolveProfile, type ProductProfile } from "@/lib/productProfiles";
+@@ -94,6 +96,61 @@ function AccordionItem({ title, children }: { title: string; children: React.Rea
+ /* ─── tab panel ───────────────────────────────────── */
+ const TABS = ["Especificaciones", "Reseñas", "Entrega y pagos"] as const;
+ 
++/* M1b: lista de pestañas con indicador (degradado + flecha) cuando hay más pestañas fuera de pantalla */
++function TabList({ active, onChange }: { active: number; onChange: (i: number) => void }) {
++  const listRef = useRef<HTMLDivElement>(null);
++  const primera = useRef(true);
++  const [hay, setHay] = useState({ izq: false, der: false });
++
++  const medir = useCallback(() => {
++    const el = listRef.current;
++    if (!el) return;
++    const max = el.scrollWidth - el.clientWidth;
++    setHay({ izq: el.scrollLeft > 2, der: el.scrollLeft < max - 2 });
++  }, []);
++
++  useEffect(() => {
++    medir();
++    const el = listRef.current;
++    if (!el || typeof ResizeObserver === "undefined") return;
++    const ro = new ResizeObserver(medir);
++    ro.observe(el);
++    return () => ro.disconnect();
++  }, [medir]);
++
++  // Al cambiar de pestaña, se centra la activa dentro de la lista (sin mover la página)
++  useEffect(() => {
++    if (primera.current) { primera.current = false; return; }
++    const el = listRef.current;
++    const btn = el?.querySelector<HTMLElement>('[aria-selected="true"]');
++    if (!el || !btn) return;
++    el.scrollTo({ left: btn.offsetLeft - (el.clientWidth - btn.offsetWidth) / 2, behavior: "smooth" });
++  }, [active]);
++
++  return (
++    <div className="gm-tab-wrap">
++      <div className="gm-tab-list" role="tablist" aria-label="Información del producto" ref={listRef} onScroll={medir}>
++        {TABS.map((t, i) => (
++          <button
++            key={t}
++            type="button"
++            role="tab"
++            id={`gm-tab-${i}`}
++            aria-selected={active === i}
++            aria-controls="gm-tabpanel"
++            className={`gm-tab-btn${active === i ? " active" : ""}`}
++            onClick={() => onChange(i)}
++          >
++            {t}
++          </button>
++        ))}
++      </div>
++      <span className={`gm-tab-more izq${hay.izq ? " on" : ""}`} aria-hidden><ChevronLeft size={16} /></span>
++      <span className={`gm-tab-more der${hay.der ? " on" : ""}`} aria-hidden><ChevronRight size={16} /></span>
++    </div>
++  );
++}
++
+ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["data"]; profile: ProductProfile }) {
+   const [active, setActive] = useState(0);
+ 
+@@ -137,12 +194,9 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
+   return (
+     <div className="gm-tabs-section">
+       <div className="gm-container">
+-        <div className="gm-tab-list">
+-          {TABS.map((t, i) => (
+-            <button key={t} className={`gm-tab-btn${active === i ? " active" : ""}`} onClick={() => setActive(i)}>{t}</button>
+-          ))}
+-        </div>
++        <TabList active={active} onChange={setActive} />
+ 
++        <div id="gm-tabpanel" role="tabpanel" aria-labelledby={`gm-tab-${active}`}>
+         {active === 0 && (
+           <div className="gm-details-grid">
+             <div>
+@@ -255,8 +309,8 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
+               <table className="gm-detail-table">
+                 <tbody>
+                   {[
+-                    ["Lima Metropolitana", "5–7 días hábiles"],
+-                    ["Provincias", "10–15 días hábiles"],
++                    ["Lima Metropolitana", textoPlazoLima()],
++                    ["Provincias", textoPlazoProvincias()],
+                     ["Armado e instalación", "Incluido en Lima"],
+                     ["Envío Lima", "Gratis en pedidos +S/ 800"],
+                     ["Seguimiento", "WhatsApp en tiempo real"],
+@@ -268,6 +322,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
+             </div>
+           </div>
+         )}
++        </div>
+       </div>
+     </div>
+   );
+@@ -320,13 +375,13 @@ const PAGE_CSS = `
+         .gm-badge-cat {
+           position:absolute; top:20px; left:20px;
+           background: rgba(247,244,239,.9); backdrop-filter:blur(8px);
+-          font-size:10px; letter-spacing:.18em; text-transform:uppercase;
++          font-size:12px; letter-spacing:.18em; text-transform:uppercase;
+           color:var(--gm-walnut-mid); padding:5px 12px;
+           border-radius:20px; border:1px solid var(--gm-gold-light);
+         }
+         .gm-badge-new {
+           position:absolute; top:20px; right:20px;
+-          background:var(--gm-walnut); font-size:10px;
++          background:var(--gm-walnut); font-size:12px;
+           letter-spacing:.1em; text-transform:uppercase;
+           color:#fff; padding:5px 12px; border-radius:20px;
+         }
+@@ -367,7 +422,7 @@ const PAGE_CSS = `
+ 
+         /* info col */
+         .gm-info-col { padding-left:16px; min-width:0; }
+-        .gm-sku { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:10px; }
++        .gm-sku { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:10px; }
+         .gm-product-title { font-family:var(--font-display); font-size:38px; font-weight:400; line-height:1.15; color:var(--gm-dark); margin-bottom:6px; }
+         .gm-product-sub { font-size:14px; color:var(--gm-muted); letter-spacing:.04em; margin-bottom:24px; }
+ 
+@@ -384,7 +439,7 @@ const PAGE_CSS = `
+         .gm-divider { height:1px; background:var(--gm-border); margin:24px 0; }
+ 
+         /* specs */
+-        .gm-specs-label { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
++        .gm-specs-label { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
+         .gm-specs-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:24px; }
+         .gm-spec-pill {
+           display:flex; align-items:flex-start; gap:10px;
+@@ -393,11 +448,11 @@ const PAGE_CSS = `
+         }
+         .gm-spec-pill:hover { border-color:var(--gm-gold-light); }
+         .gm-spec-icon { font-size:18px; color:var(--gmx-accent, var(--gm-gold)); flex-shrink:0; margin-top:1px; }
+-        .gm-spec-pill-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:2px; }
++        .gm-spec-pill-label { font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:2px; }
+         .gm-spec-pill-val { font-size:13px; font-weight:500; color:var(--gm-dark); }
+ 
+         /* color picker */
+-        .gm-color-label { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
++        .gm-color-label { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
+         .gm-color-row { display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
+         .gm-swatch {
+           width:32px; height:32px; border-radius:50%; cursor:pointer;
+@@ -407,7 +462,7 @@ const PAGE_CSS = `
+         .gm-swatch:hover { transform:scale(1.1); }
+ 
+         /* includes */
+-        .gm-includes-label { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
++        .gm-includes-label { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--gm-muted); margin-bottom:12px; }
+         .gm-includes-grid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:28px; }
+         .gm-includes-tag {
+           font-size:12px; color:var(--gm-mid);
+@@ -472,9 +527,14 @@ const PAGE_CSS = `
+         /* tabs section */
+         .gm-tabs-section { max-width:1300px; margin:0 auto; padding:48px 48px 80px; }
+         @media(max-width:768px){ .gm-tabs-section{ padding:32px 20px 60px; } }
+-        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); margin-bottom:40px; overflow-x:auto; scrollbar-width:none; }
++        .gm-tab-wrap { position:relative; margin-bottom:40px; }
++        .gm-tab-list { display:flex; border-bottom:1px solid var(--gm-border); overflow-x:auto; scrollbar-width:none; }
++        .gm-tab-more { position:absolute; top:0; bottom:1px; width:44px; display:flex; align-items:center; pointer-events:none; opacity:0; transition:opacity .2s; color:var(--gm-walnut); }
++        .gm-tab-more.on { opacity:1; }
++        .gm-tab-more.der { right:0; justify-content:flex-end; background:linear-gradient(to left, var(--background) 35%, transparent); }
++        .gm-tab-more.izq { left:0; background:linear-gradient(to right, var(--background) 35%, transparent); }
+         .gm-tab-list::-webkit-scrollbar { display:none; }
+-        @media(max-width:640px){ .gm-tab-list{ justify-content:space-between; } .gm-tab-btn{ padding:14px 6px !important; font-size:11px !important; letter-spacing:.02em !important; } }
++        @media(max-width:640px){ .gm-tab-list{ justify-content:space-between; } .gm-tab-btn{ padding:14px 6px !important; font-size:12px !important; letter-spacing:.02em !important; } }
+         .gm-tab-btn {
+           flex:none; white-space:nowrap;
+           background:none; border:none; padding:14px 24px;
+@@ -515,7 +575,7 @@ const PAGE_CSS = `
+         .gm-rating-avg-num { font-family:var(--font-display,inherit); font-size:42px; font-weight:600; color:var(--gm-walnut); line-height:1; }
+         .gm-rating-count { font-size:12px; color:var(--gm-muted); }
+         .gm-rating-bars { flex:1; min-width:220px; max-width:360px; display:flex; flex-direction:column; gap:6px; }
+-        .gm-rating-bar-row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--gm-muted); }
++        .gm-rating-bar-row { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--gm-muted); }
+         .gm-rating-bar-track { flex:1; height:6px; border-radius:3px; background:var(--gm-border); overflow:hidden; }
+         .gm-rating-bar-fill { height:100%; background:var(--gm-gold); border-radius:3px; }
+         .gm-rating-bar-count { width:20px; text-align:right; }
+@@ -523,7 +583,7 @@ const PAGE_CSS = `
+         /* recommended */
+         .gm-recommended { background:var(--gm-cream); padding:80px 0; }
+         @media(max-width:768px){ .gm-recommended{ padding:60px 0; } }
+-        .gm-eyebrow { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--gm-gold); margin-bottom:10px; }
++        .gm-eyebrow { font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--gm-gold); margin-bottom:10px; }
+         .gm-section-title { font-family:var(--font-display); font-size:30px; font-weight:400; color:var(--gm-walnut); margin-bottom:6px; }
+         .gm-section-sub { font-size:14px; color:var(--gm-muted); margin-bottom:40px; }
+         .gm-rec-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
+@@ -540,7 +600,7 @@ const PAGE_CSS = `
+         .gm-rec-card:hover .gm-rec-img img { transform:scale(1.06); }
+         .gm-rec-img-placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:40px; }
+         .gm-rec-tag {
+-          position:absolute; bottom:10px; left:10px; font-size:10px;
++          position:absolute; bottom:10px; left:10px; font-size:12px;
+           letter-spacing:.12em; text-transform:uppercase;
+           background:rgba(253,250,246,.9); color:var(--gm-walnut-mid);
+           padding:4px 10px; border-radius:20px; backdrop-filter:blur(4px);
+@@ -592,7 +652,7 @@ function ProductView({ product: base }: { product: ProductData }) {
+   const product = base as ProductData & ProductExtra;
+   const addItem = useCartStore((s) => s.addItem);
+   const itemsCarrito = useCartStore((s) => s.items);
+-  const { toggleWishlist, isWishlisted } = useWishlist();
++  const { toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted } = useWishlist();
+   const [wishPending, setWishPending] = useState(false);
+   const [adding, setAdding] = useState(false);
+   const [activeImg, setActiveImg] = useState(0);
+@@ -1023,8 +1083,10 @@ function ProductView({ product: base }: { product: ProductData }) {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   setWishPending(true);
++                  const estaba = isWishlisted(product.id);
+                   const added = await toggleWishlist(product.id);
+-                  toast.success(added ? `"${product.nombre}" guardado en favoritos` : `"${product.nombre}" eliminado de favoritos`);
++                  if (!estaba && !added) toast.error("No pudimos guardar el favorito");
++                  else avisoFavorito(product.nombre, added, () => (added ? removeFromWishlist(product.id) : addToWishlist(product.id)));
+                   setWishPending(false);
+                 }}
+                 title={isWishlisted(product.id) ? "Quitar de favoritos" : "Guardar en favoritos"}
+diff --git a/src/routes/proyectos.tsx b/src/routes/proyectos.tsx
+index 0f4eef3..41c388a 100644
+--- a/src/routes/proyectos.tsx
++++ b/src/routes/proyectos.tsx
+@@ -104,7 +104,7 @@ function ProyectosPage() {
+                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                         />
+                         {p.etiqueta && (
+-                          <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-[11px] font-medium shadow-sm">
++                          <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-medium shadow-sm">
+                             {p.etiqueta}
+                           </span>
+                         )}
+diff --git a/src/routes/testimonios.tsx b/src/routes/testimonios.tsx
+index c6c1fe0..1a2c9c4 100644
+--- a/src/routes/testimonios.tsx
++++ b/src/routes/testimonios.tsx
+@@ -101,7 +101,7 @@ function TestimoniosPage() {
+                     <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 pt-8 text-white sm:p-4 sm:pt-12">
+                       <p className="text-sm font-medium leading-tight">{f.autor_nombre}</p>
+                       {f.producto_nombre && <p className="mt-0.5 line-clamp-1 text-xs text-white/80">{f.producto_nombre}</p>}
+-                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/85">
++                      <div className="mt-1.5 flex items-center gap-2 text-xs text-white/85">
+                         {f.calificacion > 0 && (
+                           <span className="inline-flex items-center gap-0.5" aria-label={`${f.calificacion} de 5 estrellas`}>
+                             <Star className="h-3 w-3 fill-[var(--color-gold)] text-[var(--color-gold)]" /> {f.calificacion}

@@ -29,7 +29,7 @@ export function NotificationsBell({ roles }: { roles: AppRole[] }) {
         >
           <Bell className="h-5 w-5" />
           {total > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
+            <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold leading-none text-white tabular-nums">
               {total > 99 ? "99+" : total}
             </span>
           )}
