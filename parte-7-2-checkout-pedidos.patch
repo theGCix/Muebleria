@@ -1,0 +1,396 @@
+diff --git a/server/notificaciones.js b/server/notificaciones.js
+index 4d9863e..0bc0149 100644
+--- a/server/notificaciones.js
++++ b/server/notificaciones.js
+@@ -56,7 +56,7 @@ export function armarPayloadPedido(order, items, { siteUrl = "" } = {}) {
+  * Lee el pedido ya guardado y avisa a n8n. Pensado para llamarse SIN await después de responder al cliente.
+  * Devuelve { ok, motivo? } solo para pruebas; nunca lanza.
+  */
+-export async function notificarPedidoPagado({ supabaseAdmin, orderId, fetchImpl = fetch, env = process.env }) {
++export async function notificarPedidoPagado({ supabaseAdmin, orderId, fetchImpl = fetch, env = process.env, esperaMs = 1500 }) {
+   const url = env.N8N_PEDIDO_PAGADO_URL;
+   if (!url) return { ok: false, motivo: "sin N8N_PEDIDO_PAGADO_URL" };
+   try {
+@@ -68,14 +68,25 @@ export async function notificarPedidoPagado({ supabaseAdmin, orderId, fetchImpl
+       .eq("order_id", orderId);
+ 
+     const payload = armarPayloadPedido(order, items, { siteUrl: env.FRONTEND_URL });
+-    const res = await fetchImpl(url, {
+-      method: "POST",
+-      headers: { "Content-Type": "application/json", "x-webhook-secret": env.N8N_WEBHOOK_SECRET ?? "" },
+-      body: JSON.stringify(payload),
+-      signal: AbortSignal.timeout(TIMEOUT_MS),
+-    });
+-    if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
+-    return { ok: true };
++    // Un reintento si n8n no responde o falla (la compra ya terminó; esto corre en segundo plano).
++    // Si ambos fallan, el pedido queda con correo_confirmacion_enviado_at vacío y se ve en «Correos de pedidos».
++    let ultimoError;
++    for (let intento = 1; intento <= 2; intento++) {
++      try {
++        const res = await fetchImpl(url, {
++          method: "POST",
++          headers: { "Content-Type": "application/json", "x-webhook-secret": env.N8N_WEBHOOK_SECRET ?? "" },
++          body: JSON.stringify(payload),
++          signal: AbortSignal.timeout(TIMEOUT_MS),
++        });
++        if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
++        return { ok: true };
++      } catch (e) {
++        ultimoError = e;
++        if (intento < 2) await new Promise((r) => setTimeout(r, esperaMs));
++      }
++    }
++    throw ultimoError;
+   } catch (err) {
+     console.error(`⚠️ No se pudo avisar a n8n del pedido ${orderId}:`, err.message);
+     return { ok: false, motivo: err.message };
+diff --git a/server/notificaciones.test.js b/server/notificaciones.test.js
+index ad73f18..58ae5cf 100644
+--- a/server/notificaciones.test.js
++++ b/server/notificaciones.test.js
+@@ -43,8 +43,17 @@ test("notifica con secreto y payload; sin URL no llama", async () => {
+ 
+ test("si n8n falla (red o 500) NO lanza", async () => {
+   const env = { N8N_PEDIDO_PAGADO_URL: "https://n8n.x/w" };
+-  const r1 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, fetchImpl: async () => { throw new Error("ECONNREFUSED"); } });
+-  const r2 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, fetchImpl: async () => ({ ok: false, status: 500 }) });
++  const r1 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, esperaMs: 0, fetchImpl: async () => { throw new Error("ECONNREFUSED"); } });
++  const r2 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, esperaMs: 0, fetchImpl: async () => ({ ok: false, status: 500 }) });
+   assert.equal(r1.ok, false);
+   assert.equal(r2.ok, false);
+ });
++
++test("reintenta una vez: si el primer intento falla y el segundo responde, avisa", async () => {
++  const env = { N8N_PEDIDO_PAGADO_URL: "https://n8n.test/webhook/x", N8N_WEBHOOK_SECRET: "s" };
++  let llamadas = 0;
++  const fetchImpl = async () => { llamadas++; return llamadas === 1 ? { ok: false, status: 503 } : { ok: true, status: 200 }; };
++  const r = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, esperaMs: 0, fetchImpl });
++  assert.equal(r.ok, true);
++  assert.equal(llamadas, 2);
++});
+diff --git a/src/components/checkout/PagoExitoso.tsx b/src/components/checkout/PagoExitoso.tsx
+index ae0b6e5..40cf2fe 100644
+--- a/src/components/checkout/PagoExitoso.tsx
++++ b/src/components/checkout/PagoExitoso.tsx
+@@ -19,6 +19,7 @@ import { APP_URL, WHATSAPP_NUMBER } from "@/config";
+ import {
+   ENTREGA_MIN_DIAS, ENTREGA_MAX_DIAS, addBusinessDays, fmtDia,
+ } from "@/lib/entrega";
++import { numeroPedido } from "@/lib/pedidoId";
+ import "./pago-exitoso.css";
+ 
+ export interface PagoExitosoItem {
+@@ -63,24 +64,6 @@ function primerNombre(nombre?: string) {
+   return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
+ }
+ 
+-/** Cuenta de 0 al valor final (respeta "reducir movimiento"). */
+-function useCountUp(target: number, ms = 1400, delay = 450) {
+-  const [v, setV] = useState(() => (reduceMotion() ? target : 0));
+-  useEffect(() => {
+-    if (reduceMotion()) { setV(target); return; }
+-    let raf = 0;
+-    const t0 = performance.now() + delay;
+-    const tick = (now: number) => {
+-      const p = Math.min(1, Math.max(0, (now - t0) / ms));
+-      setV(target * (1 - Math.pow(1 - p, 3)));
+-      if (p < 1) raf = requestAnimationFrame(tick);
+-    };
+-    raf = requestAnimationFrame(tick);
+-    return () => cancelAnimationFrame(raf);
+-  }, [target, ms, delay]);
+-  return v;
+-}
+-
+ /** Ráfaga desde la insignia + confeti cayendo, en los colores de la marca. */
+ function Celebracion() {
+   const piezas = useMemo(() => {
+@@ -133,19 +116,19 @@ function descargarCalendario(d: PagoExitosoDatos, desde: Date, hasta: Date) {
+   const esc = (s: string) => s.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+   const ics = [
+     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//G&M Muebleria//Pedido//ES", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
+-    `UID:${d.purchase}@gm-muebleria`,
++    `UID:${numeroPedido(d.purchase)}@gm-muebleria`,
+     `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`,
+     `DTSTART;VALUE=DATE:${ymd(desde)}`,
+     `DTEND;VALUE=DATE:${ymd(finExclusivo)}`,
+     `SUMMARY:${esc("Entrega de tu pedido · G&M Mueblería")}`,
+-    `DESCRIPTION:${esc(`Pedido ${d.purchase}. Te avisamos por WhatsApp antes de la entrega.`)}`,
++    `DESCRIPTION:${esc(`Pedido ${numeroPedido(d.purchase)}. Te avisamos por WhatsApp antes de la entrega.`)}`,
+     lugar ? `LOCATION:${esc(lugar)}` : "",
+     "END:VEVENT", "END:VCALENDAR",
+   ].filter(Boolean).join("\r\n");
+   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
+   const a = document.createElement("a");
+   a.href = url;
+-  a.download = `entrega-${d.purchase}.ics`;
++  a.download = `entrega-${numeroPedido(d.purchase)}.ics`;
+   document.body.appendChild(a);
+   a.click();
+   a.remove();
+@@ -189,7 +172,7 @@ export function PagoExitoso({
+   const [copiado, setCopiado] = useState(false);
+ 
+   const total = Number(datos.amount) || 0;
+-  const totalAnimado = useCountUp(total);
++  const idPedido = numeroPedido(datos.purchase);
+   const nombre = primerNombre(datos.nombre);
+   const items = datos.items ?? [];
+   const recojo = datos.metodoEntrega === "recojo_tienda";
+@@ -227,7 +210,7 @@ export function PagoExitoso({
+ 
+   const copiar = async () => {
+     try {
+-      await navigator.clipboard.writeText(datos.purchase);
++      await navigator.clipboard.writeText(idPedido);
+       setCopiado(true);
+       setTimeout(() => setCopiado(false), 1800);
+     } catch { /* sin permiso de portapapeles: no pasa nada */ }
+@@ -235,8 +218,8 @@ export function PagoExitoso({
+ 
+   const mensajeAsesor = encodeURIComponent(
+     datos.provinciaEnvio
+-      ? `Hola G&M Mueblería, soy ${nombre || "cliente"}. Mi pedido ${datos.purchase} va a ${datos.provinciaEnvio}. Quiero confirmar el costo del envío.`
+-      : `Hola G&M Mueblería, soy ${nombre || "cliente"}. Quisiera coordinar mi pedido ${datos.purchase}.`,
++      ? `Hola G&M Mueblería, soy ${nombre || "cliente"}. Mi pedido ${idPedido} va a ${datos.provinciaEnvio}. Quiero confirmar el costo del envío.`
++      : `Hola G&M Mueblería, soy ${nombre || "cliente"}. Quisiera coordinar mi pedido ${idPedido}.`,
+   );
+   const linkAsesor = WHATSAPP_NUMBER ? `https://wa.me/${WHATSAPP_NUMBER}?text=${mensajeAsesor}` : null;
+ 
+@@ -247,13 +230,13 @@ export function PagoExitoso({
+ 
+   // Mismos estados que ve el cliente en Mis pedidos
+   const pasos = [
+-    { key: "pagado", titulo: "Pago recibido", detalle: datos.date, icono: BadgeCheck, estado: "done" as const },
++    { key: "pagado", titulo: "Pago recibido", detalle: "Tu pedido quedó registrado.", icono: BadgeCheck, estado: "done" as const },
+     { key: "en_produccion", titulo: "En producción", detalle: "Empezamos a fabricar y preparar tu pedido.", icono: Hammer, estado: "now" as const },
+     { key: "control_calidad", titulo: "Control de calidad", detalle: "Revisamos cada acabado antes de despachar.", icono: ShieldCheck, estado: "todo" as const },
+-    { key: "listo_despacho", titulo: recojo ? "Listo para recoger" : "Listo para despacho", detalle: recojo ? "Te avisamos para que pases por tienda." : "Coordinamos contigo el horario de entrega.", icono: PackageCheck, estado: "todo" as const },
++    { key: "listo_despacho", titulo: recojo ? "Listo para recoger" : "Listo para despacho", detalle: recojo ? "Te avisamos para que pases por tienda." : "Preparamos tu pedido para la entrega.", icono: PackageCheck, estado: "todo" as const },
+     ...(recojo ? [] : [{ key: "enviado", titulo: "En camino", detalle: "Sale de nuestro taller hacia tu casa.", icono: Truck, estado: "todo" as const }]),
+     ...(!recojo && datos.provinciaEnvio ? [{ key: "en_agencia", titulo: "En agencia", detalle: "Llega a la agencia de tu ciudad: te damos guía y clave para recogerlo.", icono: Store, estado: "todo" as const }] : []),
+-    { key: "entregado", titulo: recojo ? "Recogido en tienda" : "Entregado", detalle: recojo ? "Disfrútalo. Después te invitaremos a dejar tu reseña." : `Llega entre el ${fmtDia(desde)} y el ${fmtDia(hasta)}.`, icono: Sparkles, estado: "goal" as const },
++    { key: "entregado", titulo: recojo ? "Recogido en tienda" : "Entregado", detalle: recojo ? "Disfrútalo. Después te invitaremos a dejar tu reseña." : "Coordinamos contigo el día y horario de entrega.", icono: Sparkles, estado: "goal" as const },
+   ];
+ 
+   // Comprobante: la línea de tiempo refleja el estado real del pedido, no el de "recién pagado"
+@@ -312,13 +295,13 @@ export function PagoExitoso({
+           <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
+             {esComprobante
+               ? "Este es el detalle de tu compra y el avance actual de tu pedido."
+-              : "Recibimos tu pago y tu pedido pasa a producción. Aquí tienes todo lo que sigue, sin sorpresas."}
++              : "Recibimos tu pago. Aquí tienes todo lo que sigue, sin sorpresas."}
+           </p>
+ 
+           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
+             <p className="text-[11px] uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
+             <p className="font-display text-5xl font-semibold tabular-nums sm:text-6xl" aria-label={fmtPEN(total)}>
+-              {fmtPEN(totalAnimado)}
++              {fmtPEN(total)}
+             </p>
+             <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-[#fbf4e8]/70">
+               <CreditCard className="h-3.5 w-3.5" /> Tarjeta · Niubiz · Pago seguro
+@@ -349,7 +332,7 @@ export function PagoExitoso({
+               <div className="p-5 pb-5 pr-28 sm:p-6 sm:pr-40">
+                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
+                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
+-                  <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{datos.purchase}</span>
++                  <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{idPedido}</span>
+                   <button
+                     type="button"
+                     onClick={copiar}
+@@ -450,7 +433,7 @@ export function PagoExitoso({
+                 })}
+               </ol>
+               <p className="mt-5 rounded-xl bg-[#f6efe4] px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
+-                Seguimiento por WhatsApp en tiempo real. Y cuando lo recibas, te invitaremos a contarnos cómo quedó.
++                Seguimiento por WhatsApp en tiempo real.
+               </p>
+             </div>
+           </section>
+diff --git a/src/lib/fechas.ts b/src/lib/fechas.ts
+new file mode 100644
+index 0000000..0894d33
+--- /dev/null
++++ b/src/lib/fechas.ts
+@@ -0,0 +1,36 @@
++// src/lib/fechas.ts
++// Formato único de fechas para checkout, confirmación, Mi cuenta y panel: "2 nov 2026" (y "2 nov 2026, 14:30").
++// Siempre en hora de Lima y con meses abreviados en español (septiembre = "set", como en es-PE).
++const TZ = "America/Lima";
++const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic"];
++
++type Entrada = Date | string | number | null | undefined;
++
++const partesLima = new Intl.DateTimeFormat("en-US", {
++  timeZone: TZ, year: "numeric", month: "numeric", day: "numeric",
++  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
++});
++
++/** Fecha corta, p. ej. "2 nov 2026". Devuelve "—" si no hay fecha válida. */
++export function fmtFecha(d: Entrada): string {
++  if (d == null || d === "") return "—";
++  // Columnas tipo date ("2026-11-10"): se leen tal cual, sin pasar por la zona horaria.
++  if (typeof d === "string") {
++    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
++    if (m) return `${Number(m[3])} ${MESES[Number(m[2]) - 1]} ${m[1]}`;
++  }
++  const f = d instanceof Date ? d : new Date(d);
++  if (Number.isNaN(f.getTime())) return "—";
++  const p = Object.fromEntries(partesLima.formatToParts(f).map((x) => [x.type, x.value]));
++  return `${Number(p.day)} ${MESES[Number(p.month) - 1]} ${p.year}`;
++}
++
++/** Fecha con hora (24 h, Lima), p. ej. "2 nov 2026, 14:30". */
++export function fmtFechaHora(d: Entrada): string {
++  const dia = fmtFecha(d);
++  if (dia === "—") return dia;
++  const f = d instanceof Date ? d : new Date(d as string | number);
++  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) return dia;
++  const p = Object.fromEntries(partesLima.formatToParts(f).map((x) => [x.type, x.value]));
++  return `${dia}, ${p.hour}:${p.minute}`;
++}
+diff --git a/src/lib/pedidoId.ts b/src/lib/pedidoId.ts
+new file mode 100644
+index 0000000..0383fc4
+--- /dev/null
++++ b/src/lib/pedidoId.ts
+@@ -0,0 +1,7 @@
++// src/lib/pedidoId.ts
++// Número de pedido que ve el cliente: siempre "GM-" + 12 dígitos (el mismo que guarda el servidor en orders.order_number).
++// Niubiz solo recibe los dígitos (purchaseNumber); esta función solo cambia cómo se muestra.
++export function numeroPedido(valor: string | null | undefined): string {
++  const v = String(valor ?? "").trim();
++  return /^\d{1,12}$/.test(v) ? `GM-${v}` : v;
++}
+diff --git a/src/routes/_authenticated/correos-pedidos.tsx b/src/routes/_authenticated/correos-pedidos.tsx
+index f7caf97..7e6eadc 100644
+--- a/src/routes/_authenticated/correos-pedidos.tsx
++++ b/src/routes/_authenticated/correos-pedidos.tsx
+@@ -14,6 +14,7 @@ import {
+ import { EmptyState, TableSkeleton } from "@/components/states";
+ import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ import { TarjetaFila, TarjetasMovil } from "@/components/admin/TarjetaFila";
++import { fmtFechaHora } from "@/lib/fechas";
+ 
+ export const Route = createFileRoute("/_authenticated/correos-pedidos")({
+   head: () => ({ meta: [{ title: "Correos de pedidos — G&M" }] }),
+@@ -59,10 +60,6 @@ const ESTADO_CONFIG: Record<Estado, { label: string; color: string; bg: string }
+ const fmtSoles = (n: number | null) =>
+   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n ?? 0);
+ 
+-const fmtFechaHora = (iso: string) =>
+-  new Intl.DateTimeFormat("es-PE", {
+-    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+-  }).format(new Date(iso));
+ 
+ function demora(creado: string, enviado: string) {
+   const m = Math.max(0, Math.round((new Date(enviado).getTime() - new Date(creado).getTime()) / 60000));
+diff --git a/src/routes/checkout.tsx b/src/routes/checkout.tsx
+index 6b85df0..dc80d7e 100644
+--- a/src/routes/checkout.tsx
++++ b/src/routes/checkout.tsx
+@@ -83,6 +83,7 @@ import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
+ import { leerCuponSalida } from "@/lib/cupon-salida";
+ import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
+ import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
++import { fmtFechaHora } from "@/lib/fechas";
+ import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
+ 
+ /** El servidor recalculó el pedido y el total del navegador estaba desactualizado. */
+@@ -441,7 +442,7 @@ useEffect(() => {
+         actionCode:   data?.actionCode,
+         sinConfirmar: !rechazo,
+         purchase:     purchaseNumber,
+-        date:         new Date().toLocaleString("es-PE"),
++        date:         fmtFechaHora(new Date()),
+         amount:       (saved.total ?? totalFinal).toFixed(2),
+         nombre:       saved.nombre,
+         items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
+@@ -462,7 +463,7 @@ useEffect(() => {
+     clearCart();
+     setModalDatos({
+       purchase: purchaseNumber,
+-      date:     new Date().toLocaleString("es-PE"),
++      date:     fmtFechaHora(new Date()),
+       amount:   (saved.total ?? totalFinal).toFixed(2),
+       currency: "PEN",
+       nombre:        saved.nombre,
+@@ -484,7 +485,7 @@ useEffect(() => {
+     setModalDatos({
+       sinConfirmar: true,
+       purchase:     purchaseNumber,
+-      date:         new Date().toLocaleString("es-PE"),
++      date:         fmtFechaHora(new Date()),
+       amount:       (saved.total ?? totalFinal).toFixed(2),
+       nombre:       saved.nombre,
+       items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
+diff --git a/src/routes/perfil/pedidos.tsx b/src/routes/perfil/pedidos.tsx
+index dff3d48..e7f4a83 100644
+--- a/src/routes/perfil/pedidos.tsx
++++ b/src/routes/perfil/pedidos.tsx
+@@ -12,6 +12,8 @@ import {
+ import { useState } from "react";
+ import { createPortal } from "react-dom";
+ import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
++import { fmtFecha, fmtFechaHora } from "@/lib/fechas";
++import { numeroPedido } from "@/lib/pedidoId";
+ import { EvidenciasCliente } from "@/components/EvidenciasCliente";
+ import { FleteProvincia } from "@/components/FleteProvincia";
+ import { AgenciaProvincia } from "@/components/AgenciaProvincia";
+@@ -26,20 +28,9 @@ export const Route = createFileRoute("/perfil/pedidos")({
+ const fmt = (n: number) =>
+   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
+ 
+-const fmtDate = (d: string | null) => {
+-  if (!d) return "—";
+-  return new Intl.DateTimeFormat("es-PE", {
+-    day: "2-digit", month: "long", year: "numeric",
+-  }).format(new Date(d));
+-};
+-
+-const fmtDateTime = (d: string | null) => {
+-  if (!d) return "—";
+-  return new Intl.DateTimeFormat("es-PE", {
+-    day: "2-digit", month: "short", year: "numeric",
+-    hour: "2-digit", minute: "2-digit",
+-  }).format(new Date(d));
+-};
++// Formato único "2 nov 2026" / "2 nov 2026, 14:30" (src/lib/fechas.ts)
++const fmtDate = (d: string | null) => fmtFecha(d);
++const fmtDateTime = (d: string | null) => fmtFechaHora(d);
+ 
+ type OrderStatus =
+   | "pendiente" | "pagado" | "en_produccion"
+@@ -50,8 +41,8 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ElementTyp
+   pendiente:       { label: "Pendiente",       icon: Clock,        color: "#92400e", bg: "#fef3c7" },
+   pagado:          { label: "Pago recibido",   icon: CheckCircle2, color: "#065f46", bg: "#d1fae5" },
+   en_produccion:   { label: "En producción",   icon: Package,      color: "#1e40af", bg: "#dbeafe" },
+-  control_calidad: { label: "Control calidad", icon: Package,      color: "#5b21b6", bg: "#ede9fe" },
+-  listo_despacho:  { label: "Listo despacho",  icon: Truck,        color: "#0e7490", bg: "#cffafe" },
++  control_calidad: { label: "Control de calidad", icon: Package,      color: "#5b21b6", bg: "#ede9fe" },
++  listo_despacho:  { label: "Listo para despacho",  icon: Truck,        color: "#0e7490", bg: "#cffafe" },
+   enviado:         { label: "En camino",        icon: Truck,        color: "#6d28d9", bg: "#ede9fe" },
+   entregado:       { label: "Entregado",        icon: CheckCircle2, color: "#14532d", bg: "#dcfce7" },
+   cancelado:       { label: "Cancelado",        icon: XCircle,     color: "#7f1d1d", bg: "#fee2e2" },
+@@ -150,8 +141,8 @@ function PedidoCard({ order }: { order: any }) {
+ 
+   // Mismos datos que vio el cliente en la pantalla de "Pago aprobado"
+   const datosComprobante: PagoExitosoDatos = {
+-    purchase:      order.order_number,
+-    date:          new Date(order.paid_at ?? order.created_at).toLocaleString("es-PE"),
++    purchase:      numeroPedido(order.order_number),
++    date:          fmtFechaHora(order.paid_at ?? order.created_at),
+     amount:        Number(order.total).toFixed(2),
+     currency:      order.currency ?? "PEN",
+     nombre:        order.nombre,
+@@ -184,7 +175,7 @@ function PedidoCard({ order }: { order: any }) {
+         <div className="flex items-start justify-between gap-4">
+           <div className="flex-1 min-w-0">
+             <div className="flex items-center gap-2 flex-wrap mb-1">
+-              <span className="font-mono text-sm font-semibold">{order.order_number}</span>
++              <span className="font-mono text-sm font-semibold">{numeroPedido(order.order_number)}</span>
+               <span
+                 className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                 style={{ color: cfg.color, background: cfg.bg }}
