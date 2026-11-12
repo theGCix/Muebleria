@@ -56,12 +56,12 @@ export function buildComprobanteHtml(data: ComprobanteParaPDF): string {
   const itemsRows = data.items.map(
     (it) => `
     <tr>
-      <td>${escH(it.codigo)}</td>
-      <td>${escH(it.descripcion)}</td>
-      <td style="text-align:center">${it.unidad}</td>
-      <td style="text-align:right">${it.cantidad}</td>
-      <td style="text-align:right">${fmt(it.precioUnitario)}</td>
-      <td style="text-align:right">${fmt(it.total)}</td>
+      <td data-label="Código">${escH(it.codigo)}</td>
+      <td data-label="Descripción">${escH(it.descripcion)}</td>
+      <td data-label="U.M." style="text-align:center">${it.unidad}</td>
+      <td data-label="Cant." style="text-align:right">${it.cantidad}</td>
+      <td data-label="P. Unit." style="text-align:right">${fmt(it.precioUnitario)}</td>
+      <td data-label="Total" style="text-align:right">${fmt(it.total)}</td>
     </tr>`
   ).join("");
 
@@ -79,11 +79,12 @@ export function buildComprobanteHtml(data: ComprobanteParaPDF): string {
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${tipoLabel[data.tipo] ?? "Comprobante"} ${data.numero}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, sans-serif; font-size: 11px; color: #222; background: #fff; }
-    .page { width: 21cm; min-height: 29.7cm; margin: 0 auto; padding: 1.5cm; position: relative; }
+    .page { width: 100%; max-width: 21cm; min-height: 29.7cm; margin: 0 auto; padding: 1.5cm; position: relative; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
     .emisor h1 { font-size: 16px; font-weight: bold; color: #1a56db; }
     .emisor p { font-size: 10px; color: #555; }
@@ -110,6 +111,30 @@ export function buildComprobanteHtml(data: ComprobanteParaPDF): string {
     .section h3 { font-size: 11px; font-weight: bold; color: #444; margin-bottom: 6px; }
     .info-table td { padding: 2px 4px; font-size: 10px; }
     .info-table td:first-child { font-weight: bold; width: 100px; }
+    /* Pantallas chicas (teléfono y tableta vertical): la hoja ocupa el ancho, la cabecera se apila y los ítems pasan a tarjetas.
+       La impresión A4 no cambia (ver @media print). */
+    @media screen and (max-width: 820px) {
+      body { font-size: 13px; }
+      .page { width: 100%; min-height: 0; padding: 16px 14px 88px; }
+      .header { flex-direction: column; gap: 12px; }
+      .tipo-box { min-width: 0; width: 100%; }
+      .emisor h1 { font-size: 18px; }
+      .emisor p, .tipo-box .fecha, .notas, .info-table td { font-size: 12px; }
+      .tipo-box .tipo { font-size: 12px; }
+      .receptor-box table td:first-child, .info-table td:first-child { width: 84px; }
+      .info-table td { vertical-align: top; overflow-wrap: anywhere; }
+      .items-table, .items-table tbody, .items-table tr, .items-table td { display: block; width: 100%; }
+      .items-table thead { display: none; }
+      .items-table tr { border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+      .items-table tr:nth-child(even) td { background: transparent; }
+      .items-table td { display: flex; justify-content: space-between; gap: 12px; border: 0; padding: 3px 0; font-size: 13px; text-align: right !important; overflow-wrap: anywhere; }
+      .items-table td::before { content: attr(data-label); color: #666; font-size: 12px; text-align: left; flex-shrink: 0; }
+      .totales table { width: 100%; min-width: 0; }
+      .totales table td { font-size: 13px; }
+      .totales .total-row td { font-size: 15px; }
+      .footer { font-size: 12px; }
+      .anulado-stamp { font-size: 44px; }
+    }
     @media print {
       body { background: white; }
       .page { margin: 0; padding: 1cm; }
@@ -232,25 +257,4 @@ export function downloadComprobanteXml(xmlContent: string, numero: string) {
   a.download = `${numero}.xml`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-/** Genera link de WhatsApp para compartir el comprobante */
-export function whatsappShare(receptorTel: string, numero: string, total: number, appUrl: string) {
-  const tel = receptorTel.replace(/\D/g, "");
-  const msg = encodeURIComponent(
-    `Hola! Te enviamos tu comprobante *${numero}* por S/ ${total.toFixed(2)}.\n` +
-    `Puedes verlo aquí: ${appUrl}/comprobante/${numero}`
-  );
-  window.open(`https://wa.me/${tel.startsWith("51") ? tel : "51" + tel}?text=${msg}`, "_blank");
-}
-
-/** Genera mailto para enviar comprobante por correo */
-export function emailShare(email: string, numero: string, emisorNombre: string, total: number) {
-  const subject = encodeURIComponent(`Comprobante ${numero} — ${emisorNombre}`);
-  const body = encodeURIComponent(
-    `Estimado cliente,\n\nAdjuntamos su comprobante de pago:\n\n` +
-    `Número: ${numero}\nTotal: S/ ${total.toFixed(2)}\n\n` +
-    `Saludos,\n${emisorNombre}`
-  );
-  window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
 }

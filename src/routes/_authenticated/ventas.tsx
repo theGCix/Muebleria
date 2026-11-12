@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, FileText, Download, Mail, MessageCircle, XCircle, FileX, FileDown, Send, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
+import { Loader2, FileText, Download, XCircle, FileX, FileDown, Send, CheckCircle2, AlertCircle, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
 import {
@@ -27,12 +27,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   printComprobante, downloadComprobanteHtml, downloadComprobanteXml,
-  whatsappShare, emailShare, type ComprobanteParaPDF,
+  type ComprobanteParaPDF,
 } from "@/lib/comprobante-pdf";
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 import { useNubefact } from "@/hooks/useNubefact";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
+import { CompartirComprobante } from "@/components/admin/CompartirComprobante";
+import { ItemsBoleta } from "@/components/admin/ItemsBoleta";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
@@ -97,7 +99,7 @@ function saleToXmlData(sale: any): ComprobanteData {
     fechaEmision: format(new Date(sale.created_at), "yyyy-MM-dd"),
     moneda: "PEN",
     emisor: {
-      ruc: import.meta.env.SUNAT_RUC ?? "00000000000",
+      ruc: import.meta.env.VITE_SUNAT_RUC ?? "00000000000",
       razonSocial: "G&M MUEBLERIA",
       direccion: "Lima, Perú",
       ubigeo: "150101",
@@ -160,6 +162,8 @@ function NubefactBadge({ sale }: { sale: any }) {
 }
 
 // ── Componente de acciones del comprobante ───────────────────
+// Botones de 44 px en móvil (regla del panel) y compactos desde sm.
+const BTN_ACCION = "h-11 sm:h-8";
 function ComprobanteActions({ sale, onNubefactSuccess }: { sale: any; onNubefactSuccess?: () => void }) {
   const qc = useQueryClient();
   const [confirmAnular, setConfirmAnular] = useState(false);
@@ -233,39 +237,25 @@ function ComprobanteActions({ sale, onNubefactSuccess }: { sale: any; onNubefact
 
       <div className="flex flex-wrap gap-2">
         {/* Acciones locales */}
-        <Button size="sm" variant="outline" onClick={() => printComprobante(data)}>
+        <Button size="sm" variant="outline" className={BTN_ACCION} onClick={() => printComprobante(data)}>
           <FileText className="h-3.5 w-3.5 mr-1" /> Ver / Imprimir
         </Button>
-        <Button size="sm" variant="outline" onClick={() => downloadComprobanteHtml(data)}>
+        <Button size="sm" variant="outline" className={BTN_ACCION} onClick={() => downloadComprobanteHtml(data)}>
           <Download className="h-3.5 w-3.5 mr-1" /> PDF
         </Button>
         <Button
-          size="sm" variant="outline"
+          size="sm" variant="outline" className={BTN_ACCION}
           onClick={() => downloadComprobanteXml(buildInvoiceXml(xmlData), sale.numero)}
         >
           <FileDown className="h-3.5 w-3.5 mr-1" /> XML
         </Button>
-        {sale.customers?.telefono && (
-          <Button
-            size="sm" variant="outline"
-            onClick={() => whatsappShare(sale.customers.telefono, sale.numero, Number(sale.total), window.location.origin)}
-          >
-            <MessageCircle className="h-3.5 w-3.5 mr-1" /> WhatsApp
-          </Button>
-        )}
-        {sale.customers?.email && (
-          <Button
-            size="sm" variant="outline"
-            onClick={() => emailShare(sale.customers.email, sale.numero, "G&M Mueblería", Number(sale.total))}
-          >
-            <Mail className="h-3.5 w-3.5 mr-1" /> Correo
-          </Button>
-        )}
+        {/* Compartir: usa los datos de ESTE comprobante; permite escribir teléfono/correo si faltan */}
+        <CompartirComprobante sale={sale} className={BTN_ACCION} />
 
         {/* Enviar a SUNAT vía Nubefact */}
         {!anulado && (
           yaEnSunat ? (
-            <Button size="sm" variant="outline" disabled className="text-green-600 border-green-200">
+            <Button size="sm" variant="outline" disabled className={`${BTN_ACCION} text-green-600 border-green-200`}>
               <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Aceptado por SUNAT
             </Button>
           ) : (
@@ -274,7 +264,7 @@ function ComprobanteActions({ sale, onNubefactSuccess }: { sale: any; onNubefact
               variant="default"
               onClick={handleEmitirSunat}
               disabled={nubefactLoading}
-              className="bg-blue-600 hover:bg-blue-700"
+              className={`${BTN_ACCION} bg-blue-600 hover:bg-blue-700`}
             >
               {nubefactLoading
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
@@ -287,14 +277,14 @@ function ComprobanteActions({ sale, onNubefactSuccess }: { sale: any; onNubefact
 
         {/* Anulación en SUNAT (solo si ya fue aceptado) */}
         {yaEnSunat && !anulado && (
-          <Button size="sm" variant="destructive" onClick={() => setConfirmAnularSunat(true)}>
+          <Button size="sm" variant="destructive" className={BTN_ACCION} onClick={() => setConfirmAnularSunat(true)}>
             <AlertCircle className="h-3.5 w-3.5 mr-1" /> Anular en SUNAT
           </Button>
         )}
 
         {/* Anulación local (solo si NO está en SUNAT) */}
         {!yaEnSunat && !anulado && (
-          <Button size="sm" variant="destructive" onClick={() => setConfirmAnular(true)}>
+          <Button size="sm" variant="destructive" className={BTN_ACCION} onClick={() => setConfirmAnular(true)}>
             <XCircle className="h-3.5 w-3.5 mr-1" /> Anular
           </Button>
         )}
@@ -443,7 +433,7 @@ function VentasPage() {
     <div className="max-w-7xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Ventas</h1>
+          <h1 className="text-2xl font-display font-semibold leading-tight sm:text-3xl">Ventas</h1>
           <p className="text-muted-foreground">Boletas, facturas y guías de remisión</p>
         </div>
         {data?.sales && <DescargaPeriodo sales={data.sales} />}
@@ -660,7 +650,7 @@ function VentasPage() {
             </div>
           ) : saleDetail?.sale ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 sm:gap-3">
                 <div><span className="text-muted-foreground">Número:</span> <strong>{saleDetail.sale.numero}</strong></div>
                 <div><span className="text-muted-foreground">Tipo:</span> {tipoLabel[saleDetail.sale.tipo]}</div>
                 <div><span className="text-muted-foreground">Fecha:</span> {format(new Date(saleDetail.sale.created_at), "dd/MM/yyyy HH:mm")}</div>
@@ -683,28 +673,7 @@ function VentasPage() {
 
               <div>
                 <p className="font-medium text-sm mb-2">Ítems</p>
-                <div className="border rounded overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Producto</th>
-                        <th className="px-3 py-2 text-right">Cant.</th>
-                        <th className="px-3 py-2 text-right">P. Unit.</th>
-                        <th className="px-3 py-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(saleDetail.sale.sale_items ?? []).map((it: any) => (
-                        <tr key={it.id} className="border-t">
-                          <td className="px-3 py-2">{it.title}</td>
-                          <td className="px-3 py-2 text-right">{it.qty}</td>
-                          <td className="px-3 py-2 text-right">{fmt(Number(it.unit_price))}</td>
-                          <td className="px-3 py-2 text-right">{fmt(Number(it.total))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <ItemsBoleta items={saleDetail.sale.sale_items ?? []} />
               </div>
 
               <ComprobanteActions sale={saleDetail.sale} />
@@ -730,7 +699,7 @@ function VentasPage() {
             </div>
           ) : orderDetail?.order ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 sm:gap-3">
                 <div><span className="text-muted-foreground">Número:</span> <strong>{orderDetail.order.order_number}</strong></div>
                 <div><span className="text-muted-foreground">Estado:</span>
                   <Badge className="ml-2" variant={orderDetail.order.status === "cancelado" ? "destructive" : "default"}>
@@ -765,40 +734,13 @@ function VentasPage() {
 
               <div>
                 <p className="font-medium text-sm mb-2">Ítems</p>
-                <div className="border rounded overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Producto</th>
-                        <th className="px-3 py-2 text-right">Cant.</th>
-                        <th className="px-3 py-2 text-right">P. Unit.</th>
-                        <th className="px-3 py-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(orderDetail.order.order_items ?? []).map((it: any) => (
-                        <tr key={it.id} className="border-t">
-                          <td className="px-3 py-2">{it.title}</td>
-                          <td className="px-3 py-2 text-right">{it.qty}</td>
-                          <td className="px-3 py-2 text-right">{fmt(Number(it.unit_price))}</td>
-                          <td className="px-3 py-2 text-right">{fmt(Number(it.total))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-muted/30">
-                      {Number(orderDetail.order.envio) > 0 && (
-                        <tr className="border-t">
-                          <td colSpan={3} className="px-3 py-2 text-right text-muted-foreground">Envío</td>
-                          <td className="px-3 py-2 text-right">{fmt(Number(orderDetail.order.envio))}</td>
-                        </tr>
-                      )}
-                      <tr className="border-t font-semibold">
-                        <td colSpan={3} className="px-3 py-2 text-right">Total</td>
-                        <td className="px-3 py-2 text-right">{fmt(Number(orderDetail.order.total))}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                <ItemsBoleta
+                  items={orderDetail.order.order_items ?? []}
+                  pie={[
+                    ...(Number(orderDetail.order.envio) > 0 ? [{ etiqueta: "Envío", valor: Number(orderDetail.order.envio) }] : []),
+                    { etiqueta: "Total", valor: Number(orderDetail.order.total), fuerte: true },
+                  ]}
+                />
               </div>
 
               {orderDetail.order.comprobante_numero ? (
@@ -812,6 +754,7 @@ function VentasPage() {
               ) : (
                 <Button
                   size="sm"
+                  className="h-11 sm:h-8"
                   disabled={asignandoBoleta || ["pendiente", "cancelado"].includes(orderDetail.order.status)}
                   onClick={async () => {
                     setAsignandoBoleta(true);

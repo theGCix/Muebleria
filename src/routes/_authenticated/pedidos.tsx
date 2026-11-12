@@ -225,7 +225,7 @@ function PedidosPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Pedidos online</h1>
+          <h1 className="text-2xl font-display font-semibold leading-tight sm:text-3xl">Pedidos online</h1>
           <p className="text-muted-foreground mt-0.5">Pipeline de producción y entregas</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()}>

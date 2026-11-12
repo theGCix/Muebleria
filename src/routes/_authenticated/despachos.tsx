@@ -246,7 +246,10 @@ function DespachosPage() {
           <h1 className="flex items-center gap-2 text-xl font-semibold">
             <Navigation className="h-5 w-5" /> Despachos
           </h1>
-          <p className="text-sm text-muted-foreground">Programa, controla y cierra las entregas de los pedidos.</p>
+          <p className="text-sm text-muted-foreground">
+            <span className="sm:hidden">Programa y cierra entregas.</span>
+            <span className="hidden sm:inline">Programa, controla y cierra las entregas de los pedidos.</span>
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="h-11 sm:h-8" onClick={copiarHojaDeRuta}>

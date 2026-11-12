@@ -68,3 +68,9 @@
 ## Reglas del panel (Parte 8.1)
 - **Campos de mes:** usar siempre `CAMPO_MES` (`components/admin/TarjetaFila.tsx`); nunca un ancho fijo (`w-[170px]`, `w-40`): el control nativo recorta el ícono.
 - **Menú lateral:** el filtro vive en `lib/buscarMenu.ts` y se aplica sobre `canSee`; las opciones se definen solo en `nav-config`. El filtro no escribe en `localStorage` ni cambia el estado de los grupos plegados.
+
+## Reglas de boletas y compartir (Parte 8.2)
+- **Compartir comprobantes:** siempre con `armarMensajeComprobante` (`lib/compartirComprobante.ts`); nunca armar el mensaje a mano ni crear enlaces públicos propios (un correlativo `B001-…` es adivinable). Solo se incluye el enlace de Nubefact si el comprobante está aceptado por SUNAT, no anulado y es `https`. No incluir DNI, dirección ni teléfono del cliente en el mensaje.
+- **Boletas en móvil:** ítems con `ItemsBoleta` (tarjetas < 640 px); el HTML de `comprobante-pdf.ts` no debe fijar anchos en cm fuera de `@media print`.
+- **Filtros en chips:** usar `FiltrosEstado` (una fila con scroll horizontal), no `flex-wrap`.
+- **Variables de Vite:** en el navegador solo existen las `VITE_*` (por eso el RUC del emisor es `VITE_SUNAT_RUC`).

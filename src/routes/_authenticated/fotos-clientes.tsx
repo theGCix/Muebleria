@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState, ListSkeleton } from "@/components/states";
 import { uploadImage } from "@/lib/cloudinary";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+import { FiltrosEstado } from "@/components/admin/FiltrosEstado";
 import {
   eliminarGaleria, guardarGaleria, listGaleriaAdmin, listProductosBasico, moderarGaleria, setPublicadoGaleria,
   type GaleriaEstado, type GaleriaItem,
@@ -174,10 +175,13 @@ function TestimoniosAdminPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold">Testimonios</h1>
+          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-3xl">Testimonios</h1>
           <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
-            Las fotos que tus clientes envían al recibir su pedido llegan aquí y solo se publican si las apruebas. También
-            puedes cargar fotos tú mismo.
+            <span className="sm:hidden">Aprueba las fotos de tus clientes antes de publicarlas.</span>
+            <span className="hidden sm:inline">
+              Las fotos que tus clientes envían al recibir su pedido llegan aquí y solo se publican si las apruebas. También
+              puedes cargar fotos tú mismo.
+            </span>
           </p>
         </div>
         <Button onClick={() => setForm({ ...VACIO })}>
@@ -188,22 +192,7 @@ function TestimoniosAdminPage() {
       {/* Periodo */}
       <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
-      <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            aria-pressed={tab === t.key}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors ${
-              tab === t.key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"
-            }`}
-          >
-            {t.label}
-            <span className={`text-xs ${tab === t.key ? "opacity-80" : "text-muted-foreground"}`}>{cuenta[t.key]}</span>
-          </button>
-        ))}
-      </div>
+      <FiltrosEstado opciones={TABS} valor={tab} onChange={setTab} cuenta={cuenta} />
 
       {lista.isLoading ? (
         <ListSkeleton />

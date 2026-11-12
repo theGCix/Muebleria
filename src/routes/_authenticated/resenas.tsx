@@ -224,7 +224,7 @@ function ResenasPage() {
     <div className="space-y-6 max-w-[1000px] mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Reseñas</h1>
+          <h1 className="text-2xl font-display font-semibold leading-tight sm:text-3xl">Reseñas</h1>
           <p className="text-muted-foreground mt-0.5">Modera lo que se muestra en la tienda</p>
         </div>
         <Button

@@ -149,9 +149,10 @@ function CarritosAbandonadosPage() {
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Carritos abandonados</h1>
+          <h1 className="text-2xl font-display font-semibold leading-tight sm:text-3xl">Carritos abandonados</h1>
           <p className="text-muted-foreground mt-0.5">
-            Visitantes que dejaron productos sin comprar hace más de 1 hora
+            <span className="sm:hidden">Dejaron productos hace más de 1 hora</span>
+            <span className="hidden sm:inline">Visitantes que dejaron productos sin comprar hace más de 1 hora</span>
           </p>
         </div>
         <Button

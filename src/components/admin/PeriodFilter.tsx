@@ -175,7 +175,10 @@ export function PeriodFilter({
       )}
 
       {viendo && (
-        <p className="basis-full text-xs text-muted-foreground">{textoViendo(valor, ahora)}</p>
+        <p className="basis-full text-sm text-foreground/80">
+          <span className="font-medium text-foreground">Viendo:</span>{" "}
+          {textoViendo(valor, ahora).replace(/^Viendo:\s*/, "")}
+        </p>
       )}
     </div>
   );

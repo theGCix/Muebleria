@@ -352,7 +352,7 @@ function ClientesPage() {
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-display font-semibold">Clientes</h1>
+          <h1 className="text-2xl font-display font-semibold leading-tight sm:text-3xl">Clientes</h1>
           <p className="text-muted-foreground mt-0.5">Directorio y CRM</p>
         </div>
       </div>

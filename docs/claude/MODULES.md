@@ -130,3 +130,7 @@
 
 ## Menú lateral con filtro (2026-11-12, Parte 8.1)
 - `components/AppSidebar.tsx` (campo de filtro, render filtrado) + `lib/buscarMenu.ts` (helper puro) sobre `components/nav-config.ts`.
+
+## Boletas y compartir (2026-11-12, Parte 8.2)
+- `routes/_authenticated/ventas.tsx` → `components/admin/ItemsBoleta.tsx`, `components/admin/CompartirComprobante.tsx` → `lib/compartirComprobante.ts`; HTML imprimible en `lib/comprobante-pdf.ts`.
+- Testimonios: `routes/_authenticated/fotos-clientes.tsx` → `components/admin/FiltrosEstado.tsx`; período en `components/admin/PeriodFilter.tsx`.
