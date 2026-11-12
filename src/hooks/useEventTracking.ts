@@ -23,6 +23,11 @@ type EventParams = {
   /** Opcional: nombre/categoría para enriquecer GA4 y Meta Pixel */
   nombre?: string;
   categoria?: string | null;
+  /**
+   * true = solo se registra en eventos_web; NO se reenvía a GA4/Meta. Se usa cuando ese mismo paso
+   * ya se envió a GA4/Meta desde otro punto (ej. carrito_iniciado ↔ add_to_cart en cartStore).
+   */
+  solo_bd?: boolean;
 };
 
 /** Reenvía los eventos de negocio a GA4 y Meta Pixel (page_view se manda desde el router). */
@@ -53,7 +58,7 @@ function reenviarAnalitica(params: EventParams) {
 }
 
 export async function trackEvent(params: EventParams) {
-  reenviarAnalitica(params);
+  if (!params.solo_bd) reenviarAnalitica(params);
   const utm = getStoredUtm();
   try {
     await supabase.from("eventos_web").insert({

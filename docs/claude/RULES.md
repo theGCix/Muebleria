@@ -57,3 +57,10 @@
 - **Favoritos:** el aviso sale con `avisoFavorito()` (abajo, con «Deshacer»); «Deshacer» usa `addToWishlist` / `removeFromWishlist`, nunca `toggleWishlist` (usaría un estado viejo).
 - **Moneda:** el monto se muestra con «S/»; no se escribe «PEN» como texto.
 - **Pestañas con desplazamiento horizontal:** llevan indicador (degradado + flecha) visible solo si hay contenido oculto.
+
+## Reglas de seguimiento y accesibilidad (Parte 7.5)
+- **Embudo GA4/Meta:** cada paso se dispara desde un único lugar (`view_item` ficha, `add_to_cart` `cartStore`, `view_cart` `CartDrawer`, `begin_checkout` y `add_shipping_info` checkout, `add_payment_info` `handlePagar`, `purchase` con dedupe por pedido). Nunca reenviar un paso desde un segundo punto; si solo hay que registrarlo en `eventos_web`, usar `trackEvent({ ..., solo_bd: true })`.
+- **`carrito_iniciado`:** una vez por sesión, desde `cartStore`, con `solo_bd` (el `add_to_cart` de GA4/Meta ya sale de `trackAddToCart`).
+- **Menú de categorías:** debe poder operarse con teclado (patrón del `CategoryMegaMenu`); todo control interactivo nuevo del sitio público lleva `focus-visible` visible, nunca `outline-none` sin reemplazo.
+- **`alt`:** imagen de contenido = descripción de lo que se ve; decorativa o dentro de un botón con `aria-label` = `alt=""`. Fotos del taller: `alt` por foto en `lib/taller.ts`.
+- **Terceros bajo demanda:** mapas y video del taller no cargan hasta que el cliente los pide (sin scripts de Google/YouTube al abrir la página).

@@ -124,7 +124,7 @@ export function ProductGallery({ images, alt, index, onIndexChange, night = fals
             key={safe}
             className={`gmg-img ${dir > 0 ? "from-right" : "from-left"}`}
             src={images[safe]}
-            alt={alt}
+            alt={n > 1 ? `${alt} — foto ${safe + 1} de ${n}` : alt}
             draggable={false}
           />
           <div className="gmx-glow" />
@@ -234,7 +234,7 @@ function Lightbox({
           ref={imgRef}
           key={index}
           src={images[index]}
-          alt={alt}
+          alt={n > 1 ? `${alt} — foto ${index + 1} de ${n}` : alt}
           draggable={false}
           className={zoom ? "zoomed" : ""}
           onClick={() => setZoom((z) => !z)}

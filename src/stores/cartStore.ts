@@ -1,6 +1,24 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { trackAddToCart } from "@/lib/analytics";
+import { trackEvent } from "@/hooks/useEventTracking";
+import { esRutaStaff } from "@/lib/rutas";
+
+/**
+ * Registra `carrito_iniciado` en eventos_web (la métrica de carritos): una vez por sesión, en la
+ * primera pieza que entra al carrito. Va con solo_bd porque add_to_cart de GA4/Meta ya sale de
+ * trackAddToCart; así no se duplica. No se registra en el panel interno del negocio (POS, etc.).
+ */
+function registrarCarritoIniciado(productId: string, valor: number) {
+  try {
+    if (typeof window === "undefined" || esRutaStaff(window.location.pathname)) return;
+    if (sessionStorage.getItem("gm_carrito_iniciado")) return;
+    sessionStorage.setItem("gm_carrito_iniciado", "1");
+  } catch {
+    return;
+  }
+  void trackEvent({ tipo: "carrito_iniciado", product_id: productId, valor, solo_bd: true });
+}
 
 export interface CartItem {
   /**
@@ -62,6 +80,7 @@ export const useCartStore = create<CartState>()(
       addItem: (raw) => {
         const item = conLineId(raw);
         trackAddToCart({ id: item.id, nombre: item.title, precio: item.price });
+        registrarCarritoIniciado(item.id, item.price);
         set((state) => {
           const existing = state.items.find((i) => i.lineId === item.lineId);
           if (existing) {
@@ -79,6 +98,9 @@ export const useCartStore = create<CartState>()(
       addItems: (newItems) => {
         for (const it of newItems) {
           trackAddToCart({ id: it.id, nombre: it.title, precio: it.price, cantidad: it.qty ?? 1 });
+        }
+        if (newItems.length > 0) {
+          registrarCarritoIniciado(newItems[0].id, newItems.reduce((s, it) => s + it.price * (it.qty ?? 1), 0));
         }
         set((state) => {
           let items = [...state.items];

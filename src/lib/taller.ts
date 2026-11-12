@@ -14,13 +14,46 @@ export type PasoTaller = {
   nota?: string;
   /** public_id de Cloudinary o URL https. Vacío = sin foto. */
   foto?: string;
+  /** Texto alternativo de la foto: descríbela (qué se ve). Si falta, se usa el título del paso. */
+  alt?: string;
+};
+
+export type FotoGaleria = {
+  /** public_id de Cloudinary o URL https. */
+  foto: string;
+  /** Qué se ve en la foto (para lectores de pantalla). Si falta, se usa un texto genérico. */
+  alt?: string;
+};
+
+export type MiembroEquipo = {
+  nombre: string;
+  rol: string;
+  /** public_id de Cloudinary o URL https. Vacío = iniciales. */
+  foto?: string;
+};
+
+export type VideoTaller = {
+  /** URL de YouTube (watch, youtu.be o embed) o de un archivo de video (.mp4/.webm, p. ej. Cloudinary). */
+  url: string;
+  /** Texto del botón y título accesible del video. */
+  titulo?: string;
+  /** Imagen previa opcional (public_id de Cloudinary o URL https). */
+  poster?: string;
 };
 
 /** Foto principal del taller (arriba de la página). */
 export const TALLER_PORTADA: string | undefined = undefined;
+/** Qué se ve en la portada (si hay foto). */
+export const TALLER_PORTADA_ALT: string | undefined = undefined;
 
 /** Fotos extra del taller y de piezas terminadas. Vacío = no se muestra la galería. */
-export const TALLER_GALERIA: string[] = [];
+export const TALLER_GALERIA: FotoGaleria[] = [];
+
+/** Video del taller. Sin valor = no se muestra la sección. El reproductor solo se carga al pulsar «Ver video». */
+export const TALLER_VIDEO: VideoTaller | undefined = undefined;
+
+/** Equipo (nombre, rol y foto). Vacío = no se muestra la sección «El equipo». */
+export const TALLER_EQUIPO: MiembroEquipo[] = [];
 
 export const TALLER_PASOS: PasoTaller[] = [
   {
@@ -66,6 +99,15 @@ export const TALLER_PASOS: PasoTaller[] = [
     descripcion: "Protegemos cada pieza con film stretch para que llegue a tu casa en buen estado.",
   },
 ];
+
+/** Resuelve la URL de un video: YouTube (se embebe sin cookies) o archivo directo. null si no es válida. */
+export function videoFuente(url: string | undefined): { tipo: "youtube"; id: string } | { tipo: "archivo"; src: string } | null {
+  const u = url?.trim();
+  if (!u || !/^https:\/\//i.test(u)) return null;
+  const yt = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (yt) return { tipo: "youtube", id: yt[1] };
+  return /\.(mp4|webm|mov)(\?.*)?$/i.test(u) ? { tipo: "archivo", src: u } : null;
+}
 
 /** Devuelve la URL lista para <img>, o null si no hay foto configurada. */
 export function fotoUrl(ref: string | undefined, w = 900): string | null {

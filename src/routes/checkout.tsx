@@ -77,7 +77,7 @@ interface ModalDatos extends Partial<PagoExitosoDatos> {
 // const API = import.meta.env.VITE_API_URL ?? "";
 import { API_URL as API } from "@/config";
 import { trackEvent, getSessionId } from "@/hooks/useEventTracking";
-import { trackLead } from "@/lib/analytics";
+import { itemsDeCarrito, trackAddPaymentInfo, trackAddShippingInfo, trackLead } from "@/lib/analytics";
 import { precalentarServidor } from "@/lib/precalentar";
 import { ConfirmandoPagoOverlay } from "@/components/ConfirmandoPagoOverlay";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
@@ -350,6 +350,21 @@ function CheckoutPage() {
   });
 }, []);
 
+  // add_shipping_info: cuando los datos de envío quedan completos (la guarda por sesión está en analytics).
+  const envioCompleto =
+    form.nombre.trim().length > 1 &&
+    form.telefono.trim().length >= 6 &&
+    (metodoEntrega === "recojo_tienda" ||
+      (form.direccion.trim().length > 3 &&
+        form.distrito.trim().length > 0 &&
+        !distritoSinCobertura &&
+        (!esProvincia || (form.departamento !== "" && form.provincia !== ""))));
+  useEffect(() => {
+    if (!envioCompleto || items.length === 0) return;
+    trackAddShippingInfo(totalFinal, itemsDeCarrito(items), metodoEntrega);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envioCompleto]);
+
   // ── Pre-carga el JS de Niubiz ──────────────────────────────
   useEffect(() => {
     (async () => {
@@ -600,6 +615,9 @@ useEffect(() => {
     if (provinciaIncompleta) { toast.error("Completa departamento, provincia y distrito / localidad"); return; }
     if (metodoEntrega === "domicilio" && !esProvincia && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
     if (metodoEntrega === "domicilio" && distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
+
+    // add_payment_info: pasó la validación y va a pagar (si falta iniciar sesión, igual cuenta: ya decidió pagar)
+    trackAddPaymentInfo(totalFinal, itemsDeCarrito(items));
 
     if (!user) {
       setLoginOpen(true);

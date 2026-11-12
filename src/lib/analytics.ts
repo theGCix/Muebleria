@@ -160,6 +160,55 @@ export function trackBeginCheckout(value: number, items?: Item[]) {
   fb("InitiateCheckout", { value, currency: CURRENCY, num_items: items?.length });
 }
 
+// ── Pasos del embudo con guarda por sesión ──────────────────────────────────
+// Cada paso sale desde UN solo lugar; la guarda evita repetirlo si el efecto o el clic se repiten.
+// Al confirmarse una compra (trackPurchase) las guardas se limpian para medir la siguiente.
+const PASOS_EMBUDO = ["add_shipping_info", "add_payment_info"] as const;
+type PasoEmbudo = (typeof PASOS_EMBUDO)[number];
+const pasosVistos = new Set<PasoEmbudo>();
+const clavePaso = (p: PasoEmbudo) => `gm_ev_${p}`;
+
+/** true la primera vez que se pide el paso en esta sesión; false en las siguientes. */
+function primeraVez(paso: PasoEmbudo): boolean {
+  if (pasosVistos.has(paso)) return false;
+  pasosVistos.add(paso);
+  try {
+    if (sessionStorage.getItem(clavePaso(paso))) return false;
+    sessionStorage.setItem(clavePaso(paso), "1");
+  } catch { /* sin sessionStorage: queda la guarda en memoria */ }
+  return true;
+}
+
+function reiniciarPasos() {
+  for (const p of PASOS_EMBUDO) {
+    pasosVistos.delete(p);
+    try { sessionStorage.removeItem(clavePaso(p)); } catch { /* noop */ }
+  }
+}
+
+/** Líneas del carrito (CartItem) en el formato de Item de esta librería. */
+export const itemsDeCarrito = (lineas: { id: string; title: string; price: number; qty: number }[]): Item[] =>
+  lineas.map((l) => ({ id: l.id, nombre: l.title, precio: l.price, cantidad: l.qty }));
+
+/** Se abre el carrito (cada apertura con productos). Solo GA4: Meta no tiene un evento equivalente. */
+export function trackViewCart(value: number, items: Item[]) {
+  if (items.length === 0) return;
+  ga("view_cart", { currency: CURRENCY, value, items: gaItems(items) });
+}
+
+/** Datos de envío del checkout completos (una vez por sesión). Solo GA4. */
+export function trackAddShippingInfo(value: number, items: Item[], tipo: "domicilio" | "recojo_tienda") {
+  if (!primeraVez("add_shipping_info")) return;
+  ga("add_shipping_info", { currency: CURRENCY, value, shipping_tier: tipo, items: gaItems(items) });
+}
+
+/** El cliente pulsó «Pagar» y pasó la validación (una vez por sesión). Meta: AddPaymentInfo. */
+export function trackAddPaymentInfo(value: number, items: Item[]) {
+  if (!primeraVez("add_payment_info")) return;
+  ga("add_payment_info", { currency: CURRENCY, value, items: gaItems(items) });
+  fb("AddPaymentInfo", { content_ids: items.map((i) => i.id), content_type: "product", num_items: items.length, value, currency: CURRENCY });
+}
+
 /** Compra confirmada. Se manda una sola vez por pedido (aunque el efecto corra de nuevo). */
 export function trackPurchase(orderId: string, value: number) {
   const key = `gm_purchase_${orderId}`;
@@ -167,6 +216,7 @@ export function trackPurchase(orderId: string, value: number) {
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
   } catch { /* noop */ }
+  reiniciarPasos();
   ga("purchase", { transaction_id: orderId, value, currency: CURRENCY });
   fb("Purchase", { value, currency: CURRENCY }, orderId);
 }

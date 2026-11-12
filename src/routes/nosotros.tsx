@@ -4,16 +4,20 @@
 import { useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Armchair, Hammer, MessageCircle, PackageCheck, Paintbrush, Ruler, ShieldCheck, Sparkles, TreeDeciduous,
+  Armchair, Clock, Hammer, MapPin, MessageCircle, PackageCheck, Paintbrush, Ruler, ShieldCheck, Sparkles, TreeDeciduous,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { gsap, useGSAP, MQ } from "@/lib/gsap";
-import { WHATSAPP_NUMBER } from "@/config";
+import { EMPRESA, HORARIO, WHATSAPP_NUMBER } from "@/config";
+import { MapaTaller } from "@/components/taller/MapaTaller";
+import { VideoTaller } from "@/components/taller/VideoTaller";
 import { trackEvent } from "@/hooks/useEventTracking";
-import { TALLER_GALERIA, TALLER_PASOS, TALLER_PORTADA, fotoUrl } from "@/lib/taller";
+import {
+  TALLER_EQUIPO, TALLER_GALERIA, TALLER_PASOS, TALLER_PORTADA, TALLER_PORTADA_ALT, TALLER_VIDEO, fotoUrl, videoFuente,
+} from "@/lib/taller";
 
 export const Route = createFileRoute("/nosotros")({
   head: () => ({
@@ -67,7 +71,12 @@ const COMPROMISOS = [
 function NosotrosPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const portada = fotoUrl(TALLER_PORTADA, 1200);
-  const galeria = TALLER_GALERIA.map((f) => fotoUrl(f, 800)).filter((u): u is string => !!u);
+  const galeria = TALLER_GALERIA.map((f) => ({ src: fotoUrl(f.foto, 800), alt: f.alt })).filter(
+    (f): f is { src: string; alt: string | undefined } => !!f.src,
+  );
+  const equipo = TALLER_EQUIPO.filter((m) => m.nombre.trim() && m.rol.trim());
+  const hayVideo = !!TALLER_VIDEO && !!videoFuente(TALLER_VIDEO.url);
+  const direccionTienda = EMPRESA.direccion;
 
   useEffect(() => {
     trackEvent({ tipo: "pagina_vista", path: "/nosotros" });
@@ -120,7 +129,7 @@ function NosotrosPage() {
 
             {portada && (
               <div className="reveal aspect-[4/3] overflow-hidden rounded-3xl border border-border/60 bg-card">
-                <img src={portada} alt="Taller de G&M Mueblería" className="h-full w-full object-cover" />
+                <img src={portada} alt={TALLER_PORTADA_ALT ?? "Taller de G&M Mueblería"} className="h-full w-full object-cover" />
               </div>
             )}
           </div>
@@ -159,7 +168,7 @@ function NosotrosPage() {
                       </div>
                       {foto && (
                         <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-border/60 bg-card">
-                          <img src={foto} alt={paso.titulo} loading="lazy" className="h-full w-full object-cover" />
+                          <img src={foto} alt={paso.alt ?? `Paso ${i + 1}: ${paso.titulo}`} loading="lazy" className="h-full w-full object-cover" />
                         </div>
                       )}
                     </div>
@@ -169,6 +178,18 @@ function NosotrosPage() {
             </ol>
           </div>
         </section>
+
+        {/* Video (solo si hay uno válido; el reproductor carga al pulsar) */}
+        {hayVideo && TALLER_VIDEO && (
+          <section className="px-4 py-12">
+            <div className="container mx-auto max-w-4xl">
+              <h2 className="reveal mb-6 font-display text-3xl font-semibold">Míralo en acción</h2>
+              <div className="reveal">
+                <VideoTaller video={TALLER_VIDEO} />
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Compromisos */}
         <section className="px-4 py-12">
@@ -185,17 +206,91 @@ function NosotrosPage() {
           </div>
         </section>
 
+        {/* El equipo (solo si hay integrantes cargados en taller.ts) */}
+        {equipo.length > 0 && (
+          <section className="px-4 py-12">
+            <div className="container mx-auto max-w-6xl">
+              <h2 className="reveal mb-6 font-display text-3xl font-semibold">El equipo</h2>
+              <ul className="grid grid-cols-2 gap-5 md:grid-cols-4">
+                {equipo.map((m) => {
+                  const foto = fotoUrl(m.foto, 500);
+                  const iniciales = m.nombre.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
+                  return (
+                    <li key={m.nombre} className="reveal text-center">
+                      <div className="mx-auto aspect-square w-full max-w-[200px] overflow-hidden rounded-full border border-border/60 bg-secondary/50">
+                        {foto ? (
+                          <img src={foto} alt={`${m.nombre}, ${m.rol}`} loading="lazy" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center font-display text-3xl text-muted-foreground" aria-hidden="true">
+                            {iniciales}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-3 font-medium">{m.nombre}</p>
+                      <p className="text-sm text-muted-foreground">{m.rol}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </section>
+        )}
+
         {/* Galería (solo si hay fotos) */}
         {galeria.length > 0 && (
           <section className="px-4 py-12">
             <div className="container mx-auto max-w-6xl">
               <h2 className="reveal mb-6 font-display text-3xl font-semibold">Dentro del taller</h2>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                {galeria.map((src, i) => (
-                  <div key={src + i} className="reveal aspect-square overflow-hidden rounded-xl border border-border/60 bg-card">
-                    <img src={src} alt="Taller de G&M Mueblería" loading="lazy" className="h-full w-full object-cover" />
+                {galeria.map((f, i) => (
+                  <div key={f.src + i} className="reveal aspect-square overflow-hidden rounded-xl border border-border/60 bg-card">
+                    <img
+                      src={f.src}
+                      alt={f.alt ?? `Foto ${i + 1} de ${galeria.length} del taller de G&M Mueblería`}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
                   </div>
                 ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Visítanos: la dirección y el horario salen de config.ts (los mismos del pie de página) */}
+        {direccionTienda && (
+          <section className="px-4 py-12" aria-labelledby="visitanos-titulo">
+            <div className="container mx-auto grid max-w-6xl items-center gap-8 md:grid-cols-2 md:gap-12">
+              <div className="reveal">
+                <h2 id="visitanos-titulo" className="font-display text-3xl font-semibold">Visita nuestra tienda</h2>
+                <p className="mt-3 max-w-md text-muted-foreground">
+                  Ven a ver los muebles en persona, tocar los acabados y conversar con nosotros.
+                </p>
+                <ul className="mt-6 space-y-4">
+                  <li className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-strong">
+                      <MapPin className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Dirección</p>
+                      <p className="font-medium">{direccionTienda}</p>
+                    </div>
+                  </li>
+                  {HORARIO && (
+                    <li className="flex items-start gap-3">
+                      <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-strong">
+                        <Clock className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Horario</p>
+                        <p className="font-medium">{HORARIO}</p>
+                      </div>
+                    </li>
+                  )}
+                </ul>
+              </div>
+              <div className="reveal">
+                <MapaTaller direccion={`${direccionTienda}, Lima, Perú`} />
               </div>
             </div>
           </section>

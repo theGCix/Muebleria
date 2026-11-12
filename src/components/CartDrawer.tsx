@@ -17,6 +17,7 @@ import { useValidarCarrito } from "@/hooks/useValidarCarrito";
 import { CarritoAvisos } from "./CarritoAvisos";
 import { precalentarServidor } from "@/lib/precalentar";
 import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
+import { itemsDeCarrito, trackViewCart } from "@/lib/analytics";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -109,6 +110,12 @@ export const CartDrawer = () => {
   // Un combo cuenta como 1 producto, no como cada una de sus piezas.
   const totalItems = grupos.reduce((s, g) => s + (g.tipo === "combo" ? 1 : g.item.qty), 0);
 
+  // view_cart: se dispara aquí (al abrir), no en un efecto, para que salga una sola vez por apertura.
+  const handleOpenChange = (abierto: boolean) => {
+    setIsOpen(abierto);
+    if (abierto) trackViewCart(total(), itemsDeCarrito(items));
+  };
+
   const handleCheckout = () => {
     setIsOpen(false);
     window.location.href = "/checkout";
@@ -116,7 +123,7 @@ export const CartDrawer = () => {
 
   return (
     <>
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <Sheet open={isOpen} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" data-cart-target className="relative rounded-full border-border/60">
             <ShoppingBag className="h-5 w-5" />
