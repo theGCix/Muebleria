@@ -32,7 +32,7 @@ import {
 import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
 import { useNubefact } from "@/hooks/useNubefact";
 import { EmptyState, TableSkeleton } from "@/components/states";
-import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 
 export const Route = createFileRoute("/_authenticated/ventas")({
@@ -380,7 +380,7 @@ function DescargaPeriodo({ sales }: { sales: any[] }) {
         type="month"
         value={mes}
         onChange={(e) => setMes(e.target.value)}
-        className="w-40"
+        className={CAMPO_MES}
       />
       <Button size="sm" variant="outline" onClick={download}>
         <FileX className="h-4 w-4 mr-1" /> Descargar XML del período

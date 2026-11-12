@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils";
 /** Alto táctil mínimo (44 px) para los botones dentro de las tarjetas. */
 export const BTN_TACTIL = "h-11 min-w-11";
 
+// Campo de mes (<input type="month">): 44 px de alto y ancho completo en móvil; 36 px y ancho cómodo desde sm.
+// El control nativo necesita ~12 rem para mostrar «septiembre de 2026» y el ícono del calendario sin recortar.
+export const CAMPO_MES = "h-11 w-full min-w-[12rem] sm:h-9 sm:w-52";
+
 /** Contenedor de las tarjetas: solo se ve por debajo de 640 px. */
 export function TarjetasMovil({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("space-y-3 p-3 sm:hidden", className)}>{children}</div>;

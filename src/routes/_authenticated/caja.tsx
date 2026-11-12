@@ -27,7 +27,7 @@ import {
   movimientosACsv, categoriaLabel, GASTO_CATEGORIAS, METODO_LABEL, TIPO_MOV_LABEL,
   type Turno, type Movimiento, type ResumenTurno, type MetodoPago, type TipoMov, type TipoManual,
 } from "@/lib/caja.functions";
-import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
 import { useAhora } from "@/hooks/useAhora";
 import { evaluarCaja, HORA_RECORDATORIO_CIERRE } from "@/lib/cajaAlerta";
 
@@ -635,7 +635,7 @@ function GastosTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="w-[170px]" />
+        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={CAMPO_MES} />
         <Select value={cat} onValueChange={setCat}>
           <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
           <SelectContent>

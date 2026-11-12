@@ -25,7 +25,7 @@ import {
   MOTIVO_LABEL, REEMBOLSO_LABEL, NC_LABEL,
   type Devolucion, type VentaBusqueda, type VentaDetalle, type MotivoDev, type MetodoReembolso, type NcEstado,
 } from "@/lib/devoluciones.functions";
-import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
+import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
 
 export const Route = createFileRoute("/_authenticated/devoluciones")({
   head: () => ({ meta: [{ title: "Devoluciones — G&M" }] }),
@@ -117,7 +117,7 @@ function DevolucionesPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="w-[170px]" />
+        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={CAMPO_MES} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">

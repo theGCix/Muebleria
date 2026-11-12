@@ -64,3 +64,7 @@
 - **Menú de categorías:** debe poder operarse con teclado (patrón del `CategoryMegaMenu`); todo control interactivo nuevo del sitio público lleva `focus-visible` visible, nunca `outline-none` sin reemplazo.
 - **`alt`:** imagen de contenido = descripción de lo que se ve; decorativa o dentro de un botón con `aria-label` = `alt=""`. Fotos del taller: `alt` por foto en `lib/taller.ts`.
 - **Terceros bajo demanda:** mapas y video del taller no cargan hasta que el cliente los pide (sin scripts de Google/YouTube al abrir la página).
+
+## Reglas del panel (Parte 8.1)
+- **Campos de mes:** usar siempre `CAMPO_MES` (`components/admin/TarjetaFila.tsx`); nunca un ancho fijo (`w-[170px]`, `w-40`): el control nativo recorta el ícono.
+- **Menú lateral:** el filtro vive en `lib/buscarMenu.ts` y se aplica sobre `canSee`; las opciones se definen solo en `nav-config`. El filtro no escribe en `localStorage` ni cambia el estado de los grupos plegados.

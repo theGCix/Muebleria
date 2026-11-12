@@ -127,3 +127,6 @@
 **Carritos abandonados y filtros de Ventas (2026-11-11)**
 - `src/lib/recuperacionCarrito.ts` (plantillas `recordatorio` y `cupon`, `construirMensaje`, `mailtoLink`, `enlaceRecuperacion`, `esCorreoValido`, `CUPON_PORCENTAJE`/`CUPON_HORAS` = valores de n8n), `src/components/admin/RecuperarCarritoDialog.tsx` (`canalesDisponibles`, `historialContacto`). `carrito.functions.ts`: `updateCarritoEstado` → RPC `cambiar_estado_carrito`; `registrarContactoCarrito` → `registrar_contacto_carrito`; `obtenerCuponRecuperacion` → `cupon_recuperacion_carrito`.
 - `src/lib/ventasFiltros.ts`: `filtrarVentas`, `esAnulada` (`anulada` | `cancelado`), `hayFiltrosActivos`, `FILTROS_INICIALES`.
+
+## Menú lateral con filtro (2026-11-12, Parte 8.1)
+- `components/AppSidebar.tsx` (campo de filtro, render filtrado) + `lib/buscarMenu.ts` (helper puro) sobre `components/nav-config.ts`.

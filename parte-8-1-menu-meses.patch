@@ -1,0 +1,392 @@
+diff b/docs/claude/MODULES.md
+--- a/docs/claude/MODULES.md	2026-11-12 02:21:10.000000000 -0500
++++ b/docs/claude/MODULES.md	2026-11-12 03:40:21.017124554 -0500
+@@ -127,3 +127,6 @@
+ **Carritos abandonados y filtros de Ventas (2026-11-11)**
+ - `src/lib/recuperacionCarrito.ts` (plantillas `recordatorio` y `cupon`, `construirMensaje`, `mailtoLink`, `enlaceRecuperacion`, `esCorreoValido`, `CUPON_PORCENTAJE`/`CUPON_HORAS` = valores de n8n), `src/components/admin/RecuperarCarritoDialog.tsx` (`canalesDisponibles`, `historialContacto`). `carrito.functions.ts`: `updateCarritoEstado` → RPC `cambiar_estado_carrito`; `registrarContactoCarrito` → `registrar_contacto_carrito`; `obtenerCuponRecuperacion` → `cupon_recuperacion_carrito`.
+ - `src/lib/ventasFiltros.ts`: `filtrarVentas`, `esAnulada` (`anulada` | `cancelado`), `hayFiltrosActivos`, `FILTROS_INICIALES`.
++
++## Menú lateral con filtro (2026-11-12, Parte 8.1)
++- `components/AppSidebar.tsx` (campo de filtro, render filtrado) + `lib/buscarMenu.ts` (helper puro) sobre `components/nav-config.ts`.
+diff b/docs/claude/RULES.md
+--- a/docs/claude/RULES.md	2026-11-12 03:19:51.000000000 -0500
++++ b/docs/claude/RULES.md	2026-11-12 03:40:21.014094773 -0500
+@@ -64,3 +64,7 @@
+ - **Menú de categorías:** debe poder operarse con teclado (patrón del `CategoryMegaMenu`); todo control interactivo nuevo del sitio público lleva `focus-visible` visible, nunca `outline-none` sin reemplazo.
+ - **`alt`:** imagen de contenido = descripción de lo que se ve; decorativa o dentro de un botón con `aria-label` = `alt=""`. Fotos del taller: `alt` por foto en `lib/taller.ts`.
+ - **Terceros bajo demanda:** mapas y video del taller no cargan hasta que el cliente los pide (sin scripts de Google/YouTube al abrir la página).
++
++## Reglas del panel (Parte 8.1)
++- **Campos de mes:** usar siempre `CAMPO_MES` (`components/admin/TarjetaFila.tsx`); nunca un ancho fijo (`w-[170px]`, `w-40`): el control nativo recorta el ícono.
++- **Menú lateral:** el filtro vive en `lib/buscarMenu.ts` y se aplica sobre `canSee`; las opciones se definen solo en `nav-config`. El filtro no escribe en `localStorage` ni cambia el estado de los grupos plegados.
+diff b/docs/claude/TASK_LOG.md
+--- a/docs/claude/TASK_LOG.md	2026-11-12 03:19:51.000000000 -0500
++++ b/docs/claude/TASK_LOG.md	2026-11-12 03:40:21.014726403 -0500
+@@ -224,3 +224,11 @@
+ - **No se tocó:** SQL, `RULES` de métricas, cálculos fiscales, `pagos.js`, valores de `tipo` en `eventos_web`.
+ - **Verificación:** `tsc --noEmit` sin errores nuevos; `vite build` OK; lint sin errores nuevos. En Chromium con arneses temporales (ya borrados): MegaMenu 22/22 comprobaciones (teclado, ARIA, foco visible, ratón y mezcla); flujo simulado con `gtag`/`fbq` falsos → GA4: `add_to_cart` 3 (sin duplicar), `view_cart` 1, `begin_checkout` 1, `add_shipping_info` 1, `add_payment_info` 1, `purchase` 1; `eventos_web`: `carrito_iniciado` 1; con `no_track=1` no sale nada a GA4/Meta. `/nosotros` a 360/768/1280 px: sin scroll horizontal, mapa sin cargar hasta pulsar (0 peticiones a Google antes), botón de 44 px, sin textos < 12 px; secciones video, equipo y galería aparecen al llenarse y se ocultan vacías.
+ - **Riesgos / pendientes:** cargar fotos del taller, video y equipo en `lib/taller.ts` (hoy vacíos); no se pudo verificar GA4 DebugView ni el Pixel Helper con tráfico real (probar una compra de prueba); `eventos_web` guarda `carrito_iniciado` con el `product_id` del primer producto agregado; un bloqueador de anuncios puede impedir el mapa (queda «Cómo llegar»); «Lima, Perú» se añade a la dirección solo para el mapa.
++
++## 2026-11-12 — Parte 8.1: Campos de mes y buscador del menú (A12, A14) — plan aprobado e implementado
++- **Decisión del usuario:** plan aprobado tal cual (Ventas incluido en A12).
++- **A12:** nueva constante `CAMPO_MES` (`components/admin/TarjetaFila.tsx`, junto a `BTN_TACTIL`): `h-11 w-full min-w-[12rem] sm:h-9 sm:w-52`. Aplicada a los tres `<Input type="month">`: Devoluciones, Caja y gastos (pestaña Gastos) y Ventas (exportar XML). El valor sigue siendo `YYYY-MM`; no cambia lógica ni consultas.
++- **A14:** `lib/buscarMenu.ts` (`filtrarMenu(groups, roles, texto)`, `rangoCoincidencia`): sin tildes ni mayúsculas, por título de la opción y por nombre del grupo; se aplica sobre lo que `canSee` permite, así que una opción sin permiso no entra ni como grupo vacío. `AppSidebar.tsx`: campo «Filtrar menú…» (44 px y 16 px de texto en móvil), coincidencias resaltadas, grupos con coincidencias abiertos solo mientras se filtra (no se toca `openMap` ni `localStorage`), «Sin resultados» con «Limpiar filtro», ↓ pasa a la primera coincidencia, Enter la abre, Esc o la X limpian. Se oculta con el menú colapsado a iconos. Al elegir una opción con filtro activo se limpia el filtro y, en móvil, se cierra el panel.
++- **No se tocó:** `nav-config`, roles, rutas, guardas, SQL, dependencias.
++- **Verificación:** `tsc --noEmit` sin errores nuevos (solo los preexistentes de `types.ts`); `vite build` OK; helper probado con admin, vendedor y carpintero (32 comprobaciones: tildes, vacío, sin resultados, permisos). Chromium con arnés temporal (ya borrado): campos de mes a 360/414/768/1280 px con 44/44/36/36 px de alto, sin recorte ni scroll horizontal; filtro con «gasto», «devol», «usuario», «cupon»; vendedor sin Cupones/Usuarios/Catálogo/Fabricación; carpintero solo «Mis órdenes»; lo guardado en `localStorage` no cambia; móvil con 16 px y 44 px; campo oculto al colapsar.
++- **Riesgos / pendientes:** probar el campo de mes en iPhone real (iOS Safari) y Android; Chromium del arnés mostró el mes en inglés (locale), no se verificó «septiembre de 2026» literal; Firefox de escritorio no soporta `type="month"`. En móvil el panel no se cerraba solo al navegar (no existía ese comportamiento); ahora se cierra únicamente al elegir desde el filtro.
+diff b/src/components/AppSidebar.tsx
+--- a/src/components/AppSidebar.tsx	2026-11-10 22:11:21.000000000 -0500
++++ b/src/components/AppSidebar.tsx	2026-11-12 03:40:21.015071304 -0500
+@@ -1,14 +1,15 @@
+-import { useEffect, useRef, useState } from "react";
+-import { Link, useRouterState } from "@tanstack/react-router";
++import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
++import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+ import type { User } from "@supabase/supabase-js";
+-import { Home, ChevronRight } from "lucide-react";
++import { Home, ChevronRight, Search, X } from "lucide-react";
+ import {
+   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
+-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, useSidebar,
++  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, SidebarInput, useSidebar,
+ } from "@/components/ui/sidebar";
+ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+ import { SidebarUserBlock } from "@/components/SidebarUserBlock";
+ import { groups, POS_ITEM, canSee, type NavGroup } from "@/components/nav-config";
++import { filtrarMenu, rangoCoincidencia } from "@/lib/buscarMenu";
+ import type { AppRole } from "@/hooks/useAuth";
+ import { useSidebarCounts, type CountKey, type SidebarCounts } from "@/hooks/useSidebarCounts";
+ 
+@@ -25,12 +26,26 @@
+   "relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-full before:bg-primary before:opacity-0 " +
+   "data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary data-[active=true]:before:opacity-100";
+ 
++// Resalta en el título lo que coincide con el filtro (sin tildes ni mayúsculas).
++function Resaltado({ texto, filtro }: { texto: string; filtro: string }): ReactNode {
++  const r = rangoCoincidencia(texto, filtro);
++  if (!r) return texto;
++  return (
++    <>
++      {texto.slice(0, r[0])}
++      <mark className="rounded-sm bg-amber-200 px-0.5 text-inherit">{texto.slice(r[0], r[1])}</mark>
++      {texto.slice(r[1])}
++    </>
++  );
++}
++
+ function NavSection({
+-  group, currentPath, collapsed, counts, open, loaded, onOpenChange,
++  group, currentPath, collapsed, counts, open, loaded, onOpenChange, filtro, onElegir,
+ }: {
+   group: NavGroup; currentPath: string; collapsed: boolean; counts: SidebarCounts;
+-  open: boolean | undefined; loaded: boolean; onOpenChange: (open: boolean) => void;
++  open: boolean | undefined; loaded: boolean; onOpenChange: (open: boolean) => void; filtro: string; onElegir: () => void;
+ }) {
++  const filtrando = filtro.trim() !== "";
+   const hasActive = group.items.some((i) => currentPath === i.url);
+ 
+   // Estado efectivo: lo que la persona dejó guardado; si no hay nada guardado, abierto solo si contiene la página actual.
+@@ -46,7 +61,9 @@
+   }, [loaded, currentPath, hasActive, open, onOpenChange]);
+ 
+   // Con la barra colapsada a iconos, siempre se muestran todos los íconos.
+-  const isOpen = collapsed || group.alwaysOpen || effectiveOpen;
++  // Mientras se filtra, los grupos con coincidencias se muestran abiertos SIN tocar lo guardado:
++  // el estado del usuario (openMap / localStorage) no cambia, así que al limpiar vuelve como estaba.
++  const isOpen = collapsed || group.alwaysOpen || filtrando || effectiveOpen;
+ 
+   // Total de pendientes del grupo: se muestra en el título cuando el grupo está plegado,
+   // para que las alertas no queden escondidas.
+@@ -58,7 +75,7 @@
+   const labelClass = "text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/80";
+ 
+   return (
+-    <Collapsible open={isOpen} onOpenChange={onOpenChange} asChild>
++    <Collapsible open={isOpen} onOpenChange={(o) => { if (!filtrando) onOpenChange(o); }} asChild>
+       <SidebarGroup className="py-1">
+         {group.alwaysOpen ? (
+           <SidebarGroupLabel className={labelClass}>{group.label}</SidebarGroupLabel>
+@@ -88,9 +105,9 @@
+                       tooltip={item.title}
+                       className={ACTIVE_ITEM}
+                     >
+-                      <Link to={item.url}>
++                      <Link to={item.url} data-menu-link onClick={filtrando ? onElegir : undefined}>
+                         <item.icon className="h-4 w-4" />
+-                        <span>{item.title}</span>
++                        <span>{filtrando ? <Resaltado texto={item.title} filtro={filtro} /> : item.title}</span>
+                       </Link>
+                     </SidebarMenuButton>
+                     {item.countKey && n > 0 && (
+@@ -120,8 +137,9 @@
+ }
+ 
+ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | null }) {
+-  const { state } = useSidebar();
++  const { state, isMobile, setOpenMobile } = useSidebar();
+   const collapsed = state === "collapsed";
++  const navigate = useNavigate();
+   const currentPath = useRouterState({ select: (r) => r.location.pathname });
+   const counts = useSidebarCounts(roles);
+ 
+@@ -152,9 +170,50 @@
+     });
+   };
+ 
+-  const visibleGroups = groups
+-    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, roles)) }))
+-    .filter((g) => g.items.length > 0);
++  // Filtro del menú: solo en memoria (no se guarda). Se aplica sobre lo que el rol puede ver.
++  const [filtro, setFiltro] = useState("");
++  const filtrando = filtro.trim() !== "";
++  const resultado = useMemo(() => filtrarMenu(groups, roles, filtro), [roles, filtro]);
++  const visibleGroups = resultado.groups;
++  const contenidoRef = useRef<HTMLDivElement>(null);
++  const campoRef = useRef<HTMLInputElement>(null);
++
++  // Al navegar (clic, Enter o cualquier otra vía) el filtro se limpia.
++  useEffect(() => {
++    setFiltro("");
++  }, [currentPath]);
++
++  // Se eligió una opción del filtro (clic o Enter): se limpia, incluso si ya se estaba en esa página,
++  // y en móvil se cierra el panel.
++  const terminarFiltro = () => {
++    setFiltro("");
++    if (isMobile) setOpenMobile(false);
++  };
++
++  const limpiar = () => {
++    setFiltro("");
++    campoRef.current?.focus();
++  };
++
++  const onKeyCampo = (e: KeyboardEvent<HTMLInputElement>) => {
++    if (e.key === "Escape") {
++      if (filtro) {
++        e.preventDefault();
++        e.stopPropagation();
++        setFiltro("");
++      }
++    } else if (e.key === "ArrowDown") {
++      const primero = contenidoRef.current?.querySelector<HTMLElement>("[data-menu-link]");
++      if (primero) {
++        e.preventDefault();
++        primero.focus();
++      }
++    } else if (e.key === "Enter" && filtrando && resultado.primero) {
++      e.preventDefault();
++      navigate({ to: resultado.primero.url });
++      terminarFiltro();
++    }
++  };
+ 
+   const showPos = canSee(POS_ITEM, roles);
+ 
+@@ -172,7 +231,38 @@
+           )}
+         </div>
+       </SidebarHeader>
+-      <SidebarContent>
++      <SidebarContent ref={contenidoRef}>
++        {!collapsed && (
++          <div role="search" className="px-2 pt-2">
++            <div className="relative">
++              <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
++              <SidebarInput
++                ref={campoRef}
++                type="search"
++                value={filtro}
++                onChange={(e) => setFiltro(e.target.value)}
++                onKeyDown={onKeyCampo}
++                placeholder="Filtrar menú…"
++                aria-label="Filtrar el menú"
++                autoComplete="off"
++                className="h-11 pl-8 pr-9 text-base md:h-9 md:text-sm [&::-webkit-search-cancel-button]:hidden"
++              />
++              {filtro && (
++                <button
++                  type="button"
++                  onClick={limpiar}
++                  aria-label="Limpiar filtro"
++                  className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring md:h-8 md:w-8"
++                >
++                  <X className="h-4 w-4" />
++                </button>
++              )}
++            </div>
++            <p className="sr-only" role="status" aria-live="polite">
++              {filtrando ? (resultado.total === 0 ? "Sin resultados" : `${resultado.total} opciones`) : ""}
++            </p>
++          </div>
++        )}
+         {showPos && (
+           <SidebarGroup className="pb-0">
+             <SidebarMenu>
+@@ -202,8 +292,22 @@
+             open={openMap[group.label]}
+             loaded={loaded}
+             onOpenChange={(o) => setGroupOpen(group.label, o)}
++            filtro={filtro}
++            onElegir={terminarFiltro}
+           />
+         ))}
++        {filtrando && resultado.total === 0 && !collapsed && (
++          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
++            <p>Sin resultados</p>
++            <button
++              type="button"
++              onClick={limpiar}
++              className="mt-2 inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring md:min-h-8"
++            >
++              Limpiar filtro
++            </button>
++          </div>
++        )}
+       </SidebarContent>
+       <SidebarFooter className="border-t">
+         <SidebarMenu>
+diff b/src/components/admin/TarjetaFila.tsx
+--- a/src/components/admin/TarjetaFila.tsx	2026-11-06 13:33:50.000000000 -0500
++++ b/src/components/admin/TarjetaFila.tsx	2026-11-12 03:40:21.015314022 -0500
+@@ -7,6 +7,10 @@
+ /** Alto táctil mínimo (44 px) para los botones dentro de las tarjetas. */
+ export const BTN_TACTIL = "h-11 min-w-11";
+ 
++// Campo de mes (<input type="month">): 44 px de alto y ancho completo en móvil; 36 px y ancho cómodo desde sm.
++// El control nativo necesita ~12 rem para mostrar «septiembre de 2026» y el ícono del calendario sin recortar.
++export const CAMPO_MES = "h-11 w-full min-w-[12rem] sm:h-9 sm:w-52";
++
+ /** Contenedor de las tarjetas: solo se ve por debajo de 640 px. */
+ export function TarjetasMovil({ children, className }: { children: ReactNode; className?: string }) {
+   return <div className={cn("space-y-3 p-3 sm:hidden", className)}>{children}</div>;
+diff b/src/lib/buscarMenu.ts
+--- a/src/lib/buscarMenu.ts	1969-12-31 19:00:00.000000000 -0500
++++ b/src/lib/buscarMenu.ts	2026-11-12 03:40:21.016118143 -0500
+@@ -0,0 +1,63 @@
++// src/lib/buscarMenu.ts
++// Filtro del menú lateral: ignora tildes y mayúsculas, busca por título de la opción y por nombre del grupo.
++// Siempre se aplica sobre lo que el rol puede ver (canSee): una opción sin permiso nunca entra al resultado.
++import { canSee, type NavGroup, type NavItem } from "@/components/nav-config";
++import type { AppRole } from "@/hooks/useAuth";
++
++/** Minúsculas y sin tildes: «cupon» encuentra «Cupones», «resena» encuentra «Reseñas». */
++export const normalizarMenu = (t: string) =>
++  t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
++
++export type ResultadoMenu = {
++  /** Grupos con al menos una coincidencia (sin grupos vacíos). */
++  groups: NavGroup[];
++  /** Primera opción coincidente, en el orden del menú (la que abre Enter). */
++  primero: NavItem | null;
++  /** Cantidad de opciones que coinciden. */
++  total: number;
++};
++
++export function filtrarMenu(grupos: NavGroup[], roles: AppRole[], texto: string): ResultadoMenu {
++  const q = normalizarMenu(texto);
++  const permitidos = grupos
++    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, roles)) }))
++    .filter((g) => g.items.length > 0);
++
++  if (!q) {
++    const total = permitidos.reduce((n, g) => n + g.items.length, 0);
++    return { groups: permitidos, primero: permitidos[0]?.items[0] ?? null, total };
++  }
++
++  const out: NavGroup[] = [];
++  for (const g of permitidos) {
++    const grupoCoincide = normalizarMenu(g.label).includes(q);
++    const items = grupoCoincide ? g.items : g.items.filter((i) => normalizarMenu(i.title).includes(q));
++    if (items.length > 0) out.push({ ...g, items });
++  }
++  return {
++    groups: out,
++    primero: out[0]?.items[0] ?? null,
++    total: out.reduce((n, g) => n + g.items.length, 0),
++  };
++}
++
++/**
++ * Trozo del título que coincide con lo escrito, como [inicio, fin) sobre el texto ORIGINAL
++ * (para resaltarlo aunque la búsqueda no lleve tildes). null si el título no contiene el texto.
++ */
++export function rangoCoincidencia(titulo: string, texto: string): [number, number] | null {
++  const q = normalizarMenu(texto);
++  if (!q) return null;
++  let norm = "";
++  const mapa: number[] = []; // posición en `norm` → posición en `titulo`
++  for (let i = 0; i < titulo.length; i++) {
++    const n = titulo[i].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
++    for (let k = 0; k < n.length; k++) {
++      norm += n[k];
++      mapa.push(i);
++    }
++  }
++  const ini = norm.indexOf(q);
++  if (ini < 0) return null;
++  return [mapa[ini], mapa[ini + q.length - 1] + 1];
++}
+diff b/src/routes/_authenticated/caja.tsx
+--- a/src/routes/_authenticated/caja.tsx	2026-11-10 22:11:21.000000000 -0500
++++ b/src/routes/_authenticated/caja.tsx	2026-11-12 03:40:21.015610443 -0500
+@@ -27,7 +27,7 @@
+   movimientosACsv, categoriaLabel, GASTO_CATEGORIAS, METODO_LABEL, TIPO_MOV_LABEL,
+   type Turno, type Movimiento, type ResumenTurno, type MetodoPago, type TipoMov, type TipoManual,
+ } from "@/lib/caja.functions";
+-import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
++import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
+ import { useAhora } from "@/hooks/useAhora";
+ import { evaluarCaja, HORA_RECORDATORIO_CIERRE } from "@/lib/cajaAlerta";
+ 
+@@ -635,7 +635,7 @@
+   return (
+     <div className="space-y-4">
+       <div className="flex flex-wrap items-center gap-2">
+-        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="w-[170px]" />
++        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={CAMPO_MES} />
+         <Select value={cat} onValueChange={setCat}>
+           <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+           <SelectContent>
+diff b/src/routes/_authenticated/devoluciones.tsx
+--- a/src/routes/_authenticated/devoluciones.tsx	2026-11-07 08:13:11.000000000 -0500
++++ b/src/routes/_authenticated/devoluciones.tsx	2026-11-12 03:40:21.015889841 -0500
+@@ -25,7 +25,7 @@
+   MOTIVO_LABEL, REEMBOLSO_LABEL, NC_LABEL,
+   type Devolucion, type VentaBusqueda, type VentaDetalle, type MotivoDev, type MetodoReembolso, type NcEstado,
+ } from "@/lib/devoluciones.functions";
+-import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
++import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
+ 
+ export const Route = createFileRoute("/_authenticated/devoluciones")({
+   head: () => ({ meta: [{ title: "Devoluciones — G&M" }] }),
+@@ -117,7 +117,7 @@
+       </div>
+ 
+       <div className="flex flex-wrap items-center gap-2">
+-        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="w-[170px]" />
++        <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={CAMPO_MES} />
+       </div>
+ 
+       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+diff b/src/routes/_authenticated/ventas.tsx
+--- a/src/routes/_authenticated/ventas.tsx	2026-11-12 02:21:10.000000000 -0500
++++ b/src/routes/_authenticated/ventas.tsx	2026-11-12 03:40:21.016825002 -0500
+@@ -32,7 +32,7 @@
+ import { buildInvoiceXml, type ComprobanteData } from "@/lib/sunat";
+ import { useNubefact } from "@/hooks/useNubefact";
+ import { EmptyState, TableSkeleton } from "@/components/states";
+-import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
++import { TarjetaFila, TarjetasMovil, BTN_TACTIL, CAMPO_MES } from "@/components/admin/TarjetaFila";
+ import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
+ 
+ export const Route = createFileRoute("/_authenticated/ventas")({
+@@ -380,7 +380,7 @@
+         type="month"
+         value={mes}
+         onChange={(e) => setMes(e.target.value)}
+-        className="w-40"
++        className={CAMPO_MES}
+       />
+       <Button size="sm" variant="outline" onClick={download}>
+         <FileX className="h-4 w-4 mr-1" /> Descargar XML del período

@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import type { User } from "@supabase/supabase-js";
-import { Home, ChevronRight } from "lucide-react";
+import { Home, ChevronRight, Search, X } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, useSidebar,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, SidebarHeader, SidebarFooter, SidebarInput, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarUserBlock } from "@/components/SidebarUserBlock";
 import { groups, POS_ITEM, canSee, type NavGroup } from "@/components/nav-config";
+import { filtrarMenu, rangoCoincidencia } from "@/lib/buscarMenu";
 import type { AppRole } from "@/hooks/useAuth";
 import { useSidebarCounts, type CountKey, type SidebarCounts } from "@/hooks/useSidebarCounts";
 
@@ -25,12 +26,26 @@ const ACTIVE_ITEM =
   "relative before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-full before:bg-primary before:opacity-0 " +
   "data-[active=true]:bg-primary/10 data-[active=true]:font-semibold data-[active=true]:text-primary data-[active=true]:before:opacity-100";
 
+// Resalta en el título lo que coincide con el filtro (sin tildes ni mayúsculas).
+function Resaltado({ texto, filtro }: { texto: string; filtro: string }): ReactNode {
+  const r = rangoCoincidencia(texto, filtro);
+  if (!r) return texto;
+  return (
+    <>
+      {texto.slice(0, r[0])}
+      <mark className="rounded-sm bg-amber-200 px-0.5 text-inherit">{texto.slice(r[0], r[1])}</mark>
+      {texto.slice(r[1])}
+    </>
+  );
+}
+
 function NavSection({
-  group, currentPath, collapsed, counts, open, loaded, onOpenChange,
+  group, currentPath, collapsed, counts, open, loaded, onOpenChange, filtro, onElegir,
 }: {
   group: NavGroup; currentPath: string; collapsed: boolean; counts: SidebarCounts;
-  open: boolean | undefined; loaded: boolean; onOpenChange: (open: boolean) => void;
+  open: boolean | undefined; loaded: boolean; onOpenChange: (open: boolean) => void; filtro: string; onElegir: () => void;
 }) {
+  const filtrando = filtro.trim() !== "";
   const hasActive = group.items.some((i) => currentPath === i.url);
 
   // Estado efectivo: lo que la persona dejó guardado; si no hay nada guardado, abierto solo si contiene la página actual.
@@ -46,7 +61,9 @@ function NavSection({
   }, [loaded, currentPath, hasActive, open, onOpenChange]);
 
   // Con la barra colapsada a iconos, siempre se muestran todos los íconos.
-  const isOpen = collapsed || group.alwaysOpen || effectiveOpen;
+  // Mientras se filtra, los grupos con coincidencias se muestran abiertos SIN tocar lo guardado:
+  // el estado del usuario (openMap / localStorage) no cambia, así que al limpiar vuelve como estaba.
+  const isOpen = collapsed || group.alwaysOpen || filtrando || effectiveOpen;
 
   // Total de pendientes del grupo: se muestra en el título cuando el grupo está plegado,
   // para que las alertas no queden escondidas.
@@ -58,7 +75,7 @@ function NavSection({
   const labelClass = "text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/80";
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onOpenChange} asChild>
+    <Collapsible open={isOpen} onOpenChange={(o) => { if (!filtrando) onOpenChange(o); }} asChild>
       <SidebarGroup className="py-1">
         {group.alwaysOpen ? (
           <SidebarGroupLabel className={labelClass}>{group.label}</SidebarGroupLabel>
@@ -88,9 +105,9 @@ function NavSection({
                       tooltip={item.title}
                       className={ACTIVE_ITEM}
                     >
-                      <Link to={item.url}>
+                      <Link to={item.url} data-menu-link onClick={filtrando ? onElegir : undefined}>
                         <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                        <span>{filtrando ? <Resaltado texto={item.title} filtro={filtro} /> : item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                     {item.countKey && n > 0 && (
@@ -120,8 +137,9 @@ function NavSection({
 }
 
 export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | null }) {
-  const { state } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
+  const navigate = useNavigate();
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
   const counts = useSidebarCounts(roles);
 
@@ -152,9 +170,50 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
     });
   };
 
-  const visibleGroups = groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => canSee(i, roles)) }))
-    .filter((g) => g.items.length > 0);
+  // Filtro del menú: solo en memoria (no se guarda). Se aplica sobre lo que el rol puede ver.
+  const [filtro, setFiltro] = useState("");
+  const filtrando = filtro.trim() !== "";
+  const resultado = useMemo(() => filtrarMenu(groups, roles, filtro), [roles, filtro]);
+  const visibleGroups = resultado.groups;
+  const contenidoRef = useRef<HTMLDivElement>(null);
+  const campoRef = useRef<HTMLInputElement>(null);
+
+  // Al navegar (clic, Enter o cualquier otra vía) el filtro se limpia.
+  useEffect(() => {
+    setFiltro("");
+  }, [currentPath]);
+
+  // Se eligió una opción del filtro (clic o Enter): se limpia, incluso si ya se estaba en esa página,
+  // y en móvil se cierra el panel.
+  const terminarFiltro = () => {
+    setFiltro("");
+    if (isMobile) setOpenMobile(false);
+  };
+
+  const limpiar = () => {
+    setFiltro("");
+    campoRef.current?.focus();
+  };
+
+  const onKeyCampo = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      if (filtro) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFiltro("");
+      }
+    } else if (e.key === "ArrowDown") {
+      const primero = contenidoRef.current?.querySelector<HTMLElement>("[data-menu-link]");
+      if (primero) {
+        e.preventDefault();
+        primero.focus();
+      }
+    } else if (e.key === "Enter" && filtrando && resultado.primero) {
+      e.preventDefault();
+      navigate({ to: resultado.primero.url });
+      terminarFiltro();
+    }
+  };
 
   const showPos = canSee(POS_ITEM, roles);
 
@@ -172,7 +231,38 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
           )}
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent ref={contenidoRef}>
+        {!collapsed && (
+          <div role="search" className="px-2 pt-2">
+            <div className="relative">
+              <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <SidebarInput
+                ref={campoRef}
+                type="search"
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                onKeyDown={onKeyCampo}
+                placeholder="Filtrar menú…"
+                aria-label="Filtrar el menú"
+                autoComplete="off"
+                className="h-11 pl-8 pr-9 text-base md:h-9 md:text-sm [&::-webkit-search-cancel-button]:hidden"
+              />
+              {filtro && (
+                <button
+                  type="button"
+                  onClick={limpiar}
+                  aria-label="Limpiar filtro"
+                  className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring md:h-8 md:w-8"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <p className="sr-only" role="status" aria-live="polite">
+              {filtrando ? (resultado.total === 0 ? "Sin resultados" : `${resultado.total} opciones`) : ""}
+            </p>
+          </div>
+        )}
         {showPos && (
           <SidebarGroup className="pb-0">
             <SidebarMenu>
@@ -202,8 +292,22 @@ export function AppSidebar({ roles, user }: { roles: AppRole[]; user: User | nul
             open={openMap[group.label]}
             loaded={loaded}
             onOpenChange={(o) => setGroupOpen(group.label, o)}
+            filtro={filtro}
+            onElegir={terminarFiltro}
           />
         ))}
+        {filtrando && resultado.total === 0 && !collapsed && (
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+            <p>Sin resultados</p>
+            <button
+              type="button"
+              onClick={limpiar}
+              className="mt-2 inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring md:min-h-8"
+            >
+              Limpiar filtro
+            </button>
+          </div>
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t">
         <SidebarMenu>
