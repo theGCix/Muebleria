@@ -48,7 +48,7 @@ export function ComboBanner({ combo, otros }: { combo: Combo; otros: number }) {
     <div className="overflow-hidden rounded-2xl border border-accent/30 bg-card shadow-[var(--shadow-elegant)]">
       <div className="grid md:grid-cols-2">
         <div className="flex flex-col justify-center gap-4 p-6 sm:p-8 lg:p-10">
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent-foreground">
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-accent-strong px-3 py-1 text-xs font-bold uppercase tracking-wide text-accent-foreground">
             <PackageCheck className="h-3.5 w-3.5" /> Combo destacado
           </span>
 
@@ -80,14 +80,14 @@ export function ComboBanner({ combo, otros }: { combo: Combo; otros: number }) {
 
           <div>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-display text-5xl font-semibold text-accent">
+              <span className="font-display text-5xl font-semibold text-accent-strong">
                 {fmtPEN(combo.precio_combo)}
               </span>
               <span className="text-lg text-muted-foreground line-through">
                 {fmtPEN(precioNormal)}
               </span>
             </div>
-            <p className="mt-1 text-sm font-semibold text-accent">
+            <p className="mt-1 text-sm font-semibold text-accent-strong">
               Ahorras {fmtPEN(ahorro)}
               {pct > 0 && ` (${pct}%)`} llevándolos juntos
             </p>

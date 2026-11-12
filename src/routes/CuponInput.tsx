@@ -91,7 +91,7 @@ export function CuponInput({ customerId, items, onAplicado }: CuponInputProps) {
     <div className="space-y-1">
       <div className="flex gap-2">
         <Input
-          placeholder="Código de cupón"
+          placeholder="Ingresa tu cupón"
           value={codigo}
           onChange={(e) => setCodigo(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAplicar()}

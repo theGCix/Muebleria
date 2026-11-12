@@ -163,11 +163,11 @@ export function ProductsSection() {
           className="mb-8 flex flex-col gap-5 md:mb-10 md:flex-row md:items-end md:justify-between"
         >
           <div className="max-w-2xl">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent">
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">
               Catálogo G&amp;M
             </p>
             <h2 className="font-display text-4xl font-semibold leading-[1.02] md:text-6xl">
-              ¿Qué espacio vas a <em className="italic text-accent">transformar</em>?
+              ¿Qué espacio vas a <em className="italic text-accent-strong">transformar</em>?
             </h2>
             <p className="mt-3 text-muted-foreground">
               Elige tu ambiente, marca tu presupuesto y mira al instante lo que el taller tiene para
@@ -328,7 +328,7 @@ export function ProductsSection() {
               <button
                 type="button"
                 onClick={limpiar}
-                className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+                className="inline-flex items-center gap-1 text-sm font-medium text-accent-strong hover:underline"
               >
                 <X className="h-3.5 w-3.5" /> Quitar filtros
               </button>

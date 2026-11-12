@@ -35,13 +35,13 @@ export function CombosSection() {
             {resto.length > 0 && (
               <div id="combos-todos" className={destacado ? "mt-14 scroll-mt-28" : ""}>
                 <div className="mb-1 flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-strong text-accent-foreground">
                     <PackageCheck className="h-4.5 w-4.5" />
                   </span>
                   <h2 className="font-display text-3xl font-semibold">
                     {destacado ? "Más combos" : "Combos"}
                   </h2>
-                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent-strong">
                     {resto.length} {resto.length === 1 ? "combo" : "combos"}
                   </span>
                 </div>

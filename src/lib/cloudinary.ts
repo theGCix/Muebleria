@@ -47,7 +47,8 @@ export function cloudinaryUrl(
   opts: { w?: number; h?: number; q?: number } = {}
 ): string {
   const { w = 600, h, q = 80 } = opts;
-  const transforms = [`w_${w}`, `q_${q}`, "f_auto", h ? `h_${h}` : ""].filter(Boolean).join(",");
+  // K5: con alto fijo se recorta (c_fill) enfocando el sujeto (g_auto); antes w+h sin modo de recorte deformaba la foto
+  const transforms = [`w_${w}`, h ? `h_${h}` : "", h ? "c_fill" : "", h ? "g_auto" : "", `q_${q}`, "f_auto"].filter(Boolean).join(",");
   return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${transforms}/${publicId}`;
 }
 

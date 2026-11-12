@@ -8,9 +8,11 @@ import { MIN_GALERIA, useGaleriaClientes } from "@/hooks/useGaleriaClientes";
 const MAX_HOME = 8;
 
 /** Versión liviana de la foto si es de Cloudinary. */
-export function liviana(url: string, w: number) {
+export function liviana(url: string, w: number, h?: number) {
   if (!url.includes("res.cloudinary.com") || !url.includes("/upload/") || /\/upload\/[a-z]_/.test(url)) return url;
-  return url.replace("/upload/", `/upload/w_${w},q_auto,f_auto/`);
+  // H6: con alto, Cloudinary recorta enfocando el sujeto (el mueble) en vez del centro
+  const recorte = h ? `h_${h},c_fill,g_auto,` : "";
+  return url.replace("/upload/", `/upload/w_${w},${recorte}q_auto,f_auto/`);
 }
 
 export function ClientesSatisfechos() {
@@ -22,7 +24,7 @@ export function ClientesSatisfechos() {
     <section id="clientes-satisfechos" className="scroll-mt-28 bg-secondary/30 px-4 py-20 md:py-24">
       <div className="container mx-auto max-w-7xl">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent">Clientes satisfechos</p>
+          <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">Clientes satisfechos</p>
           <h2 className="font-display text-4xl font-semibold leading-[1.05] md:text-5xl">
             Algunos de nuestros clientes satisfechos con su compra
           </h2>
@@ -35,15 +37,15 @@ export function ClientesSatisfechos() {
               key={f.id}
               className="group relative w-[calc(50%-0.5rem)] overflow-hidden rounded-2xl bg-muted shadow-[var(--shadow-soft)] md:w-[calc(33.333%-0.85rem)] lg:w-[calc(25%-0.95rem)]"
             >
-              <div className="aspect-[4/5]">
+              <div className="aspect-square">
                 <img
-                  src={liviana(f.fotos[0], 700)}
+                  src={liviana(f.fotos[0], 700, 700)}
                   alt={`${f.autor_nombre}${f.producto_nombre ? ` con su ${f.producto_nombre}` : " con su mueble G&M"}`}
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                 />
               </div>
-              <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-4 pt-12 text-white">
+              <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 pt-8 text-white sm:p-4 sm:pt-12">
                 <p className="text-sm font-medium leading-tight">{f.autor_nombre}</p>
                 {f.producto_nombre && <p className="mt-0.5 line-clamp-1 text-xs text-white/80">{f.producto_nombre}</p>}
                 <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/85">
@@ -65,7 +67,7 @@ export function ClientesSatisfechos() {
 
         {(data?.length ?? 0) >= MIN_GALERIA && (
           <div className="mt-10 text-center">
-            <Link to="/testimonios" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+            <Link to="/testimonios" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-strong hover:underline">
               Ver todos los testimonios <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

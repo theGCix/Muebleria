@@ -479,7 +479,11 @@ export function ProductCard({ product: p }: Props) {
               <button
                 type="button"
                 onClick={handleMedida}
-                className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+                aria-haspopup="dialog"
+                aria-expanded={medidaOpen}
+                className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-medium underline-offset-4 transition-all hover:border-primary/30 hover:bg-primary/[0.06] hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-[0.97] active:bg-primary/10 motion-reduce:transition-none motion-reduce:active:scale-100 ${
+                  medidaOpen ? "border-primary/30 bg-primary/10 text-primary" : "border-transparent text-muted-foreground"
+                }`}
               >
                 <Ruler className="h-3.5 w-3.5" />
                 {agotado ? (

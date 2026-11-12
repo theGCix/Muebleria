@@ -266,14 +266,14 @@ function HeroMarca() {
             <div
               data-hero-item
               className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-accent" />
+              <Sparkles className="h-3.5 w-3.5 text-accent-strong" />
               Hecho a mano · Madera noble
             </div>
             <h1
               data-hero-title
               className="font-display text-5xl md:text-6xl lg:text-7xl font-semibold leading-[1.05] text-foreground"
             >
-              Muebles que <em className="text-accent not-italic">cuentan</em> historias en tu hogar
+              Muebles que <em className="text-accent-strong not-italic">cuentan</em> historias en tu hogar
             </h1>
             <p data-hero-item className="text-lg text-muted-foreground max-w-xl leading-relaxed">
               En G&amp;M Mueblería diseñamos piezas atemporales en madera natural, pensadas para

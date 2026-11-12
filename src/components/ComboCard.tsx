@@ -30,7 +30,7 @@ export function ComboCard({ combo }: Props) {
       params={{ id: combo.id }}
       className="bg-card rounded-xl border-2 border-accent/30 overflow-hidden hover:shadow-lg transition-all duration-300 relative block group"
     >
-      <span className="absolute top-3 left-3 z-10 rounded-full bg-accent text-accent-foreground text-xs font-bold px-2.5 py-1 shadow-sm flex items-center gap-1">
+      <span className="absolute top-3 left-3 z-10 rounded-full bg-accent-strong text-accent-foreground text-xs font-bold px-2.5 py-1 shadow-sm flex items-center gap-1">
         <PackageCheck className="h-3 w-3" /> Combo
       </span>
 
@@ -61,11 +61,11 @@ export function ComboCard({ combo }: Props) {
         </p>
 
         <div className="mt-3 flex items-baseline gap-2 flex-wrap">
-          <span className="font-bold text-xl text-accent">{fmtPEN(combo.precio_combo)}</span>
+          <span className="font-bold text-xl text-accent-strong">{fmtPEN(combo.precio_combo)}</span>
           <span className="text-sm text-muted-foreground line-through">{fmtPEN(precioNormal)}</span>
         </div>
         {ahorro > 0 && (
-          <span className="inline-block mt-1 text-xs font-medium bg-accent/10 text-accent rounded-full px-2 py-0.5">
+          <span className="inline-block mt-1 text-xs font-medium bg-accent/10 text-accent-strong rounded-full px-2 py-0.5">
             Ahorras {fmtPEN(ahorro)}
           </span>
         )}

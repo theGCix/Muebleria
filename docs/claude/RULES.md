@@ -43,3 +43,9 @@
 - **Caja:** el sistema solo avisa (> 24 h abierta; recordatorio a las 21:00 Lima), nunca cierra una caja. Un error al cargar la caja no se trata como «no hay caja abierta».
 - **Recuperar carritos:** nunca inventar teléfonos ni correos (se valida con `whatsappLink` y `esCorreoValido`); abrir WhatsApp/correo no marca el carrito: solo «Sí, marcar como contactado». Un cupón por carrito (`cupon_recuperacion_carrito`, solo admin, 5 % / 48 h, mismo código que n8n); si venció o se usó no se crea otro. Un aviso automático cuenta como enviado solo si `recordatorio_enviado = true`. El estado de `carritos` se cambia con `cambiar_estado_carrito` (no hay política UPDATE).
 - **Filtros de listas mezcladas (local + online):** filtrar por una vigencia común (`esAnulada`), no por el texto de estado de un solo canal; cada filtro con etiqueta visible.
+
+## Reglas visuales (Parte 7.1)
+- **Naranja en texto:** nunca `text-accent` ni `/80` sobre texto: usar `text-accent-strong` (mismo tono 45, `oklch(0.52 0.14 45)`; 5.6:1 sobre el fondo, 4.75:1 sobre `secondary`). Etiquetas naranjas con texto claro: `bg-accent-strong text-accent-foreground`. `--accent` queda para fondos, bordes y hovers sin texto.
+- **`--gradient-warm`:** el extremo naranja usa el mismo valor oscuro para que el texto claro sobre el degradado cumpla 4.5:1.
+- **Fotos:** `cloudinaryUrl(id, { w, h })` recorta con `c_fill,g_auto` (antes w+h estiraba la imagen). Fotos de clientes: `liviana(url, w, h)`. Tarjetas de producto, categoría y reseña en 4:3; galería de clientes cuadrada.
+- **Barra de promoción del header:** se oculta al bajar > 80 px y vuelve al llegar a < 24 px (`top-0` ↔ `-top-8`, sin cambiar la altura del header).

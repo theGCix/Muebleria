@@ -105,7 +105,7 @@ export function MedidaCTA() {
               <button
                 type="button"
                 onClick={() => setEnviado(null)}
-                className="mt-2 text-sm font-medium text-accent hover:underline"
+                className="mt-2 text-sm font-medium text-accent-strong hover:underline"
               >
                 Enviar otra consulta
               </button>

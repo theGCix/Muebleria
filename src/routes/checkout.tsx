@@ -963,7 +963,7 @@ useEffect(() => {
                     id="cupon"
                     value={cuponCodigo}
                     onChange={(e) => setCuponCodigo(e.target.value.toUpperCase())}
-                    placeholder="CODIGO"
+                    placeholder="Ingresa tu cupón"
                     className="h-11 text-sm"
                     disabled={!!cuponAplicado}
                   />

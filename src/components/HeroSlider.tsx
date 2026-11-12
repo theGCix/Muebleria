@@ -201,7 +201,7 @@ export function HeroSlider() {
                   {/* Degradado para que el texto se lea sobre cualquier foto */}
                   <div
                     aria-hidden
-                    className="absolute inset-0 bg-gradient-to-r from-[var(--color-walnut)]/90 via-[var(--color-walnut)]/55 to-transparent"
+                    className="absolute inset-0 bg-[var(--color-walnut)]/70 sm:bg-transparent sm:bg-gradient-to-r sm:from-[var(--color-walnut)]/90 sm:via-[var(--color-walnut)]/70 sm:to-transparent"
                   />
                   <div className="container relative mx-auto flex h-full items-center px-6 md:px-10">
                     <div className="max-w-xl space-y-4 text-[var(--color-warm-white)] sm:space-y-5">

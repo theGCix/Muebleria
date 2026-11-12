@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, BadgeCheck, MessageCircle, Star } from "lucide-react";
 import { MIN_RESENAS_HOME, useResenasDestacadas } from "@/hooks/useResenasDestacadas";
 import { useHayGaleria } from "@/hooks/useGaleriaClientes";
+import { liviana } from "@/components/ClientesSatisfechos";
 import type { ResenaDestacada } from "@/lib/resenas.functions";
 
 const fechaCorta = (iso: string) =>
@@ -47,7 +48,7 @@ export function Testimonials() {
           className="mb-12 flex flex-col gap-8 md:flex-row md:items-end md:justify-between"
         >
           <div className="max-w-xl">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent">
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">
               Testimonios
             </p>
             <h2 className="font-display text-4xl font-semibold leading-[1.02] md:text-5xl">
@@ -82,7 +83,7 @@ export function Testimonials() {
           <div className="mt-8 text-center">
             <Link
               to="/testimonios"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-strong hover:underline"
             >
               Ver más testimonios <ArrowRight className="h-4 w-4" />
             </Link>
@@ -98,9 +99,9 @@ export function Tarjeta({ r }: { r: ResenaDestacada }) {
   return (
     <article className="flex w-[85%] shrink-0 snap-center flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-soft)] sm:w-[60%] md:mb-5 md:w-auto md:break-inside-avoid">
       {foto && (
-        <div className="aspect-[16/10] overflow-hidden bg-muted">
+        <div className="aspect-[4/3] overflow-hidden bg-muted">
           <img
-            src={foto}
+            src={liviana(foto, 800, 600)}
             alt={`Foto de ${r.autor_nombre} con su compra`}
             loading="lazy"
             className="h-full w-full object-cover"
@@ -117,7 +118,7 @@ export function Tarjeta({ r }: { r: ResenaDestacada }) {
         {r.respuesta_tienda && (
           <div className="rounded-xl bg-secondary/60 p-3 text-xs leading-relaxed">
             <span className="mb-1 flex items-center gap-1.5 font-semibold text-foreground">
-              <MessageCircle className="h-3.5 w-3.5 text-accent" /> Respuesta de G&amp;M
+              <MessageCircle className="h-3.5 w-3.5 text-accent-strong" /> Respuesta de G&amp;M
             </span>
             <span className="line-clamp-3 text-muted-foreground">{r.respuesta_tienda}</span>
           </div>

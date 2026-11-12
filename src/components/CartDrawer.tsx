@@ -121,7 +121,7 @@ export const CartDrawer = () => {
           <Button variant="outline" size="icon" data-cart-target className="relative rounded-full border-border/60">
             <ShoppingBag className="h-5 w-5" />
             {totalItems > 0 && (
-              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-accent text-accent-foreground">
+              <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-accent-strong text-accent-foreground">
                 {totalItems}
               </Badge>
             )}
@@ -157,7 +157,7 @@ export const CartDrawer = () => {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-accent-foreground">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-accent-strong px-2 py-0.5 text-[11px] font-bold text-accent-foreground">
                                 <PackageCheck className="h-3 w-3" /> Combo
                               </span>
                               <h4 className="mt-1 truncate font-display text-lg font-semibold text-foreground">

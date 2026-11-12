@@ -47,7 +47,7 @@ function TestimoniosPage() {
           <div className="container mx-auto max-w-7xl">
             <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
               <div className="max-w-2xl">
-                <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent">Testimonios</p>
+                <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">Testimonios</p>
                 <h1 className="font-display text-4xl font-semibold leading-[1.05] md:text-6xl">
                   Lo que dicen quienes ya tienen un G&amp;M en casa
                 </h1>
@@ -74,7 +74,7 @@ function TestimoniosPage() {
         {vacio && (
           <section className="px-4 py-16 text-center">
             <p className="text-muted-foreground">Estamos reuniendo las primeras opiniones de nuestros clientes.</p>
-            <Link to="/catalogo" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+            <Link to="/catalogo" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent-strong hover:underline">
               Ver el catálogo <ArrowRight className="h-4 w-4" />
             </Link>
           </section>
@@ -90,15 +90,15 @@ function TestimoniosPage() {
                     key={f.id}
                     className="group relative w-[calc(50%-0.5rem)] overflow-hidden rounded-2xl bg-muted shadow-[var(--shadow-soft)] md:w-[calc(33.333%-0.85rem)] lg:w-[calc(25%-0.95rem)]"
                   >
-                    <div className="aspect-[4/5]">
+                    <div className="aspect-square">
                       <img
-                        src={liviana(f.fotos[0], 700)}
+                        src={liviana(f.fotos[0], 700, 700)}
                         alt={`${f.autor_nombre}${f.producto_nombre ? ` con su ${f.producto_nombre}` : " con su mueble G&M"}`}
                         loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                       />
                     </div>
-                    <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-4 pt-12 text-white">
+                    <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3 pt-8 text-white sm:p-4 sm:pt-12">
                       <p className="text-sm font-medium leading-tight">{f.autor_nombre}</p>
                       {f.producto_nombre && <p className="mt-0.5 line-clamp-1 text-xs text-white/80">{f.producto_nombre}</p>}
                       <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/85">

@@ -24,8 +24,8 @@ const navLinkCls = (activo: boolean, tono: "base" | "accent" = "base") =>
     "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:rounded-full after:bg-accent after:transition-transform after:duration-300",
     activo ? "after:scale-x-100" : "after:scale-x-0",
     activo
-      ? tono === "accent" ? "text-accent" : "text-foreground"
-      : tono === "accent" ? "text-accent/80 hover:text-accent" : "text-foreground/70 hover:text-foreground",
+      ? tono === "accent" ? "text-accent-strong" : "text-foreground"
+      : tono === "accent" ? "text-accent-strong hover:text-accent-strong/80" : "text-foreground/70 hover:text-foreground",
   ].join(" ");
 
 export function Header() {
@@ -33,6 +33,8 @@ export function Header() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [mobileSearch, setMobileSearch] = useState("");
+  // H8: la barra de promoción se oculta al hacer scroll (histéresis 24/80 px para evitar parpadeos)
+  const [barraOculta, setBarraOculta] = useState(false);
   const { user, roles } = useAuth();
   const navigate = useNavigate();
   const setQuery = useSearchStore((s) => s.setQuery);
@@ -97,6 +99,24 @@ export function Header() {
     navigate({ to: "/catalogo", search: term ? { q: term } : {} });
   };
 
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY;
+        setBarraOculta((prev) => (prev ? y > 24 : y > 80));
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   const handleDesktopSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const value = (new FormData(e.currentTarget).get("q") as string) ?? "";
@@ -112,9 +132,15 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full">
+      <header
+        className={`sticky z-40 w-full transition-[top] duration-300 motion-reduce:transition-none ${barraOculta ? "-top-8" : "top-0"}`}
+      >
         {/* Barra superior de servicio */}
-        <div className="w-full bg-primary text-primary-foreground">
+        <div
+          className="w-full bg-primary text-primary-foreground"
+          aria-hidden={barraOculta || undefined}
+          {...(barraOculta ? ({ inert: "" } as Record<string, string>) : {})}
+        >
           <div className="container mx-auto flex h-8 items-center justify-center px-4 md:px-6">
             <p className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium tracking-wide text-center">
               <CampanaTicker
@@ -196,7 +222,7 @@ export function Header() {
             <div className="flex items-center gap-2 md:hidden ml-auto">
               <button
                 onClick={() => { setMobileSearchOpen((v) => !v); setMobileOpen(false); }}
-                className={`p-2 rounded-md transition-colors ${mobileSearchOpen ? "text-accent bg-accent/10" : "text-foreground/70 hover:text-foreground hover:bg-accent/10"}`}
+                className={`p-2 rounded-md transition-colors ${mobileSearchOpen ? "text-accent-strong bg-accent/10" : "text-foreground/70 hover:text-foreground hover:bg-accent/10"}`}
                 aria-label="Buscar"
               >
                 <Search className="h-5 w-5" />
@@ -261,7 +287,7 @@ export function Header() {
                       onClick={() => setMobileOpen(false)}
                       aria-current={combosActivo ? "true" : undefined}
                       className={`flex items-center gap-2 text-sm font-medium py-2 border-b border-border/30 last:border-0 ${
-                        combosActivo ? "text-accent" : "text-foreground/80 hover:text-foreground"
+                        combosActivo ? "text-accent-strong" : "text-foreground/80 hover:text-foreground"
                       }`}
                     >
                       <PackageCheck className="h-4 w-4" />
@@ -275,7 +301,7 @@ export function Header() {
                       onClick={() => setMobileOpen(false)}
                       aria-current={ofertasActivo ? "true" : undefined}
                       className={`flex items-center gap-2 text-sm font-medium py-2 border-b border-border/30 last:border-0 ${
-                        ofertasActivo ? "text-accent underline underline-offset-4" : "text-accent/80"
+                        ofertasActivo ? "text-accent-strong underline underline-offset-4" : "text-accent-strong"
                       }`}
                     >
                       <Flame className="h-4 w-4" />
