@@ -1,0 +1,683 @@
+diff --git a/docs/claude/MODULES.md b/docs/claude/MODULES.md
+index e91d314..6fe6eaf 100644
+--- a/docs/claude/MODULES.md
++++ b/docs/claude/MODULES.md
+@@ -134,3 +134,7 @@
+ ## Boletas y compartir (2026-11-12, Parte 8.2)
+ - `routes/_authenticated/ventas.tsx` → `components/admin/ItemsBoleta.tsx`, `components/admin/CompartirComprobante.tsx` → `lib/compartirComprobante.ts`; HTML imprimible en `lib/comprobante-pdf.ts`.
+ - Testimonios: `routes/_authenticated/fotos-clientes.tsx` → `components/admin/FiltrosEstado.tsx`; período en `components/admin/PeriodFilter.tsx`.
++
++## Mis órdenes: pestañas y skeleton; scroll entre módulos (2026-11-12, Parte 8.3)
++- `routes/_authenticated/mi-produccion.tsx` → `lib/ordenesProduccion.ts` (reparto en pestañas), `components/produccion/MiProduccionSkeleton.tsx` (esqueleto = `OrdenCard` colapsada; ajustar si cambia), `components/produccion/OrdenCard.tsx` (sin cambios).
++- `hooks/useScrollPorModulo.ts` montado en `routes/__root.tsx`.
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index 1fd9097..5c2753b 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -74,3 +74,8 @@
+ - **Boletas en móvil:** ítems con `ItemsBoleta` (tarjetas < 640 px); el HTML de `comprobante-pdf.ts` no debe fijar anchos en cm fuera de `@media print`.
+ - **Filtros en chips:** usar `FiltrosEstado` (una fila con scroll horizontal), no `flex-wrap`.
+ - **Variables de Vite:** en el navegador solo existen las `VITE_*` (por eso el RUC del emisor es `VITE_SUNAT_RUC`).
++
++## Reglas de fabricación y navegación (Parte 8.3)
++- **Pestañas de «Mis órdenes»:** el reparto sale solo de `agruparPorPestana` (`lib/ordenesProduccion.ts`); nunca comparar `prod_status` a mano en la pantalla. Pendientes = `pendiente` + `rechazado_calidad`; En proceso = `en_proceso` + `pausado`; Terminadas = `terminado`. «Urgente» solo para órdenes abiertas. La pestaña inicial se decide una vez y el auto-refresh no la cambia.
++- **Skeleton de «Mis órdenes»:** `MiProduccionSkeleton` copia la estructura de `OrdenCard` colapsada; si cambia la tarjeta, se actualiza el esqueleto. Título y etiquetas reales desde el primer frame; solo lo dinámico va como skeleton.
++- **Scroll entre tienda y administración:** lo maneja `useScrollPorModulo`; solo restaura al volver a la misma ruta del módulo, nunca con atrás/adelante (eso es del router) ni si el usuario ya movió el scroll. Siempre con try/catch sobre `sessionStorage`.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 9d9e68c..e42a6a5 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -243,3 +243,12 @@
+ - **No se tocó:** SQL, RLS, roles, rutas, guardas, `nubefact.ts`, cálculos fiscales. No existe ruta pública de comprobantes.
+ - **Verificación:** `tsc --noEmit` sin errores nuevos; `vite build` OK; helper de compartir 39 comprobaciones (POS/online, anulada, con y sin enlace, enlaces `http`/`javascript:` descartados, teléfonos con y sin 51, sin datos del cliente). Chromium con arnés temporal (ya borrado): tarjetas a 360/414 y tabla a 768/1280 px, sin scroll horizontal; filtros de testimonios en una fila (44 px en móvil, 36 px en escritorio) que cambian de estado y muestran degradado; «Viendo» a 14 px; diálogo de compartir sin desborde y con validación de celular; HTML de boleta a 360/414/768 px sin scroll horizontal y sin texto < 12 px visible; en impresión sigue la hoja A4 con tabla.
+ - **Riesgos / pendientes:** abrir `wa.me` y `mailto:` en un teléfono real y probar una boleta aceptada por SUNAT; un `mailto:` no adjunta archivos; el aspecto de «Viendo» cambió en las 12 pantallas; las descripciones cortas de móvil las redacté yo; el menú de impresión del navegador móvil no se probó.
++
++## 2026-11-12 — Parte 8.3: Fabricación y navegación entre módulos (F13, F14, F15) — plan aprobado e implementado
++- **Decisiones del usuario:** plan aprobado tal cual: `pausado` → En proceso (con su insignia «Pausado»), `rechazado_calidad` → Pendientes; F14 solo para «Mis órdenes» (la fase 2, reemplazar el spinner de `AuthLayout` por el armazón del panel, queda pendiente de su decisión).
++- **F13:** `lib/ordenesProduccion.ts` (puro: `agruparPorPestana`, `pestanaDe`, `esUrgente`, `pestanaInicial`). Pendientes = `pendiente` + `rechazado_calidad`; En proceso = `en_proceso` + `pausado`; Terminadas = `terminado` (la más reciente primero). Cada orden cae en una sola pestaña y los contadores suman el total. «Urgente» (≤ 2 días) se calcula solo sobre órdenes abiertas: una terminada nunca sale urgente. Pestañas con `ui/tabs` (Radix, teclado), contador, 44 px en móvil (etiqueta sobre contador, sin scroll horizontal), estado vacío por pestaña y estado de error con «Reintentar» (antes un fallo se veía como «Sin órdenes»). Pestaña inicial: En proceso → Pendientes → Terminadas, decidida una sola vez con la primera carga (el auto-refresh de 2 min no la cambia); la elección se recuerda en `sessionStorage` (`gm:mi-produccion:pestana`, con try/catch).
++- **F14:** `components/produccion/MiProduccionSkeleton.tsx` copia `OrdenCard` colapsada (cabecera, 2 cajas de fechas, barra de avance, acciones) en la misma columna `max-w-3xl` (antes `CardGridSkeleton` era una grilla de 3 columnas). Título, botón «Actualizar» y etiquetas de pestañas salen desde el primer frame; solo el subtítulo y los contadores son skeleton, con altura reservada. `role="status"`, `aria-busy` y texto `sr-only`.
++- **F15:** `hooks/useScrollPorModulo.ts`, montado en `__root.tsx`. Recuerda por módulo (tienda / admin = rutas bajo `/_authenticated`) la última ruta y su scroll, en memoria y en `sessionStorage` (`gm:scroll-modulos`). Al entrar a un módulo desde el otro por enlace, si la ruta destino es la que se dejó, restaura esa posición esperando a que el contenido tenga altura (máx. 1,5 s; si queda más corto, se limita al fondo). No actúa con atrás/adelante (lo resuelve `scrollRestoration` del router) y se cancela si el usuario mueve el scroll.
++- **No se tocó:** `OrdenCard.tsx`, consultas y mutaciones, `v_mi_produccion`, `pos.functions.ts`, SQL, RLS, `router.tsx`, rutas, guardas, permisos, dependencias.
++- **Verificación:** `tsc --noEmit` sin errores nuevos (solo los preexistentes de `types.ts`); `vite build` OK; `agruparPorPestana` probado (5 estados, listas vacías, terminada vencida, suma de contadores, cambio de pestaña al terminar, estado desconocido, pestaña inicial). **No se probó en navegador** (no había Chromium en el entorno): faltan el salto visual del skeleton, las pestañas a 360/414/768/1280 px y el recorrido de F15.
++- **Riesgos / pendientes:** probar F15 en un teléfono real (doble salto con `scrollRestoration`; el `<main>` del panel tiene `overflow-auto` pero sin altura fija, se asume que el scroll es el de la ventana); el skeleton debe ajustarse si cambia `OrdenCard`; fase 2 de F14 (`AuthLayout`) sin decidir; el enlace «Ir a la tienda» sigue llevando a `/` (F15 solo restaura si se vuelve a la misma ruta que se dejó).
+diff --git a/src/components/produccion/MiProduccionSkeleton.tsx b/src/components/produccion/MiProduccionSkeleton.tsx
+new file mode 100644
+index 0000000..17ecfc4
+--- /dev/null
++++ b/src/components/produccion/MiProduccionSkeleton.tsx
+@@ -0,0 +1,65 @@
++// src/components/produccion/MiProduccionSkeleton.tsx
++// ─────────────────────────────────────────────────────────────
++// Esqueleto de la lista de "Mis órdenes" (Parte 8.3 · F14).
++// Copia la estructura y las medidas de OrdenCard colapsada
++// (cabecera, 2 cajas de fechas, barra de avance, fila de acciones)
++// en la misma columna que la pantalla real, para que no haya salto
++// al cargar. Si cambia el diseño de OrdenCard, ajustar este archivo.
++// ─────────────────────────────────────────────────────────────
++import { Skeleton } from "@/components/ui/skeleton";
++
++function OrdenCardSkeleton() {
++  return (
++    <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
++      {/* Cabecera: n.º de orden, cliente, teléfono · estado y urgencia */}
++      <div className="flex items-start justify-between p-5 gap-3">
++        <div className="min-w-0 flex-1 space-y-1.5">
++          <Skeleton className="h-4 w-28" />
++          <Skeleton className="h-7 w-48 max-w-full" />
++          <Skeleton className="h-5 w-24" />
++        </div>
++        <div className="flex flex-col items-end gap-1.5 shrink-0">
++          <Skeleton className="h-[22px] w-24 rounded-full" />
++          <Skeleton className="h-5 w-28 rounded-full" />
++        </div>
++      </div>
++
++      {/* Fechas */}
++      <div className="grid grid-cols-2 gap-2 px-5 pb-3">
++        {[0, 1].map((i) => (
++          <div key={i} className="bg-muted/40 rounded-lg p-3 space-y-1.5">
++            <Skeleton className="h-4 w-16" />
++            <Skeleton className="h-5 w-24" />
++          </div>
++        ))}
++      </div>
++
++      {/* Barra de avance */}
++      <div className="px-5 pb-3">
++        <div className="flex items-center justify-between mb-1.5">
++          <Skeleton className="h-4 w-12" />
++          <Skeleton className="h-4 w-8" />
++        </div>
++        <Skeleton className="h-1.5 w-full rounded-full" />
++      </div>
++
++      {/* Acciones */}
++      <div className="flex items-center gap-2 px-5 pb-4 border-t border-border/40 pt-3">
++        <Skeleton className="h-9 w-24" />
++        <Skeleton className="h-9 w-36" />
++        <Skeleton className="h-9 w-32 ml-auto" />
++      </div>
++    </div>
++  );
++}
++
++export function MiProduccionSkeleton({ count = 3 }: { count?: number }) {
++  return (
++    <div className="space-y-3" role="status" aria-busy="true" aria-live="polite">
++      <span className="sr-only">Cargando tus órdenes</span>
++      {Array.from({ length: count }).map((_, i) => (
++        <OrdenCardSkeleton key={i} />
++      ))}
++    </div>
++  );
++}
+diff --git a/src/hooks/useScrollPorModulo.ts b/src/hooks/useScrollPorModulo.ts
+new file mode 100644
+index 0000000..7ffd094
+--- /dev/null
++++ b/src/hooks/useScrollPorModulo.ts
+@@ -0,0 +1,146 @@
++// src/hooks/useScrollPorModulo.ts
++// ─────────────────────────────────────────────────────────────
++// Parte 8.3 · F15 — Conservar el scroll al saltar entre la tienda y la
++// administración y volver al módulo anterior.
++//
++// Por qué hace falta: el router ya restaura el scroll por ENTRADA del
++// historial (atrás/adelante), pero un <Link> ("Ir a la tienda", "Dashboard")
++// crea una entrada nueva y la página abre arriba.
++//
++// Qué hace:
++//  · Recuerda, por módulo ("tienda" = rutas públicas, "admin" = rutas bajo
++//    /_authenticated), la última ruta y su posición vertical.
++//  · Al ENTRAR a un módulo desde el otro, si la ruta de destino es la misma
++//    que se dejó, restaura esa posición (esperando a que el contenido tenga
++//    altura suficiente por skeletons y consultas).
++//  · No actúa con atrás/adelante (lo resuelve el router), no pisa al usuario
++//    si ya movió el scroll, y si sessionStorage falla sigue en memoria.
++// No cambia rutas, guardas ni permisos.
++// ─────────────────────────────────────────────────────────────
++import { useEffect } from "react";
++import { useRouter } from "@tanstack/react-router";
++
++type Modulo = "tienda" | "admin";
++type Posicion = { ruta: string; y: number };
++type Memoria = Partial<Record<Modulo, Posicion>>;
++
++const CLAVE = "gm:scroll-modulos";
++/** Tiempo máximo esperando a que la página destino tenga altura suficiente. */
++const ESPERA_MAX_MS = 1500;
++
++function leerMemoria(): Memoria {
++  try {
++    const crudo = window.sessionStorage.getItem(CLAVE);
++    if (!crudo) return {};
++    const dato = JSON.parse(crudo) as Memoria;
++    const limpio: Memoria = {};
++    for (const m of ["tienda", "admin"] as Modulo[]) {
++      const p = dato?.[m];
++      if (p && typeof p.ruta === "string" && Number.isFinite(p.y) && p.y >= 0) limpio[m] = p;
++    }
++    return limpio;
++  } catch {
++    return {};
++  }
++}
++
++function guardarMemoria(m: Memoria) {
++  try {
++    window.sessionStorage.setItem(CLAVE, JSON.stringify(m));
++  } catch {
++    /* sessionStorage bloqueado o lleno: queda solo en memoria */
++  }
++}
++
++export function useScrollPorModulo() {
++  const router = useRouter();
++
++  useEffect(() => {
++    if (typeof window === "undefined") return;
++
++    const moduloActual = (): Modulo =>
++      router.state.matches.some((m) => m.routeId.startsWith("/_authenticated")) ? "admin" : "tienda";
++
++    const memoria: Memoria = leerMemoria();
++    let actual: { modulo: Modulo; ruta: string } = {
++      modulo: moduloActual(),
++      ruta: router.state.location.pathname,
++    };
++    // Última acción del historial: PUSH / REPLACE = enlace; BACK / FORWARD / GO = atrás o adelante.
++    let ultimaAccion: string = "PUSH";
++    let cancelarRestauracion: (() => void) | null = null;
++
++    const dejarHistorial = router.history.subscribe(({ action }) => {
++      ultimaAccion = action.type;
++    });
++
++    // Al salir de una página, guarda su posición (el scroll aún es el de la página que se deja).
++    const dejarAntes = router.subscribe("onBeforeLoad", (e) => {
++      cancelarRestauracion?.();
++      cancelarRestauracion = null;
++      if (!e.pathChanged || !e.fromLocation) return;
++      // Solo si la página que se deja es la que tenemos registrada (evita guardar a mitad de una transición).
++      if (e.fromLocation.pathname !== actual.ruta) return;
++      memoria[actual.modulo] = { ruta: actual.ruta, y: Math.max(0, Math.round(window.scrollY)) };
++      guardarMemoria(memoria);
++    });
++
++    // Al terminar de pintar la página nueva: ¿cambió el módulo? ¿es la misma ruta que se dejó?
++    const dejarRender = router.subscribe("onRendered", (e) => {
++      const previo = actual;
++      const nuevo = { modulo: moduloActual(), ruta: e.toLocation.pathname };
++      actual = nuevo;
++
++      if (!e.pathChanged || nuevo.modulo === previo.modulo) return; // misma zona: lo maneja el router
++      if (ultimaAccion !== "PUSH" && ultimaAccion !== "REPLACE") return; // atrás/adelante: lo maneja el router
++      const guardada = memoria[nuevo.modulo];
++      if (!guardada || guardada.ruta !== nuevo.ruta || guardada.y <= 0) return;
++
++      cancelarRestauracion?.();
++      cancelarRestauracion = restaurar(guardada.y);
++    });
++
++    return () => {
++      dejarHistorial();
++      dejarAntes();
++      dejarRender();
++      cancelarRestauracion?.();
++    };
++  }, [router]);
++}
++
++/**
++ * Lleva la ventana a `y` en cuanto el documento sea lo bastante alto. Se cancela si el usuario
++ * mueve el scroll (rueda, táctil, teclado, clic). Devuelve la función para cancelarla.
++ */
++function restaurar(y: number): () => void {
++  let activo = true;
++  let raf = 0;
++  const inicio = performance.now();
++
++  const eventos = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
++  const parar = () => {
++    activo = false;
++    cancelAnimationFrame(raf);
++    for (const ev of eventos) window.removeEventListener(ev, parar);
++  };
++  for (const ev of eventos) window.addEventListener(ev, parar, { passive: true });
++
++  const intentar = () => {
++    if (!activo) return;
++    const max = document.documentElement.scrollHeight - window.innerHeight;
++    if (max >= y - 1) {
++      window.scrollTo({ top: y, left: 0, behavior: "auto" });
++      parar();
++    } else if (performance.now() - inicio > ESPERA_MAX_MS) {
++      // La página destino quedó más corta que la posición guardada: se limita al fondo.
++      if (max > 0) window.scrollTo({ top: max, left: 0, behavior: "auto" });
++      parar();
++    } else {
++      raf = requestAnimationFrame(intentar);
++    }
++  };
++  raf = requestAnimationFrame(intentar);
++
++  return parar;
++}
+diff --git a/src/lib/ordenesProduccion.ts b/src/lib/ordenesProduccion.ts
+new file mode 100644
+index 0000000..4c64acd
+--- /dev/null
++++ b/src/lib/ordenesProduccion.ts
+@@ -0,0 +1,90 @@
++// src/lib/ordenesProduccion.ts
++// ─────────────────────────────────────────────────────────────
++// Reparto de las órdenes del carpintero en pestañas (Parte 8.3 · F13).
++// Lógica pura (sin React ni consultas): así se prueba sola y las
++// pantallas nunca comparan estados "a mano".
++//
++//   Pendientes  = pendiente + rechazado_calidad (hay que rehacerlo)
++//   En proceso  = en_proceso + pausado          (sigue siendo trabajo abierto)
++//   Terminadas  = terminado
++// ─────────────────────────────────────────────────────────────
++import { diasRestantes, type MiOrdenRow, type ProduccionStatus } from "@/types/produccion";
++
++export type PestanaProduccion = "pendientes" | "en_proceso" | "terminadas";
++
++/** Orden en que se muestran las pestañas. */
++export const PESTANAS_PRODUCCION: { key: PestanaProduccion; label: string }[] = [
++  { key: "pendientes", label: "Pendientes" },
++  { key: "en_proceso", label: "En proceso" },
++  { key: "terminadas", label: "Terminadas" },
++];
++
++/** Orden de preferencia para elegir la pestaña inicial. */
++const PRIORIDAD_INICIAL: PestanaProduccion[] = ["en_proceso", "pendientes", "terminadas"];
++
++/** Una orden urgente vence en ≤ 2 días (o ya venció). Una orden terminada nunca lo es. */
++export const DIAS_URGENTE = 2;
++
++export function pestanaDe(status: ProduccionStatus): PestanaProduccion {
++  switch (status) {
++    case "en_proceso":
++    case "pausado":
++      return "en_proceso";
++    case "terminado":
++      return "terminadas";
++    case "pendiente":
++    case "rechazado_calidad":
++    default:
++      // Un estado desconocido nunca debe ocultar una orden: cae en Pendientes.
++      return "pendientes";
++  }
++}
++
++export function esUrgente(o: Pick<MiOrdenRow, "prod_status" | "fecha_fin_estimada">): boolean {
++  if (o.prod_status === "terminado") return false;
++  const dias = diasRestantes(o.fecha_fin_estimada);
++  return dias !== null && dias <= DIAS_URGENTE;
++}
++
++export interface GrupoPestana {
++  /** Órdenes urgentes (solo en pestañas abiertas); van primero. */
++  urgentes: MiOrdenRow[];
++  /** El resto, en el orden recibido (en Terminadas: la más reciente primero). */
++  resto: MiOrdenRow[];
++  /** urgentes + resto: es el contador de la pestaña. */
++  total: number;
++}
++
++export type OrdenesPorPestana = Record<PestanaProduccion, GrupoPestana>;
++
++const porFinReal = (a: MiOrdenRow, b: MiOrdenRow) =>
++  (b.fecha_fin_real ?? "").localeCompare(a.fecha_fin_real ?? "");
++
++/** Reparte cada orden en UNA sola pestaña según su `prod_status`. */
++export function agruparPorPestana(ordenes: MiOrdenRow[]): OrdenesPorPestana {
++  const grupos: OrdenesPorPestana = {
++    pendientes: { urgentes: [], resto: [], total: 0 },
++    en_proceso: { urgentes: [], resto: [], total: 0 },
++    terminadas: { urgentes: [], resto: [], total: 0 },
++  };
++
++  for (const o of ordenes) {
++    const g = grupos[pestanaDe(o.prod_status)];
++    (esUrgente(o) ? g.urgentes : g.resto).push(o);
++  }
++
++  grupos.terminadas.resto.sort(porFinReal);
++  for (const k of Object.keys(grupos) as PestanaProduccion[]) {
++    grupos[k].total = grupos[k].urgentes.length + grupos[k].resto.length;
++  }
++  return grupos;
++}
++
++/** Primera pestaña con órdenes (En proceso → Pendientes → Terminadas); sin órdenes, En proceso. */
++export function pestanaInicial(grupos: OrdenesPorPestana): PestanaProduccion {
++  return PRIORIDAD_INICIAL.find((k) => grupos[k].total > 0) ?? "en_proceso";
++}
++
++export function esPestanaProduccion(v: unknown): v is PestanaProduccion {
++  return v === "pendientes" || v === "en_proceso" || v === "terminadas";
++}
+diff --git a/src/routes/__root.tsx b/src/routes/__root.tsx
+index 91d2b56..e9351eb 100644
+--- a/src/routes/__root.tsx
++++ b/src/routes/__root.tsx
+@@ -8,6 +8,7 @@ import {
+ import { Toaster } from "@/components/ui/sonner";
+ import { useCartSync } from "@/hooks/useCartSync";
+ import { useUtmCapture } from "@/hooks/useUtm";
++import { useScrollPorModulo } from "@/hooks/useScrollPorModulo";
+ import { WishlistProvider } from "@/context/WishlistContext";
+ import { AsistenteChat } from "@/components/AsistenteChat";
+ import { ExitCouponDialog } from "@/components/ExitCouponDialog";
+@@ -83,6 +84,7 @@ function RootComponent() {
+   const { queryClient } = Route.useRouteContext();
+   useCartSync();
+   useUtmCapture();
++  useScrollPorModulo(); // Parte 8.3 · F15
+ 
+   return (
+     <QueryClientProvider client={queryClient}>
+diff --git a/src/routes/_authenticated/mi-produccion.tsx b/src/routes/_authenticated/mi-produccion.tsx
+index b7d1f79..fd18083 100644
+--- a/src/routes/_authenticated/mi-produccion.tsx
++++ b/src/routes/_authenticated/mi-produccion.tsx
+@@ -3,17 +3,33 @@
+ // Vista "Mis órdenes" — rediseñada para el carpintero.
+ // Muestra qué fabricar, materiales, especificaciones y pasos
+ // directamente desde la tarjeta, sin necesidad de abrir otro módulo.
++//
++// Parte 8.3:
++//  · F13  Pestañas Pendientes / En proceso / Terminadas (lib/ordenesProduccion).
++//  · F14  Skeleton con la estructura final en vez de "Cargando…" + spinner.
+ // ─────────────────────────────────────────────────────────────
+ 
++import { useMemo, useRef, useState } from "react";
+ import { createFileRoute } from "@tanstack/react-router";
+ import { useQuery } from "@tanstack/react-query";
+-import { Hammer, Loader2, RefreshCw } from "lucide-react";
++import { Hammer, RefreshCw, TriangleAlert } from "lucide-react";
+ 
+ import { listMiProduccion } from "@/lib/pos.functions";
+ import type { MiOrdenRow } from "@/types/produccion";
++import {
++  PESTANAS_PRODUCCION,
++  agruparPorPestana,
++  esPestanaProduccion,
++  pestanaInicial,
++  type GrupoPestana,
++  type PestanaProduccion,
++} from "@/lib/ordenesProduccion";
+ import { OrdenCard } from "@/components/produccion/OrdenCard";
++import { MiProduccionSkeleton } from "@/components/produccion/MiProduccionSkeleton";
+ import { Button } from "@/components/ui/button";
+-import { CardGridSkeleton, EmptyState } from "@/components/states";
++import { Skeleton } from "@/components/ui/skeleton";
++import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
++import { EmptyState } from "@/components/states";
+ 
+ // ─────────────────────────────────────────────────────────────
+ 
+@@ -22,45 +38,130 @@ export const Route = createFileRoute("/_authenticated/mi-produccion")({
+   component: MiProduccionPage,
+ });
+ 
++// ─────────────────────────────────────────────────────────────
++// La pestaña elegida se recuerda mientras dure la sesión del navegador.
++// Con try/catch: sessionStorage puede estar bloqueado o lleno.
++
++const CLAVE_PESTANA = "gm:mi-produccion:pestana";
++
++function leerPestanaGuardada(): PestanaProduccion | null {
++  try {
++    const v = window.sessionStorage.getItem(CLAVE_PESTANA);
++    return esPestanaProduccion(v) ? v : null;
++  } catch {
++    return null;
++  }
++}
++
++function guardarPestana(p: PestanaProduccion) {
++  try {
++    window.sessionStorage.setItem(CLAVE_PESTANA, p);
++  } catch {
++    /* sin almacenamiento: se sigue funcionando sin recordar la pestaña */
++  }
++}
++
++const VACIO_POR_PESTANA: Record<PestanaProduccion, { title: string; description: string }> = {
++  pendientes: {
++    title: "No tienes órdenes pendientes",
++    description: "Cuando el supervisor te asigne trabajo nuevo, aparecerá aquí.",
++  },
++  en_proceso: {
++    title: "No tienes órdenes en proceso",
++    description: "Inicia una orden desde Pendientes y la verás aquí.",
++  },
++  terminadas: {
++    title: "Aún no tienes órdenes terminadas",
++    description: "Las órdenes que marques como terminadas se guardan aquí.",
++  },
++};
++
++function ListaOrdenes({ grupo, vacio }: { grupo: GrupoPestana; vacio: PestanaProduccion }) {
++  if (grupo.total === 0) {
++    return <EmptyState icon={Hammer} {...VACIO_POR_PESTANA[vacio]} />;
++  }
++  return (
++    <div className="space-y-6">
++      {/* Órdenes urgentes primero (nunca hay urgentes en Terminadas) */}
++      {grupo.urgentes.length > 0 && (
++        <section>
++          <div className="flex items-center gap-2 mb-3">
++            <span className="h-2 w-2 rounded-full bg-red-500" />
++            <h2 className="text-sm font-semibold text-red-700">Urgentes — entrega próxima</h2>
++          </div>
++          <div className="space-y-3">
++            {grupo.urgentes.map((orden: MiOrdenRow) => (
++              <OrdenCard key={orden.produccion_id} orden={orden} />
++            ))}
++          </div>
++        </section>
++      )}
++
++      {grupo.resto.length > 0 && (
++        <section>
++          {grupo.urgentes.length > 0 && (
++            <h2 className="text-sm font-semibold text-muted-foreground mb-3">Demás órdenes</h2>
++          )}
++          <div className="space-y-3">
++            {grupo.resto.map((orden: MiOrdenRow) => (
++              <OrdenCard key={orden.produccion_id} orden={orden} />
++            ))}
++          </div>
++        </section>
++      )}
++    </div>
++  );
++}
++
+ // ─────────────────────────────────────────────────────────────
+ 
+ function MiProduccionPage() {
+-  const { data, isLoading, isFetching, refetch } = useQuery({
++  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+     queryKey: ["mi-produccion"],
+     queryFn: listMiProduccion,
+     refetchInterval: 120_000, // auto-refresh cada 2 min
+     staleTime: 60_000,
+   });
+ 
+-  const ordenes: MiOrdenRow[] = data?.ordenes ?? [];
++  const ordenes: MiOrdenRow[] = useMemo(() => data?.ordenes ?? [], [data]);
++  const grupos = useMemo(() => agruparPorPestana(ordenes), [ordenes]);
+ 
+-  // Separar urgentes (≤ 2 días) del resto para ordenarlas primero
+-  const hoy = new Date();
+-  hoy.setHours(0, 0, 0, 0);
++  // Pestaña: la que el carpintero eligió (o la recordada); si no hay, la inicial se decide UNA sola vez
++  // con la primera carga, para que el auto-refresh no le cambie la pestaña sola.
++  const [elegida, setElegida] = useState<PestanaProduccion | null>(leerPestanaGuardada);
++  const inicial = useRef<PestanaProduccion | null>(null);
++  if (data && inicial.current === null) inicial.current = pestanaInicial(grupos);
++  const activa: PestanaProduccion = elegida ?? inicial.current ?? "en_proceso";
+ 
+-  const urgentes = ordenes.filter((o) => {
+-    if (!o.fecha_fin_estimada) return false;
+-    const fin = new Date(o.fecha_fin_estimada);
+-    fin.setHours(0, 0, 0, 0);
+-    return (fin.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24) <= 2;
+-  });
++  const elegir = (v: string) => {
++    if (!esPestanaProduccion(v)) return;
++    setElegida(v);
++    guardarPestana(v);
++  };
+ 
+-  const normales = ordenes.filter((o) => !urgentes.includes(o));
++  const cargando = isLoading;
++  const fallo = isError && !data;
++  const total = ordenes.length;
+ 
+   // ──────────────────────────────────────────────────────────
+   return (
+     <div className="space-y-6 max-w-3xl mx-auto pb-12">
+-      {/* Header */}
++      {/* Header: título y botón reales desde el primer frame */}
+       <div className="flex items-start justify-between gap-4">
+         <div>
+           <h1 className="text-3xl font-display font-semibold">Mis órdenes</h1>
+-          <p className="text-muted-foreground mt-1">
+-            {isLoading
+-              ? "Cargando..."
+-              : ordenes.length === 0
+-              ? "No tienes órdenes asignadas"
+-              : `${ordenes.length} orden${ordenes.length !== 1 ? "es" : ""} asignada${ordenes.length !== 1 ? "s" : ""}`}
+-          </p>
++          {/* Altura reservada (min-h-6) para que no salte al cargar */}
++          <div className="text-muted-foreground mt-1 min-h-6 flex items-center">
++            {cargando ? (
++              <Skeleton className="h-4 w-36" />
++            ) : fallo ? (
++              "No se pudieron cargar tus órdenes"
++            ) : total === 0 ? (
++              "No tienes órdenes asignadas"
++            ) : (
++              `${total} orden${total !== 1 ? "es" : ""} asignada${total !== 1 ? "s" : ""}`
++            )}
++          </div>
+         </div>
+ 
+         <Button
+@@ -68,7 +169,7 @@ function MiProduccionPage() {
+           variant="outline"
+           onClick={() => refetch()}
+           disabled={isFetching}
+-          className="shrink-0 mt-1"
++          className="shrink-0 mt-1 h-11 sm:h-8"
+         >
+           <RefreshCw
+             className={["h-3.5 w-3.5 mr-1.5", isFetching ? "animate-spin" : ""].join(" ")}
+@@ -77,49 +178,61 @@ function MiProduccionPage() {
+         </Button>
+       </div>
+ 
+-      {/* Estado cargando */}
+-      {isLoading && <CardGridSkeleton count={3} />}
+-
+-      {/* Estado vacío */}
+-      {!isLoading && ordenes.length === 0 && (
++      {fallo ? (
+         <EmptyState
+-          icon={Hammer}
+-          title="Sin órdenes asignadas"
+-          description="El supervisor te asignará trabajo en breve. Esta lista se actualiza sola."
++          icon={TriangleAlert}
++          title="No pudimos cargar tus órdenes"
++          description="Revisa tu conexión e inténtalo otra vez. Tus órdenes no se perdieron."
++          action={
++            <Button size="sm" variant="outline" className="h-11 sm:h-8" onClick={() => refetch()}>
++              Reintentar
++            </Button>
++          }
+         />
+-      )}
+-
+-      {/* Órdenes urgentes primero */}
+-      {!isLoading && urgentes.length > 0 && (
+-        <section>
+-          <div className="flex items-center gap-2 mb-3">
+-            <span className="h-2 w-2 rounded-full bg-red-500" />
+-            <h2 className="text-sm font-semibold text-red-700">
+-              Urgentes — entrega próxima
+-            </h2>
+-          </div>
+-          <div className="space-y-3">
+-            {urgentes.map((orden) => (
+-              <OrdenCard key={orden.produccion_id} orden={orden} />
+-            ))}
+-          </div>
+-        </section>
+-      )}
+-
+-      {/* Resto de órdenes */}
+-      {!isLoading && normales.length > 0 && (
+-        <section>
+-          {urgentes.length > 0 && (
+-            <h2 className="text-sm font-semibold text-muted-foreground mb-3">
+-              En proceso
+-            </h2>
+-          )}
+-          <div className="space-y-3">
+-            {normales.map((orden) => (
+-              <OrdenCard key={orden.produccion_id} orden={orden} />
++      ) : (
++        <Tabs value={activa} onValueChange={elegir}>
++          {/* Las etiquetas de las pestañas están desde el primer frame; solo el contador carga */}
++          <TabsList
++            aria-label="Estado de las órdenes"
++            className="grid w-full grid-cols-3 h-auto"
++          >
++            {PESTANAS_PRODUCCION.map((p) => (
++              <TabsTrigger
++                key={p.key}
++                value={p.key}
++                className="flex-col sm:flex-row gap-0.5 sm:gap-1.5 min-h-11 sm:min-h-9 px-2"
++              >
++                <span>{p.label}</span>
++                <span className="text-xs tabular-nums text-muted-foreground inline-flex h-4 min-w-5 items-center justify-center">
++                  {cargando ? (
++                    <Skeleton className="h-3.5 w-5" aria-hidden />
++                  ) : (
++                    <>
++                      <span aria-hidden>{grupos[p.key].total}</span>
++                      <span className="sr-only">, {grupos[p.key].total} órdenes</span>
++                    </>
++                  )}
++                </span>
++              </TabsTrigger>
+             ))}
+-          </div>
+-        </section>
++          </TabsList>
++
++          {PESTANAS_PRODUCCION.map((p) => (
++            <TabsContent key={p.key} value={p.key} className="mt-4">
++              {cargando ? (
++                <MiProduccionSkeleton />
++              ) : total === 0 ? (
++                <EmptyState
++                  icon={Hammer}
++                  title="Sin órdenes asignadas"
++                  description="El supervisor te asignará trabajo en breve. Esta lista se actualiza sola."
++                />
++              ) : (
++                <ListaOrdenes grupo={grupos[p.key]} vacio={p.key} />
++              )}
++            </TabsContent>
++          ))}
++        </Tabs>
+       )}
+     </div>
+   );

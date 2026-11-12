@@ -8,6 +8,7 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useUtmCapture } from "@/hooks/useUtm";
+import { useScrollPorModulo } from "@/hooks/useScrollPorModulo";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { AsistenteChat } from "@/components/AsistenteChat";
 import { ExitCouponDialog } from "@/components/ExitCouponDialog";
@@ -83,6 +84,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useCartSync();
   useUtmCapture();
+  useScrollPorModulo(); // Parte 8.3 · F15
 
   return (
     <QueryClientProvider client={queryClient}>

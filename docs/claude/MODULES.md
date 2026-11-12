@@ -134,3 +134,7 @@
 ## Boletas y compartir (2026-11-12, Parte 8.2)
 - `routes/_authenticated/ventas.tsx` → `components/admin/ItemsBoleta.tsx`, `components/admin/CompartirComprobante.tsx` → `lib/compartirComprobante.ts`; HTML imprimible en `lib/comprobante-pdf.ts`.
 - Testimonios: `routes/_authenticated/fotos-clientes.tsx` → `components/admin/FiltrosEstado.tsx`; período en `components/admin/PeriodFilter.tsx`.
+
+## Mis órdenes: pestañas y skeleton; scroll entre módulos (2026-11-12, Parte 8.3)
+- `routes/_authenticated/mi-produccion.tsx` → `lib/ordenesProduccion.ts` (reparto en pestañas), `components/produccion/MiProduccionSkeleton.tsx` (esqueleto = `OrdenCard` colapsada; ajustar si cambia), `components/produccion/OrdenCard.tsx` (sin cambios).
+- `hooks/useScrollPorModulo.ts` montado en `routes/__root.tsx`.

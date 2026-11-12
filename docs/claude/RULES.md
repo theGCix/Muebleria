@@ -74,3 +74,8 @@
 - **Boletas en móvil:** ítems con `ItemsBoleta` (tarjetas < 640 px); el HTML de `comprobante-pdf.ts` no debe fijar anchos en cm fuera de `@media print`.
 - **Filtros en chips:** usar `FiltrosEstado` (una fila con scroll horizontal), no `flex-wrap`.
 - **Variables de Vite:** en el navegador solo existen las `VITE_*` (por eso el RUC del emisor es `VITE_SUNAT_RUC`).
+
+## Reglas de fabricación y navegación (Parte 8.3)
+- **Pestañas de «Mis órdenes»:** el reparto sale solo de `agruparPorPestana` (`lib/ordenesProduccion.ts`); nunca comparar `prod_status` a mano en la pantalla. Pendientes = `pendiente` + `rechazado_calidad`; En proceso = `en_proceso` + `pausado`; Terminadas = `terminado`. «Urgente» solo para órdenes abiertas. La pestaña inicial se decide una vez y el auto-refresh no la cambia.
+- **Skeleton de «Mis órdenes»:** `MiProduccionSkeleton` copia la estructura de `OrdenCard` colapsada; si cambia la tarjeta, se actualiza el esqueleto. Título y etiquetas reales desde el primer frame; solo lo dinámico va como skeleton.
+- **Scroll entre tienda y administración:** lo maneja `useScrollPorModulo`; solo restaura al volver a la misma ruta del módulo, nunca con atrás/adelante (eso es del router) ni si el usuario ya movió el scroll. Siempre con try/catch sobre `sessionStorage`.
