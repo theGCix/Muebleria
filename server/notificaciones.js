@@ -56,7 +56,7 @@ export function armarPayloadPedido(order, items, { siteUrl = "" } = {}) {
  * Lee el pedido ya guardado y avisa a n8n. Pensado para llamarse SIN await después de responder al cliente.
  * Devuelve { ok, motivo? } solo para pruebas; nunca lanza.
  */
-export async function notificarPedidoPagado({ supabaseAdmin, orderId, fetchImpl = fetch, env = process.env }) {
+export async function notificarPedidoPagado({ supabaseAdmin, orderId, fetchImpl = fetch, env = process.env, esperaMs = 1500 }) {
   const url = env.N8N_PEDIDO_PAGADO_URL;
   if (!url) return { ok: false, motivo: "sin N8N_PEDIDO_PAGADO_URL" };
   try {
@@ -68,14 +68,25 @@ export async function notificarPedidoPagado({ supabaseAdmin, orderId, fetchImpl 
       .eq("order_id", orderId);
 
     const payload = armarPayloadPedido(order, items, { siteUrl: env.FRONTEND_URL });
-    const res = await fetchImpl(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-webhook-secret": env.N8N_WEBHOOK_SECRET ?? "" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
-    return { ok: true };
+    // Un reintento si n8n no responde o falla (la compra ya terminó; esto corre en segundo plano).
+    // Si ambos fallan, el pedido queda con correo_confirmacion_enviado_at vacío y se ve en «Correos de pedidos».
+    let ultimoError;
+    for (let intento = 1; intento <= 2; intento++) {
+      try {
+        const res = await fetchImpl(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-webhook-secret": env.N8N_WEBHOOK_SECRET ?? "" },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
+        return { ok: true };
+      } catch (e) {
+        ultimoError = e;
+        if (intento < 2) await new Promise((r) => setTimeout(r, esperaMs));
+      }
+    }
+    throw ultimoError;
   } catch (err) {
     console.error(`⚠️ No se pudo avisar a n8n del pedido ${orderId}:`, err.message);
     return { ok: false, motivo: err.message };

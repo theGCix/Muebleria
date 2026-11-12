@@ -19,6 +19,7 @@ import { APP_URL, WHATSAPP_NUMBER } from "@/config";
 import {
   ENTREGA_MIN_DIAS, ENTREGA_MAX_DIAS, addBusinessDays, fmtDia,
 } from "@/lib/entrega";
+import { numeroPedido } from "@/lib/pedidoId";
 import "./pago-exitoso.css";
 
 export interface PagoExitosoItem {
@@ -61,24 +62,6 @@ function primerNombre(nombre?: string) {
   const n = (nombre ?? "").trim().split(/\s+/)[0];
   if (!n || n === "—") return "";
   return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
-}
-
-/** Cuenta de 0 al valor final (respeta "reducir movimiento"). */
-function useCountUp(target: number, ms = 1400, delay = 450) {
-  const [v, setV] = useState(() => (reduceMotion() ? target : 0));
-  useEffect(() => {
-    if (reduceMotion()) { setV(target); return; }
-    let raf = 0;
-    const t0 = performance.now() + delay;
-    const tick = (now: number) => {
-      const p = Math.min(1, Math.max(0, (now - t0) / ms));
-      setV(target * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, ms, delay]);
-  return v;
 }
 
 /** Ráfaga desde la insignia + confeti cayendo, en los colores de la marca. */
@@ -133,19 +116,19 @@ function descargarCalendario(d: PagoExitosoDatos, desde: Date, hasta: Date) {
   const esc = (s: string) => s.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
   const ics = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//G&M Muebleria//Pedido//ES", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
-    `UID:${d.purchase}@gm-muebleria`,
+    `UID:${numeroPedido(d.purchase)}@gm-muebleria`,
     `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`,
     `DTSTART;VALUE=DATE:${ymd(desde)}`,
     `DTEND;VALUE=DATE:${ymd(finExclusivo)}`,
     `SUMMARY:${esc("Entrega de tu pedido · G&M Mueblería")}`,
-    `DESCRIPTION:${esc(`Pedido ${d.purchase}. Te avisamos por WhatsApp antes de la entrega.`)}`,
+    `DESCRIPTION:${esc(`Pedido ${numeroPedido(d.purchase)}. Te avisamos por WhatsApp antes de la entrega.`)}`,
     lugar ? `LOCATION:${esc(lugar)}` : "",
     "END:VEVENT", "END:VCALENDAR",
   ].filter(Boolean).join("\r\n");
   const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = `entrega-${d.purchase}.ics`;
+  a.download = `entrega-${numeroPedido(d.purchase)}.ics`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -189,7 +172,7 @@ export function PagoExitoso({
   const [copiado, setCopiado] = useState(false);
 
   const total = Number(datos.amount) || 0;
-  const totalAnimado = useCountUp(total);
+  const idPedido = numeroPedido(datos.purchase);
   const nombre = primerNombre(datos.nombre);
   const items = datos.items ?? [];
   const recojo = datos.metodoEntrega === "recojo_tienda";
@@ -227,7 +210,7 @@ export function PagoExitoso({
 
   const copiar = async () => {
     try {
-      await navigator.clipboard.writeText(datos.purchase);
+      await navigator.clipboard.writeText(idPedido);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 1800);
     } catch { /* sin permiso de portapapeles: no pasa nada */ }
@@ -235,8 +218,8 @@ export function PagoExitoso({
 
   const mensajeAsesor = encodeURIComponent(
     datos.provinciaEnvio
-      ? `Hola G&M Mueblería, soy ${nombre || "cliente"}. Mi pedido ${datos.purchase} va a ${datos.provinciaEnvio}. Quiero confirmar el costo del envío.`
-      : `Hola G&M Mueblería, soy ${nombre || "cliente"}. Quisiera coordinar mi pedido ${datos.purchase}.`,
+      ? `Hola G&M Mueblería, soy ${nombre || "cliente"}. Mi pedido ${idPedido} va a ${datos.provinciaEnvio}. Quiero confirmar el costo del envío.`
+      : `Hola G&M Mueblería, soy ${nombre || "cliente"}. Quisiera coordinar mi pedido ${idPedido}.`,
   );
   const linkAsesor = WHATSAPP_NUMBER ? `https://wa.me/${WHATSAPP_NUMBER}?text=${mensajeAsesor}` : null;
 
@@ -247,13 +230,13 @@ export function PagoExitoso({
 
   // Mismos estados que ve el cliente en Mis pedidos
   const pasos = [
-    { key: "pagado", titulo: "Pago recibido", detalle: datos.date, icono: BadgeCheck, estado: "done" as const },
+    { key: "pagado", titulo: "Pago recibido", detalle: "Tu pedido quedó registrado.", icono: BadgeCheck, estado: "done" as const },
     { key: "en_produccion", titulo: "En producción", detalle: "Empezamos a fabricar y preparar tu pedido.", icono: Hammer, estado: "now" as const },
     { key: "control_calidad", titulo: "Control de calidad", detalle: "Revisamos cada acabado antes de despachar.", icono: ShieldCheck, estado: "todo" as const },
-    { key: "listo_despacho", titulo: recojo ? "Listo para recoger" : "Listo para despacho", detalle: recojo ? "Te avisamos para que pases por tienda." : "Coordinamos contigo el horario de entrega.", icono: PackageCheck, estado: "todo" as const },
+    { key: "listo_despacho", titulo: recojo ? "Listo para recoger" : "Listo para despacho", detalle: recojo ? "Te avisamos para que pases por tienda." : "Preparamos tu pedido para la entrega.", icono: PackageCheck, estado: "todo" as const },
     ...(recojo ? [] : [{ key: "enviado", titulo: "En camino", detalle: "Sale de nuestro taller hacia tu casa.", icono: Truck, estado: "todo" as const }]),
     ...(!recojo && datos.provinciaEnvio ? [{ key: "en_agencia", titulo: "En agencia", detalle: "Llega a la agencia de tu ciudad: te damos guía y clave para recogerlo.", icono: Store, estado: "todo" as const }] : []),
-    { key: "entregado", titulo: recojo ? "Recogido en tienda" : "Entregado", detalle: recojo ? "Disfrútalo. Después te invitaremos a dejar tu reseña." : `Llega entre el ${fmtDia(desde)} y el ${fmtDia(hasta)}.`, icono: Sparkles, estado: "goal" as const },
+    { key: "entregado", titulo: recojo ? "Recogido en tienda" : "Entregado", detalle: recojo ? "Disfrútalo. Después te invitaremos a dejar tu reseña." : "Coordinamos contigo el día y horario de entrega.", icono: Sparkles, estado: "goal" as const },
   ];
 
   // Comprobante: la línea de tiempo refleja el estado real del pedido, no el de "recién pagado"
@@ -312,13 +295,13 @@ export function PagoExitoso({
           <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
             {esComprobante
               ? "Este es el detalle de tu compra y el avance actual de tu pedido."
-              : "Recibimos tu pago y tu pedido pasa a producción. Aquí tienes todo lo que sigue, sin sorpresas."}
+              : "Recibimos tu pago. Aquí tienes todo lo que sigue, sin sorpresas."}
           </p>
 
           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
             <p className="text-[11px] uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
             <p className="font-display text-5xl font-semibold tabular-nums sm:text-6xl" aria-label={fmtPEN(total)}>
-              {fmtPEN(totalAnimado)}
+              {fmtPEN(total)}
             </p>
             <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-[#fbf4e8]/70">
               <CreditCard className="h-3.5 w-3.5" /> Tarjeta · Niubiz · Pago seguro
@@ -349,7 +332,7 @@ export function PagoExitoso({
               <div className="p-5 pb-5 pr-28 sm:p-6 sm:pr-40">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{datos.purchase}</span>
+                  <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{idPedido}</span>
                   <button
                     type="button"
                     onClick={copiar}
@@ -450,7 +433,7 @@ export function PagoExitoso({
                 })}
               </ol>
               <p className="mt-5 rounded-xl bg-[#f6efe4] px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                Seguimiento por WhatsApp en tiempo real. Y cuando lo recibas, te invitaremos a contarnos cómo quedó.
+                Seguimiento por WhatsApp en tiempo real.
               </p>
             </div>
           </section>

@@ -12,6 +12,8 @@ import {
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
+import { fmtFecha, fmtFechaHora } from "@/lib/fechas";
+import { numeroPedido } from "@/lib/pedidoId";
 import { EvidenciasCliente } from "@/components/EvidenciasCliente";
 import { FleteProvincia } from "@/components/FleteProvincia";
 import { AgenciaProvincia } from "@/components/AgenciaProvincia";
@@ -26,20 +28,9 @@ export const Route = createFileRoute("/perfil/pedidos")({
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
 
-const fmtDate = (d: string | null) => {
-  if (!d) return "—";
-  return new Intl.DateTimeFormat("es-PE", {
-    day: "2-digit", month: "long", year: "numeric",
-  }).format(new Date(d));
-};
-
-const fmtDateTime = (d: string | null) => {
-  if (!d) return "—";
-  return new Intl.DateTimeFormat("es-PE", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  }).format(new Date(d));
-};
+// Formato único "2 nov 2026" / "2 nov 2026, 14:30" (src/lib/fechas.ts)
+const fmtDate = (d: string | null) => fmtFecha(d);
+const fmtDateTime = (d: string | null) => fmtFechaHora(d);
 
 type OrderStatus =
   | "pendiente" | "pagado" | "en_produccion"
@@ -50,8 +41,8 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ElementTyp
   pendiente:       { label: "Pendiente",       icon: Clock,        color: "#92400e", bg: "#fef3c7" },
   pagado:          { label: "Pago recibido",   icon: CheckCircle2, color: "#065f46", bg: "#d1fae5" },
   en_produccion:   { label: "En producción",   icon: Package,      color: "#1e40af", bg: "#dbeafe" },
-  control_calidad: { label: "Control calidad", icon: Package,      color: "#5b21b6", bg: "#ede9fe" },
-  listo_despacho:  { label: "Listo despacho",  icon: Truck,        color: "#0e7490", bg: "#cffafe" },
+  control_calidad: { label: "Control de calidad", icon: Package,      color: "#5b21b6", bg: "#ede9fe" },
+  listo_despacho:  { label: "Listo para despacho",  icon: Truck,        color: "#0e7490", bg: "#cffafe" },
   enviado:         { label: "En camino",        icon: Truck,        color: "#6d28d9", bg: "#ede9fe" },
   entregado:       { label: "Entregado",        icon: CheckCircle2, color: "#14532d", bg: "#dcfce7" },
   cancelado:       { label: "Cancelado",        icon: XCircle,     color: "#7f1d1d", bg: "#fee2e2" },
@@ -150,8 +141,8 @@ function PedidoCard({ order }: { order: any }) {
 
   // Mismos datos que vio el cliente en la pantalla de "Pago aprobado"
   const datosComprobante: PagoExitosoDatos = {
-    purchase:      order.order_number,
-    date:          new Date(order.paid_at ?? order.created_at).toLocaleString("es-PE"),
+    purchase:      numeroPedido(order.order_number),
+    date:          fmtFechaHora(order.paid_at ?? order.created_at),
     amount:        Number(order.total).toFixed(2),
     currency:      order.currency ?? "PEN",
     nombre:        order.nombre,
@@ -184,7 +175,7 @@ function PedidoCard({ order }: { order: any }) {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="font-mono text-sm font-semibold">{order.order_number}</span>
+              <span className="font-mono text-sm font-semibold">{numeroPedido(order.order_number)}</span>
               <span
                 className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium"
                 style={{ color: cfg.color, background: cfg.bg }}

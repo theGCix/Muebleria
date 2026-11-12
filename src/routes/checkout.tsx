@@ -83,6 +83,7 @@ import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
 import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
+import { fmtFechaHora } from "@/lib/fechas";
 import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
 
 /** El servidor recalculó el pedido y el total del navegador estaba desactualizado. */
@@ -441,7 +442,7 @@ useEffect(() => {
         actionCode:   data?.actionCode,
         sinConfirmar: !rechazo,
         purchase:     purchaseNumber,
-        date:         new Date().toLocaleString("es-PE"),
+        date:         fmtFechaHora(new Date()),
         amount:       (saved.total ?? totalFinal).toFixed(2),
         nombre:       saved.nombre,
         items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
@@ -462,7 +463,7 @@ useEffect(() => {
     clearCart();
     setModalDatos({
       purchase: purchaseNumber,
-      date:     new Date().toLocaleString("es-PE"),
+      date:     fmtFechaHora(new Date()),
       amount:   (saved.total ?? totalFinal).toFixed(2),
       currency: "PEN",
       nombre:        saved.nombre,
@@ -484,7 +485,7 @@ useEffect(() => {
     setModalDatos({
       sinConfirmar: true,
       purchase:     purchaseNumber,
-      date:         new Date().toLocaleString("es-PE"),
+      date:         fmtFechaHora(new Date()),
       amount:       (saved.total ?? totalFinal).toFixed(2),
       nombre:       saved.nombre,
       items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),

@@ -14,6 +14,7 @@ import {
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { TarjetaFila, TarjetasMovil } from "@/components/admin/TarjetaFila";
+import { fmtFechaHora } from "@/lib/fechas";
 
 export const Route = createFileRoute("/_authenticated/correos-pedidos")({
   head: () => ({ meta: [{ title: "Correos de pedidos — G&M" }] }),
@@ -59,10 +60,6 @@ const ESTADO_CONFIG: Record<Estado, { label: string; color: string; bg: string }
 const fmtSoles = (n: number | null) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n ?? 0);
 
-const fmtFechaHora = (iso: string) =>
-  new Intl.DateTimeFormat("es-PE", {
-    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-  }).format(new Date(iso));
 
 function demora(creado: string, enviado: string) {
   const m = Math.max(0, Math.round((new Date(enviado).getTime() - new Date(creado).getTime()) / 60000));

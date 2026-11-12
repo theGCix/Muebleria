@@ -43,8 +43,17 @@ test("notifica con secreto y payload; sin URL no llama", async () => {
 
 test("si n8n falla (red o 500) NO lanza", async () => {
   const env = { N8N_PEDIDO_PAGADO_URL: "https://n8n.x/w" };
-  const r1 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, fetchImpl: async () => { throw new Error("ECONNREFUSED"); } });
-  const r2 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, fetchImpl: async () => ({ ok: false, status: 500 }) });
+  const r1 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, esperaMs: 0, fetchImpl: async () => { throw new Error("ECONNREFUSED"); } });
+  const r2 = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, esperaMs: 0, fetchImpl: async () => ({ ok: false, status: 500 }) });
   assert.equal(r1.ok, false);
   assert.equal(r2.ok, false);
+});
+
+test("reintenta una vez: si el primer intento falla y el segundo responde, avisa", async () => {
+  const env = { N8N_PEDIDO_PAGADO_URL: "https://n8n.test/webhook/x", N8N_WEBHOOK_SECRET: "s" };
+  let llamadas = 0;
+  const fetchImpl = async () => { llamadas++; return llamadas === 1 ? { ok: false, status: 503 } : { ok: true, status: 200 }; };
+  const r = await notificarPedidoPagado({ supabaseAdmin: fakeSupabase(), orderId: "o1", env, esperaMs: 0, fetchImpl });
+  assert.equal(r.ok, true);
+  assert.equal(llamadas, 2);
 });
