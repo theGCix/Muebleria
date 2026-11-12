@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, RefreshCw, MessageCircle, Mail, Phone, ShoppingCart } from "lucide-react";
+import { RefreshCw, Mail, Phone, Send, ShoppingCart } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { canalesDisponibles, historialContacto, RecuperarCarritoDialog } from "@/components/admin/RecuperarCarritoDialog";
+import { esCorreoValido } from "@/lib/recuperacionCarrito";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { CardGridSkeleton, EmptyState } from "@/components/states";
 
@@ -30,20 +33,18 @@ const ESTADO_CONFIG: Record<CarritoAbandonado["estado"], { label: string; color:
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
 
-function waLink(telefono: string, nombre: string) {
-  const digits = telefono.replace(/\D/g, "");
-  const withCountry = digits.startsWith("51") ? digits : `51${digits}`;
-  const msg = encodeURIComponent(
-    `Hola ${nombre || ""} 👋 Vimos que dejaste productos en tu carrito de G&M Mueblería. ¿Te ayudamos a completar tu compra?`
-  );
-  return `https://wa.me/${withCountry}?text=${msg}`;
-}
-
-function CarritoCard({ carrito }: { carrito: CarritoAbandonado }) {
+function CarritoCard({ carrito, esAdmin }: { carrito: CarritoAbandonado; esAdmin: boolean }) {
   const qc = useQueryClient();
+  const [recuperando, setRecuperando] = useState(false);
+  const disp = canalesDisponibles(carrito);
+  const contactable = disp.correo || disp.whatsapp;
+  const avisos = historialContacto(carrito);
   const mut = useMutation({
     mutationFn: (patch: Parameters<typeof updateCarritoEstado>[0]) => updateCarritoEstado(patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["carritos-abandonados"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["carritos-abandonados"] });
+      qc.invalidateQueries({ queryKey: ["sidebar-counts"] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -53,12 +54,13 @@ function CarritoCard({ carrito }: { carrito: CarritoAbandonado }) {
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-sm truncate">{carrito.nombre || "Visitante sin nombre"}</p>
+          {/* Nombre; si no hay, el correo; solo si tampoco hay, «Visitante sin nombre» */}
+          <p className="font-medium text-sm truncate">{carrito.nombre || carrito.email || "Visitante sin nombre"}</p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mt-0.5">
             {carrito.telefono && (
               <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {carrito.telefono}</span>
             )}
-            {carrito.email && (
+            {carrito.nombre && carrito.email && (
               <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {carrito.email}</span>
             )}
             {carrito.distrito && <span>{carrito.distrito}</span>}
@@ -91,26 +93,25 @@ function CarritoCard({ carrito }: { carrito: CarritoAbandonado }) {
             hace {formatDistanceToNow(new Date(carrito.last_activity_at), { locale: es })}
           </p>
         </div>
-        {carrito.telefono && (
-          <Button size="sm" variant="outline" asChild>
-            <a
-              href={waLink(carrito.telefono, carrito.nombre ?? "")}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => carrito.estado === "activo" && mut.mutate({ id: carrito.id, estado: "contactado" })}
-            >
-              <MessageCircle className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
-            </a>
+        {contactable ? (
+          <Button size="sm" variant="outline" className="h-11 sm:h-8" onClick={() => setRecuperando(true)}>
+            <Send className="h-3.5 w-3.5 mr-1.5" /> Recuperar
           </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground text-right">Sin teléfono ni correo válidos</span>
         )}
       </div>
+
+      {avisos.length > 0 && (
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{avisos[0]}</p>
+      )}
 
       <div className="mt-2">
         <Select
           value={carrito.estado}
           onValueChange={(v) => mut.mutate({ id: carrito.id, estado: v as CarritoAbandonado["estado"] })}
         >
-          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-11 sm:h-8 text-xs" aria-label="Estado del carrito"><SelectValue /></SelectTrigger>
           <SelectContent>
             {(Object.keys(ESTADO_CONFIG) as CarritoAbandonado["estado"][]).map((e) => (
               <SelectItem key={e} value={e} className="text-xs">{ESTADO_CONFIG[e].label}</SelectItem>
@@ -118,6 +119,10 @@ function CarritoCard({ carrito }: { carrito: CarritoAbandonado }) {
           </SelectContent>
         </Select>
       </div>
+
+      {recuperando && (
+        <RecuperarCarritoDialog carrito={carrito} esAdmin={esAdmin} onClose={() => setRecuperando(false)} />
+      )}
     </Card>
   );
 }
@@ -126,6 +131,8 @@ function CarritosAbandonadosPage() {
   const { valor: periodo, setValor: setPeriodo, rango } =
     usePeriodo({ granularidad: "mes", offset: 0 });
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  const esAdmin = roles.includes("admin");
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["carritos-abandonados"],
     queryFn: () => listCarritosAbandonados({ horasMin: 1 }),
@@ -148,7 +155,7 @@ function CarritosAbandonadosPage() {
           </p>
         </div>
         <Button
-          variant="outline" size="sm"
+          variant="outline" size="sm" className="h-11 sm:h-8"
           onClick={() => qc.invalidateQueries({ queryKey: ["carritos-abandonados"] })}
         >
           <RefreshCw className={`h-4 w-4 mr-1.5 ${isFetching ? "animate-spin" : ""}`} /> Actualizar
@@ -158,7 +165,7 @@ function CarritosAbandonadosPage() {
       {/* Periodo */}
       <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-card border border-border/50 rounded-xl p-4">
           <p className="text-xs text-muted-foreground mb-1">Carritos abandonados</p>
           <p className="font-display text-2xl font-semibold">{carritos.length}</p>
@@ -166,6 +173,12 @@ function CarritosAbandonadosPage() {
         <div className="bg-card border border-border/50 rounded-xl p-4">
           <p className="text-xs text-muted-foreground mb-1">Valor potencial</p>
           <p className="font-display text-2xl font-semibold">{fmt(totalPotencial)}</p>
+        </div>
+        <div className="bg-card border border-border/50 rounded-xl p-4">
+          <p className="text-xs text-muted-foreground mb-1">Con correo</p>
+          <p className="font-display text-2xl font-semibold">
+            {carritos.filter((c) => esCorreoValido(c.email)).length}
+          </p>
         </div>
         <div className="bg-card border border-border/50 rounded-xl p-4">
           <p className="text-xs text-muted-foreground mb-1">Con teléfono</p>
@@ -185,7 +198,7 @@ function CarritosAbandonadosPage() {
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {carritos.map((c) => <CarritoCard key={c.id} carrito={c} />)}
+          {carritos.map((c) => <CarritoCard key={c.id} carrito={c} esAdmin={esAdmin} />)}
         </div>
       )}
     </div>

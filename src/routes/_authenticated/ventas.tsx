@@ -4,6 +4,10 @@ import { listSales, getSale, anularVenta, listVentasUnificadas, getOrderDetalle 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  FILTROS_INICIALES, filtrarVentas, hayFiltrosActivos, type FiltroEstado,
+} from "@/lib/ventasFiltros";
 import { Input } from "@/components/ui/input";
 
 import {
@@ -422,19 +426,18 @@ function VentasPage() {
     enabled: !!openOrderId,
   });
 
-  const ventas = useMemo(() => {
-    const all = dataUnificada?.ventas ?? [];
-    return all.filter((v) => {
-      const matchTipo = filtroTipo === "todos" || v.tipo === filtroTipo;
-      const matchEstado = filtroEstado === "todos" || v.estado === filtroEstado;
-      const matchCanal = filtroCanal === "todos" || v.canal === filtroCanal;
-      const matchSearch =
-        !busqueda ||
-        v.numero?.toLowerCase().includes(busqueda.toLowerCase()) ||
-        v.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase());
-      return matchTipo && matchEstado && matchCanal && matchSearch;
-    });
-  }, [dataUnificada, filtroTipo, filtroEstado, filtroCanal, busqueda]);
+  const filtros = { tipo: filtroTipo, estado: filtroEstado as FiltroEstado, canal: filtroCanal, busqueda };
+  const ventas = useMemo(
+    () => filtrarVentas(dataUnificada?.ventas ?? [], { tipo: filtroTipo, estado: filtroEstado as FiltroEstado, canal: filtroCanal, busqueda }),
+    [dataUnificada, filtroTipo, filtroEstado, filtroCanal, busqueda],
+  );
+  const totalVentas = dataUnificada?.ventas?.length ?? 0;
+  const limpiarFiltros = () => {
+    setFiltroTipo(FILTROS_INICIALES.tipo);
+    setFiltroEstado(FILTROS_INICIALES.estado);
+    setFiltroCanal(FILTROS_INICIALES.canal);
+    setBusqueda(FILTROS_INICIALES.busqueda);
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -449,45 +452,66 @@ function VentasPage() {
       {/* Periodo */}
       <PeriodFilter valor={periodo} onChange={setPeriodo} />
 
-      {/* Filtros */}
-      <div className="flex gap-3 flex-wrap items-center">
-        <Input
-          placeholder="Buscar por número o cliente…"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="max-w-xs"
-        />
-        <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="boleta">Boleta</SelectItem>
-            <SelectItem value="factura">Factura</SelectItem>
-            <SelectItem value="nota">Nota crédito</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="completada">Completada</SelectItem>
-            <SelectItem value="anulada">Anulada</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filtroCanal} onValueChange={setFiltroCanal}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Canal" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los canales</SelectItem>
-            <SelectItem value="local">🏪 Local</SelectItem>
-            <SelectItem value="online">🌐 Online</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Filtros: cada control lleva su etiqueta visible (en móvil se apilan a todo el ancho) */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-1">
+          <Label htmlFor="ventas-buscar" className="text-xs text-muted-foreground">Buscar</Label>
+          <Input
+            id="ventas-buscar"
+            placeholder="Número o cliente…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="h-11 sm:h-9"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="ventas-tipo" className="text-xs text-muted-foreground">Tipo de comprobante</Label>
+          <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+            <SelectTrigger id="ventas-tipo" className="h-11 w-full sm:h-9" aria-label="Filtrar por tipo de comprobante">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los tipos</SelectItem>
+              <SelectItem value="boleta">Boleta</SelectItem>
+              <SelectItem value="factura">Factura</SelectItem>
+              <SelectItem value="nota">Nota de crédito</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="ventas-estado" className="text-xs text-muted-foreground">Estado de la venta</Label>
+          <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+            <SelectTrigger id="ventas-estado" className="h-11 w-full sm:h-9" aria-label="Filtrar por estado de la venta">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los estados</SelectItem>
+              <SelectItem value="vigentes">Vigentes (no anuladas)</SelectItem>
+              <SelectItem value="anuladas">Anuladas / canceladas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="ventas-canal" className="text-xs text-muted-foreground">Canal de venta</Label>
+          <Select value={filtroCanal} onValueChange={setFiltroCanal}>
+            <SelectTrigger id="ventas-canal" className="h-11 w-full sm:h-9" aria-label="Filtrar por canal de venta">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los canales</SelectItem>
+              <SelectItem value="local">🏪 Local (POS)</SelectItem>
+              <SelectItem value="online">🌐 Online</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>Mostrando {ventas.length} de {totalVentas} comprobantes</span>
+        {hayFiltrosActivos(filtros) && (
+          <Button variant="ghost" size="sm" className="h-11 sm:h-8" onClick={limpiarFiltros}>
+            Limpiar filtros
+          </Button>
+        )}
       </div>
 
       <Card className="overflow-hidden">

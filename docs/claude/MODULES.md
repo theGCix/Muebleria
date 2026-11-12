@@ -123,3 +123,7 @@
 - `usePeriodo(inicial, { compartido?: string, zonaLima?: boolean })` (`PeriodFilter.tsx`): con `compartido` (hoy `"analisis"`: Dashboard, Analytics, Central) el período se guarda en un store en memoria + `sessionStorage:periodo:<clave>`; sin clave es el filtro local de siempre. `periodo.ts`: `hoyLima()`, `ahoraLima()`, `restarDias()`, `rangoParaSql(rango, hoy?)`.
 - Dashboard: `range.serieDesde` (≤ 399 días atrás con «todo») para `getDashboardSeries`; `range.desde` para `getDashboardKpis`. Central: bloques «Estado actual» (pipeline, alertas) y «Histórico» (con `PeriodFilter`).
 - Caja: `src/lib/cajaAlerta.ts` (`evaluarCaja`, `antiguedadTexto`, `UMBRAL_CAJA_HORAS = 24`, `HORA_RECORDATORIO_CIERRE = 21`), `src/hooks/useAhora.ts`, `src/hooks/useCajaAlerta.ts`, `src/components/admin/CajaAlertBanner.tsx` (montado en `_authenticated.tsx`), clave `caja` en `useSidebarCounts` / `nav-config`.
+
+**Carritos abandonados y filtros de Ventas (2026-11-11)**
+- `src/lib/recuperacionCarrito.ts` (plantillas `recordatorio` y `cupon`, `construirMensaje`, `mailtoLink`, `enlaceRecuperacion`, `esCorreoValido`, `CUPON_PORCENTAJE`/`CUPON_HORAS` = valores de n8n), `src/components/admin/RecuperarCarritoDialog.tsx` (`canalesDisponibles`, `historialContacto`). `carrito.functions.ts`: `updateCarritoEstado` → RPC `cambiar_estado_carrito`; `registrarContactoCarrito` → `registrar_contacto_carrito`; `obtenerCuponRecuperacion` → `cupon_recuperacion_carrito`.
+- `src/lib/ventasFiltros.ts`: `filtrarVentas`, `esAnulada` (`anulada` | `cancelado`), `hayFiltrosActivos`, `FILTROS_INICIALES`.

@@ -17,6 +17,10 @@ export interface CarritoAbandonado {
   estado: "activo" | "contactado" | "recuperado" | "perdido";
   order_id: string | null;
   recordatorio_enviado: boolean;
+  // Marcas del seguimiento automático (n8n): fecha del aviso 1 / aviso 2. OJO: la migración de n8n marcó
+  // carritos antiguos SIN enviar nada; solo `recordatorio_enviado = true` significa que n8n envió un correo.
+  recordatorio_1_at?: string | null;
+  recordatorio_2_at?: string | null;
   last_activity_at: string;
   created_at: string;
   updated_at: string;
@@ -96,18 +100,53 @@ export async function listCarritosAbandonados(input?: { horasMin?: number }) {
 
 const UpdateCarritoSchema = z.object({
   id: z.string().uuid(),
-  estado: z.enum(["activo", "contactado", "recuperado", "perdido"]).optional(),
-  recordatorio_enviado: z.boolean().optional(),
+  estado: z.enum(["activo", "contactado", "recuperado", "perdido"]),
 });
 
+// `carritos` no tiene política de UPDATE para el personal: un .update() directo se descartaba sin error.
+// El cambio de estado pasa por la función cambiar_estado_carrito (guard de admin / vendedor).
 export async function updateCarritoEstado(input: z.infer<typeof UpdateCarritoSchema>) {
   const data = UpdateCarritoSchema.parse(input);
   const { supabase } = await getAuthenticatedClient();
-  const patch: Record<string, unknown> = {};
-  if (data.estado !== undefined) patch.estado = data.estado;
-  if (data.recordatorio_enviado !== undefined) patch.recordatorio_enviado = data.recordatorio_enviado;
-
-  const { error } = await supabase.from("carritos").update(patch).eq("id", data.id);
+  const { error } = await supabase.rpc("cambiar_estado_carrito" as never, {
+    _carrito_id: data.id,
+    _estado: data.estado,
+  } as never);
   if (error) throw new Error(error.message);
   return { ok: true };
+}
+
+/**
+ * Registra que el personal contactó al cliente (WhatsApp o correo). Pasa el carrito a «contactado» y, por
+ * defecto, pausa los avisos automáticos de n8n para que no se duplique el contacto.
+ */
+export async function registrarContactoCarrito(input: { id: string; pausarAvisos?: boolean }) {
+  const data = z.object({ id: z.string().uuid(), pausarAvisos: z.boolean().optional() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data: res, error } = await supabase.rpc("registrar_contacto_carrito" as never, {
+    _carrito_id: data.id,
+    _pausar_avisos: data.pausarAvisos ?? true,
+  } as never);
+  if (error) throw new Error(error.message);
+  return res as unknown as { ok: boolean; ya_contactado: boolean; avisos_pausados: boolean };
+}
+
+export interface CuponRecuperacion {
+  estado: "creado" | "existente" | "no_disponible";
+  motivo: "desactivado" | "vencido" | "usado" | null;
+  codigo: string;
+  valor: number;
+  tipo_descuento: string;
+  vence_el: string | null;
+}
+
+/** Obtiene (o crea una sola vez) el cupón de recuperación del carrito. Solo administrador. */
+export async function obtenerCuponRecuperacion(input: { id: string }) {
+  const data = z.object({ id: z.string().uuid() }).parse(input);
+  const { supabase } = await getAuthenticatedClient();
+  const { data: res, error } = await supabase.rpc("cupon_recuperacion_carrito" as never, {
+    _carrito_id: data.id,
+  } as never);
+  if (error) throw new Error(error.message);
+  return res as unknown as CuponRecuperacion;
 }
