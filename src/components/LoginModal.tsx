@@ -180,14 +180,6 @@ function AuthExperience({
   const score = passwordScore(password);
   const busy = loading || !!oauthLoading;
 
-  const checks =
-    mode === "signup"
-      ? [fullName.trim().length > 1, emailOk, password.length >= 6]
-      : mode === "magic"
-        ? [emailOk]
-        : [emailOk, password.length >= 6];
-  const done = checks.filter(Boolean).length;
-
   /* ── Animaciones ── */
 
   // 1) Veta de madera: se dibuja una sola vez al abrir (momento principal).
@@ -251,21 +243,7 @@ function AuthExperience({
     { scope: rootRef, dependencies: [mode, stage] },
   );
 
-  // 4) Barra de avance: se llena a medida que los campos son válidos.
-  useGSAP(
-    () => {
-      gsap.to(".piece-fill", {
-        scaleX: (i: number) => (stage !== "form" || checks[i] ? 1 : 0),
-        duration: motionOK() ? 0.5 : 0,
-        ease: "power3.out",
-        stagger: 0.06,
-        overwrite: "auto",
-      });
-    },
-    { scope: rootRef, dependencies: [checks.join(), stage, mode] },
-  );
-
-  // 5) Celebración al entrar.
+  // 4) Celebración al entrar.
   useGSAP(
     () => {
       if (stage !== "success" || !motionOK()) return;
@@ -458,13 +436,6 @@ function AuthExperience({
     },
   }[mode];
 
-  const progressLabel =
-    stage !== "form"
-      ? ""
-      : done === checks.length
-        ? "Todo listo para continuar"
-        : `${done} de ${checks.length} campos completos`;
-
   const lastBadge = (m: LastMethod) =>
     lastMethod === m ? (
       <span className="absolute right-3 rounded-full bg-[#C9A24B]/20 px-2 py-0.5 text-xs font-medium text-[#8A6A1F] dark:text-[#E3C170]">
@@ -504,23 +475,6 @@ function AuthExperience({
 
       {/* Formulario */}
       <div className="max-h-[92vh] overflow-y-auto p-6 sm:p-8">
-        {/* Barra de avance (persistente entre modos) */}
-        <div className="mb-5">
-          <div className="flex gap-1.5" aria-hidden="true">
-            {checks.map((_, i) => (
-              <span key={`${mode}-${i}`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
-                <span
-                  className="piece-fill block h-full origin-left rounded-full bg-[#B5793F]"
-                  style={{ transform: "scaleX(0)" }}
-                />
-              </span>
-            ))}
-          </div>
-          <p className="mt-2 min-h-4 text-xs text-muted-foreground" aria-live="polite">
-            {progressLabel}
-          </p>
-        </div>
-
         <div ref={panelRef}>
           {stage === "form" && (
             <>

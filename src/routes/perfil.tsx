@@ -67,25 +67,26 @@ function PerfilLayout() {
       <main className="container mx-auto px-4 py-10 max-w-5xl">
 
         {/* Header perfil */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-3 mb-8">
+          <div className="flex min-w-0 items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
               <User className="h-7 w-7 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="font-display text-2xl font-semibold">Mi cuenta</h1>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <p className="truncate text-sm text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleLogout} className="hidden sm:inline-flex">
-            <LogOut className="h-4 w-4 mr-2" /> Cerrar sesión
+          <Button variant="outline" size="sm" onClick={handleLogout} className="h-11 shrink-0 px-3 sm:h-9" aria-label="Cerrar sesión">
+            <LogOut className="h-4 w-4 sm:mr-2" aria-hidden /> <span className="hidden sm:inline">Cerrar sesión</span>
           </Button>
         </div>
 
         <div className="flex flex-col md:flex-row gap-6">
           {/* Menú lateral */}
-          <nav className="md:w-56 flex-shrink-0">
-            <div className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0 -mx-1 px-1 md:mx-0 md:px-0">
+          <nav aria-label="Secciones de Mi cuenta" className="md:w-56 flex-shrink-0">
+            {/* Móvil: 3 × 2, todas las secciones a la vista. ≥ 768 px: columna lateral. */}
+            <div className="grid grid-cols-3 gap-2 md:flex md:flex-col md:gap-1">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = pathname === item.to || (pathname === "/perfil" && item.to === "/perfil/pedidos");
@@ -93,23 +94,18 @@ function PerfilLayout() {
                   <Link
                     key={item.to}
                     to={item.to}
-                    className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                    aria-current={active ? "page" : undefined}
+                    className={`flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-lg border px-2 py-2.5 text-center text-xs font-medium leading-tight transition-colors md:min-h-0 md:flex-row md:justify-start md:gap-2.5 md:border-transparent md:px-3.5 md:text-left md:text-sm md:whitespace-nowrap ${
                       active
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                     }`}
                   >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    <Icon className="h-4 w-4 flex-shrink-0" aria-hidden />
                     {item.label}
                   </Link>
                 );
               })}
-              <button
-                onClick={handleLogout}
-                className="flex sm:hidden items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground whitespace-nowrap"
-              >
-                <LogOut className="h-4 w-4 flex-shrink-0" /> Cerrar sesión
-              </button>
             </div>
           </nav>
 
