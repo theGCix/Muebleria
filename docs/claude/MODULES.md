@@ -74,3 +74,10 @@
 - Existentes: `ProductGallery`, pestañas Especificaciones / Reseñas / Entrega, `ProductRecomendaciones` (misma categoría, 4 productos), cotización (`LeadFormDialog`) y WhatsApp.
 - `StickyBuyBar`: fija en móvil (≤ 640 px) y al hacer scroll en pantallas grandes; panel «Ir a pagar / Seguir comprando» tras agregar.
 - No existen medidas por producto (alto/ancho/fondo), plazas ni esquema: solo `volumen_m3` y `peso_kg` (ver DATABASE.md).
+
+---
+## Estado verificado — Parte 5 (catálogo móvil, 2026-11-05)
+- `ProductCard.tsx` es el único componente de tarjeta: lo usan `catalogo.tsx`, `categoria.$slug.tsx`, `ProductsSection.tsx`, `OfertasSection.tsx`, `ProductRecomendaciones.tsx` y `perfil/favoritos.tsx`. `PiezaDestacada.tsx` (2×2 en la grilla) es aparte.
+- Estrellas: `useProductRatings` (una consulta a `v_producto_rating`, no versionada en `supabase/migrations/`); sin reseñas no hay estrellas. «Favorito» exige ≥ 4.5 y ≥ 3 reseñas.
+- Tarjeta: `@container`; umbrales `@[11rem]` y `@[13rem]` para compactar (a 360 px mide ~158 px). Botones con `min-h-11`/`h-11`.
+- Compra rápida: «Comprar ahora» → `addItem` + `navigate({ to: "/checkout" })`; en el carrito pasa a «Ir a pagar».

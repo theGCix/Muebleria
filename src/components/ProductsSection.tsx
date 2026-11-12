@@ -338,8 +338,8 @@ export function ProductsSection() {
 
         {/* ── Cuadrícula ── */}
         {isLoading ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="min-h-[440px] animate-pulse rounded-2xl bg-muted sm:col-span-2 md:row-span-2" />
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="min-h-[440px] animate-pulse rounded-2xl bg-muted col-span-2 md:row-span-2" />
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-muted" />
             ))}
@@ -384,11 +384,11 @@ export function ProductsSection() {
           <>
             <div
               key={claveAnim}
-              className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 [grid-auto-flow:dense]"
+              className="grid grid-cols-2 gap-3 sm:gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 [grid-auto-flow:dense]"
             >
               {destacada && (
                 <div
-                  className="h-full motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 sm:col-span-2 md:row-span-2"
+                  className="h-full motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 col-span-2 md:row-span-2"
                   style={{ animationFillMode: "both" }}
                 >
                   <PiezaDestacada product={destacada} />

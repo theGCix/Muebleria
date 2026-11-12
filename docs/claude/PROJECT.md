@@ -1,5 +1,6 @@
 # PROJECT — G&M Mueblería
 
+> Parte 5 (catálogo móvil: 2 columnas, estrellas reales, «Comprar ahora», táctiles ≥ 44 px) entregada en `feat/catalogo-movil-2col`; ver TASK_LOG.md.
 > Estado al 2026-11-05: Parte 3/8 implementada (D1/D2 fases 1–4). Parte 4/8: entregas A, B y E6 hechas (E6 con los 6 medios y logos SVG propios); N2 y D7 pendientes. Detalle en TASK_LOG.md y MODULES.md (hallazgos verificados en el repo).
 
 ## Resumen

@@ -1,10 +1,10 @@
 // src/components/ProductCard.tsx
 // Tarjeta "vitrina": cada señal que muestra sale de datos reales (oferta, stock, reseñas, plazo de entrega).
 // Nada de urgencia o prueba social inventada: si el dato no existe, el elemento no aparece.
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useCartStore } from "@/stores/cartStore";
 import {
-  ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2,
+  ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -100,6 +100,7 @@ function volarAlCarrito(origen: HTMLElement | null, src: string) {
 }
 
 export function ProductCard({ product: p }: Props) {
+  const navigate = useNavigate();
   const addItem = useCartStore((s) => s.addItem);
   const updateQty = useCartStore((s) => s.updateQty);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -163,6 +164,17 @@ export function ProductCard({ product: p }: Props) {
     addItem({ id: p.id, title: p.nombre, price: precioOferta, image: imgSrc ?? "", sku: p.sku ?? undefined });
     toast.success(`"${p.nombre}" añadido al carrito`);
     volarAlCarrito(mediaRef.current, imgSrc ?? "");
+  };
+
+  // Compra rápida: agrega (si aún no está) y va directo al checkout. Dentro de un <Link>: nunca debe navegar a la ficha.
+  const handleBuyNow = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (agotado) return;
+    if (!enCarrito) {
+      addItem({ id: p.id, title: p.nombre, price: precioOferta, image: imgSrc ?? "", sku: p.sku ?? undefined });
+    }
+    navigate({ to: "/checkout" });
   };
 
   // Control de cantidad en la propia tarjeta (dentro de un <Link>: nunca debe navegar)
@@ -241,7 +253,7 @@ export function ProductCard({ product: p }: Props) {
             <div className="gmc-sheen" aria-hidden />
 
             {insignias.length > 0 && (
-              <div className="absolute left-2.5 top-2.5 z-10 flex max-w-[calc(100%-3.75rem)] flex-col items-start gap-1.5">
+              <div className="absolute left-2.5 top-2.5 z-10 flex max-w-[calc(100%-3rem)] flex-col items-start gap-1.5">
                 {insignias.map((b) => (
                   <span
                     key={b.key}
@@ -259,15 +271,17 @@ export function ProductCard({ product: p }: Props) {
               type="button"
               onClick={handleWishlist}
               disabled={wishPending}
-              className="absolute right-2.5 top-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/85 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-background disabled:opacity-50"
+              className="group/wish absolute right-0 top-0 z-10 flex h-11 w-11 items-center justify-center disabled:opacity-50"
               title={wishlisted ? "Quitar de favoritos" : "Guardar en favoritos"}
               aria-label={wishlisted ? "Quitar de favoritos" : "Guardar en favoritos"}
             >
-              <Heart
-                className={`h-4 w-4 transition-all duration-200 ${
-                  wishlisted ? "scale-110 fill-destructive text-destructive" : "text-muted-foreground"
-                }`}
-              />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/85 shadow-sm backdrop-blur-sm transition-all group-hover/wish:scale-110 group-hover/wish:bg-background">
+                <Heart
+                  className={`h-4 w-4 transition-all duration-200 ${
+                    wishlisted ? "scale-110 fill-destructive text-destructive" : "text-muted-foreground"
+                  }`}
+                />
+              </span>
             </button>
 
             {agotado && (
@@ -293,11 +307,11 @@ export function ProductCard({ product: p }: Props) {
           </div>
 
           {/* ───────── Información ───────── */}
-          <div className="flex flex-1 flex-col p-4 pt-3.5">
+          <div className="flex flex-1 flex-col p-3 pt-2.5 @[13rem]:p-4 @[13rem]:pt-3.5">
             {p.categoria && (
               <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</span>
             )}
-            <h3 className="mt-1 text-[17px] font-semibold leading-snug line-clamp-2">{p.nombre}</h3>
+            <h3 className="mt-1 text-[15px] font-semibold leading-snug line-clamp-2 @[13rem]:text-[17px]">{p.nombre}</h3>
 
             {rating && (
               <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
@@ -308,10 +322,10 @@ export function ProductCard({ product: p }: Props) {
             )}
 
             {descripcion ? (
-              <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{descripcion}</p>
+              <p className="mt-1.5 hidden text-sm text-muted-foreground line-clamp-2 @[13rem]:block">{descripcion}</p>
             ) : (
               atributos.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2 hidden flex-wrap gap-1.5 @[13rem]:flex">
                   {atributos.map((a) => (
                     <span key={a} className="rounded-full border border-border bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground">{a}</span>
                   ))}
@@ -319,11 +333,11 @@ export function ProductCard({ product: p }: Props) {
               )
             )}
 
-            <div className="mt-auto flex flex-col gap-2.5 pt-3.5">
+            <div className="mt-auto flex flex-col gap-2 pt-2.5 @[13rem]:gap-2.5 @[13rem]:pt-3.5">
               {/* Precio */}
               {enOferta ? (
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="font-display text-2xl font-bold leading-none text-destructive">{fmtPEN(precioOferta)}</span>
+                  <span className="font-display text-xl font-bold leading-none text-destructive @[13rem]:text-2xl">{fmtPEN(precioOferta)}</span>
                   <span className="text-sm text-muted-foreground line-through">{fmtPEN(p.precio)}</span>
                   <span className="whitespace-nowrap rounded-md bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">
                     Ahorras {fmtPEN(p.precio - precioOferta)}
@@ -335,7 +349,7 @@ export function ProductCard({ product: p }: Props) {
                   )}
                 </div>
               ) : (
-                <span className="font-display text-2xl font-bold leading-none">{fmtPEN(p.precio)}</span>
+                <span className="font-display text-xl font-bold leading-none @[13rem]:text-2xl">{fmtPEN(p.precio)}</span>
               )}
 
               {/* Escasez real */}
@@ -356,7 +370,7 @@ export function ProductCard({ product: p }: Props) {
 
               {/* Promesa de entrega (misma fuente que la ficha) */}
               {!agotado && (
-                <p className="flex min-h-4 items-start gap-1.5 text-xs text-muted-foreground">
+                <p className="flex min-h-4 items-start gap-1.5 text-[11px] text-muted-foreground @[13rem]:text-xs">
                   {entrega && (
                     <>
                       <Truck className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
@@ -379,16 +393,16 @@ export function ProductCard({ product: p }: Props) {
                   key="en-carrito"
                   role="group"
                   aria-label={`${p.nombre} en el carrito: ${qty} ${qty === 1 ? "unidad" : "unidades"}`}
-                  className="flex w-full items-center gap-1 rounded-full border border-primary/25 bg-primary/[0.06] p-1 text-primary animate-in zoom-in-95 fade-in duration-300"
+                  className="flex w-full items-center gap-0.5 rounded-full border border-primary/25 bg-primary/[0.06] p-0.5 text-primary animate-in zoom-in-95 fade-in duration-300"
                 >
                   <button
                     type="button"
                     onClick={handleDec}
                     aria-label={qty <= 1 ? "Quitar del carrito" : "Quitar una unidad"}
                     title={qty <= 1 ? "Quitar del carrito" : "Quitar una unidad"}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm transition-all hover:bg-primary/10 active:scale-90"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-sm transition-all hover:bg-primary/10 active:scale-90"
                   >
-                    {qty <= 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+                    {qty <= 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                   </button>
 
                   <div className="min-w-0 flex-1 text-center leading-tight" aria-live="polite">
@@ -410,9 +424,9 @@ export function ProductCard({ product: p }: Props) {
                     disabled={llegoAlMaximo || agotado}
                     aria-label="Agregar una unidad"
                     title={llegoAlMaximo ? "Alcanzaste el stock disponible" : "Agregar una unidad"}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-90 disabled:cursor-not-allowed disabled:bg-primary/25 disabled:text-primary-foreground/80"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-90 disabled:cursor-not-allowed disabled:bg-primary/25 disabled:text-primary-foreground/80"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-4 w-4" />
                   </button>
                 </div>
               ) : (
@@ -421,7 +435,7 @@ export function ProductCard({ product: p }: Props) {
                   onClick={handleAdd}
                   disabled={agotado}
                   style={{ ["--gmc-delay" as string]: retraso }}
-                  className={`gmc-cta group/btn flex w-full items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 transition-all duration-300 ${
+                  className={`gmc-cta group/btn flex min-h-11 w-full items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 transition-all duration-300 ${
                     agotado
                       ? "cursor-default bg-muted text-muted-foreground"
                       : "gmc-cta-shine bg-primary text-primary-foreground shadow-sm hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.97]"
@@ -445,11 +459,26 @@ export function ProductCard({ product: p }: Props) {
                 </button>
               )}
 
+              {/* Compra rápida: ya en el carrito pasa a «Ir a pagar» */}
+              {!agotado && (
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  aria-label={enCarrito ? "Ir a pagar" : "Comprar ahora"}
+                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-primary bg-background px-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 active:scale-[0.97]"
+                >
+                  <Zap className="h-4 w-4" />
+                  <span className="whitespace-nowrap">
+                    {enCarrito ? "Ir a pagar" : (<>Comprar<span className="hidden @[13rem]:inline"> ahora</span></>)}
+                  </span>
+                </button>
+              )}
+
               {/* Captura de leads: el taller fabrica a medida */}
               <button
                 type="button"
                 onClick={handleMedida}
-                className="inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
               >
                 <Ruler className="h-3.5 w-3.5" />
                 {agotado ? (

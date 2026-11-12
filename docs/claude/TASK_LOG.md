@@ -48,8 +48,12 @@
 - Pendiente: reemplazar por logos oficiales si el dueño los consigue (mismo nombre de archivo). La nota previa de «cobro solo con tarjeta» queda superada por esta confirmación.
 
 ## 2026-11-05 — Parte 5: Catálogo móvil (2 columnas, estrellas, compra rápida)
-- Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo.
-- Hallazgos (verificados): `ProductCard.tsx` YA muestra estrellas reales (`useProductRatings` → vista `v_producto_rating`; sin reseñas no muestra nada) y YA tiene «Agregar al carrito» con control de cantidad. Las grillas de `catalogo.tsx`, `categoria.$slug.tsx`, `ProductsSection.tsx` y `OfertasSection.tsx` son `grid-cols-1` en móvil (solo `ProductRecomendaciones` y `perfil/favoritos` ya usan 2). Botones de la tarjeta: corazón y ± de 32 px; falta «compra rápida».
-- Archivos previstos: `ProductCard.tsx`, `product-card.css`, las 4 grillas anteriores. Sin dependencias ni migraciones.
-- Pendiente: autorización y decisión sobre qué significa «compra rápida» (ver plan).
-- Nota: `v_producto_rating` no está versionada en `supabase/migrations/`; no se toca.
+- Plan entregado y **aprobado**. Decisión del dueño: compra rápida = «Comprar ahora» (agrega y va a `/checkout`).
+- Hallazgos previos: `ProductCard` ya mostraba estrellas reales (`useProductRatings` → `v_producto_rating`; sin reseñas no se muestra nada) y «Agregar al carrito». Las grillas eran `grid-cols-1` en móvil.
+- **Entrega (rama `feat/catalogo-movil-2col`):**
+  - Grillas a `grid-cols-2 gap-3 sm:gap-6` (resto de breakpoints igual) en `routes/catalogo.tsx`, `routes/categoria.$slug.tsx`, `ProductsSection.tsx` (la `PiezaDestacada` y su esqueleto ocupan `col-span-2` también en móvil), `OfertasSection.tsx`; `ProductRecomendaciones.tsx` solo ajusta el gap.
+  - `ProductCard.tsx`: botón «Comprar ahora» (en móvil «Comprar»; `aria-label` completo; si ya está en el carrito pasa a «Ir a pagar»; oculto si está agotado; usa `addItem` y `navigate("/checkout")`, sin abrir la ficha). Compactación en móvil con `@container` (nombre 15 px, precio `text-xl`, descripción y chips ocultos bajo 13 rem). Táctiles ≥ 44 px: corazón (área 44, círculo 32), ± del carrito, «Agregar», «Comprar» y «Cotiza a medida».
+  - Estrellas: sin cambios (ya reales). Sin dependencias, sin migraciones; no se tocó `cartStore`, `pagos.js` ni RLS.
+- Verificación: `tsc --noEmit` sin errores nuevos; `vite build` OK; Playwright a 360 y 414 px con respuestas simuladas de Supabase (datos solo de prueba, no en el repo): 2 columnas, 0 botones < 44 px, sin scroll horizontal, «Comprar» lleva a `/checkout` con el producto en el carrito.
+- Notas: los archivos del zip llegaron en CRLF; los editados se normalizaron a LF (igual que el repo) para un diff mínimo. Las tarjetas son más altas en móvil (botón extra + 44 px). Preexistente sin tocar: en `ProductCard`, ± usan `p.id` (no `lineId`) con productos con opciones.
+- Pendiente: probar con datos reales en el dispositivo del dueño; ajustar altura si se prefiere.
