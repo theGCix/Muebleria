@@ -176,6 +176,16 @@ export function AuthButton({ className, compact = false }: { className?: string;
         </DropdownMenu>
       ) : (
         <>
+          {compact ? (
+            <button
+              type="button"
+              onClick={openLogin}
+              aria-label="Iniciar sesión"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2A1B12] text-[#F3E8D4] transition-colors hover:bg-[#3A2619] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A24B] focus-visible:ring-offset-2"
+            >
+              <UserRound className="h-5 w-5" />
+            </button>
+          ) : (
           <button
             type="button"
             onClick={openLogin}
@@ -191,6 +201,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
               </span>
             </span>
           </button>
+          )}
 
           {nudge && (
             <button

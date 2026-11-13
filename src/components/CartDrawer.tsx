@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { ShoppingBag, Minus, Plus, Trash2, PackageCheck } from "lucide-react";
+import { ShoppingBag, ShoppingCart, Minus, Plus, Trash2, PackageCheck } from "lucide-react";
 import { useCartStore, type CartItem } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
@@ -126,7 +126,7 @@ export const CartDrawer = () => {
       <Sheet open={isOpen} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" data-cart-target className="relative rounded-full border-border/60">
-            <ShoppingBag className="h-5 w-5" />
+            <ShoppingCart className="h-5 w-5" />
             {totalItems > 0 && (
               <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-accent-strong text-accent-foreground">
                 {totalItems}
@@ -147,7 +147,7 @@ export const CartDrawer = () => {
             {items.length === 0 ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">Carrito vacío</p>
                 </div>
               </div>

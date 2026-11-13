@@ -157,7 +157,7 @@ export function Header() {
 
         {/* Navbar principal */}
         <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
-          <div className="container mx-auto flex h-20 items-center gap-4 px-4 md:px-6">
+          <div className="container mx-auto flex h-20 items-center gap-2 md:gap-4 px-4 md:px-6">
             {/* Logo */}
             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
@@ -219,7 +219,7 @@ export function Header() {
             </div>
 
             {/* Mobile: buscar + wishlist + cart + hamburger */}
-            <div className="flex items-center gap-2 md:hidden ml-auto">
+            <div className="flex items-center gap-1 sm:gap-2 md:hidden ml-auto">
               <button
                 onClick={() => { setMobileSearchOpen((v) => !v); setMobileOpen(false); }}
                 className={`p-2 rounded-md transition-colors ${mobileSearchOpen ? "text-accent-strong bg-accent/10" : "text-foreground/70 hover:text-foreground hover:bg-accent/10"}`}
@@ -227,8 +227,8 @@ export function Header() {
               >
                 <Search className="h-5 w-5" />
               </button>
-              {/* Foto de la cuenta, igual que en escritorio y tablet */}
-              {user && <AuthButton compact />}
+              {/* Acceso siempre a la vista: foto de la cuenta o botón «Iniciar sesión» (antes solo estaba dentro del menú) */}
+              <AuthButton compact />
               <WishlistDrawer />
               <CartDrawer />
               <button
