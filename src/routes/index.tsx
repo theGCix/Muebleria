@@ -2,6 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { Header } from "@/components/Header"; 
 import { PortadaPresupuesto } from "@/components/PortadaPresupuesto";
+<<<<<<< ours
+=======
+import { HeroCampanaHome } from "@/components/Hero";
+>>>>>>> theirs
 import { Categories } from "@/components/Categories";
 import { OfertasSection } from "@/components/OfertasSection";
 import { CombosSection } from "@/components/CombosSection";
@@ -37,6 +41,10 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
+<<<<<<< ours
      <main ref={mainRef}> <PortadaPresupuesto /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
+=======
+     <main ref={mainRef}> <PortadaPresupuesto /> <HeroCampanaHome /> <OfertasSection /> <CombosSection /> <Categories /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
+>>>>>>> theirs
      </main> 
      <Footer /> </div> ); }
