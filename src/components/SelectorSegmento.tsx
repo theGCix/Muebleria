@@ -58,7 +58,7 @@ export function SelectorSegmento({
         aria-labelledby={id}
         className={
           deslizable
-            ? "-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:justify-center sm:overflow-visible sm:px-0"
+            ? "-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:justify-start sm:overflow-visible sm:px-0"
             : "flex flex-wrap gap-2"
         }
       >
