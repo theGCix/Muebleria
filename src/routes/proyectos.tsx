@@ -57,7 +57,7 @@ function ProyectosPage() {
       <main>
         <section className="px-4 pb-8 pt-14 md:pt-20">
           <div className="container mx-auto max-w-6xl">
-            <p className="mb-3 text-xs uppercase tracking-[0.25em] text-muted-foreground">Proyectos</p>
+            <p className="mb-3 text-sm font-medium text-muted-foreground">Proyectos</p>
             <h1 className="max-w-3xl font-display text-4xl font-semibold leading-tight md:text-5xl">
               Lo que nace cuando una idea nueva llega al taller
             </h1>

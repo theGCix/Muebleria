@@ -168,11 +168,10 @@ export function ProductsSection() {
               Catálogo G&amp;M
             </p>
             <h2 className="t-seccion">
-              ¿Qué espacio vas a <em className="italic text-accent-strong">transformar</em>?
+              Define tu presupuesto y descubre las opciones para tu hogar
             </h2>
             <p className="mt-3 text-muted-foreground">
-              Elige tu ambiente, marca tu presupuesto y mira al instante lo que el taller tiene para
-              ti.
+              Elige tu ambiente, marca cuánto quieres invertir y mira al instante lo que el taller tiene para ti.
             </p>
           </div>
           <div className="relative w-full md:max-w-xs">

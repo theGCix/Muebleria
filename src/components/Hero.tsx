@@ -67,18 +67,18 @@ function Reloj({ venceMs, unificada }: { venceMs: number; unificada: boolean }) 
 
   return (
     <div role="timer" aria-label={`Tiempo restante: ${resumen}`}>
-      <p className="text-sm text-secondary/80 mb-2">
+      <p className="mb-1 text-xs text-muted-foreground sm:text-sm">
         {unificada ? "La oferta termina en" : "La próxima oferta termina en"}
       </p>
-      <div className="flex items-end gap-4 sm:gap-6">
+      <div className="flex items-end gap-3 sm:gap-4">
         {unidades.map((u, i) => (
-          <div key={u.l} className="flex items-end gap-4 sm:gap-6">
-            {i > 0 && <span aria-hidden className="mb-6 h-10 w-px bg-secondary/30" />}
+          <div key={u.l} className="flex items-end gap-3 sm:gap-4">
+            {i > 0 && <span aria-hidden className="mb-4 h-6 w-px bg-foreground/20" />}
             <div>
-              <div className="hero-display text-5xl sm:text-7xl leading-none">
+              <div className="hero-display text-3xl leading-none text-accent-strong sm:text-4xl">
                 <Digitos valor={u.v} />
               </div>
-              <div className="mt-1.5 text-xs text-secondary/70">{u.l}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{u.l}</div>
             </div>
           </div>
         ))}
@@ -87,7 +87,7 @@ function Reloj({ venceMs, unificada }: { venceMs: number; unificada: boolean }) 
   );
 }
 
-const CUERDAS = [34, 62, 46]; // largos distintos: se ve colgado, no alineado
+const CUERDAS = [16, 30, 22]; // largos distintos: se ve colgado, no alineado
 
 function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
   const { precioFinal, ahorro } = ofertaInfo(p);
@@ -101,14 +101,14 @@ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
     <Link
       to="/product/$handle"
       params={{ handle: p.id }}
-      className="etiqueta group block w-[200px] shrink-0 snap-center lg:w-auto"
+      className="etiqueta group block w-[150px] shrink-0 snap-center lg:w-auto"
       style={{ ["--i" as string]: i, ["--cuerda" as string]: `${CUERDAS[i % CUERDAS.length]}px` }}
     >
-      <div className="relative overflow-hidden rounded-lg bg-card text-foreground shadow-[0_18px_40px_-18px_rgba(0,0,0,0.7)]">
+      <div className="relative overflow-hidden rounded-lg bg-card text-foreground shadow-[var(--shadow-soft)]">
         {/* ojal por donde pasa la cuerda */}
         <span
           aria-hidden
-          className="absolute left-1/2 top-2 z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-primary ring-2 ring-secondary/60"
+          className="absolute left-1/2 top-2 z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-primary ring-2 ring-campana"
         />
 
         <div className="relative aspect-square bg-muted">
@@ -126,12 +126,12 @@ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
           </span>
         </div>
 
-        <div className="space-y-1.5 p-3">
-          <h3 className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-tight">
+        <div className="space-y-1 p-2.5">
+          <h3 className="line-clamp-2 min-h-[2.25rem] text-sm font-semibold leading-tight">
             {p.nombre}
           </h3>
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-xl font-bold">{fmtPEN(precioFinal)}</span>
+            <span className="text-lg font-bold">{fmtPEN(precioFinal)}</span>
             <span className="text-xs line-through opacity-60">{fmtPEN(p.precio)}</span>
           </div>
           <p className="text-xs font-medium text-accent-strong">Ahorras {fmtPEN(ahorro)}</p>
@@ -167,17 +167,17 @@ function HeroCampana({ c }: { c: Campana }) {
   return (
     <section
       data-hero
-      className="hero-taller relative overflow-hidden bg-primary text-primary-foreground"
+      className="hero-taller relative overflow-hidden text-foreground"
     >
-      <div className="container mx-auto grid grid-cols-1 items-center gap-12 px-4 py-14 md:px-6 md:py-20 lg:grid-cols-[1.05fr_1fr]">
-        <div data-hero-text className="min-w-0 space-y-8">
-          <div className="space-y-4">
-            <h2 data-hero-title className="hero-display text-4xl font-normal leading-[1.05] sm:text-5xl lg:text-6xl">
+      <div className="container mx-auto grid grid-cols-1 items-center gap-6 px-4 py-8 md:px-6 md:py-10 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
+        <div data-hero-text className="min-w-0 space-y-4">
+          <div className="space-y-2">
+            <h2 data-hero-title className="hero-display text-3xl font-normal leading-[1.1] sm:text-4xl">
               {titulo}
             </h2>
             <p
               data-hero-item
-              className="max-w-lg text-lg leading-relaxed text-secondary/85"
+              className="hidden max-w-lg text-base leading-relaxed text-muted-foreground sm:block"
             >
               {bajada}
             </p>
@@ -193,7 +193,7 @@ function HeroCampana({ c }: { c: Campana }) {
             <Button
               asChild
               size="lg"
-              className="h-12 rounded-full bg-secondary px-7 text-primary hover:bg-card"
+              className="h-11 rounded-full bg-accent-strong px-6 text-accent-foreground hover:bg-accent-strong/90"
             >
               <a href="#ofertas">
                 Ver las {c.ofertas.length} {c.ofertas.length === 1 ? "oferta" : "ofertas"}
@@ -204,7 +204,7 @@ function HeroCampana({ c }: { c: Campana }) {
               asChild
               variant="outline"
               size="lg"
-              className="h-12 rounded-full border-secondary/50 bg-transparent px-7 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              className="h-11 rounded-full border-foreground/25 bg-transparent px-6 text-foreground hover:bg-card"
             >
               <a href="#catalogo">Explorar el catálogo</a>
             </Button>
@@ -212,7 +212,7 @@ function HeroCampana({ c }: { c: Campana }) {
 
           <ul
             data-hero-item
-            className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-secondary/80"
+            className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"
           >
             <li className="flex items-center gap-2">
               <Truck className="h-4 w-4" /> Delivery a todo Lima
@@ -227,13 +227,13 @@ function HeroCampana({ c }: { c: Campana }) {
         <div data-hero-rail ref={railRef} className="relative min-w-0">
           <div
             aria-hidden
-            className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-secondary/70"
+            className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-foreground/25"
           >
-            <span className="absolute -left-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-secondary" />
-            <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-secondary" />
+            <span className="absolute -left-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-foreground/40" />
+            <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-foreground/40" />
           </div>
           <div
-            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden px-4 pb-8 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
+            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden px-4 pb-4 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
             style={{ ["--n" as string]: destacadas.length }}
           >
             {destacadas.map((p, i) => (
@@ -250,7 +250,7 @@ function HeroCampana({ c }: { c: Campana }) {
             <button
               type="button"
               onClick={movimiento.activar}
-              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-secondary/50 px-3.5 py-1.5 text-xs text-secondary transition-colors hover:bg-primary-foreground/10"
+              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-foreground/25 px-3.5 py-1.5 text-xs text-foreground transition-colors hover:bg-card"
             >
               <Smartphone className="h-3.5 w-3.5" /> Activar movimiento
             </button>

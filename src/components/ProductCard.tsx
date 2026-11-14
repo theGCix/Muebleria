@@ -260,7 +260,7 @@ export function ProductCard({ product: p }: Props) {
                 {insignias.map((b) => (
                   <span
                     key={b.key}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${b.cls}`}
+                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold shadow-sm ${b.cls}`}
                   >
                     {b.icono === "estrella" && <Star className="h-3 w-3 fill-current" />}
                     {b.icono === "chispa" && <Sparkles className="h-3 w-3" />}
@@ -288,14 +288,14 @@ export function ProductCard({ product: p }: Props) {
             </button>
 
             {agotado && (
-              <span className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 bg-foreground/80 py-1.5 text-center text-xs font-semibold uppercase tracking-[0.2em] text-background">
+              <span className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 bg-foreground/80 py-1.5 text-center text-xs font-semibold tracking-wide text-background">
                 Agotado
               </span>
             )}
 
             {/* Vista rápida (solo con mouse) */}
             <div className="gmc-quick" aria-hidden>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Vista rápida</p>
+              <p className="text-xs font-semibold tracking-wide text-white/70">Vista rápida</p>
               {atributos.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {atributos.map((a) => (

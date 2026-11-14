@@ -161,7 +161,7 @@ export function Header() {
             {/* Logo */}
             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
-              <span className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
+              <span className="text-xs tracking-wide text-muted-foreground">Mueblería</span>
             </Link>
 
             {/* Desktop nav */}
@@ -271,7 +271,7 @@ export function Header() {
 
               {/* Categorías (acordeón) */}
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1 px-1">
+                <p className="text-xs font-medium text-muted-foreground mb-1 px-1">
                   Categorías
                 </p>
                 <CategoryMobileAccordion onNavigate={() => setMobileOpen(false)} />

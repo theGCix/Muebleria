@@ -23,7 +23,7 @@ export function Categories() {
   return (
     <section data-cat-section id="categorias" className="container mx-auto px-6 py-24">
       <div data-reveal className="text-center max-w-2xl mx-auto mb-16">
-        <p className="text-xs uppercase tracking-[0.25em] text-accent-strong font-medium mb-4">
+        <p className="text-sm text-accent-strong font-medium mb-4">
           Nuestras colecciones
         </p>
         <h2 className="t-seccion text-foreground">

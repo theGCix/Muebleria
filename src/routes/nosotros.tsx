@@ -110,7 +110,7 @@ function NosotrosPage() {
         <section className="px-4 pb-10 pt-14 md:pt-20">
           <div className="container mx-auto grid max-w-6xl items-center gap-10 md:grid-cols-2">
             <div className="reveal">
-              <p className="mb-3 text-xs uppercase tracking-[0.25em] text-muted-foreground">Nuestro taller · Lima</p>
+              <p className="mb-3 text-sm font-medium text-muted-foreground">Nuestro taller · Lima</p>
               <h1 className="font-display text-4xl font-semibold leading-tight md:text-5xl">
                 Hecho a mano, pieza por pieza
               </h1>
@@ -156,7 +156,7 @@ function NosotrosPage() {
                       <div>
                         <div className="flex items-center gap-2 text-accent">
                           <Icono className="h-4 w-4" aria-hidden="true" />
-                          <span className="text-xs font-medium uppercase tracking-wide">Paso {i + 1}</span>
+                          <span className="text-xs font-medium">Paso {i + 1}</span>
                         </div>
                         <h3 className="mt-1 font-display text-2xl font-semibold">{paso.titulo}</h3>
                         <p className="mt-2 max-w-xl text-muted-foreground">{paso.descripcion}</p>
@@ -272,7 +272,7 @@ function NosotrosPage() {
                       <MapPin className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Dirección</p>
+                      <p className="text-xs font-medium text-muted-foreground">Dirección</p>
                       <p className="font-medium">{direccionTienda}</p>
                     </div>
                   </li>
@@ -282,7 +282,7 @@ function NosotrosPage() {
                         <Clock className="h-4 w-4" aria-hidden="true" />
                       </span>
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Horario</p>
+                        <p className="text-xs font-medium text-muted-foreground">Horario</p>
                         <p className="font-medium">{HORARIO}</p>
                       </div>
                     </li>

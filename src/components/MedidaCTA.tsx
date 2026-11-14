@@ -73,7 +73,7 @@ export function MedidaCTA() {
           </span>
           <h2 className="t-seccion">
             ¿No encuentras el mueble exacto? Lo fabricamos para tu{" "}
-            <em className="italic text-secondary">espacio</em>.
+            espacio.
           </h2>
           <p className="mt-4 max-w-lg text-white/75">
             Nuestros artesanos fabrican piezas pensadas para las medidas y el estilo de tu espacio.

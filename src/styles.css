@@ -43,6 +43,8 @@
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
   --color-detail: var(--detail);
+  --color-campana: var(--campana);
+  --color-campana-soft: var(--campana-soft);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -66,38 +68,42 @@
 
 :root {
   --radius: 0.5rem;
-  /* Japandi Premium — G&M Mueblería (identidad visual desde nov-2026)
-     Marfil #F5F1E8 · beige #D8C3A5 · marrón #8B735B · verde bosque #34443A · texto #292824 */
-  --background: oklch(0.959 0.013 87);
+  /* G&M Mueblería — paleta pastel (nov-2026), regla 60-30-10:
+     60% crema (--background) · 30% salvia/arena pastel (--secondary, --muted) · 10% terracota (--accent, solo ofertas).
+     Los muebles de madera son el color fuerte; el fondo pastel los hace resaltar. Texto siempre oscuro. */
+  --background: oklch(0.972 0.014 88); /* 60%: crema pastel */
   --foreground: oklch(0.276 0.007 95);
-  --card: oklch(0.994 0.006 85); /* blanco cálido #FFFDF9 */
+  --card: oklch(0.992 0.007 88); /* blanco cálido */
   --card-foreground: oklch(0.276 0.007 95);
   --popover: oklch(0.994 0.006 85);
   --popover-foreground: oklch(0.276 0.007 95);
-  --primary: oklch(0.369 0.027 157); /* verde bosque: botones, precios, footer (9.2:1 sobre marfil) */
-  --primary-foreground: oklch(0.959 0.013 87);
-  --secondary: oklch(0.827 0.047 77); /* beige: botones secundarios */
+  --primary: oklch(0.43 0.035 158); /* salvia profunda: botones, precios, footer (≥7:1 sobre crema) */
+  --primary-foreground: oklch(0.975 0.012 88);
+  --secondary: oklch(0.905 0.04 150); /* 30%: salvia pastel (superficies y botones secundarios) */
   --secondary-foreground: oklch(0.276 0.007 95);
-  --muted: oklch(0.927 0.02 85);
+  --muted: oklch(0.946 0.022 92); /* arena pastel */
   --muted-foreground: oklch(0.487 0.029 71); /* 5.7:1 sobre marfil */
   /* Terracota: SOLO ofertas y descuentos. --accent para fondos/bordes sin texto;
      --accent-strong para texto (7.3:1 sobre marfil, 4.8:1 sobre beige); --accent-soft para fondos suaves */
   --accent: oklch(0.581 0.118 42);
   --accent-foreground: oklch(0.994 0.006 85);
   --accent-strong: oklch(0.438 0.108 40);
-  --accent-soft: oklch(0.924 0.023 53);
+  --accent-soft: oklch(0.935 0.04 50); /* durazno pastel */
   /* Marrón #8B735B: 4.0:1 sobre marfil → solo líneas, bordes e íconos; NUNCA texto pequeño */
   --detail: oklch(0.572 0.046 67);
   --whatsapp: oklch(0.574 0.138 152);
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.985 0.008 80);
-  --border: oklch(0.893 0.03 82);
-  --input: oklch(0.88 0.032 80);
-  --ring: oklch(0.369 0.027 157);
+  --border: oklch(0.9 0.024 90);
+  --input: oklch(0.89 0.026 88);
+  --ring: oklch(0.43 0.035 158);
+  /* Campaña (Días de locura): superficie pastel durazno; el 10% de acento es la terracota de --accent */
+  --campana: oklch(0.925 0.05 58);
+  --campana-soft: oklch(0.955 0.03 62);
   --wood-light: oklch(0.91 0.04 75);
   --wood-dark: oklch(0.32 0.05 50);
   --cream: oklch(0.97 0.015 80);
-  --gradient-warm: linear-gradient(135deg, oklch(0.369 0.027 157) 0%, oklch(0.469 0.037 156) 100%);
+  --gradient-warm: linear-gradient(135deg, oklch(0.43 0.035 158) 0%, oklch(0.53 0.04 156) 100%);
   --shadow-soft: 0 4px 24px -8px oklch(0.32 0.05 50 / 0.15);
   --shadow-elegant: 0 20px 60px -20px oklch(0.32 0.05 50 / 0.25);
   /* Tipografía: una sola serif (títulos) y una sola sans (todo lo demás) */
@@ -225,13 +231,9 @@
   letter-spacing: -0.02em;
 }
 
-/* Veta de madera muy sutil sobre el nogal */
+/* Campaña: superficie pastel, sin textura */
 .hero-taller {
-  background-image: repeating-linear-gradient(
-    92deg,
-    rgb(255 255 255 / 0.018) 0 2px,
-    transparent 2px 9px
-  );
+  background-color: var(--campana);
 }
 
 /* La cuerda: del ojal de la etiqueta hasta el riel */
