@@ -17,7 +17,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
 import { cloudinaryUrl } from "@/lib/cloudinary";
-import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import { avisoFavorito } from "@/lib/avisoFavorito";
 import { ofertaInfo } from "@/lib/pricing";
 
@@ -46,7 +46,7 @@ export function WishlistDrawer() {
       image: imgSrc ?? "",
       sku: item.product.sku ?? undefined,
     });
-    toast.success(`"${item.product.nombre}" añadido al carrito`);
+    avisoCarrito(`"${item.product.nombre}" añadido al carrito`);
   };
 
   const handleRemove = async (productId: string, nombre: string) => {

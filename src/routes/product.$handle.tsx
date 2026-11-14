@@ -11,6 +11,7 @@ import { Footer } from "@/components/Footer";
 import { Loader2, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
 import { calcLineId, useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import { avisoFavorito } from "@/lib/avisoFavorito";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { trackEvent } from "@/hooks/useEventTracking";
@@ -885,7 +886,7 @@ function ProductView({ product: base }: { product: ProductData }) {
       // Solo los ids: el servidor valida, suma el ajuste y arma el título. Sin opciones en BD → formato antiguo.
       opciones: hayOpcionesBD ? idsOpciones : undefined,
     });
-    toast.success("Agregado al carrito", { description: `${product.nombre} · ${Object.values(prefs).join(" · ")}`, position: "top-center" });
+    avisoCarrito("Agregado al carrito", `${product.nombre} · ${Object.values(prefs).join(" · ")}`);
     // Solo el destello verde es temporal; después el botón queda en "En tu carrito" (qtyEnCarrito)
     setTimeout(() => setAdding(false), 1600);
   };

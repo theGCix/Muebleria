@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import { supabase } from "@/integrations/supabase/client";
 import { useCartStore } from "@/stores/cartStore";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -56,7 +57,7 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
       { id: base.id, title: base.nombre, price: base.precio, image: base.image ?? "", sku: base.sku ?? undefined },
       ...elegidos.map((i) => ({ id: i.p.id, title: i.p.nombre, price: i.precio, image: i.img ?? "", sku: i.p.sku ?? undefined })),
     ]);
-    toast.success(`${1 + elegidos.length} piezas agregadas al carrito`, { position: "top-center" });
+    avisoCarrito(`${1 + elegidos.length} piezas agregadas al carrito`);
   };
 
   return (

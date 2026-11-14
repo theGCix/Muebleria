@@ -7,6 +7,7 @@ import {
   ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import { avisoFavorito } from "@/lib/avisoFavorito";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import type { Product } from "@/hooks/useProducts";
@@ -162,7 +163,7 @@ export function ProductCard({ product: p }: Props) {
     e.preventDefault();
     e.stopPropagation();
     addItem({ id: p.id, title: p.nombre, price: precioOferta, image: imgSrc ?? "", sku: p.sku ?? undefined });
-    toast.success(`"${p.nombre}" añadido al carrito`);
+    avisoCarrito(`"${p.nombre}" añadido al carrito`);
     volarAlCarrito(mediaRef.current, imgSrc ?? "");
   };
 

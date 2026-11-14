@@ -2,7 +2,7 @@
 // Pieza protagonista del catálogo: ocupa 2x2 en la cuadrícula.
 // Todo lo que muestra sale de datos reales (oferta vigente, stock, fecha de alta).
 import { Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import {
   Check,
   Image as ImageIcon,
@@ -48,7 +48,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
       image: img ?? "",
       sku: p.sku ?? undefined,
     });
-    toast.success(`"${p.nombre}" añadido al carrito`);
+    avisoCarrito(`"${p.nombre}" añadido al carrito`);
   };
 
   return (

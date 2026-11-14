@@ -9,6 +9,7 @@ import { LeadFormDialog } from "./LeadFormDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import {
   ShoppingCart, Heart, ChevronDown, Star,
   Package, Truck, Shield, Wrench,
@@ -96,9 +97,7 @@ export function ProductDetail({ product }: { product: Product }) {
       image: product.images[0]?.url ?? "",
       quantity: 1,
     });
-    toast.success("Agregado al carrito", {
-      description: product.title,
-    });
+    avisoCarrito("Agregado al carrito", product.title);
   };
 
   return (

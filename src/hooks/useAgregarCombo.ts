@@ -2,6 +2,7 @@
 // Lógica compartida para agregar un combo al carrito (tarjeta y banner usan exactamente la misma).
 import { useState } from "react";
 import { toast } from "sonner";
+import { avisoCarrito } from "@/lib/avisoCarrito";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 import { useCartStore } from "@/stores/cartStore";
 import { precioNormalCombo, type Combo } from "@/hooks/useCombos";
@@ -38,7 +39,7 @@ export function useAgregarCombo(combo: Combo) {
       comboLabel: combo.nombre,
     }));
     addItems(nuevos);
-    toast.success(`Combo "${combo.nombre}" agregado al carrito`);
+    avisoCarrito(`Combo "${combo.nombre}" agregado al carrito`);
     setTimeout(() => setAdding(false), 1200);
   }
 
