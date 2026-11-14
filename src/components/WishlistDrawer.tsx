@@ -11,7 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Heart, Trash2, ShoppingBag, Loader2, CheckCircle2 } from "lucide-react";
+import { Heart, Trash2, ShoppingBag, ShoppingCart, Loader2, CheckCircle2 } from "lucide-react";
 import { useWishlist } from "@/context/WishlistContext";
 import { useCartStore } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
@@ -120,8 +120,11 @@ export function WishlistDrawer() {
                     return (
                       <div
                         key={item.id}
-                        className="flex gap-4 p-3 rounded-lg bg-card border border-border/50"
+                        className="p-3 rounded-lg bg-card border border-border/50 space-y-3"
                       >
+                       {/* Fila superior: imagen · datos · eliminar. El botón de carrito va debajo, a todo el ancho,
+                           para que nunca tape el nombre ni el precio. */}
+                       <div className="flex gap-3">
                         {/* Imagen */}
                         <Link
                           to="/product/$handle"
@@ -148,7 +151,7 @@ export function WishlistDrawer() {
                             to="/product/$handle"
                             params={{ handle: item.product_id }}
                             onClick={() => setIsOpen(false)}
-                            className="font-medium truncate text-foreground hover:underline block"
+                            className="font-medium line-clamp-2 break-words text-foreground hover:underline block"
                           >
                             {item.product.nombre}
                           </Link>
@@ -170,23 +173,24 @@ export function WishlistDrawer() {
                           })()}
                         </div>
 
-                        {/* Acciones */}
-                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleRemove(item.product_id, item.product.nombre)}
-                            title="Eliminar de favoritos"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                        {/* Eliminar */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0 -mt-1 -mr-1 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemove(item.product_id, item.product.nombre)}
+                          title="Eliminar de favoritos"
+                          aria-label={`Eliminar ${item.product.nombre} de favoritos`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                       </div>
 
                           {/* Botón carrito: cambia según estado */}
                           <Button
                             size="sm"
                             variant={inCart ? "default" : "outline"}
-                            className={`rounded-full text-xs transition-all ${
+                            className={`w-full h-10 rounded-full text-sm transition-all ${
                               inCart
                                 ? "bg-primary text-primary-foreground"
                                 : ""
@@ -199,17 +203,16 @@ export function WishlistDrawer() {
                               "Agotado"
                             ) : inCart ? (
                               <>
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                <CheckCircle2 className="h-4 w-4 mr-1.5" />
                                 En carrito
                               </>
                             ) : (
                               <>
-                                <ShoppingBag className="h-3 w-3 mr-1" />
+                                <ShoppingCart className="h-4 w-4 mr-1.5" />
                                 Al carrito
                               </>
                             )}
                           </Button>
-                        </div>
                       </div>
                     );
                   })}
