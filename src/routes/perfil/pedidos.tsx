@@ -72,6 +72,7 @@ async function fetchMisPedidos(userId: string) {
       id, order_number, nombre, email, telefono, dni,
       direccion, distrito, ciudad, notas,
       subtotal, envio, total, currency, status, metodo_entrega,
+      metodo_pago, monto_pagado,
       paid_at, estimated_delivery, created_at,
       departamento, provincia, zona_envio, volumen_total_m3,
       envio_estado, envio_final, envio_modo_pago, envio_estimado_min, envio_estimado_max,
@@ -139,11 +140,19 @@ function PedidoCard({ order }: { order: any }) {
   const statusEfectivo = (enAgencia ? "en_agencia" : recojo && order.status === "enviado" ? "listo_despacho" : order.status) as Paso;
   const stepIndex = pasos.indexOf(statusEfectivo);
 
+  // Pago en efectivo (Parte 8.4): mientras haya saldo por cobrar, el comprobante dice qué se pagó y qué falta
+  const montoPagado = Number(order.monto_pagado ?? 0);
+  const saldoPorCobrar = order.metodo_pago === "efectivo" ? Math.max(0, Number(order.total) - montoPagado) : 0;
+  const pagoEfectivo: PagoExitosoDatos["pagoEfectivo"] =
+    saldoPorCobrar <= 0.009 ? undefined : montoPagado > 0 || !recojo ? "adelanto" : "recojo";
+
   // Mismos datos que vio el cliente en la pantalla de "Pago aprobado"
   const datosComprobante: PagoExitosoDatos = {
     purchase:      numeroPedido(order.order_number),
     date:          fmtFechaHora(order.paid_at ?? order.created_at),
-    amount:        Number(order.total).toFixed(2),
+    amount:        (pagoEfectivo === "adelanto" ? montoPagado : Number(order.total)).toFixed(2),
+    pagoEfectivo,
+    totalPedido:   pagoEfectivo === "adelanto" ? Number(order.total) : undefined,
     currency:      order.currency ?? "PEN",
     nombre:        order.nombre,
     email:         order.email,

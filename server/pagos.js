@@ -25,6 +25,32 @@ export class PagoError extends Error {
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
+// ── Método de pago (Parte 8.4) ───────────────────────────────────────────────
+// tarjeta y yape_plin se cobran ONLINE por Niubiz (el total). El efectivo solo existe en dos casos:
+//  · recojo en tienda → no se cobra online; ventas confirma y se cobra al recoger.
+//  · delivery en Lima y Callao (contra entrega) → se cobra ONLINE un adelanto y el resto al entregar.
+// Provincia no admite efectivo (el flete se confirma aparte).
+/** Adelanto del delivery contra entrega: 30 % del total (mínimo, el flete). Un solo lugar para cambiarlo. */
+export const PORCENTAJE_ADELANTO = 0.3;
+export const METODOS_PAGO = ["tarjeta", "yape_plin", "efectivo"];
+/** Máximo de pedidos en efectivo sin confirmar por cliente (evita pedidos de relleno). */
+export const MAX_EFECTIVO_PENDIENTES = 3;
+
+/** → { metodo, modalidad: "online_total" | "efectivo_recojo" | "efectivo_adelanto" } o lanza PagoError. */
+export function modalidadPago({ metodo_pago, metodo_entrega, destino }) {
+  const metodo = metodo_pago ?? "tarjeta"; // compatibilidad: un navegador anterior no manda metodo_pago
+  if (!METODOS_PAGO.includes(metodo)) throw new PagoError("Método de pago no válido.");
+  if (metodo !== "efectivo") return { metodo, modalidad: "online_total" };
+  if ((metodo_entrega ?? "domicilio") === "recojo_tienda") return { metodo, modalidad: "efectivo_recojo" };
+  if (destino === "provincia") throw new PagoError("El pago en efectivo no está disponible para envíos a provincia.");
+  return { metodo, modalidad: "efectivo_adelanto" };
+}
+
+/** Monto que se cobra online en delivery contra entrega: el mayor entre el % y el flete, sin pasar del total. */
+export function calcularAdelanto({ total, envio }) {
+  return Math.min(r2(total), Math.max(r2(total * PORCENTAJE_ADELANTO), r2(envio ?? 0)));
+}
+
 export function precioEnvioLima(distrito) {
   if (!distrito) return null;
   const m = DISTRITOS.find(

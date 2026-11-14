@@ -46,6 +46,11 @@ export interface PagoExitosoDatos {
   items?: PagoExitosoItem[];
   /** Solo en modo comprobante: estado real del pedido (pagado, en_produccion, … entregado). */
   estado?: string;
+  /** Pago en efectivo (Parte 8.4). «recojo»: no se pagó nada online (se paga en tienda). «adelanto»: `amount` es el
+   *  adelanto pagado online y el resto se cobra al entregar. */
+  pagoEfectivo?: "recojo" | "adelanto";
+  /** Total del pedido cuando `amount` es solo una parte (adelanto). */
+  totalPedido?: number;
   /** Pedido a provincia 'enviado' que ya llegó a la agencia. */
   enAgencia?: boolean;
   /** Provincia de destino cuando el envío es a provincias (el flete se confirma por WhatsApp). */
@@ -183,7 +188,10 @@ export function PagoExitoso({
     return { desde: addBusinessDays(hoy, ENTREGA_MIN_DIAS), hasta: addBusinessDays(hoy, ENTREGA_MAX_DIAS) };
   }, []);
 
-  const descuento = Math.max(0, (datos.subtotal ?? 0) + (datos.envio ?? 0) - total);
+  const pagoEf = datos.pagoEfectivo;
+  const totalPedido = datos.totalPedido ?? total;
+  const saldoPedido = Math.max(0, Math.round((totalPedido - total) * 100) / 100);
+  const descuento = Math.max(0, (datos.subtotal ?? 0) + (datos.envio ?? 0) - totalPedido);
 
   const { data: sugeridos } = useQuery({
     queryKey: ["pago-completa-espacio", items.map((i) => i.id).join(",")],
@@ -279,7 +287,10 @@ export function PagoExitoso({
           </div>
 
           <p className="gmp-rise mt-7 text-xs font-semibold uppercase tracking-[0.28em] text-[#f0a020]" style={{ ["--gmp-d" as string]: "0.9s" }}>
-            {esComprobante ? "Comprobante de pago" : "Pago aprobado"}
+            {esComprobante ? "Comprobante de pago"
+              : pagoEf === "recojo" ? "Pedido registrado"
+              : pagoEf === "adelanto" ? "Adelanto recibido"
+              : "Pago aprobado"}
           </p>
           <h1
             id="gmp-titulo"
@@ -289,22 +300,31 @@ export function PagoExitoso({
             style={{ ["--gmp-d" as string]: "1s" }}
           >
             {esComprobante
-              ? "Tu pago fue aprobado"
+              ? (pagoEf === "recojo" ? "Tu pedido está registrado" : "Tu pago fue aprobado")
               : nombre ? `¡Gracias, ${nombre}!` : "¡Gracias por tu compra!"}
           </h1>
           <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
             {esComprobante
               ? "Este es el detalle de tu compra y el avance actual de tu pedido."
+              : pagoEf === "recojo"
+                ? "Registramos tu pedido. Lo confirmamos por WhatsApp o correo y te avisamos cuando esté listo para recoger. Pagas todo en la tienda."
+              : pagoEf === "adelanto"
+                ? "Recibimos tu adelanto. El saldo se paga en efectivo cuando recibas tu pedido."
               : "Recibimos tu pago. Aquí tienes todo lo que sigue, sin sorpresas."}
           </p>
 
           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
-            <p className="text-xs uppercase tracking-[0.22em] text-[#fbf4e8]/60">Total pagado</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-[#fbf4e8]/60">
+              {pagoEf === "recojo" ? "Total a pagar en tienda" : pagoEf === "adelanto" ? "Adelanto pagado" : "Total pagado"}
+            </p>
             <p className="font-display text-5xl font-semibold tabular-nums sm:text-6xl" aria-label={fmtPEN(total)}>
               {fmtPEN(total)}
             </p>
             <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-[#fbf4e8]/70">
-              <CreditCard className="h-3.5 w-3.5" /> Tarjeta · Niubiz · Pago seguro
+              <CreditCard className="h-3.5 w-3.5" />{" "}
+              {pagoEf === "recojo" ? "Efectivo · al recoger en tienda"
+                : pagoEf === "adelanto" ? `Niubiz · saldo ${fmtPEN(saldoPedido)} en efectivo al entregar`
+                : "Tarjeta · Niubiz · Pago seguro"}
             </p>
           </div>
 
@@ -388,10 +408,18 @@ export function PagoExitoso({
                   {descuento > 0.01 && (
                     <div className="flex justify-between text-emerald-700"><dt>Descuento aplicado</dt><dd className="tabular-nums">−{fmtPEN(descuento)}</dd></div>
                   )}
-                  <div className="flex items-baseline justify-between border-t border-dashed border-border pt-3">
-                    <dt className="font-display text-lg font-semibold">Total pagado</dt>
-                    <dd className="font-display text-2xl font-semibold tabular-nums">{fmtPEN(total)}</dd>
-                  </div>
+                  {pagoEf === "adelanto" ? (
+                    <>
+                      <div className="flex justify-between border-t border-dashed border-border pt-3"><dt className="text-muted-foreground">Total del pedido</dt><dd className="tabular-nums">{fmtPEN(totalPedido)}</dd></div>
+                      <div className="flex justify-between"><dt className="font-semibold">Adelanto pagado</dt><dd className="font-semibold tabular-nums">{fmtPEN(total)}</dd></div>
+                      <div className="flex items-baseline justify-between"><dt className="font-display text-lg font-semibold">Saldo en efectivo al entregar</dt><dd className="font-display text-2xl font-semibold tabular-nums">{fmtPEN(saldoPedido)}</dd></div>
+                    </>
+                  ) : (
+                    <div className="flex items-baseline justify-between border-t border-dashed border-border pt-3">
+                      <dt className="font-display text-lg font-semibold">{pagoEf === "recojo" ? "Total a pagar en tienda" : "Total pagado"}</dt>
+                      <dd className="font-display text-2xl font-semibold tabular-nums">{fmtPEN(total)}</dd>
+                    </div>
+                  )}
                 </dl>
 
                 {!recojo && (datos.direccion || datos.distrito) && (

@@ -79,3 +79,8 @@
 - **Pestañas de «Mis órdenes»:** el reparto sale solo de `agruparPorPestana` (`lib/ordenesProduccion.ts`); nunca comparar `prod_status` a mano en la pantalla. Pendientes = `pendiente` + `rechazado_calidad`; En proceso = `en_proceso` + `pausado`; Terminadas = `terminado`. «Urgente» solo para órdenes abiertas. La pestaña inicial se decide una vez y el auto-refresh no la cambia.
 - **Skeleton de «Mis órdenes»:** `MiProduccionSkeleton` copia la estructura de `OrdenCard` colapsada; si cambia la tarjeta, se actualiza el esqueleto. Título y etiquetas reales desde el primer frame; solo lo dinámico va como skeleton.
 - **Scroll entre tienda y administración:** lo maneja `useScrollPorModulo`; solo restaura al volver a la misma ruta del módulo, nunca con atrás/adelante (eso es del router) ni si el usuario ya movió el scroll. Siempre con try/catch sobre `sessionStorage`.
+
+## Reglas de pago (Parte 8.4)
+- **El servidor decide cuánto se cobra online** (`modalidadPago` / `calcularAdelanto`); el navegador solo lo muestra. Si cambias `PORCENTAJE_ADELANTO`, cámbialo en `server/pagos.js` Y en `src/lib/pagoEfectivo.ts` (una prueba lo verifica).
+- **Efectivo solo en recojo en tienda y delivery Lima.** Provincia nunca. El recojo en efectivo NO reserva stock hasta que ventas confirme (`confirmar_pedido_efectivo`); un pedido en efectivo pendiente pasa a «Pagado» solo con `registrar_cobro_pedido`.
+- **Migración antes que servidor:** el servidor escribe `metodo_pago` y `monto_pagado` en cada pedido nuevo.

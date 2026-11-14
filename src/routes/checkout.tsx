@@ -2,8 +2,8 @@
 // G&M Mueblería — Checkout con integración Niubiz (VisanetCheckout popup)
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CheckoutHeader } from "@/components/checkout/CheckoutHeader";
-import { MediosPago, LogoMedio } from "@/components/checkout/MediosPago";
-import { MEDIOS_PAGO, MEDIO_NIUBIZ } from "@/lib/mediosPago";
+import { MetodosPago } from "@/components/checkout/MetodosPago";
+import { efectivoDisponible, modalidadPago, desglosePago, type MetodoPago } from "@/lib/pagoEfectivo";
 import { Footer } from "@/components/Footer";
 import { LoginModal } from "@/components/LoginModal";
 import { Button } from "@/components/ui/button";
@@ -104,7 +104,7 @@ async function fetchNiubizSession(payload: {
   email?: string;
   /** Para que el servidor abra la sesión con el MISMO total que luego autoriza */
   items?: { product_id: string; qty: number; sku?: string | null; title?: string; comboId?: string | null; opciones?: string[] }[];
-  order?: { metodo_entrega: string; modo_entrega: string | null; destino: string; distrito: string };
+  order?: { metodo_entrega: string; modo_entrega: string | null; destino: string; distrito: string; metodo_pago?: string };
   cupon_codigo?: string | null;
   user_id?: string | null;
 }) {
@@ -233,6 +233,8 @@ function CheckoutPage() {
   // UI de direcciones guardadas (Lima): «Cambiar» abre la lista; «Usar otra dirección» muestra los campos a mano.
   const [cambiandoDir, setCambiandoDir] = useState(false);
   const [dirManual, setDirManual] = useState(false);
+  // Método de pago (Parte 8.4): tarjeta, Yape o Plin (Niubiz, total) o efectivo (recojo / contra entrega en Lima)
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>("tarjeta");
   const { volumenTotal, faltaVolumen } = useVolumenCarrito(items);
 
   useEffect(() => {
@@ -292,6 +294,17 @@ function CheckoutPage() {
   const totalFinal       = subtotal + envio - descuentoCupon;
   const distritoSinCobertura = metodoEntrega === "domicilio" && !esProvincia && form.distrito !== "" && envioBase === null;
   const provinciaIncompleta  = esProvincia && (!form.departamento || !form.provincia || !form.distrito.trim());
+
+  // Qué se paga ahora y qué queda en efectivo. Si el efectivo deja de estar disponible (p. ej. cambia a provincia),
+  // se paga con tarjeta. El servidor recalcula y valida todo; esto solo muestra el monto correcto.
+  const destinoPago: "lima" | "provincia" = esProvincia ? "provincia" : "lima";
+  const efectivoOk = efectivoDisponible(metodoEntrega, destinoPago);
+  const metodoPagoReal: MetodoPago = metodoPago === "efectivo" && !efectivoOk ? "tarjeta" : metodoPago;
+  const modalidad = modalidadPago(metodoPagoReal, metodoEntrega, destinoPago);
+  const esEfectivoRecojo = modalidad === "efectivo_recojo";
+  const esAdelanto = modalidad === "efectivo_adelanto";
+  const { ahora: pagoAhora, saldo: pagoSaldo } = desglosePago(modalidad, totalFinal, envio);
+  const previoAdelanto = desglosePago("efectivo_adelanto", totalFinal, envio);
 
   // Un solo distrito para todo el sitio: lo que se elige aquí (select o dirección guardada) lo ven la ficha y las tarjetas
   useEffect(() => {
@@ -451,6 +464,7 @@ useEffect(() => {
         cupon_codigo:     saved.cuponCodigo ?? null,     // ← nuevo: se revalida en el servidor
         modo_entrega:     saved.modoEntrega ?? null,
         metodo_entrega:   saved.metodoEntrega ?? "domicilio",
+        metodo_pago:      saved.metodoPago ?? "tarjeta",   // el servidor valida y recalcula el adelanto
         // Envío nacional: el servidor recalcula zona y estimado (no confía en el navegador)
         destino:          saved.destino ?? "lima",
         departamento:     saved.destino === "provincia" ? (saved.departamento ?? null) : null,
@@ -488,7 +502,7 @@ useEffect(() => {
         sinConfirmar: !rechazo,
         purchase:     purchaseNumber,
         date:         fmtFechaHora(new Date()),
-        amount:       (saved.total ?? totalFinal).toFixed(2),
+        amount:       (saved.montoPagado ?? saved.total ?? totalFinal).toFixed(2),
         nombre:       saved.nombre,
         items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
       });
@@ -509,8 +523,12 @@ useEffect(() => {
     setModalDatos({
       purchase: purchaseNumber,
       date:     fmtFechaHora(new Date()),
-      amount:   (saved.total ?? totalFinal).toFixed(2),
+      amount:   (saved.montoPagado ?? saved.total ?? totalFinal).toFixed(2),
       currency: "PEN",
+      // Efectivo contra entrega: lo pagado ahora es el adelanto; el resto se cobra al entregar
+      ...(saved.metodoPago === "efectivo" && saved.destino !== "provincia"
+        ? { pagoEfectivo: "adelanto" as const, totalPedido: saved.total ?? totalFinal }
+        : {}),
       nombre:        saved.nombre,
       email:         saved.email,
       direccion:     saved.direccion,
@@ -531,7 +549,7 @@ useEffect(() => {
       sinConfirmar: true,
       purchase:     purchaseNumber,
       date:         fmtFechaHora(new Date()),
-      amount:       (saved.total ?? totalFinal).toFixed(2),
+      amount:       (saved.montoPagado ?? saved.total ?? totalFinal).toFixed(2),
       nombre:       saved.nombre,
       items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
     });
@@ -539,6 +557,49 @@ useEffect(() => {
   })
   .finally(() => setConfirmandoPago(false));
 }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Recojo en tienda con efectivo: no hay cobro online. Se registra el pedido (queda «por confirmar»;
+  //    ventas lo confirma y entonces se reserva el stock) y se muestra la pantalla de éxito. ──
+  const registrarPedidoEfectivo = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setLoginOpen(true); return; }
+    const purchaseNumber = generateOrderId();
+    const res = await fetch(`${API}/api/orders/efectivo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({
+        order: {
+          orderNumber: purchaseNumber,
+          nombre: form.nombre, email: form.email, telefono: form.telefono, dni: form.dni, notas: form.notas,
+          cupon_codigo: cuponAplicado?.codigo ?? null,
+          metodo_entrega: "recojo_tienda", destino: "lima",
+        },
+        items: items.map((i) => ({
+          product_id: i.id, sku: i.sku ?? null, title: i.title, qty: i.qty, price: i.price, image: i.image ?? null,
+          comboId: i.comboId ?? null, opciones: i.opciones,
+        })),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.success) throw new Error(data?.error ?? "No pudimos registrar tu pedido. Inténtalo de nuevo.");
+
+    if (data.orderId) markCartRecovered({ session_id: getSessionId(), order_id: data.orderId });
+    clearCart();
+    setModalDatos({
+      purchase: data.orderNumber ?? `GM-${purchaseNumber}`,
+      date:     fmtFechaHora(new Date()),
+      amount:   Number(data.total ?? totalFinal).toFixed(2),   // total del pedido, que se paga en tienda
+      currency: "PEN",
+      nombre:   form.nombre,
+      email:    form.email,
+      metodoEntrega: "recojo_tienda",
+      pagoEfectivo: "recojo",
+      subtotal: subtotal,
+      envio:    0,
+      items: items.map((i) => ({ id: i.id, title: i.title, image: i.image ?? null, qty: i.qty, price: i.price })),
+    });
+    setModalTipo("exitoso");
+  };
 
   // ── Lógica real de pago (Niubiz) — se llama tras validar y, si hace falta, loguearse ──
   const procederAlPago = async () => {
@@ -558,11 +619,13 @@ useEffect(() => {
     });
 
     try {
+      if (esEfectivoRecojo) { await registrarPedidoEfectivo(); return; }
+
       const orderId = generateOrderId();
       orderIdRef.current = orderId;
 
       const niubiz = await fetchNiubizSession({
-        amount:  totalFinal,
+        amount:  pagoAhora,
         orderId,
         email:   form.email,
         items: items.map((i) => ({ product_id: i.id, qty: i.qty, sku: i.sku ?? null, title: i.title, comboId: i.comboId ?? null, opciones: i.opciones })),
@@ -571,6 +634,7 @@ useEffect(() => {
           modo_entrega:   requiereEleccion ? modoEntrega : null,
           destino:        esProvincia ? "provincia" : "lima",
           distrito:       form.distrito,
+          metodo_pago:    metodoPagoReal,
         },
         cupon_codigo: cuponAplicado?.codigo ?? null,
         user_id:      user?.id ?? null,
@@ -588,7 +652,7 @@ useEffect(() => {
         channel:           "web",
         merchantid:        niubiz.merchantId,
         purchasenumber:    orderId,
-        amount:            totalFinal.toFixed(2),
+        amount:            pagoAhora.toFixed(2),
         currency:          niubiz.currency,
         expirationminutes: "5",
         // timeouturl:        `${window.location.origin}/niubiz-return.html`,
@@ -609,6 +673,8 @@ useEffect(() => {
         subtotal,
         envio,
         total: totalFinal,
+        metodoPago: metodoPagoReal,   // el retorno de Niubiz lo manda al servidor
+        montoPagado: pagoAhora,       // lo que se cobra ahora (el total, o solo el adelanto en efectivo contra entrega)
         cuponCodigo: cuponAplicado?.codigo ?? null,   // ← nuevo
         modoEntrega: requiereEleccion ? modoEntrega : null,
         metodoEntrega,
@@ -855,23 +921,15 @@ useEffect(() => {
 
             <section className="bg-card border border-border/50 rounded-xl p-6 space-y-3">
               <h2 className="font-display text-xl font-semibold">Método de pago</h2>
-              <div className="flex items-center gap-3 p-4 rounded-lg border-2 border-primary/30 bg-primary/5">
-                <CreditCard className="h-6 w-6 text-primary flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm">Tarjeta de crédito / débito</p>
-                  <p className="text-xs text-muted-foreground">Pago seguro procesado por Niubiz</p>
-                  <MediosPago grupo="tarjeta" className="mt-2" />
-                </div>
-                <LogoMedio nombre={MEDIO_NIUBIZ.nombre} logo={MEDIO_NIUBIZ.logo} altura="h-8" />
-              </div>
-              {/* Otros medios (Yape, Plin, PagoEfectivo): solo se muestran cuando estén habilitados en src/lib/mediosPago.ts */}
-              {MEDIOS_PAGO.some((m) => m.habilitado && m.grupo !== "tarjeta") && (
-                <div className="rounded-lg border border-border p-4 space-y-2">
-                  <p className="text-sm font-medium">También puedes pagar con</p>
-                  <MediosPago grupo="billetera" />
-                  <MediosPago grupo="efectivo" />
-                </div>
-              )}
+              <MetodosPago
+                valor={metodoPagoReal}
+                onElegir={setMetodoPago}
+                efectivoDisponible={efectivoOk}
+                modalidad={efectivoOk ? modalidadPago("efectivo", metodoEntrega, destinoPago) : "online_total"}
+                adelanto={previoAdelanto.ahora}
+                saldo={previoAdelanto.saldo}
+                fmt={fmt}
+              />
             </section>
 
             <div className="grid sm:grid-cols-3 gap-3 text-sm text-muted-foreground">
@@ -894,7 +952,11 @@ useEffect(() => {
                 type="submit" size="lg" className="w-full rounded-full h-12 text-base"
                 disabled={loading || avisoPendiente || !aceptaTerminos || (metodoEntrega === "domicilio" && (!form.distrito || distritoSinCobertura || provinciaIncompleta))}
               >
-                {loading ? "Conectando con Niubiz..." : `Pagar — ${fmt(totalFinal)}`}
+                {loading
+                  ? (esEfectivoRecojo ? "Registrando tu pedido..." : "Conectando con Niubiz...")
+                  : esEfectivoRecojo ? "Confirmar pedido"
+                  : esAdelanto ? `Pagar adelanto — ${fmt(pagoAhora)}`
+                  : `Pagar — ${fmt(totalFinal)}`}
               </Button>
             </div>
           </form>
@@ -1086,6 +1148,15 @@ useEffect(() => {
                   <span>Total</span>
                   <span className="font-display text-lg">{fmt(totalFinal)}</span>
                 </div>
+                {(esAdelanto || esEfectivoRecojo) && (
+                  <div className="space-y-1 rounded-lg bg-muted/40 p-3 text-sm">
+                    <div className="flex justify-between"><span>Pagas ahora</span><b className="tabular-nums">{fmt(pagoAhora)}</b></div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>{esEfectivoRecojo ? "Pagas en tienda al recoger" : "Saldo en efectivo al recibir"}</span>
+                      <b className="tabular-nums text-foreground">{fmt(pagoSaldo)}</b>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </aside>
@@ -1104,6 +1175,9 @@ useEffect(() => {
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground leading-tight">Total (IGV incluido)</p>
               <p className="font-display text-xl font-semibold leading-tight">{fmt(totalFinal)}</p>
+              {(esAdelanto || esEfectivoRecojo) && (
+                <p className="text-xs font-medium leading-tight">Pagas ahora {fmt(pagoAhora)}</p>
+              )}
               <button
                 type="button"
                 className="-ml-1 inline-flex min-h-[44px] items-center px-1 text-xs font-medium text-primary underline underline-offset-2"
@@ -1119,7 +1193,7 @@ useEffect(() => {
               className="h-12 min-w-[140px] rounded-full px-6 text-base"
               disabled={loading}
             >
-              {loading ? "Conectando…" : "Pagar"}
+              {loading ? "Conectando…" : esEfectivoRecojo ? "Confirmar" : esAdelanto ? "Pagar adelanto" : "Pagar"}
             </Button>
           </div>
         </div>

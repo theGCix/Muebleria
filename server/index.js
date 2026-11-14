@@ -14,7 +14,7 @@ import { registerChat } from "./chat.js";
 import { notificarPedidoPagado } from "./notificaciones.js";
 import { calcularEnvioNacional } from "./envioNacional.js";
 import { registrarPagoHuerfano } from "./pagosHuerfanos.js";
-import { calcularPedido, validarCarrito, autorizarNiubiz, PagoError } from "./pagos.js";
+import { calcularPedido, validarCarrito, autorizarNiubiz, PagoError, modalidadPago, calcularAdelanto, MAX_EFECTIVO_PENDIENTES } from "./pagos.js";
 
 // ── Cargar .env desde la raíz del proyecto ────────────────────
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -167,17 +167,24 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
         items: itemsCalculo,
         descuento,
       });
-      if (Math.abs(calculo.total - monto) > 0.01) {
-        console.warn(`⚠️ Total del navegador (${monto}) ≠ total del servidor (${calculo.total}) al abrir la sesión ${orderId}`);
+      // Parte 8.4: con efectivo contra entrega (Lima) solo se cobra el adelanto; el recojo en efectivo no se paga online.
+      const mod = modalidadPago({ metodo_pago: order.metodo_pago, metodo_entrega: order.metodo_entrega, destino: order.destino });
+      if (mod.modalidad === "efectivo_recojo") {
+        return res.status(400).json({ error: "Este pedido se paga en tienda: no necesita pasarela de pago." });
+      }
+      const aCobrar = mod.modalidad === "efectivo_adelanto" ? calcularAdelanto(calculo) : calculo.total;
+      if (Math.abs(aCobrar - monto) > 0.01) {
+        console.warn(`⚠️ Monto del navegador (${monto}) ≠ monto del servidor (${aCobrar}) al abrir la sesión ${orderId}`);
         return res.status(409).json({
           code: "PRECIO_CAMBIO",
           error: "Los precios de tu pedido cambiaron. Actualizamos tu carrito con el total correcto.",
           total: calculo.total,
+          aCobrar,
           descuento,
           lineas: calculo.lineas.map((l) => ({ product_id: l.product_id, opciones: l.opciones ?? null, unit_price: l.unit_price })),
         });
       }
-      monto = calculo.total;
+      monto = aCobrar;
     }
     const merchantId = process.env.NIUBIZ_MERCHANT_ID;
     const token      = await getSecurityToken();
@@ -483,6 +490,19 @@ app.post("/api/orders", async (req, res) => {
     const subtotalReal      = calculo.subtotal;
     const envioReal         = calculo.envio;
     const totalConDescuento = calculo.total;
+
+    // ── Parte 8.4: qué se cobra ONLINE ──
+    // tarjeta / Yape o Plin → el total. Efectivo contra entrega (Lima) → solo el adelanto; el saldo se cobra al entregar.
+    // El recojo en efectivo no pasa por aquí (usa /api/orders/efectivo).
+    const mod = modalidadPago({ metodo_pago: order.metodo_pago, metodo_entrega: order.metodo_entrega, destino: order.destino });
+    if (mod.modalidad === "efectivo_recojo") {
+      return res.status(400).json({ error: "Este pedido se paga en tienda: no necesita pasarela de pago." });
+    }
+    const aCobrar = mod.modalidad === "efectivo_adelanto" ? calcularAdelanto(calculo) : totalConDescuento;
+    const saldoContraEntrega = Math.round((totalConDescuento - aCobrar) * 100) / 100;
+    const notaPago = mod.modalidad === "efectivo_adelanto"
+      ? `[CONTRA ENTREGA] Adelanto S/ ${aCobrar.toFixed(2)} pagado online · saldo S/ ${saldoContraEntrega.toFixed(2)} en efectivo al entregar`
+      : null;
     if (Math.abs((order.total ?? 0) - totalConDescuento) > 0.01) {
       console.warn(`⚠️ Total del navegador (${order.total}) ≠ total del servidor (${totalConDescuento}) en ${orderNumber}`);
     }
@@ -495,10 +515,10 @@ app.post("/api/orders", async (req, res) => {
       merchantId:       process.env.NIUBIZ_MERCHANT_ID,
       transactionToken: order.transactionToken,
       purchaseNumber,
-      amount:           totalConDescuento,
+      amount:           aCobrar,
     });
     if (!autorizacion.aprobado) {
-      console.warn(`⚠️ Pago no aprobado (${orderNumber}, S/ ${totalConDescuento}, HTTP ${autorizacion.httpStatus}): ${autorizacion.actionCode} ${autorizacion.actionDesc} | ${autorizacion.detalle}`);
+      console.warn(`⚠️ Pago no aprobado (${orderNumber}, S/ ${aCobrar}, HTTP ${autorizacion.httpStatus}): ${autorizacion.actionCode} ${autorizacion.actionDesc} | ${autorizacion.detalle}`);
       return res.status(402).json({
         error:      autorizacion.actionDesc || "El pago no fue aprobado",
         actionCode: autorizacion.actionCode,
@@ -518,7 +538,7 @@ app.post("/api/orders", async (req, res) => {
         direccion:          order.direccion ?? null,
         distrito:           order.distrito  ?? null,
         ciudad:             order.ciudad    ?? null,
-        notas:              [order.notas, notaEnvio].filter(Boolean).join(" | ") || null,
+        notas:              [order.notas, notaEnvio, notaPago].filter(Boolean).join(" | ") || null,
         subtotal:           subtotalReal,
         envio:              envioReal,
         total:              totalConDescuento,
@@ -533,6 +553,9 @@ app.post("/api/orders", async (req, res) => {
         niubiz_auth_code:   autorizacion.authCode ?? null,
         status:             "pagado",
         paid_at:            new Date().toISOString(),
+        metodo_pago:        mod.metodo,
+        monto_pagado:       aCobrar,
+        saldo_cobrado_at:   saldoContraEntrega > 0 ? null : new Date().toISOString(),
         // Solo en pedidos a provincia: así los pedidos de Lima no dependen de la migración nueva
         ...(envioNac ? {
           departamento:       order.departamento ?? null,
@@ -559,7 +582,7 @@ app.post("/api/orders", async (req, res) => {
       // cliente ve "no pudimos confirmar" (sinConfirmar), no un error de pago.
       await registrarPagoHuerfano({
         supabase: supabaseAdmin, motivo: "pedido_no_guardado", order, items,
-        orderNumber, purchaseNumber, monto: totalConDescuento,
+        orderNumber, purchaseNumber, monto: aCobrar,
         authCode: autorizacion.authCode, error: orderError.message,
       });
       return res.status(500).json({ success: false, sinConfirmar: true });
@@ -602,7 +625,7 @@ app.post("/api/orders", async (req, res) => {
         // Queda marcado para completar los ítems a mano.
         await registrarPagoHuerfano({
           supabase: supabaseAdmin, motivo: "items_no_guardados", order, items,
-          orderNumber, purchaseNumber, monto: totalConDescuento,
+          orderNumber, purchaseNumber, monto: aCobrar,
           authCode: autorizacion.authCode, orderId: newOrder.id, error: itemsError.message,
         });
         res.json({ success: true, orderId: newOrder.id, descuentoAplicado: descuento });
@@ -625,6 +648,120 @@ app.post("/api/orders", async (req, res) => {
     void notificarPedidoPagado({ supabaseAdmin, orderId: newOrder.id });
   } catch (err) {
     console.error("Error guardando orden:", err.message);
+    res.status(err instanceof PagoError ? err.status : 500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/orders/efectivo ─────────────────────────────────────
+// Recojo en tienda con pago en efectivo (Parte 8.4). No hay cobro online: el pedido nace «pendiente»,
+// SIN reservar stock (no se llama a procesar_pago_pedido). Ventas lo confirma desde el panel
+// (confirmar_pedido_efectivo → reserva) y registra el cobro al recoger (registrar_cobro_pedido).
+// Requiere sesión (el usuario sale del token, no del cuerpo) y limita los pedidos sin confirmar por cliente.
+app.post("/api/orders/efectivo", niubizLimiter, requireAuth, async (req, res) => {
+  try {
+    const { order = {}, items } = req.body ?? {};
+    const mod = modalidadPago({ metodo_pago: "efectivo", metodo_entrega: order.metodo_entrega, destino: order.destino });
+    if (mod.modalidad !== "efectivo_recojo") {
+      return res.status(400).json({ error: "El efectivo sin adelanto solo aplica al recojo en tienda." });
+    }
+
+    const purchaseNumber = /^\d{1,12}$/.test(String(order.orderNumber ?? "").trim())
+      ? String(order.orderNumber).trim()
+      : String(Date.now()).slice(-12);
+    const orderNumber = `GM-${purchaseNumber}`;
+
+    // Doble clic / reintento: el mismo número devuelve el mismo pedido
+    const { data: existing } = await supabaseAdmin
+      .from("orders").select("id").eq("order_number", orderNumber).eq("user_id", req.user.id).maybeSingle();
+    if (existing) return res.json({ success: true, orderId: existing.id, orderNumber, alreadyExists: true });
+
+    const { count: pendientes } = await supabaseAdmin
+      .from("orders").select("id", { count: "exact", head: true })
+      .eq("user_id", req.user.id).eq("metodo_pago", "efectivo").eq("status", "pendiente");
+    if ((pendientes ?? 0) >= MAX_EFECTIVO_PENDIENTES) {
+      return res.status(429).json({ error: "Ya tienes pedidos en efectivo esperando confirmación. Escríbenos por WhatsApp para confirmarlos." });
+    }
+
+    const itemsCalculo = (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones, sku: i.sku, title: i.title, image: i.image }));
+
+    let cuponAplicado = null;
+    let descuento = 0;
+    if (order.cupon_codigo) {
+      const resultado = await validarCupon({
+        codigo: order.cupon_codigo,
+        items: itemsCalculo.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+        customer_id: null,
+        user_id: req.user.id,
+      });
+      if (resultado.valid) { cuponAplicado = resultado; descuento = resultado.descuento; }
+    }
+
+    const calculo = await calcularPedido({
+      supabase: supabaseAdmin,
+      order: { metodo_entrega: "recojo_tienda", modo_entrega: null, destino: "lima", distrito: null },
+      items: itemsCalculo,
+      descuento,
+    });
+
+    const { data: newOrder, error: orderError } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        order_number:     orderNumber,
+        user_id:          req.user.id,
+        nombre:           order.nombre || "—",
+        email:            order.email  || req.user.email || "—",
+        telefono:         order.telefono ?? null,
+        dni:              order.dni      ?? null,
+        notas:            [order.notas, "[RECOJO EN TIENDA · EFECTIVO] Por confirmar: cobrar al recoger"].filter(Boolean).join(" | "),
+        subtotal:         calculo.subtotal,
+        envio:            0,
+        total:            calculo.total,
+        cupon_id:         cuponAplicado?.cupon_id ?? null,
+        cupon_codigo:     cuponAplicado?.codigo ?? null,
+        descuento_cupon:  descuento,
+        modo_entrega:     null,
+        metodo_entrega:   "recojo_tienda",
+        currency:         "PEN",
+        status:           "pendiente",
+        metodo_pago:      "efectivo",
+        monto_pagado:     0,
+      })
+      .select("id")
+      .single();
+    if (orderError) {
+      console.error("Error guardando pedido en efectivo:", orderError.message);
+      return res.status(500).json({ error: "No pudimos registrar tu pedido. Inténtalo de nuevo." });
+    }
+
+    const orderItems = calculo.lineas.map((l) => ({
+      order_id:   newOrder.id,
+      product_id: l.product_id,
+      sku:        l.sku ?? null,
+      title:      l.title,
+      qty:        l.qty,
+      unit_price: l.unit_price,
+      total:      l.line_total,
+      image_url:  l.image ?? null,
+      ...(l.opciones_snapshot ? { opciones: l.opciones_snapshot, precio_opciones: l.precio_opciones } : {}),
+    }));
+    const { error: itemsError } = await supabaseAdmin.from("order_items").insert(orderItems);
+    if (itemsError) {
+      // Sin ítems el pedido no sirve: se borra para no dejar un pendiente vacío.
+      await supabaseAdmin.from("orders").delete().eq("id", newOrder.id);
+      console.error("Error guardando ítems del pedido en efectivo:", itemsError.message);
+      return res.status(500).json({ error: "No pudimos registrar tu pedido. Inténtalo de nuevo." });
+    }
+
+    if (cuponAplicado) {
+      const { error: usoError } = await supabaseAdmin.from("cupon_usos").insert({
+        cupon_id: cuponAplicado.cupon_id, order_id: newOrder.id, customer_id: null, descuento_aplicado: descuento,
+      });
+      if (usoError) console.error(`🚨 No se pudo registrar el uso del cupón en el pedido ${newOrder.id}:`, usoError.message);
+    }
+
+    res.json({ success: true, orderId: newOrder.id, orderNumber, total: calculo.total, descuentoAplicado: descuento });
+  } catch (err) {
+    console.error("Error en pedido en efectivo:", err.message);
     res.status(err instanceof PagoError ? err.status : 500).json({ error: err.message });
   }
 });

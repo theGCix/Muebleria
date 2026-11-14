@@ -31,6 +31,7 @@ import { EmptyState, TableSkeleton } from "@/components/states";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import { PeriodFilter, usePeriodo } from "@/components/admin/PeriodFilter";
 import { EvidenciasPedido } from "@/components/admin/EvidenciasPedido";
+import { PagoEfectivoAdmin, saldoPorCobrar } from "@/components/admin/PagoEfectivoAdmin";
 
 
 export const Route = createFileRoute("/_authenticated/pedidos")({
@@ -83,6 +84,13 @@ const PIPELINE_ORDER: OrderStatus[] = [
 
 const STATUSES = Object.entries(STATUS_CONFIG) as [OrderStatus, StatusConfig][];
 
+/** Estados a los que se puede pasar. Un pedido en efectivo sin cobrar pasa a «Pagado» solo registrando el cobro
+ *  (así queda el monto y se reserva el stock), no con este botón. */
+function siguientesEstados(o: { status: string; metodo_pago?: string | null }): OrderStatus[] {
+  const base = STATUS_CONFIG[o.status as OrderStatus]?.next ?? [];
+  return o.metodo_pago === "efectivo" && o.status === "pendiente" ? base.filter((e) => e !== "pagado") : base;
+}
+
 // ── Queries ──────────────────────────────────────────────────
 async function fetchOrders() {
   const { data, error } = await supabase
@@ -93,6 +101,7 @@ async function fetchOrders() {
       subtotal, envio, total, currency, status,
       niubiz_token, niubiz_auth_code, niubiz_ref_code,
       paid_at, created_at,
+      metodo_pago, monto_pagado, confirmado_at, saldo_cobrado_at,
       metodo_entrega, departamento, provincia, zona_envio, volumen_total_m3,
       envio_estado, envio_final, envio_modo_pago, envio_estimado_min, envio_estimado_max,
       agencia_preferida, agencia_nombre, agencia_direccion, agencia_guia, agencia_clave, agencia_llegada_at,
@@ -390,6 +399,11 @@ function PedidosPage() {
                           <Icon className="h-3 w-3" />
                           {cfg.label}
                         </span>
+                        {order.metodo_pago === "efectivo" && saldoPorCobrar(order) > 0 && (
+                          <span className="ml-1.5 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                            Por cobrar {fmt(saldoPorCobrar(order))}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                         {order.paid_at ? fmtDate(order.paid_at) : fmtDate(order.created_at)}
@@ -433,6 +447,9 @@ function PedidosPage() {
                       { etiqueta: "Fecha", valor: order.paid_at ? fmtDate(order.paid_at) : fmtDate(order.created_at) },
                       { etiqueta: "Pedido", valor: <span className="font-mono text-xs">{order.order_number}</span> },
                       ...(order.dni ? [{ etiqueta: "DNI", valor: order.dni }] : []),
+                      ...(order.metodo_pago === "efectivo" && saldoPorCobrar(order) > 0
+                        ? [{ etiqueta: "Por cobrar", valor: fmt(saldoPorCobrar(order)) }]
+                        : []),
                     ]}
                     acciones={
                       <Button variant="outline" className={`${BTN_TACTIL} flex-1`} onClick={() => setSelectedId(order.id)}>
@@ -504,11 +521,11 @@ function PedidosPage() {
               {/* EE - 09062026 09:31*/}
 
               {/* Cambio de estado */}
-              {STATUS_CONFIG[selected.status as OrderStatus]?.next.length > 0 && (
+              {siguientesEstados(selected).length > 0 && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                   <span className="text-sm text-muted-foreground">Cambiar a:</span>
                   <div className="flex gap-2 flex-wrap">
-                    {STATUS_CONFIG[selected.status as OrderStatus].next.map((nextStatus) => {
+                    {siguientesEstados(selected).map((nextStatus) => {
                       const cfg = STATUS_CONFIG[nextStatus];
                       const Icon = cfg.icon;
                       return (
@@ -743,6 +760,11 @@ function PedidosPage() {
                     })}
                   </div>
                 </section>
+              )}
+
+              {/* Pago en efectivo (recojo / contra entrega): confirmar y registrar cobros */}
+              {selected.metodo_pago === "efectivo" && (
+                <PagoEfectivoAdmin key={`${selected.id}-${selected.monto_pagado}-${selected.status}`} order={selected} />
               )}
 
               {/* Datos Niubiz */}

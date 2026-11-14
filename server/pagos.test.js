@@ -236,3 +236,36 @@ test("opciones: la oferta vigente también descuenta el ajuste de la opción", a
   const v = await validarCarrito({ supabase: fakeSupabase({ products: [V({ ...P2, nombre: "Sillón Y" })], grupos: g }), items: [{ product_id: "p2", qty: 1, price: 540, opciones: ["v-p"] }] });
   assert.equal(v.lineas[0].estado, "ok");
 });
+// ── Parte 8.4: efectivo ──────────────────────────────────────────────────────
+import { modalidadPago, calcularAdelanto, PORCENTAJE_ADELANTO } from "./pagos.js";
+
+test("modalidadPago: tarjeta y Yape/Plin se cobran completos online; sin método = tarjeta", () => {
+  for (const m of ["tarjeta", "yape_plin", undefined]) {
+    assert.equal(modalidadPago({ metodo_pago: m, metodo_entrega: "domicilio", destino: "lima" }).modalidad, "online_total");
+    assert.equal(modalidadPago({ metodo_pago: m, metodo_entrega: "domicilio", destino: "provincia" }).modalidad, "online_total");
+    assert.equal(modalidadPago({ metodo_pago: m, metodo_entrega: "recojo_tienda" }).modalidad, "online_total");
+  }
+});
+
+test("modalidadPago: efectivo solo en recojo (sin cobro online) o delivery Lima (adelanto); provincia se rechaza", () => {
+  assert.equal(modalidadPago({ metodo_pago: "efectivo", metodo_entrega: "recojo_tienda" }).modalidad, "efectivo_recojo");
+  assert.equal(modalidadPago({ metodo_pago: "efectivo", metodo_entrega: "domicilio", destino: "lima" }).modalidad, "efectivo_adelanto");
+  assert.throws(() => modalidadPago({ metodo_pago: "efectivo", metodo_entrega: "domicilio", destino: "provincia" }), PagoError);
+  assert.throws(() => modalidadPago({ metodo_pago: "bitcoin", metodo_entrega: "recojo_tienda" }), PagoError);
+});
+
+test("calcularAdelanto: 30 % del total, nunca menos que el flete ni más que el total", () => {
+  assert.equal(PORCENTAJE_ADELANTO, 0.3);
+  assert.equal(calcularAdelanto({ total: 2310, envio: 60 }), 693);   // 30 % de 2310
+  assert.equal(calcularAdelanto({ total: 100, envio: 60 }), 60);     // el flete pesa más que el 30 %
+  assert.equal(calcularAdelanto({ total: 50, envio: 60 }), 50);      // tope: el total
+  assert.equal(calcularAdelanto({ total: 333.33, envio: 25 }), 100); // redondeo a céntimos
+});
+
+import { readFileSync } from "node:fs";
+test("el % de adelanto que muestra el navegador (src/lib/pagoEfectivo.ts) es el mismo que cobra el servidor", () => {
+  const ts = readFileSync(new URL("../src/lib/pagoEfectivo.ts", import.meta.url), "utf-8");
+  const m = ts.match(/PORCENTAJE_ADELANTO\s*=\s*([\d.]+)/);
+  assert.ok(m, "no se encontró PORCENTAJE_ADELANTO en src/lib/pagoEfectivo.ts");
+  assert.equal(Number(m[1]), PORCENTAJE_ADELANTO);
+});
