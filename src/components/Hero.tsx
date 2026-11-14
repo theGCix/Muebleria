@@ -14,12 +14,6 @@ import { cloudinaryUrl } from "@/lib/cloudinary";
 import { fmtPEN, ofertaInfo } from "@/lib/pricing";
 import type { Product } from "@/hooks/useProducts";
 
-/** Solo la campaña (nombre, reloj y etiquetas); sin ofertas vigentes no muestra nada. */
-export function HeroCampanaHome() {
-  const { campana } = useCampana();
-  return campana ? <HeroCampana c={campana} /> : null;
-}
-
 export function Hero() {
   const { campana, isLoading } = useCampana();
   if (isLoading) return <div aria-hidden className="min-h-[520px]" />;
@@ -67,18 +61,18 @@ function Reloj({ venceMs, unificada }: { venceMs: number; unificada: boolean }) 
 
   return (
     <div role="timer" aria-label={`Tiempo restante: ${resumen}`}>
-      <p className="text-sm text-secondary/80 mb-2">
+      <p className="text-sm text-[var(--color-gold-light)]/80 mb-2">
         {unificada ? "La oferta termina en" : "La próxima oferta termina en"}
       </p>
       <div className="flex items-end gap-4 sm:gap-6">
         {unidades.map((u, i) => (
           <div key={u.l} className="flex items-end gap-4 sm:gap-6">
-            {i > 0 && <span aria-hidden className="mb-6 h-10 w-px bg-secondary/30" />}
+            {i > 0 && <span aria-hidden className="mb-6 h-10 w-px bg-[var(--color-gold)]/30" />}
             <div>
               <div className="hero-display text-5xl sm:text-7xl leading-none">
                 <Digitos valor={u.v} />
               </div>
-              <div className="mt-1.5 text-xs text-secondary/70">{u.l}</div>
+              <div className="mt-1.5 text-xs text-[var(--color-gold-light)]/70">{u.l}</div>
             </div>
           </div>
         ))}
@@ -104,14 +98,14 @@ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
       className="etiqueta group block w-[200px] shrink-0 snap-center lg:w-auto"
       style={{ ["--i" as string]: i, ["--cuerda" as string]: `${CUERDAS[i % CUERDAS.length]}px` }}
     >
-      <div className="relative overflow-hidden rounded-lg bg-card text-foreground shadow-[0_18px_40px_-18px_rgba(0,0,0,0.7)]">
+      <div className="relative overflow-hidden rounded-lg bg-[var(--color-gold-light)] text-[var(--color-walnut)] shadow-[0_18px_40px_-18px_rgba(0,0,0,0.7)]">
         {/* ojal por donde pasa la cuerda */}
         <span
           aria-hidden
-          className="absolute left-1/2 top-2 z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-primary ring-2 ring-secondary/60"
+          className="absolute left-1/2 top-2 z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-[var(--color-walnut)] ring-2 ring-[var(--color-gold)]/60"
         />
 
-        <div className="relative aspect-square bg-muted">
+        <div className="relative aspect-square bg-[var(--color-cream)]">
           {img && (
             <img
               src={img}
@@ -121,7 +115,7 @@ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           )}
-          <span className="absolute bottom-2 right-2 rounded-md bg-accent-strong px-2 py-1 text-sm font-bold text-accent-foreground shadow-sm">
+          <span className="absolute bottom-2 right-2 rounded-md bg-destructive px-2 py-1 text-sm font-bold text-destructive-foreground shadow-sm">
             -{p.descuento_porcentaje}%
           </span>
         </div>
@@ -134,10 +128,10 @@ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
             <span className="text-xl font-bold">{fmtPEN(precioFinal)}</span>
             <span className="text-xs line-through opacity-60">{fmtPEN(p.precio)}</span>
           </div>
-          <p className="text-xs font-medium text-accent-strong">Ahorras {fmtPEN(ahorro)}</p>
+          <p className="text-xs font-medium text-destructive">Ahorras {fmtPEN(ahorro)}</p>
           {pocas && (
             <div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-primary/15">
+              <div className="h-1.5 overflow-hidden rounded-full bg-[var(--color-walnut)]/15">
                 <div
                   className="h-full rounded-full bg-destructive"
                   style={{ width: `${Math.max(8, (stock! / 10) * 100)}%` }}
@@ -167,17 +161,17 @@ function HeroCampana({ c }: { c: Campana }) {
   return (
     <section
       data-hero
-      className="hero-taller relative overflow-hidden bg-primary text-primary-foreground"
+      className="hero-taller relative overflow-hidden bg-[var(--color-walnut)] text-[var(--color-warm-white)]"
     >
       <div className="container mx-auto grid grid-cols-1 items-center gap-12 px-4 py-14 md:px-6 md:py-20 lg:grid-cols-[1.05fr_1fr]">
         <div data-hero-text className="min-w-0 space-y-8">
           <div className="space-y-4">
-            <h2 data-hero-title className="hero-display text-4xl font-normal leading-[1.05] sm:text-5xl lg:text-6xl">
+            <h1 data-hero-title className="hero-display text-5xl font-semibold leading-[1.02] sm:text-6xl lg:text-7xl">
               {titulo}
-            </h2>
+            </h1>
             <p
               data-hero-item
-              className="max-w-lg text-lg leading-relaxed text-secondary/85"
+              className="max-w-lg text-lg leading-relaxed text-[var(--color-gold-light)]/85"
             >
               {bajada}
             </p>
@@ -193,7 +187,7 @@ function HeroCampana({ c }: { c: Campana }) {
             <Button
               asChild
               size="lg"
-              className="h-12 rounded-full bg-secondary px-7 text-primary hover:bg-card"
+              className="h-12 rounded-full bg-[var(--color-gold)] px-7 text-[var(--color-walnut)] hover:bg-[var(--color-gold-light)]"
             >
               <a href="#ofertas">
                 Ver las {c.ofertas.length} {c.ofertas.length === 1 ? "oferta" : "ofertas"}
@@ -204,7 +198,7 @@ function HeroCampana({ c }: { c: Campana }) {
               asChild
               variant="outline"
               size="lg"
-              className="h-12 rounded-full border-secondary/50 bg-transparent px-7 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              className="h-12 rounded-full border-[var(--color-gold)]/50 bg-transparent px-7 text-[var(--color-warm-white)] hover:bg-[var(--color-warm-white)]/10 hover:text-[var(--color-warm-white)]"
             >
               <a href="#catalogo">Explorar el catálogo</a>
             </Button>
@@ -212,7 +206,7 @@ function HeroCampana({ c }: { c: Campana }) {
 
           <ul
             data-hero-item
-            className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-secondary/80"
+            className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--color-gold-light)]/80"
           >
             <li className="flex items-center gap-2">
               <Truck className="h-4 w-4" /> Delivery a todo Lima
@@ -227,10 +221,10 @@ function HeroCampana({ c }: { c: Campana }) {
         <div data-hero-rail ref={railRef} className="relative min-w-0">
           <div
             aria-hidden
-            className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-secondary/70"
+            className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-[var(--color-gold)]/70"
           >
-            <span className="absolute -left-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-secondary" />
-            <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-secondary" />
+            <span className="absolute -left-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-[var(--color-gold)]" />
+            <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-[var(--color-gold)]" />
           </div>
           <div
             className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden px-4 pb-8 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
@@ -250,7 +244,7 @@ function HeroCampana({ c }: { c: Campana }) {
             <button
               type="button"
               onClick={movimiento.activar}
-              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-secondary/50 px-3.5 py-1.5 text-xs text-secondary transition-colors hover:bg-primary-foreground/10"
+              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-[var(--color-gold)]/50 px-3.5 py-1.5 text-xs text-[var(--color-gold-light)] transition-colors hover:bg-[var(--color-warm-white)]/10"
             >
               <Smartphone className="h-3.5 w-3.5" /> Activar movimiento
             </button>

@@ -95,19 +95,11 @@
 - **Mayúsculas con espaciado:** solo una etiqueta superior por página (`.gmx-eyebrow`); el resto en minúscula normal.
 - **Botón de WhatsApp:** neutro (`.gmx-wa`, fondo `--card`, borde `--border`) con el ícono en `--whatsapp`; nunca un bloque verde sólido.
 - **Footer:** verde bosque con texto `text-primary-foreground` (opacidad ≥ 75 %).
-<<<<<<< ours
-- **Entrega 2 (portada, home, catálogo, carrito, checkout):** hecha. `Hero.tsx`, `HeroSlider.tsx` y `ProductDetail.tsx` quedan como código heredado sin montar (siguen con `--color-walnut/gold`); no volver a montarlos sin migrarlos a tokens.
-
-## Reglas de presupuesto y portada (Japandi, entrega 2)
-- **Tramos de presupuesto:** una sola fuente, `TRAMOS` en `src/lib/presupuesto.ts` (fijos en código, calculados el 2026-11-14 con los precios finales de los 17 productos activos: hasta S/ 1,500 → 4 piezas · S/ 1,500–2,000 → 5 · más de S/ 2,000 → 8). Se editan solo esos números; los atajos del slider del home (`ATAJOS_HASTA`) salen de ahí. `min` exclusivo, `max` inclusivo, siempre sobre `ofertaInfo(p).precioFinal`.
-- **Portada** (`PortadaPresupuesto.tsx`): título, línea de apoyo, selector y «Ver todo el catálogo»; nada más. Cada tramo es un enlace a `/catalogo?min=&max=`. Conserva `data-hero`, `data-hero-title` y `data-hero-item` (animaciones de `useHomeCinema`).
-=======
 - **Entrega 2 (portada, home, catálogo, carrito, checkout):** hecha. `HeroSlider.tsx` y `ProductDetail.tsx` quedan como código heredado sin montar (siguen con `--color-walnut/gold`); no volver a montarlos sin migrarlos a tokens. La **campaña** (nombre de `config_general.campana_nombre`, p. ej. «Días de locura», reloj y etiquetas) sigue en el home: `HeroCampanaHome` (de `Hero.tsx`, ya en tokens) va justo debajo de la portada y no muestra nada si no hay ofertas vigentes.
 
 ## Reglas de presupuesto y portada (Japandi, entrega 2)
 - **Tramos de presupuesto:** una sola fuente, `TRAMOS` en `src/lib/presupuesto.ts` (fijos en código, calculados el 2026-11-14 con los precios finales de los 17 productos activos: hasta S/ 1,500 → 4 piezas · S/ 1,500–2,000 → 5 · más de S/ 2,000 → 8). Se editan solo esos números; los atajos del slider del home (`ATAJOS_HASTA`) salen de ahí. `min` exclusivo, `max` inclusivo, siempre sobre `ofertaInfo(p).precioFinal`.
 - **Portada** (`PortadaPresupuesto.tsx`): título, línea de apoyo, selector y «Ver todo el catálogo»; nada más. La campaña activa no se quita: va debajo como `HeroCampanaHome`. Cada tramo es un enlace a `/catalogo?min=&max=`. Conserva `data-hero`, `data-hero-title` y `data-hero-item` (animaciones de `useHomeCinema`).
->>>>>>> theirs
 - **`/catalogo` con `min`/`max`:** filtra en el cliente por precio final con `useCatalogoHome` (el servidor solo ordena por precio de lista). Si el catálogo supera 60 piezas, subir el límite de esa consulta.
 - **Terracota = solo descuentos y ofertas** (etiquetas `-X%`, filtro «Solo piezas en oferta», precio con oferta, cupón aplicado). Rojo `destructive` solo para errores, acciones destructivas y escasez (poco stock / agotado).
 - **Verde `primary`** para «Sin costo» y confirmaciones; nunca `green-600` / `emerald` / `amber` sueltos (no llegan a 4.5:1).
