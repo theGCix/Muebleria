@@ -1,0 +1,458 @@
+diff --git a/src/components/checkout/DireccionesGuardadas.tsx b/src/components/checkout/DireccionesGuardadas.tsx
+index 82024c9..2e2b9b3 100644
+--- a/src/components/checkout/DireccionesGuardadas.tsx
++++ b/src/components/checkout/DireccionesGuardadas.tsx
+@@ -1,25 +1,67 @@
+ // src/components/checkout/DireccionesGuardadas.tsx
+-// Selector rápido de las direcciones guardadas en "Mis direcciones" (solo envío a Lima y Callao).
++// Parte del checkout para envío a Lima y Callao con direcciones de "Mis direcciones":
++//  · <DireccionSeleccionada>: tarjeta resumen «Entregar en» con botón «Cambiar» (estado normal).
++//  · <DireccionesGuardadas>: lista para elegir otra, con «Usar otra dirección» y «Administrar».
+ import { Link } from "@tanstack/react-router";
+ import { Check, MapPin } from "lucide-react";
+ import type { Address } from "@/lib/perfil.functions";
+-import { direccionUsable, distritoDeTarifa } from "@/hooks/useCheckoutPrefill";
++import { distritoDeTarifa } from "@/hooks/useCheckoutPrefill";
++
++const envioTxt = (envio: number | null | undefined, fmt: (n: number) => string) =>
++  envio == null ? null : `Envío ${fmt(envio)}`;
++
++/** Tarjeta resumen de la dirección elegida, con el costo de envío a la vista. */
++export function DireccionSeleccionada({
++  direccion, envio, fmt, onCambiar,
++}: {
++  direccion: Address;
++  envio: number | null | undefined;
++  fmt: (n: number) => string;
++  onCambiar: () => void;
++}) {
++  return (
++    <div className="space-y-2">
++      <p className="text-sm font-medium">Entregar en</p>
++      <div className="flex items-start gap-3 rounded-lg border border-primary bg-primary/5 p-3">
++        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
++        <div className="min-w-0 flex-1">
++          <p className="text-sm font-medium">{direccion.etiqueta}</p>
++          <p className="break-words text-sm text-muted-foreground">
++            {[direccion.direccion, direccion.distrito].filter(Boolean).join(" · ")}
++          </p>
++          {envioTxt(envio, fmt) && <p className="mt-1 text-xs font-semibold">{envioTxt(envio, fmt)}</p>}
++        </div>
++        <button
++          type="button"
++          onClick={onCambiar}
++          className="min-h-[44px] shrink-0 px-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
++        >
++          Cambiar
++        </button>
++      </div>
++    </div>
++  );
++}
+ 
+ export function DireccionesGuardadas({
+-  direcciones, direccionActual, distritoActual, onElegir,
++  direcciones, direccionActual, distritoActual, envioDe, fmt, onElegir, onUsarOtra, onCancelar,
+ }: {
+-  direcciones: Address[];
++  direcciones: Address[]; // ya filtradas (usables) por el checkout
+   direccionActual: string;
+   distritoActual: string;
++  envioDe: (distrito: string) => number | null | undefined;
++  fmt: (n: number) => string;
+   onElegir: (a: Address) => void;
++  onUsarOtra: () => void;
++  /** Solo cuando ya había una elegida: permite cerrar la lista sin cambiar nada. */
++  onCancelar?: () => void;
+ }) {
+-  const lista = direcciones.filter(direccionUsable);
+-  if (lista.length === 0) return null;
++  if (direcciones.length === 0) return null;
+ 
+   return (
+-    <div className="sm:col-span-2 space-y-2">
++    <div className="space-y-2">
+       <div className="flex items-center justify-between gap-3">
+-        <p className="text-sm font-medium">Tus direcciones guardadas</p>
++        <p className="text-sm font-medium">Elige dónde entregamos</p>
+         <Link
+           to="/perfil/direcciones"
+           className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+@@ -27,10 +69,11 @@ export function DireccionesGuardadas({
+           Administrar
+         </Link>
+       </div>
+-      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Direcciones guardadas">
+-        {lista.map((a) => {
++      <div className="grid gap-2" role="radiogroup" aria-label="Direcciones guardadas">
++        {direcciones.map((a) => {
+           const activa =
+             a.direccion.trim() === direccionActual.trim() && distritoDeTarifa(a.distrito) === distritoActual;
++          const envio = envioTxt(envioDe(distritoDeTarifa(a.distrito)), fmt);
+           return (
+             <button
+               key={a.id}
+@@ -38,13 +81,13 @@ export function DireccionesGuardadas({
+               role="radio"
+               aria-checked={activa}
+               onClick={() => onElegir(a)}
+-              className={`flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${
++              className={`flex min-h-[56px] items-start gap-2.5 rounded-lg border p-3 text-left transition-colors ${
+                 activa ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+               }`}
+             >
+               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+               <span className="min-w-0 flex-1">
+-                <span className="flex items-center gap-2 text-sm font-medium">
++                <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                   {a.etiqueta}
+                   {a.predeterminada && (
+                     <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
+@@ -52,15 +95,32 @@ export function DireccionesGuardadas({
+                     </span>
+                   )}
+                 </span>
+-                <span className="block truncate text-xs text-muted-foreground">
+-                  {[a.direccion, a.distrito].filter(Boolean).join(" · ")}
++                <span className="block break-words text-sm text-muted-foreground">{a.direccion}</span>
++                <span className="block text-xs text-muted-foreground">
++                  {[a.distrito, envio].filter(Boolean).join(" · ")}
+                 </span>
+               </span>
+               {activa && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />}
+             </button>
+           );
+         })}
++        <button
++          type="button"
++          onClick={onUsarOtra}
++          className="min-h-[44px] rounded-lg border border-dashed border-border p-3 text-left text-sm font-medium text-primary transition-colors hover:border-primary/40"
++        >
++          + Usar otra dirección
++        </button>
+       </div>
++      {onCancelar && (
++        <button
++          type="button"
++          onClick={onCancelar}
++          className="min-h-[44px] text-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
++        >
++          Cancelar
++        </button>
++      )}
+     </div>
+   );
+ }
+diff --git a/src/components/checkout/OpcionesEntrega.tsx b/src/components/checkout/OpcionesEntrega.tsx
+new file mode 100644
+index 0000000..d204e6f
+--- /dev/null
++++ b/src/components/checkout/OpcionesEntrega.tsx
+@@ -0,0 +1,58 @@
++// src/components/checkout/OpcionesEntrega.tsx
++// Un solo selector de entrega con 3 opciones (antes eran dos preguntas seguidas con 4 tarjetas iguales):
++// Delivery en Lima y Callao · Envío a provincia · Recojo en tienda.
++// Es solo interfaz: el estado del checkout sigue siendo metodoEntrega + destino.
++import { Check } from "lucide-react";
++
++export type OpcionEntrega = "lima" | "provincia" | "recojo";
++
++export function OpcionesEntrega({
++  valor, onElegir, precioLima,
++}: {
++  valor: OpcionEntrega;
++  onElegir: (o: OpcionEntrega) => void;
++  /** Texto del costo de Lima: «S/ 25.00» si ya hay distrito, «Desde S/ 15.00» si no. */
++  precioLima: string;
++}) {
++  const opciones: { key: OpcionEntrega; titulo: string; sub: string; precio: string; verde?: boolean }[] = [
++    { key: "lima", titulo: "Delivery en Lima y Callao", sub: "Pagas el envío aquí, según tu distrito", precio: precioLima },
++    { key: "provincia", titulo: "Envío a provincia", sub: "Te confirmamos el flete por WhatsApp", precio: "Por confirmar" },
++    { key: "recojo", titulo: "Recojo en tienda", sub: "Te avisamos cuando esté listo", precio: "Gratis", verde: true },
++  ];
++
++  return (
++    <div className="space-y-2" role="radiogroup" aria-label="Cómo quieres recibir tu pedido">
++      {opciones.map((o) => {
++        const activa = valor === o.key;
++        return (
++          <button
++            key={o.key}
++            type="button"
++            role="radio"
++            aria-checked={activa}
++            onClick={() => onElegir(o.key)}
++            className={`flex w-full min-h-[56px] items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
++              activa ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
++            }`}
++          >
++            <span
++              className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${
++                activa ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
++              }`}
++              aria-hidden
++            >
++              {activa && <Check className="h-3 w-3" />}
++            </span>
++            <span className="min-w-0 flex-1">
++              <span className="block text-sm font-medium">{o.titulo}</span>
++              <span className="block text-xs text-muted-foreground">{o.sub}</span>
++            </span>
++            <span className={`shrink-0 text-sm font-semibold ${o.verde ? "text-green-600" : "text-foreground"}`}>
++              {o.precio}
++            </span>
++          </button>
++        );
++      })}
++    </div>
++  );
++}
+diff --git a/src/routes/checkout.tsx b/src/routes/checkout.tsx
+index ae68b8a..9d32b4d 100644
+--- a/src/routes/checkout.tsx
++++ b/src/routes/checkout.tsx
+@@ -32,8 +32,9 @@ import {
+ } from "@/lib/envioNacional";
+ import { useVolumenCarrito } from "@/hooks/useVolumenCarrito";
+ import { WHATSAPP_NUMBER } from "@/config";
+-import { useCheckoutPrefill, elegirDireccion, distritoDeTarifa } from "@/hooks/useCheckoutPrefill";
+-import { DireccionesGuardadas } from "@/components/checkout/DireccionesGuardadas";
++import { useCheckoutPrefill, elegirDireccion, distritoDeTarifa, direccionUsable } from "@/hooks/useCheckoutPrefill";
++import { DireccionesGuardadas, DireccionSeleccionada } from "@/components/checkout/DireccionesGuardadas";
++import { OpcionesEntrega, type OpcionEntrega } from "@/components/checkout/OpcionesEntrega";
+ import type { Address } from "@/lib/perfil.functions";
+ 
+ 
+@@ -229,6 +230,9 @@ function CheckoutPage() {
+   // "lima" = Lima Metropolitana y Callao (tarifa por distrito, se cobra en línea).
+   // "provincia" = resto del país: flete estimado por volumen, se confirma por WhatsApp y NO se cobra en Niubiz.
+   const [destino, setDestino] = useState<"lima" | "provincia">("lima");
++  // UI de direcciones guardadas (Lima): «Cambiar» abre la lista; «Usar otra dirección» muestra los campos a mano.
++  const [cambiandoDir, setCambiandoDir] = useState(false);
++  const [dirManual, setDirManual] = useState(false);
+   const { volumenTotal, faltaVolumen } = useVolumenCarrito(items);
+ 
+   useEffect(() => {
+@@ -253,6 +257,31 @@ function CheckoutPage() {
+   const requiereEleccion = disponibilidad?.requiere_eleccion_modo_entrega ?? false;
+   const cargoParcial     = (metodoEntrega === "domicilio" && requiereEleccion && modoEntrega === "parcial") ? CARGO_ENVIO_PARCIAL : 0;
+   const esProvincia      = metodoEntrega === "domicilio" && destino === "provincia";
++
++  // Selector único de entrega (solo interfaz; el estado sigue siendo metodoEntrega + destino)
++  const opcionEntrega: OpcionEntrega = metodoEntrega === "recojo_tienda" ? "recojo" : destino;
++  const elegirOpcionEntrega = (o: OpcionEntrega) => {
++    if (o === "recojo") { setMetodoEntrega("recojo_tienda"); return; }
++    setMetodoEntrega("domicilio");
++    if (o !== destino) cambiarDestino(o);
++  };
++
++  // Direcciones guardadas (Lima y Callao): resumen de la elegida → lista para cambiar → campos a mano
++  const guardadasUsables = user ? direcciones.filter(direccionUsable) : [];
++  const hayGuardadas     = guardadasUsables.length > 0;
++  const cargandoDirs     = !!user && !prefillListo;
++  const dirSeleccionada  = guardadasUsables.find(
++    (a) => a.direccion.trim() === form.direccion.trim() && distritoDeTarifa(a.distrito) === form.distrito,
++  ) ?? null;
++  const verResumen   = hayGuardadas && !!dirSeleccionada && !cambiandoDir && !dirManual;
++  const verLista     = hayGuardadas && !dirManual && (cambiandoDir || !dirSeleccionada);
++  const verCamposLima = !cargandoDirs && (!hayGuardadas || dirManual);
++  const elegirGuardada = (a: Address) => { aplicarDireccion(a); setCambiandoDir(false); setDirManual(false); };
++  const usarOtraDireccion = () => {
++    setDirManual(true);
++    setCambiandoDir(false);
++    setForm((f) => ({ ...f, direccion: "" })); // el distrito se conserva: define el costo de envío
++  };
+   const estimacion       = esProvincia && form.departamento && form.provincia
+     ? estimarEnvioProvincia(form.departamento, form.provincia, volumenTotal, faltaVolumen)
+     : null;
+@@ -613,6 +642,7 @@ useEffect(() => {
+     if (avisoPendiente) { toast.error("Revisa los cambios en tu carrito y confirma con \"Entendido, continuar\""); return; }
+     if (!aceptaTerminos) { toast.error("Debes aceptar los Términos y condiciones para continuar"); return; }
+     if (provinciaIncompleta) { toast.error("Completa departamento, provincia y distrito / localidad"); return; }
++    if (metodoEntrega === "domicilio" && !form.direccion.trim()) { toast.error("Elige o escribe tu dirección de entrega"); return; }
+     if (metodoEntrega === "domicilio" && !esProvincia && !form.distrito) { toast.error("Selecciona tu distrito para calcular el envío"); return; }
+     if (metodoEntrega === "domicilio" && distritoSinCobertura) { toast.error("No tenemos tarifa para ese distrito todavía"); return; }
+ 
+@@ -679,91 +709,91 @@ useEffect(() => {
+             </section>
+ 
+             <section className="bg-card border border-border/50 rounded-xl p-6 space-y-4">
+-              <h2 className="font-display text-xl font-semibold">
+-                {metodoEntrega === "domicilio" ? "Dirección de entrega" : "Recojo en tienda"}
+-              </h2>
+-
+-              <p className="text-sm font-medium">¿Cómo lo recibes?</p>
+-              <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Cómo recibes tu pedido">
+-                <button
+-                  type="button"
+-                  role="radio"
+-                  aria-checked={metodoEntrega === "domicilio"}
+-                  onClick={() => setMetodoEntrega("domicilio")}
+-                  className={`min-h-[44px] p-3 rounded-lg border text-left transition-colors ${
+-                    metodoEntrega === "domicilio" ? "border-primary bg-primary/5" : "border-border"
+-                  }`}
+-                >
+-                  <p className="text-sm font-medium">Envío a domicilio</p>
+-                  <p className="text-xs text-muted-foreground">Según tarifa por distrito</p>
+-                </button>
+-                <button
+-                  type="button"
+-                  role="radio"
+-                  aria-checked={metodoEntrega === "recojo_tienda"}
+-                  onClick={() => setMetodoEntrega("recojo_tienda")}
+-                  className={`min-h-[44px] p-3 rounded-lg border text-left transition-colors ${
+-                    metodoEntrega === "recojo_tienda" ? "border-primary bg-primary/5" : "border-border"
+-                  }`}
+-                >
+-                  <p className="text-sm font-medium">Recojo en tienda</p>
+-                  <p className="text-xs font-semibold text-green-600">Sin costo de envío</p>
+-                </button>
+-              </div>
++              <h2 className="font-display text-xl font-semibold">Entrega</h2>
++
++              <OpcionesEntrega
++                valor={opcionEntrega}
++                onElegir={elegirOpcionEntrega}
++                precioLima={
++                  form.distrito && getPrecioEnvio(form.distrito) != null
++                    ? fmt(getPrecioEnvio(form.distrito) as number)
++                    : `Desde ${fmt(precioEnvioDesde())}`
++                }
++              />
+ 
+               {metodoEntrega === "domicilio" ? (
+                 <div className="grid sm:grid-cols-2 gap-4">
+-                  <p className="sm:col-span-2 text-sm font-medium">¿A dónde lo enviamos?</p>
+-                  <div className="sm:col-span-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Zona de entrega">
+-                    {([
+-                      ["lima", "Lima y Callao", "Se cobra aquí, según tu distrito"],
+-                      ["provincia", "Otras provincias", "Flete estimado; lo confirmamos por WhatsApp"],
+-                    ] as const).map(([val, titulo, sub]) => (
+-                      <button
+-                        key={val}
+-                        type="button"
+-                        role="radio"
+-                        aria-checked={destino === val}
+-                        onClick={() => cambiarDestino(val)}
+-                        className={`min-h-[44px] p-2.5 rounded-lg border text-left transition-colors ${
+-                          destino === val ? "border-primary bg-primary/5" : "border-border"
+-                        }`}
+-                      >
+-                        <p className="text-sm font-medium">{titulo}</p>
+-                        <p className="text-xs text-muted-foreground">{sub}</p>
+-                      </button>
+-                    ))}
+-                  </div>
+-                  {user && !esProvincia && (
+-                    <DireccionesGuardadas
+-                      direcciones={direcciones}
+-                      direccionActual={form.direccion}
+-                      distritoActual={form.distrito}
+-                      onElegir={aplicarDireccion}
+-                    />
+-                  )}
+-                  <div className="space-y-1.5 sm:col-span-2">
+-                    <Label htmlFor="direccion">Dirección</Label>
+-                    <Input className="h-11" id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
+-                  </div>
+                   {!esProvincia ? (
+                     <>
+-                        <div className="space-y-1.5 sm:col-span-2">
+-                          <Label htmlFor="distrito">Distrito</Label>
+-                          <DistritoCombobox
+-                            id="distrito"
+-                            value={form.distrito}
+-                            onChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
++                      {cargandoDirs && <div className="sm:col-span-2 h-20 rounded-lg bg-muted/40 animate-pulse" aria-hidden />}
++                      {verResumen && dirSeleccionada && (
++                        <div className="sm:col-span-2">
++                          <DireccionSeleccionada
++                            direccion={dirSeleccionada}
++                            envio={getPrecioEnvio(form.distrito)}
++                            fmt={fmt}
++                            onCambiar={() => setCambiandoDir(true)}
++                          />
++                        </div>
++                      )}
++                      {verLista && (
++                        <div className="sm:col-span-2">
++                          <DireccionesGuardadas
++                            direcciones={guardadasUsables}
++                            direccionActual={form.direccion}
++                            distritoActual={form.distrito}
++                            envioDe={getPrecioEnvio}
++                            fmt={fmt}
++                            onElegir={elegirGuardada}
++                            onUsarOtra={usarOtraDireccion}
++                            onCancelar={dirSeleccionada ? () => setCambiandoDir(false) : undefined}
+                           />
+-                          <p className="text-xs text-muted-foreground">
+-                            {form.distrito
+-                              ? <>Envío a {form.distrito}: <b className="text-foreground">{fmt(getPrecioEnvio(form.distrito) ?? 0)}</b>{form.distrito === distritoFicha ? " · el distrito que elegiste en el producto" : ""}</>
+-                              : <>Envío desde {fmt(precioEnvioDesde())} según tu distrito.</>}
+-                          </p>
+                         </div>
++                      )}
++                      {verCamposLima && (
++                        <>
++                          {hayGuardadas && (
++                            <div className="sm:col-span-2">
++                              <button
++                                type="button"
++                                onClick={() => { setDirManual(false); setCambiandoDir(true); }}
++                                className="min-h-[44px] text-sm font-medium text-primary underline-offset-4 hover:underline"
++                              >
++                                ← Elegir una dirección guardada
++                              </button>
++                            </div>
++                          )}
++                          {/* Primero el distrito: define el costo del envío */}
++                          <div className="space-y-1.5 sm:col-span-2">
++                            <Label htmlFor="distrito">Distrito</Label>
++                            <DistritoCombobox
++                              id="distrito"
++                              value={form.distrito}
++                              onChange={(v) => setForm((f) => ({ ...f, distrito: v }))}
++                            />
++                            <p className="text-xs text-muted-foreground">
++                              {form.distrito
++                                ? <>Envío a {form.distrito}: <b className="text-foreground">{fmt(getPrecioEnvio(form.distrito) ?? 0)}</b>{form.distrito === distritoFicha ? " · el distrito que elegiste en el producto" : ""}</>
++                                : <>Envío desde {fmt(precioEnvioDesde())} según tu distrito.</>}
++                            </p>
++                          </div>
++                          <div className="space-y-1.5 sm:col-span-2">
++                            <Label htmlFor="direccion">Dirección</Label>
++                            <Input className="h-11" id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
++                          </div>
++                        </>
++                      )}
+                     </>
+                   ) : (
+                     <>
++                      {/* El aviso del flete va primero, antes de pedir datos */}
++                      <div className="sm:col-span-2 rounded-lg bg-muted/40 p-3 text-xs space-y-1">
++                        <p className="font-medium text-sm">Envío a provincias</p>
++                        <p className="text-muted-foreground">
++                          Hoy pagas solo tus muebles. El flete se calcula por volumen y destino, y te lo confirmamos por
++                          WhatsApp antes de despachar. Puedes elegir recojo en agencia, que sale más económico.
++                        </p>
++                      </div>
+                       <div className="space-y-1.5">
+                         <Label htmlFor="departamento">Departamento</Label>
+                         <Select
+@@ -796,12 +826,9 @@ useEffect(() => {
+                           onChange={set("distrito")} placeholder="Ej. Yanahuara"
+                         />
+                       </div>
+-                      <div className="sm:col-span-2 rounded-lg bg-muted/40 p-3 text-xs space-y-1">
+-                        <p className="font-medium text-sm">Envío a provincias</p>
+-                        <p className="text-muted-foreground">
+-                          Hoy pagas solo tus muebles. El flete se calcula por volumen y destino, y te lo confirmamos por
+-                          WhatsApp antes de despachar. Puedes elegir recojo en agencia, que sale más económico.
+-                        </p>
++                      <div className="space-y-1.5 sm:col-span-2">
++                        <Label htmlFor="direccion">Dirección</Label>
++                        <Input className="h-11" id="direccion" required value={form.direccion} onChange={set("direccion")} placeholder="Av. Principal 123, Dpto 4B" />
+                       </div>
+                     </>
+                   )}
