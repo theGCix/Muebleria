@@ -24,8 +24,8 @@ export function ClientesSatisfechos() {
     <section id="clientes-satisfechos" className="scroll-mt-28 bg-secondary/30 px-4 py-20 md:py-24">
       <div className="container mx-auto max-w-7xl">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">Clientes satisfechos</p>
-          <h2 className="font-display text-4xl font-semibold leading-[1.05] md:text-5xl">
+          <p className="mb-3 text-sm font-medium text-accent-strong">Clientes satisfechos</p>
+          <h2 className="t-seccion">
             Algunos de nuestros clientes satisfechos con su compra
           </h2>
           <p className="mt-4 text-muted-foreground">Fotos reales de muebles G&amp;M en los hogares de quienes ya los eligieron.</p>
@@ -51,7 +51,7 @@ export function ClientesSatisfechos() {
                 <div className="mt-1.5 flex items-center gap-2 text-xs text-white/85">
                   {f.calificacion > 0 && (
                     <span className="inline-flex items-center gap-0.5" aria-label={`${f.calificacion} de 5 estrellas`}>
-                      <Star className="h-3 w-3 fill-[var(--color-gold)] text-[var(--color-gold)]" /> {f.calificacion}
+                      <Star className="h-3 w-3 fill-detail text-detail" /> {f.calificacion}
                     </span>
                   )}
                   {f.origen !== "panel" && (

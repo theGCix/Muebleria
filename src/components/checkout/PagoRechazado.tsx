@@ -152,7 +152,7 @@ export function PagoRechazado({
           >
             {nombre ? `${nombre}, no pudimos completar tu pago` : "No pudimos completar tu pago"}
           </h1>
-          <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "0.7s" }}>
+          <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-primary-foreground/80" style={{ ["--gmp-d" as string]: "0.7s" }}>
             {datos.sinConfirmar
               ? "No recibimos la confirmación del pago. Tu pedido sigue guardado y lo resolvemos contigo."
               : "Tu pedido sigue esperándote. Con un pequeño ajuste lo cerramos en un minuto."}
@@ -166,7 +166,7 @@ export function PagoRechazado({
           {/* Qué pasó + qué hacer */}
           <section className="gmp-rise lg:col-span-3" style={{ ["--gmp-d" as string]: "0.85s" }} aria-label="Qué pasó">
             <div className="gmp-card h-full p-5 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">¿Qué pasó?</p>
+              <p className="text-sm font-semibold text-muted-foreground">¿Qué pasó?</p>
               <h2 className="font-display mt-1 text-2xl font-semibold leading-tight sm:text-3xl">
                 {datos.sinConfirmar ? "No pudimos confirmar tu pago" : motivo.titulo}
               </h2>
@@ -192,7 +192,7 @@ export function PagoRechazado({
 
               {!datos.sinConfirmar && (
                 <>
-                  <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="mt-6 text-sm font-semibold text-muted-foreground">
                     {motivo.nuestro ? "Qué puedes hacer" : "Cómo resolverlo"}
                   </p>
                   <ol className="mt-3 space-y-3">
@@ -217,14 +217,14 @@ export function PagoRechazado({
           {/* Tu pedido sigue aquí */}
           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1s" }} aria-label="Tu pedido">
             <div className="gmp-card h-full p-5 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido sigue aquí</p>
+              <p className="text-sm font-semibold text-muted-foreground">Tu pedido sigue aquí</p>
               <h2 className="font-display mt-1 mb-4 text-xl font-semibold leading-tight">Nada se perdió</h2>
 
               {items.length > 0 ? (
                 <ul className="space-y-3">
                   {items.map((it) => (
                     <li key={it.id} className="flex items-center gap-3">
-                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-[#f6efe4]">
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted">
                         {it.image
                           ? <img src={it.image} alt="" className="h-full w-full object-cover mix-blend-multiply" loading="lazy" />
                           : <ShoppingBag className="m-auto mt-4 h-5 w-5 text-muted-foreground" />}

@@ -167,7 +167,7 @@ export const CartDrawer = () => {
                               <span className="inline-flex items-center gap-1 rounded-full bg-accent-strong px-2 py-0.5 text-xs font-bold text-accent-foreground">
                                 <PackageCheck className="h-3 w-3" /> Combo
                               </span>
-                              <h4 className="mt-1 truncate font-display text-lg font-semibold text-foreground">
+                              <h4 className="mt-1 truncate text-base font-semibold text-foreground">
                                 {tituloCombo(g.label || "armado")}
                               </h4>
                               <p className="text-xs text-muted-foreground">

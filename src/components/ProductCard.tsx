@@ -143,7 +143,7 @@ export function ProductCard({ product: p }: Props) {
   const insignias = useMemo(() => {
     const out: { key: string; texto: string; cls: string; icono?: "estrella" | "chispa" }[] = [];
     if (enOferta && p.descuento_porcentaje) {
-      out.push({ key: "oferta", texto: `-${p.descuento_porcentaje}%`, cls: "bg-destructive text-destructive-foreground" });
+      out.push({ key: "oferta", texto: `-${p.descuento_porcentaje}%`, cls: "bg-accent-strong text-accent-foreground" });
     }
     if (rating && rating.promedio >= MIN_PROMEDIO_TOP && rating.total >= MIN_RESENAS_TOP) {
       out.push({ key: "top", texto: "Favorito", cls: "bg-amber-500 text-white", icono: "estrella" });

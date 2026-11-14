@@ -123,7 +123,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
               ref={avatarRef}
               type="button"
               aria-label="Menú de tu cuenta"
-              className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-[#2A1B12] text-sm font-semibold text-[#F3E8D4] ring-offset-background transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A24B] focus-visible:ring-offset-2"
+              className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-primary text-sm font-semibold text-primary-foreground ring-offset-background transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
@@ -181,7 +181,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
               type="button"
               onClick={openLogin}
               aria-label="Iniciar sesión"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#2A1B12] text-[#F3E8D4] transition-colors hover:bg-[#3A2619] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A24B] focus-visible:ring-offset-2"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <UserRound className="h-5 w-5" />
             </button>
@@ -189,7 +189,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
           <button
             type="button"
             onClick={openLogin}
-            className="group relative inline-flex h-10 items-center gap-2 overflow-hidden rounded-full bg-[#2A1B12] px-4 text-sm font-medium text-[#F3E8D4] transition-colors hover:bg-[#3A2619] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A24B] focus-visible:ring-offset-2"
+            className="group relative inline-flex h-10 items-center gap-2 overflow-hidden rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <UserRound className="h-4 w-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
             <span className="relative block h-5 min-w-[4.6rem] overflow-hidden">
@@ -209,9 +209,9 @@ export function AuthButton({ className, compact = false }: { className?: string;
               type="button"
               role="status"
               onClick={openLogin}
-              className="absolute right-0 top-full z-50 mt-3 w-56 rounded-xl bg-[#2A1B12] p-3 text-left text-sm text-[#F3E8D4] shadow-lg"
+              className="absolute right-0 top-full z-50 mt-3 w-56 rounded-xl bg-primary p-3 text-left text-sm text-primary-foreground shadow-lg"
             >
-              <span className="absolute -top-1 right-6 h-2.5 w-2.5 rotate-45 bg-[#2A1B12]" aria-hidden="true" />
+              <span className="absolute -top-1 right-6 h-2.5 w-2.5 rotate-45 bg-primary" aria-hidden="true" />
               Ingresa y sigue tus pedidos desde un solo lugar.
             </button>
           )}

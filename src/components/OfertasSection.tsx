@@ -46,11 +46,11 @@ export function OfertasSection() {
           className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between"
         >
           <div className="flex items-start gap-3">
-            <span className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
+            <span className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent-strong text-accent-foreground">
               <Flame className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="font-display text-3xl font-semibold">Ofertas</h2>
+              <h2 className="t-seccion">Ofertas</h2>
               <p className="text-muted-foreground">
                 {mayorAhorro > 0
                   ? `Hasta ${fmtPEN(mayorAhorro)} de ahorro en una sola pieza, por tiempo limitado`

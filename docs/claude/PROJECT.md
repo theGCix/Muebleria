@@ -14,6 +14,8 @@ React, TypeScript, Vite, TanStack Router/Query, Supabase (PostgreSQL, RLS, Edge 
 ## Identidad visual (Japandi Premium, desde 2026-11-14)
 Marfil `#F5F1E8`, beige `#D8C3A5`, marrón `#8B735B`, verde bosque `#34443A` y gris oscuro `#292824`. Tipografía: Playfair Display (títulos y logo) + Inter. Detalle en RULES.md.
 
+Portada (entrega 2, 2026-11-14): título, línea de apoyo, selector de presupuesto con tramos fijos (`src/lib/presupuesto.ts`) y enlace al catálogo; el filtro llega a `/catalogo?min=&max=`. Carrusel del panel y campaña con reloj ya no se muestran en el home.
+
 ## Rol de Claude en este proyecto
 Ingeniero full-stack senior + UI/UX e-commerce.
 

@@ -26,7 +26,7 @@ export function Categories() {
         <p className="text-xs uppercase tracking-[0.25em] text-accent-strong font-medium mb-4">
           Nuestras colecciones
         </p>
-        <h2 className="font-display text-4xl md:text-5xl font-semibold text-foreground">
+        <h2 className="t-seccion text-foreground">
           Piezas para cada rincón de tu hogar
         </h2>
       </div>
@@ -59,7 +59,7 @@ export function Categories() {
                     <cat.icon className="h-6 w-6" />
                   </div>
                 )}
-                <h3 className="font-display text-2xl font-semibold mb-2 text-foreground">{cat.nombre}</h3>
+                <h3 className="text-xl font-semibold mb-2 text-foreground">{cat.nombre}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">{cat.descripcion}</p>
                 <span className="inline-flex items-center gap-1 text-sm font-medium text-accent-strong opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">
                   Ver colección <ArrowRight className="h-3.5 w-3.5" />

@@ -24,7 +24,7 @@ export function Estrellas({ valor, size = 16 }: { valor: number; size?: number }
           size={size}
           className={
             i < Math.round(valor)
-              ? "fill-[var(--color-gold)] text-[var(--color-gold)]"
+              ? "fill-detail text-detail"
               : "text-border"
           }
         />
@@ -48,10 +48,10 @@ export function Testimonials() {
           className="mb-12 flex flex-col gap-8 md:flex-row md:items-end md:justify-between"
         >
           <div className="max-w-xl">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">
+            <p className="mb-3 text-sm font-medium text-accent-strong">
               Testimonios
             </p>
-            <h2 className="font-display text-4xl font-semibold leading-[1.02] md:text-5xl">
+            <h2 className="t-seccion">
               Lo que dicen quienes ya tienen un G&amp;M en casa
             </h2>
           </div>
@@ -111,7 +111,7 @@ export function Tarjeta({ r }: { r: ResenaDestacada }) {
       <div className="flex flex-1 flex-col gap-3 p-6">
         <Estrellas valor={r.calificacion} />
         {r.titulo && (
-          <h3 className="font-display text-2xl font-semibold leading-tight">{r.titulo}</h3>
+          <h3 className="text-xl font-semibold leading-tight">{r.titulo}</h3>
         )}
         <p className="line-clamp-6 text-sm leading-relaxed text-muted-foreground">{r.comentario}</p>
 
@@ -127,7 +127,7 @@ export function Tarjeta({ r }: { r: ResenaDestacada }) {
         <div className="mt-auto border-t border-border/60 pt-4 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="font-medium text-foreground">{r.autor_nombre}</span>
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
               <BadgeCheck className="h-3.5 w-3.5" /> Compra verificada
             </span>
           </div>

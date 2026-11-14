@@ -1030,7 +1030,7 @@ useEffect(() => {
                           Entrega estimada: {disponibilidad?.fecha_entrega_backorder}
                         </p>
                       </div>
-                      <span className="text-xs font-semibold text-green-600">Sin costo extra</span>
+                      <span className="text-xs font-semibold text-primary">Sin costo extra</span>
                     </div>
                   </button>
 
@@ -1081,7 +1081,7 @@ useEffect(() => {
                 </div>
                 {errorCupon && <p className="text-xs text-destructive">{errorCupon}</p>}
                 {cuponAplicado && (
-                  <p className="text-xs text-green-600">
+                  <p className="text-xs text-accent-strong">
                     ✓ {cuponAplicado.codigo} aplicado — ahorras {fmt(cuponAplicado.descuento)}
                   </p>
                 )}
@@ -1101,20 +1101,20 @@ useEffect(() => {
                   </span>
                   <span>
                     {metodoEntrega === "recojo_tienda"
-                      ? <span className="text-green-600">Sin costo</span>
+                      ? <span className="text-primary">Sin costo</span>
                       : esProvincia
-                        ? <span className="text-amber-600">Por confirmar</span>
+                        ? <span className="text-muted-foreground">Por confirmar</span>
                         : (form.distrito ? fmt(envio) : "—")}
                   </span>
                 </div>
                 {descuentoCupon > 0 && (
-                  <div className="flex justify-between text-green-600">
+                  <div className="flex justify-between text-accent-strong">
                     <span>Descuento ({cuponAplicado?.codigo})</span>
                     <span>-{fmt(descuentoCupon)}</span>
                   </div>
                 )}
                 {esProvincia && (
-                  <div className="text-xs rounded-lg bg-amber-50 text-amber-900 border border-amber-200 p-2.5 space-y-1">
+                  <div className="text-xs rounded-lg bg-muted text-foreground border border-border p-2.5 space-y-1">
                     {!estimacion && <p>Elige departamento y provincia para ver un estimado del flete.</p>}
                     {estimacion?.tipo === "estimado" && (
                       <p>

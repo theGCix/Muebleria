@@ -57,7 +57,8 @@ export interface PagoExitosoDatos {
   provinciaEnvio?: string;
 }
 
-const COLORES = ["#6b4423", "#f0a020", "#f3dfb8", "#c8553d", "#8a5a34", "#fff4d6", "#2f6f73"];
+// Confeti con la paleta Japandi (verde bosque, beige, marrón, marfil, terracota)
+const COLORES = ["#34443A", "#D8C3A5", "#8B735B", "#F5F1E8", "#C0583A", "#4F6657", "#E6D6BC"];
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const reduceMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -286,7 +287,7 @@ export function PagoExitoso({
             </svg>
           </div>
 
-          <p className="gmp-rise mt-7 text-xs font-semibold uppercase tracking-[0.28em] text-[#f0a020]" style={{ ["--gmp-d" as string]: "0.9s" }}>
+          <p className="gmp-rise mt-7 text-xs font-semibold uppercase tracking-[0.28em] text-secondary" style={{ ["--gmp-d" as string]: "0.9s" }}>
             {esComprobante ? "Comprobante de pago"
               : pagoEf === "recojo" ? "Pedido registrado"
               : pagoEf === "adelanto" ? "Adelanto recibido"
@@ -303,7 +304,7 @@ export function PagoExitoso({
               ? (pagoEf === "recojo" ? "Tu pedido está registrado" : "Tu pago fue aprobado")
               : nombre ? `¡Gracias, ${nombre}!` : "¡Gracias por tu compra!"}
           </h1>
-          <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-[#fbf4e8]/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
+          <p className="gmp-rise mt-3 max-w-lg text-[15px] leading-relaxed text-primary-foreground/80" style={{ ["--gmp-d" as string]: "1.1s" }}>
             {esComprobante
               ? "Este es el detalle de tu compra y el avance actual de tu pedido."
               : pagoEf === "recojo"
@@ -314,13 +315,13 @@ export function PagoExitoso({
           </p>
 
           <div className="gmp-rise mt-7" style={{ ["--gmp-d" as string]: "1.2s" }}>
-            <p className="text-xs uppercase tracking-[0.22em] text-[#fbf4e8]/60">
+            <p className="text-xs font-medium text-primary-foreground/70">
               {pagoEf === "recojo" ? "Total a pagar en tienda" : pagoEf === "adelanto" ? "Adelanto pagado" : "Total pagado"}
             </p>
             <p className="font-display text-5xl font-semibold tabular-nums sm:text-6xl" aria-label={fmtPEN(total)}>
               {fmtPEN(total)}
             </p>
-            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-[#fbf4e8]/70">
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary-foreground/70">
               <CreditCard className="h-3.5 w-3.5" />{" "}
               {pagoEf === "recojo" ? "Efectivo · al recoger en tienda"
                 : pagoEf === "adelanto" ? `Niubiz · saldo ${fmtPEN(saldoPedido)} en efectivo al entregar`
@@ -330,7 +331,7 @@ export function PagoExitoso({
 
           {!esComprobante && (
           <div className="gmp-rise mt-6 inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm backdrop-blur" style={{ ["--gmp-d" as string]: "1.35s" }}>
-            {recojo ? <Store className="h-4 w-4 text-[#f0a020]" /> : <Truck className="h-4 w-4 text-[#f0a020]" />}
+            {recojo ? <Store className="h-4 w-4 text-secondary" /> : <Truck className="h-4 w-4 text-secondary" />}
             {recojo ? (
               <span>Te avisamos cuando puedas <b>recogerlo en tienda</b></span>
             ) : (
@@ -350,7 +351,7 @@ export function PagoExitoso({
               <span className="gmp-stamp" aria-hidden>Pagado</span>
 
               <div className="p-5 pb-5 pr-28 sm:p-6 sm:pr-40">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tu pedido</p>
+                <p className="text-sm font-semibold text-muted-foreground">Tu pedido</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className="break-all font-mono text-[13px] font-semibold tracking-tight sm:text-[15px]">{idPedido}</span>
                   <button
@@ -359,7 +360,7 @@ export function PagoExitoso({
                     className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
                     aria-label="Copiar número de pedido"
                   >
-                    {copiado ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copiado ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
                     <span aria-live="polite">{copiado ? "Copiado" : "Copiar"}</span>
                   </button>
                 </div>
@@ -373,7 +374,7 @@ export function PagoExitoso({
                   <ul className="space-y-3.5">
                     {items.map((it) => (
                       <li key={it.id} className="flex items-center gap-3.5">
-                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-[#f6efe4]">
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted">
                           {it.image ? (
                             <img src={it.image} alt="" className="h-full w-full object-cover mix-blend-multiply" loading="lazy" />
                           ) : (
@@ -406,7 +407,7 @@ export function PagoExitoso({
                     </div>
                   )}
                   {descuento > 0.01 && (
-                    <div className="flex justify-between text-emerald-700"><dt>Descuento aplicado</dt><dd className="tabular-nums">−{fmtPEN(descuento)}</dd></div>
+                    <div className="flex justify-between text-accent-strong"><dt>Descuento aplicado</dt><dd className="tabular-nums">−{fmtPEN(descuento)}</dd></div>
                   )}
                   {pagoEf === "adelanto" ? (
                     <>
@@ -423,13 +424,13 @@ export function PagoExitoso({
                 </dl>
 
                 {!recojo && (datos.direccion || datos.distrito) && (
-                  <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#f6efe4] px-3.5 py-2.5 text-xs text-muted-foreground">
+                  <p className="mt-4 flex items-start gap-2 rounded-xl bg-muted px-3.5 py-2.5 text-xs text-muted-foreground">
                     <MapPin className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
                     <span>Entrega en <b className="font-semibold text-foreground">{[datos.direccion, datos.distrito].filter(Boolean).join(", ")}</b></span>
                   </p>
                 )}
                 {datos.modoEntrega === "parcial" && (
-                  <p className="mt-2 flex items-start gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
+                  <p className="mt-2 flex items-start gap-2 rounded-xl bg-muted px-3.5 py-2.5 text-xs text-foreground">
                     <Truck className="mt-px h-3.5 w-3.5 shrink-0" />
                     <span>Elegiste <b>entrega parcial</b>: lo disponible sale primero y coordinamos contigo el resto.</span>
                   </p>
@@ -441,7 +442,7 @@ export function PagoExitoso({
           {/* Línea de tiempo */}
           <section className="gmp-rise lg:col-span-2" style={{ ["--gmp-d" as string]: "1.65s" }} aria-label="Lo que sigue">
             <div className="gmp-card h-full p-5 sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Lo que sigue</p>
+              <p className="text-sm font-semibold text-muted-foreground">Lo que sigue</p>
               <h2 className="font-display mt-1 mb-5 text-2xl font-semibold leading-tight">El camino de tu pedido</h2>
               <ol>
                 {pasosMostrados.map((p) => {
@@ -452,7 +453,7 @@ export function PagoExitoso({
                       <div className="min-w-0 pt-0.5">
                         <p className={`text-sm font-semibold ${p.estado === "todo" ? "text-muted-foreground" : ""}`}>
                           {p.titulo}
-                          {p.estado === "now" && <span className="ml-2 rounded-full bg-[#f0a020]/20 px-2 py-0.5 align-middle text-xs font-bold uppercase tracking-wide text-[#8a5a00]">Siguiente</span>}
+                          {p.estado === "now" && <span className="ml-2 rounded-full bg-secondary/40 px-2 py-0.5 align-middle text-xs font-semibold text-foreground">Siguiente</span>}
                         </p>
                         <p className={`text-xs leading-relaxed ${p.estado === "goal" ? "font-medium text-foreground" : "text-muted-foreground"}`}>{p.detalle}</p>
                       </div>
@@ -460,7 +461,7 @@ export function PagoExitoso({
                   );
                 })}
               </ol>
-              <p className="mt-5 rounded-xl bg-[#f6efe4] px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-5 rounded-xl bg-muted px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
                 Seguimiento por WhatsApp en tiempo real.
               </p>
             </div>
@@ -490,7 +491,7 @@ export function PagoExitoso({
           <section className="gmp-rise mt-10" style={{ ["--gmp-d" as string]: "1.95s" }} aria-label="Completa tu espacio">
             <div className="mb-4 flex items-end justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mientras fabricamos tu pedido</p>
+                <p className="text-sm font-semibold text-muted-foreground">Mientras fabricamos tu pedido</p>
                 <h2 className="font-display text-2xl font-semibold sm:text-3xl">Completa tu espacio</h2>
               </div>
               <Link to="/catalogo" className="shrink-0 text-sm text-primary underline-offset-4 hover:underline">Ver catálogo</Link>
@@ -501,14 +502,14 @@ export function PagoExitoso({
                 const img = p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w: 400, h: 300 }) : p.imagen_url;
                 return (
                   <Link key={p.id} to="/product/$handle" params={{ handle: p.id }} className="gmp-card group w-[240px] shrink-0 snap-start overflow-hidden transition-all hover:-translate-y-1 sm:w-auto">
-                    <div className="aspect-[4/3] overflow-hidden bg-[#f6efe4]">
+                    <div className="aspect-[4/3] overflow-hidden bg-muted">
                       {img && <img src={img} alt={p.nombre} loading="lazy" className="h-full w-full object-cover mix-blend-multiply transition-transform duration-700 group-hover:scale-105" />}
                     </div>
                     <div className="p-4">
-                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</p>
-                      <p className="font-display mt-0.5 text-lg font-semibold leading-snug line-clamp-1">{p.nombre}</p>
+                      <p className="text-xs text-muted-foreground">{p.categoria}</p>
+                      <p className="mt-0.5 text-lg font-semibold leading-snug line-clamp-1">{p.nombre}</p>
                       <p className="mt-1 flex items-baseline gap-2">
-                        <span className={`font-display text-xl font-bold ${activa ? "text-destructive" : ""}`}>{fmtPEN(precioFinal)}</span>
+                        <span className={`text-xl font-bold ${activa ? "text-accent-strong" : ""}`}>{fmtPEN(precioFinal)}</span>
                         {activa && <span className="text-xs text-muted-foreground line-through">{fmtPEN(p.precio)}</span>}
                       </p>
                     </div>
@@ -521,12 +522,12 @@ export function PagoExitoso({
 
         {/* Boca a boca */}
                 {!esComprobante && (
-<section className="gmp-rise mt-10 overflow-hidden rounded-2xl bg-[var(--gmp-walnut-deep)] p-6 text-[#fbf4e8] sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-8" style={{ ["--gmp-d" as string]: "2.1s" }}>
+<section className="gmp-rise mt-10 overflow-hidden rounded-2xl bg-[var(--gmp-walnut-deep)] p-6 text-primary-foreground sm:flex sm:items-center sm:justify-between sm:gap-6 sm:p-8" style={{ ["--gmp-d" as string]: "2.1s" }}>
           <div>
             <p className="font-display text-2xl font-semibold sm:text-3xl">¿Conoces a alguien que está amueblando?</p>
-            <p className="mt-1 text-sm text-[#fbf4e8]/70">Cuéntale dónde compraste. Una recomendación tuya vale más que cualquier anuncio.</p>
+            <p className="mt-1 text-sm text-primary-foreground/70">Cuéntale dónde compraste. Una recomendación tuya vale más que cualquier anuncio.</p>
           </div>
-          <a href={`https://wa.me/?text=${mensajeCompartir}`} target="_blank" rel="noreferrer" className="mt-4 inline-flex shrink-0 items-center gap-2 rounded-full bg-[#f0a020] px-6 py-3 text-sm font-semibold text-[#2b1a08] transition-all hover:-translate-y-0.5 hover:shadow-lg sm:mt-0">
+          <a href={`https://wa.me/?text=${mensajeCompartir}`} target="_blank" rel="noreferrer" className="mt-4 inline-flex shrink-0 items-center gap-2 rounded-full bg-secondary px-6 py-3 text-sm font-semibold text-foreground transition-all hover:-translate-y-0.5 hover:shadow-lg sm:mt-0">
             <Share2 className="h-4 w-4" /> Compartir por WhatsApp
           </a>
         </section>

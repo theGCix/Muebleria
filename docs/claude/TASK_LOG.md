@@ -269,3 +269,15 @@
 - **Verificación:** `tsc --noEmit` sin errores nuevos y `vite build` OK. Contrastes calculados (≥ 4.5:1 en todo texto). **No se probó** en navegador a 360/414/1440 px.
 - **Pendiente / riesgos:** Playfair es más ancha que Cormorant (la portada puede partir títulos en más líneas hasta la entrega 2); Hero y compañía siguen con la paleta cálida; los textos SVG de `SignatureModules` (8–11 unidades de viewBox) no se tocaron; el admin cambia de color por los tokens (botones verdes) y su sidebar sigue azul pizarra; el modo `.dark` no se modificó.
 
+## 2026-11-14 — Color y tipografía, entrega 2 (portada con selector de presupuesto, home, catálogo, carrito, checkout) — implementado, falta revisar en navegador
+- **Decisiones del dueño:** portada corta con título, línea de apoyo, selector y «Ver todo el catálogo»; tramos fijos en código calculados con los precios reales (consulta SQL del 2026-11-14); entrega 1 ya aplicada y vista en navegador.
+- **Tramos** (`src/lib/presupuesto.ts`): hasta S/ 1,500 (4 piezas) · S/ 1,500–2,000 (5) · más de S/ 2,000 (8), sobre precio final con oferta vigente. El slider del home deja de usar 1000/2000/3000 inventados y lee los mismos topes.
+- **Portada:** `PortadaPresupuesto.tsx` reemplaza a `HeroSlider` + `Hero` en `routes/index.tsx` (desmontados, no borrados). **Efecto:** las diapositivas del panel `/carrusel` y el reloj/riel de la campaña ya no salen en el home; las ofertas siguen en `OfertasSection` y la barra de campaña en el header.
+- **`/catalogo`:** acepta `min` y `max`; fila «Presupuesto» con los mismos tramos; con presupuesto filtra por precio final en el cliente (`useCatalogoHome`, `enabled` nuevo en `useCatalogoHome` y `useAllProducts`). Chips de 44 px con `focus-visible`; «Quitar filtros» usa `accent-strong`.
+- **Home:** `PiezaDestacada`, `MedidaCTA`, `Testimonials`, `ClientesSatisfechos`, `LeadFormDialog` y `testimonios.tsx` sin `--color-walnut/gold/wood-dark`; títulos con `.t-seccion`; h3 en Inter; mayúsculas con espaciado quitadas salvo «Nuestras colecciones».
+- **Ofertas en terracota (antes rojo):** `OfertasSection`, `PiezaDestacada`, `ProductCard` (insignia `-X%`), filtro «Solo piezas en oferta», precio con oferta en `PagoExitoso`. Escasez y agotado siguen en rojo.
+- **Carrito:** solo el h4 del nombre de combo pasa de serif a Inter.
+- **Checkout:** `checkout.tsx`, `OpcionesEntrega`, `PagoExitoso`, `PagoRechazado` y sus CSS: verdes/ámbares/hex sueltos → tokens (`green-600` daba 3.30:1 y `amber-600` 3.19:1). Solo clases y colores; precios, flete, IGV, cupones y lógica de pago intactos.
+- **Verificación:** `tsc --noEmit` sin errores nuevos, `vite build` OK, `node --test server/pagos.test.js` 27/27. **No se probó en el flujo real** (cobro Niubiz, datos de Supabase).
+- **Pendiente / riesgos:** revisar a 360/414/1440 px con y sin oferta; el filtro de precio de `/catalogo` corta en 60 piezas; `Hero.tsx`, `HeroSlider.tsx` y `ProductDetail.tsx` quedan como código muerto con paleta heredada (candidatos a borrar); el admin y el modo `.dark` no se tocaron.
+

@@ -57,13 +57,13 @@ export function PromoCategoriaBanner({
           {/* Texto */}
           <div className="relative z-10 flex-1 p-5 sm:p-8 lg:pl-12">
            
-            <h2 className="font-display text-3xl font-bold uppercase leading-none sm:text-5xl lg:text-6xl">
+            <h2 className="t-seccion">
               {titulo}
             </h2>
-            <p className="mt-2 font-display text-2xl font-semibold sm:text-4xl">
+            <p className="mt-2 t-precio-ficha">
               {prefijo.toLowerCase()} {fmtPEN(desde)}
             </p>
-            <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-background px-5 py-2 text-sm font-bold uppercase tracking-wide text-primary transition-transform group-hover:translate-x-1">
+            <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-background px-5 py-2 text-sm font-semibold text-primary transition-transform group-hover:translate-x-1">
               Ver productos <ArrowRight className="h-4 w-4" />
             </span>
           </div>

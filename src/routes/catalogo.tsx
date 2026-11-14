@@ -1,5 +1,5 @@
 // src/routes/catalogo.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/select";
 import { CATEGORIAS } from "@/lib/categories";
 import { useAllProducts, useProductCountsByCategory, type ProductSort, type Product } from "@/hooks/useProducts";
+import { useCatalogoHome } from "@/hooks/useCatalogoHome";
+import { ofertaInfo } from "@/lib/pricing";
+import { TRAMOS, enRango, etiquetaRango, mismoRango } from "@/lib/presupuesto";
 import { useSearchStore } from "@/stores/searchStore";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { trackSearch } from "@/lib/analytics";
@@ -25,6 +28,15 @@ interface CatalogoSearch {
   q?: string;
   cat?: string;
   sort?: ProductSort;
+  /** Presupuesto (precio final con oferta): min exclusivo, max inclusivo. Ver lib/presupuesto.ts */
+  min?: number;
+  max?: number;
+}
+
+/** Acepta número o texto numérico ≥ 0; cualquier otra cosa se ignora. */
+function monto(v: unknown): number | undefined {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 export const Route = createFileRoute("/catalogo")({
@@ -35,6 +47,8 @@ export const Route = createFileRoute("/catalogo")({
       search.sort === "precio_asc" || search.sort === "precio_desc" || search.sort === "recientes"
         ? (search.sort as ProductSort)
         : undefined,
+    min: monto(search.min),
+    max: monto(search.max),
   }),
   head: () => ({
     meta: [
@@ -46,7 +60,7 @@ export const Route = createFileRoute("/catalogo")({
 });
 
 function CatalogoPage() {
-  const { q, cat, sort } = Route.useSearch();
+  const { q, cat, sort, min, max } = Route.useSearch();
   const navigate = Route.useNavigate();
   const storeQuery = useSearchStore((s) => s.query);
   const setStoreQuery = useSearchStore((s) => s.setQuery);
@@ -72,12 +86,35 @@ function CatalogoPage() {
   const activeCat = cat && CATEGORIAS.some((c) => c.slug === cat) ? cat : undefined;
 
   const { data: counts = {} } = useProductCountsByCategory();
-  const { data, isLoading, isFetching, isError } = useAllProducts({
+  // Con presupuesto en la URL se filtra por precio FINAL (con oferta, como las tarjetas) en el
+  // cliente, con la misma consulta que el home (el servidor solo ordena por precio de lista).
+  const hayPrecio = min != null || max != null;
+  const rango = { min, max };
+  const todos = useCatalogoHome(60, hayPrecio);
+  const { data, isLoading: cargandoServidor, isFetching, isError: errorServidor } = useAllProducts({
     search: q || undefined,
     categoria: activeCat,
     sort: activeSort,
     page,
+    enabled: !hayPrecio,
   });
+
+  const listaPrecio = useMemo(() => {
+    if (!hayPrecio) return [] as Product[];
+    let l = (todos.data ?? []).filter((p) => enRango(p, { min, max }));
+    if (activeCat) l = l.filter((p) => p.categoria === activeCat);
+    if (q) {
+      const t = q.toLowerCase();
+      l = l.filter((p) => [p.nombre, p.descripcion].some((x) => x?.toLowerCase().includes(t)));
+    }
+    const pf = (p: Product) => ofertaInfo(p).precioFinal;
+    if (activeSort === "precio_asc") l = [...l].sort((a, b) => pf(a) - pf(b));
+    else if (activeSort === "precio_desc") l = [...l].sort((a, b) => pf(b) - pf(a));
+    return l;
+  }, [hayPrecio, todos.data, min, max, activeCat, q, activeSort]);
+
+  const isLoading = hayPrecio ? todos.isLoading : cargandoServidor;
+  const isError = hayPrecio ? todos.isError : errorServidor;
 
   // Resetea la paginación acumulada cada vez que cambian los filtros.
   useEffect(() => {
@@ -108,9 +145,10 @@ function CatalogoPage() {
     setSearch({ q: searchInput || undefined });
   };
 
-  const total = data?.total ?? 0;
-  const hasMore = accumulated.length < total;
-  const hasActiveFilters = !!activeCat || !!q;
+  const lista = hayPrecio ? listaPrecio : accumulated;
+  const total = hayPrecio ? listaPrecio.length : (data?.total ?? 0);
+  const hasMore = !hayPrecio && accumulated.length < total;
+  const hasActiveFilters = !!activeCat || !!q || hayPrecio;
 
   const clearFilters = () => {
     setSearchInput("");
@@ -136,11 +174,11 @@ function CatalogoPage() {
             </Breadcrumb>
 
             <div className="mt-6 flex items-start gap-4">
-              <div className="h-14 w-14 shrink-0 rounded-xl bg-accent text-accent-foreground flex items-center justify-center">
+              <div className="h-14 w-14 shrink-0 rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center">
                 <LayoutGrid className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground">
+                <h1 className="t-seccion text-foreground">
                   Catálogo completo
                 </h1>
                 <p className="text-muted-foreground mt-1.5 max-w-2xl">
@@ -165,7 +203,7 @@ function CatalogoPage() {
         <section className="container mx-auto max-w-7xl px-4 py-10">
           <div className="flex flex-col gap-4 mb-8 pb-6 border-b border-border/50">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Categoría</span>
+              <span className="text-sm font-medium text-muted-foreground mr-1">Categoría</span>
               <FilterChip
                 label="Todas"
                 count={Object.values(counts).reduce((a, b) => a + b, 0)}
@@ -182,6 +220,25 @@ function CatalogoPage() {
                 />
               ))}
             </div>
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Presupuesto">
+              <span className="text-sm font-medium text-muted-foreground mr-1">Presupuesto</span>
+              <FilterChip
+                label="Todos"
+                active={!hayPrecio}
+                onClick={() => setSearch({ min: undefined, max: undefined })}
+              />
+              {TRAMOS.map((t) => (
+                <FilterChip
+                  key={t.id}
+                  label={etiquetaRango(t)}
+                  active={hayPrecio && mismoRango(t, rango)}
+                  onClick={() => setSearch({ min: t.min, max: t.max })}
+                />
+              ))}
+              {hayPrecio && !TRAMOS.some((t) => mismoRango(t, rango)) && (
+                <FilterChip label={etiquetaRango(rango)} active onClick={() => setSearch({ min: undefined, max: undefined })} />
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -190,7 +247,7 @@ function CatalogoPage() {
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1 ml-3 text-accent hover:underline"
+                  className="inline-flex min-h-[44px] items-center gap-1 ml-3 text-accent-strong hover:underline"
                 >
                   <X className="h-3 w-3" /> Quitar filtros
                 </button>
@@ -222,12 +279,12 @@ function CatalogoPage() {
             <div className="text-center py-24 text-muted-foreground">
               Ocurrió un error al cargar los productos. Intenta de nuevo en un momento.
             </div>
-          ) : accumulated.length === 0 ? (
+          ) : lista.length === 0 ? (
             <div className="flex flex-col items-center text-center py-24 gap-3">
               <PackageSearch className="h-10 w-10 text-muted-foreground/50" />
               <p className="font-medium text-foreground">No encontramos productos</p>
               <p className="text-sm text-muted-foreground max-w-sm">
-                Prueba con otra búsqueda o quita los filtros aplicados.
+                {hayPrecio ? "Prueba ampliando tu presupuesto o quita los filtros aplicados." : "Prueba con otra búsqueda o quita los filtros aplicados."}
               </p>
               {hasActiveFilters && (
                 <Button variant="outline" className="rounded-full mt-2" onClick={clearFilters}>
@@ -238,7 +295,7 @@ function CatalogoPage() {
           ) : (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {accumulated.map((p) => (
+                {lista.map((p) => (
                   <ProductCard key={p.id} product={p} />
                 ))}
               </div>
@@ -273,7 +330,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={
-        "px-3.5 py-1.5 rounded-full text-sm border transition-colors " +
+        "min-h-11 px-3.5 py-1.5 rounded-full text-sm border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
         (active
           ? "bg-primary text-primary-foreground border-primary"
           : "bg-background text-foreground/70 border-border/60 hover:border-foreground/30 hover:text-foreground")

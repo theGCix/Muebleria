@@ -80,7 +80,7 @@ export function LeadFormDialog({
         {sent ? (
           <div className="flex flex-col items-center text-center py-6 gap-3">
             <CheckCircle2 className="h-10 w-10 text-green-600" />
-            <h3 className="font-display text-lg font-semibold">¡Consulta enviada!</h3>
+            <h3 className="text-lg font-semibold">¡Consulta enviada!</h3>
             <p className="text-sm text-muted-foreground">
               Un asesor te contactará muy pronto{form.telefono ? " por WhatsApp o llamada" : ""}.
             </p>
@@ -128,7 +128,7 @@ export function LeadFormDialog({
               </div>
               <Button
                 type="submit"
-                className="w-full bg-[var(--color-walnut)] hover:bg-[var(--color-walnut-mid)] text-white"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 disabled={mutation.isPending || !form.nombre}
               >
                 {mutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}

@@ -3,10 +3,10 @@
    con "reducir movimiento" la pantalla aparece completa y estática. */
 
 .gmp-root {
-  --gmp-walnut-deep: oklch(0.24 0.045 55);
-  --gmp-walnut: oklch(0.32 0.055 55);
-  --gmp-amber: #f0a020;
-  --gmp-cream: #f6f1e9;
+  --gmp-walnut-deep: color-mix(in oklab, var(--primary) 80%, black);
+  --gmp-walnut: var(--primary);
+  --gmp-amber: var(--secondary);
+  --gmp-cream: var(--background);
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -19,7 +19,7 @@
 .gmp-hero {
   position: relative;
   overflow: hidden;
-  color: #fbf4e8;
+  color: var(--primary-foreground);
   background:
     radial-gradient(900px 380px at 50% -8%, color-mix(in oklab, var(--gmp-amber) 26%, transparent), transparent 70%),
     repeating-linear-gradient(92deg, rgba(255, 255, 255, .028) 0 2px, transparent 2px 11px),
@@ -32,8 +32,8 @@
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: radial-gradient(circle at 35% 30%, #fff7e6, #f3dfb8 70%);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, .35), inset 0 -4px 10px rgba(120, 70, 20, .18);
+  background: radial-gradient(circle at 35% 30%, var(--card), var(--secondary) 70%);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .35), inset 0 -4px 10px rgba(41, 40, 36, .18);
 }
 .gmp-badge svg { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); }
 .gmp-ring, .gmp-tick { fill: none; stroke: var(--gmp-walnut-deep); stroke-linecap: round; stroke-linejoin: round; }
@@ -72,10 +72,10 @@
 
 /* ───────── Tarjetas ───────── */
 .gmp-card {
-  background: #fffdf9;
+  background: var(--card);
   border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
   border-radius: 1.1rem;
-  box-shadow: 0 18px 40px -26px rgba(60, 35, 15, .45);
+  box-shadow: 0 18px 40px -26px rgba(41, 40, 36, .45);
 }
 
 /* Ticket con muescas laterales y separador punteado */
@@ -141,7 +141,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fffdf9;
+  background: var(--card);
   border: 2px solid color-mix(in oklab, var(--border) 100%, transparent);
   color: var(--muted-foreground);
 }
@@ -155,7 +155,7 @@
   border: 2px solid var(--gmp-amber);
   opacity: .5;
 }
-.is-goal .gmp-node { background: color-mix(in oklab, var(--gmp-amber) 18%, #fffdf9); border-color: var(--gmp-amber); color: var(--primary); }
+.is-goal .gmp-node { background: color-mix(in oklab, var(--gmp-amber) 30%, var(--card)); border-color: var(--gmp-amber); color: var(--primary); }
 
 /* ───────── Barra fija en móvil ───────── */
 .gmp-bar {
@@ -164,7 +164,7 @@
   bottom: 0;
   z-index: 2;
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
-  background: color-mix(in oklab, #fffdf9 94%, transparent);
+  background: color-mix(in oklab, var(--card) 94%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
 }

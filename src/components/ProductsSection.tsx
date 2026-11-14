@@ -19,6 +19,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { CATEGORIAS } from "@/lib/categories";
 import { fmtPEN, ofertaInfo } from "@/lib/pricing";
+import { ATAJOS_HASTA } from "@/lib/presupuesto";
 import { useCatalogoHome } from "@/hooks/useCatalogoHome";
 import { useSearchStore } from "@/stores/searchStore";
 import type { Product } from "@/hooks/useProducts";
@@ -27,7 +28,7 @@ import { PiezaDestacada } from "./PiezaDestacada";
 
 const PASO = 50;
 const POR_PAGINA = 12;
-const ATAJOS = [1000, 2000, 3000];
+const ATAJOS = ATAJOS_HASTA; // tramos fijos de lib/presupuesto.ts
 
 type Orden = "recientes" | "precio_asc" | "precio_desc";
 const ORDENES: { id: Orden; label: string }[] = [
@@ -163,10 +164,10 @@ export function ProductsSection() {
           className="mb-8 flex flex-col gap-5 md:mb-10 md:flex-row md:items-end md:justify-between"
         >
           <div className="max-w-2xl">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.25em] text-accent-strong">
+            <p className="mb-3 text-sm font-medium text-accent-strong">
               Catálogo G&amp;M
             </p>
-            <h2 className="font-display text-4xl font-semibold leading-[1.02] md:text-6xl">
+            <h2 className="t-seccion">
               ¿Qué espacio vas a <em className="italic text-accent-strong">transformar</em>?
             </h2>
             <p className="mt-3 text-muted-foreground">
@@ -229,10 +230,10 @@ export function ProductsSection() {
             {hayRango && (
               <div>
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="text-sm font-medium text-muted-foreground">
                     Tu presupuesto
                   </p>
-                  <p className="font-display text-3xl font-semibold leading-none">
+                  <p className="t-precio-ficha">
                     {limitado ? `Hasta ${fmtCorto(topeEf)}` : "Sin límite"}
                   </p>
                 </div>
@@ -270,13 +271,13 @@ export function ProductsSection() {
                   onClick={() => setSoloOfertas((v) => !v)}
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
                     soloOfertas
-                      ? "border-destructive bg-destructive text-destructive-foreground"
-                      : "border-border bg-background hover:border-destructive/50"
+                      ? "border-accent-strong bg-accent-strong text-accent-foreground"
+                      : "border-border bg-background hover:border-accent-strong/50"
                   }`}
                 >
                   <span
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                      soloOfertas ? "bg-white/20" : "bg-destructive/10 text-destructive"
+                      soloOfertas ? "bg-white/20" : "bg-accent-soft text-accent-strong"
                     }`}
                   >
                     <Flame className="h-4.5 w-4.5" />
@@ -295,7 +296,7 @@ export function ProductsSection() {
               )}
 
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">
                   Ordenar
                 </p>
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Ordenar piezas">
@@ -347,7 +348,7 @@ export function ProductsSection() {
         ) : filtradas.length === 0 ? (
           <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
             <SearchX className="mb-4 h-10 w-10 text-muted-foreground" />
-            <h3 className="font-display text-2xl font-semibold">
+            <h3 className="text-xl font-semibold">
               {data.length === 0
                 ? "Pronto tendremos piezas nuevas"
                 : "Nada encaja con esta combinación"}

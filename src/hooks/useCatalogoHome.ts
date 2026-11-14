@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Product } from "@/hooks/useProducts";
 
-export function useCatalogoHome(first = 60) {
+export function useCatalogoHome(first = 60, enabled = true) {
   return useQuery({
     queryKey: ["products-catalogo-home", first],
+    enabled,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase

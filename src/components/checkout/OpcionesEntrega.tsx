@@ -47,7 +47,7 @@ export function OpcionesEntrega({
               <span className="block text-sm font-medium">{o.titulo}</span>
               <span className="block text-xs text-muted-foreground">{o.sub}</span>
             </span>
-            <span className={`shrink-0 text-sm font-semibold ${o.verde ? "text-green-600" : "text-foreground"}`}>
+            <span className={`shrink-0 text-sm font-semibold ${o.verde ? "text-primary" : "text-foreground"}`}>
               {o.precio}
             </span>
           </button>

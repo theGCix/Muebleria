@@ -52,7 +52,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
   };
 
   return (
-    <article className="group relative isolate flex min-h-[440px] h-full flex-col justify-end overflow-hidden rounded-2xl bg-[var(--wood-dark)] text-white shadow-[var(--shadow-elegant)]">
+    <article className="group relative isolate flex min-h-[440px] h-full flex-col justify-end overflow-hidden rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-elegant)]">
       {/* Fondo: toda la imagen es un enlace a la ficha */}
       <Link
         to="/product/$handle"
@@ -80,15 +80,15 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur ${
             activa
-              ? "bg-destructive text-destructive-foreground"
-              : "bg-white/90 text-[var(--wood-dark)]"
+              ? "bg-accent-strong text-accent-foreground"
+              : "bg-white/90 text-primary"
           }`}
         >
           <EtiquetaIcon className="h-3.5 w-3.5" />
           {etiqueta}
         </span>
         {activa && p.descuento_porcentaje ? (
-          <span className="rounded-full bg-white/90 px-2.5 py-1.5 text-xs font-bold text-destructive shadow-sm">
+          <span className="rounded-full bg-white/90 px-2.5 py-1.5 text-xs font-bold text-accent-strong shadow-sm">
             -{p.descuento_porcentaje}%
           </span>
         ) : null}
@@ -97,11 +97,11 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
       {/* Contenido */}
       <div className="pointer-events-none relative z-10 flex flex-col gap-3 p-5 md:p-7">
         {p.categoria && (
-          <span className="text-xs font-medium uppercase tracking-[0.22em] text-white/70">
+          <span className="text-xs font-medium text-white/80">
             {p.categoria}
           </span>
         )}
-        <h3 className="font-display text-3xl font-semibold leading-[1.05] md:text-[2.6rem]">
+        <h3 className="text-3xl font-semibold leading-[1.1] md:text-4xl">
           {p.nombre}
         </h3>
         {p.descripcion && (
@@ -116,7 +116,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
             <span className="pb-0.5 text-sm text-white/60 line-through">{fmtPEN(p.precio)}</span>
           )}
           {activa && ahorro > 0 && (
-            <span className="pb-0.5 text-sm font-semibold text-[var(--color-gold-light)]">
+            <span className="pb-0.5 text-sm font-semibold text-secondary">
               Ahorras {fmtPEN(ahorro)}
             </span>
           )}
@@ -129,7 +129,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
               <span className="flex min-w-[170px] flex-col gap-1">
                 <span className="h-1.5 overflow-hidden rounded-full bg-white/20">
                   <span
-                    className="block h-full rounded-full bg-[var(--color-gold)]"
+                    className="block h-full rounded-full bg-secondary"
                     style={{ width: `${Math.max(8, ((p.stock ?? 0) / STOCK_BAJO) * 100)}%` }}
                   />
                 </span>
@@ -149,7 +149,7 @@ export function PiezaDestacada({ product: p }: { product: Product }) {
                 ? "cursor-default bg-white/20 text-white/60"
                 : enCarrito
                   ? "cursor-default bg-emerald-50 text-emerald-700"
-                  : "bg-white text-[var(--wood-dark)] shadow-lg hover:-translate-y-0.5 hover:bg-[var(--color-gold-light)] active:scale-[0.98]"
+                  : "bg-white text-primary shadow-lg hover:-translate-y-0.5 hover:bg-secondary active:scale-[0.98]"
             }`}
           >
             {enCarrito ? <Check className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}

@@ -95,4 +95,13 @@
 - **Mayúsculas con espaciado:** solo una etiqueta superior por página (`.gmx-eyebrow`); el resto en minúscula normal.
 - **Botón de WhatsApp:** neutro (`.gmx-wa`, fondo `--card`, borde `--border`) con el ícono en `--whatsapp`; nunca un bloque verde sólido.
 - **Footer:** verde bosque con texto `text-primary-foreground` (opacidad ≥ 75 %).
-- **Pendiente (entrega 2):** Hero, HeroSlider, PiezaDestacada y MedidaCTA siguen con la paleta cálida heredada (`--color-walnut/gold/blush` en `styles.css`); catálogo, carrito y checkout solo cambian por los tokens.
+- **Entrega 2 (portada, home, catálogo, carrito, checkout):** hecha. `Hero.tsx`, `HeroSlider.tsx` y `ProductDetail.tsx` quedan como código heredado sin montar (siguen con `--color-walnut/gold`); no volver a montarlos sin migrarlos a tokens.
+
+## Reglas de presupuesto y portada (Japandi, entrega 2)
+- **Tramos de presupuesto:** una sola fuente, `TRAMOS` en `src/lib/presupuesto.ts` (fijos en código, calculados el 2026-11-14 con los precios finales de los 17 productos activos: hasta S/ 1,500 → 4 piezas · S/ 1,500–2,000 → 5 · más de S/ 2,000 → 8). Se editan solo esos números; los atajos del slider del home (`ATAJOS_HASTA`) salen de ahí. `min` exclusivo, `max` inclusivo, siempre sobre `ofertaInfo(p).precioFinal`.
+- **Portada** (`PortadaPresupuesto.tsx`): título, línea de apoyo, selector y «Ver todo el catálogo»; nada más. Cada tramo es un enlace a `/catalogo?min=&max=`. Conserva `data-hero`, `data-hero-title` y `data-hero-item` (animaciones de `useHomeCinema`).
+- **`/catalogo` con `min`/`max`:** filtra en el cliente por precio final con `useCatalogoHome` (el servidor solo ordena por precio de lista). Si el catálogo supera 60 piezas, subir el límite de esa consulta.
+- **Terracota = solo descuentos y ofertas** (etiquetas `-X%`, filtro «Solo piezas en oferta», precio con oferta, cupón aplicado). Rojo `destructive` solo para errores, acciones destructivas y escasez (poco stock / agotado).
+- **Verde `primary`** para «Sin costo» y confirmaciones; nunca `green-600` / `emerald` / `amber` sueltos (no llegan a 4.5:1).
+- **Una sola etiqueta superior en mayúsculas por página:** home = «Nuestras colecciones» (`Categories`); página de pago aprobado y rechazado = su etiqueta de cabecera. El resto, en minúscula normal (`text-sm font-medium`).
+- **Títulos:** h1/h2 de sección con `.t-seccion` (Playfair 400, 26/32); portada con `.t-titulo` (48/32). h3/h4 en Inter, nunca `font-display`.

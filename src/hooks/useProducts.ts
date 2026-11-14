@@ -137,6 +137,8 @@ interface AllProductsQuery {
   categoria?: string; // slug de CATEGORIAS, o undefined = todas
   sort?: ProductSort;
   page: number; // 0-indexed
+  /** false = no consultar (p. ej. /catalogo con filtro de precio usa useCatalogoHome) */
+  enabled?: boolean;
 }
 
 /**
@@ -144,8 +146,9 @@ interface AllProductsQuery {
  * A diferencia de useProducts (preview acotado del home), esta trae
  * el conteo total para poder mostrar "Cargar más" con precisión.
  */
-export function useAllProducts({ search, categoria, sort = "recientes", page }: AllProductsQuery) {
+export function useAllProducts({ search, categoria, sort = "recientes", page, enabled = true }: AllProductsQuery) {
   return useQuery({
+    enabled,
     queryKey: ["products-all", search ?? null, categoria ?? null, sort, page],
     queryFn: async () => {
       let q = supabase

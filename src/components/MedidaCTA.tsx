@@ -66,14 +66,14 @@ export function MedidaCTA() {
     <section id="a-medida" className="scroll-mt-28 px-4 pb-20 pt-4 md:pb-24">
       <div
         data-reveal="panel"
-        className="hero-taller container mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-3xl bg-[var(--wood-dark)] p-7 text-white shadow-[var(--shadow-elegant)] md:p-12 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:p-14">
+        className="hero-taller container mx-auto grid max-w-7xl gap-10 overflow-hidden rounded-3xl bg-primary p-7 text-primary-foreground shadow-[var(--shadow-elegant)] md:p-12 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:p-14">
         <div className="flex flex-col justify-center">
-          <span className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-gold)]/50 px-3.5 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-[var(--color-gold-light)]">
+          <span className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-secondary/50 px-3.5 py-1.5 text-sm font-medium text-secondary">
             <Ruler className="h-3.5 w-3.5" /> Muebles a medida
           </span>
-          <h2 className="font-display text-4xl font-semibold leading-[1.02] md:text-6xl">
+          <h2 className="t-seccion">
             ¿No encuentras el mueble exacto? Lo fabricamos para tu{" "}
-            <em className="italic text-[var(--color-gold)]">espacio</em>.
+            <em className="italic text-secondary">espacio</em>.
           </h2>
           <p className="mt-4 max-w-lg text-white/75">
             Nuestros artesanos fabrican piezas pensadas para las medidas y el estilo de tu espacio.
@@ -82,7 +82,7 @@ export function MedidaCTA() {
           <ol className="mt-8 space-y-4">
             {PASOS.map((p) => (
               <li key={p.n} className="flex items-start gap-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-gold)]/60 font-display text-lg text-[var(--color-gold)]">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-secondary/60 text-lg font-semibold text-secondary">
                   {p.n}
                 </span>
                 <span>
@@ -98,7 +98,7 @@ export function MedidaCTA() {
           {enviado ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 text-center">
               <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-              <h3 className="font-display text-3xl font-semibold">¡Gracias, {enviado}!</h3>
+              <h3 className="text-2xl font-semibold">¡Gracias, {enviado}!</h3>
               <p className="max-w-xs text-sm text-muted-foreground">
                 Recibimos tu consulta. Un asesor te contactará muy pronto por WhatsApp o llamada.
               </p>
@@ -119,14 +119,14 @@ export function MedidaCTA() {
               }}
             >
               <div>
-                <h3 className="font-display text-3xl font-semibold">Pide tu cotización</h3>
+                <h3 className="text-2xl font-semibold">Pide tu cotización</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Toma menos de un minuto. Sin compromiso.
                 </p>
               </div>
 
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">
                   ¿Qué necesitas?
                 </p>
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de mueble">

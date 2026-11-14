@@ -104,7 +104,7 @@ function TestimoniosPage() {
                       <div className="mt-1.5 flex items-center gap-2 text-xs text-white/85">
                         {f.calificacion > 0 && (
                           <span className="inline-flex items-center gap-0.5" aria-label={`${f.calificacion} de 5 estrellas`}>
-                            <Star className="h-3 w-3 fill-[var(--color-gold)] text-[var(--color-gold)]" /> {f.calificacion}
+                            <Star className="h-3 w-3 fill-detail text-detail" /> {f.calificacion}
                           </span>
                         )}
                         {f.origen !== "panel" && (
