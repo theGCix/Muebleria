@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { EmptyState, KanbanSkeleton } from "@/components/states";
+import { SEGMENTOS, nombreAmbiente, nombreSegmento } from "@/lib/segmentos";
 
 export const Route = createFileRoute("/_authenticated/leads")({
   head: () => ({ meta: [{ title: "Leads — G&M" }] }),
@@ -91,6 +92,13 @@ function LeadDetail({ lead, asesores, onClose }: {
               <div className="flex items-center gap-1.5 col-span-2">
                 <Package className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>{lead.producto_nombre}</span>
+              </div>
+            )}
+            {(lead.segmento || lead.ambiente) && (
+              <div className="col-span-2 text-sm">
+                <span className="text-muted-foreground">Segmento: </span>
+                {nombreSegmento(lead.segmento) ?? "—"}
+                {lead.ambiente && <span className="text-muted-foreground"> · Ambiente: {nombreAmbiente(lead.ambiente)}</span>}
               </div>
             )}
             <div className="col-span-2 text-xs text-muted-foreground">
@@ -194,6 +202,7 @@ function LeadDetail({ lead, asesores, onClose }: {
 // ── Página principal ──────────────────────────────────────────
 function LeadsPage() {
   const [q, setQ] = useState("");
+  const [segFiltro, setSegFiltro] = useState<string>("todos");
   const [selected, setSelected] = useState<Lead | null>(null);
   const { valor: periodo, setValor: setPeriodo, rango } =
     usePeriodo({ granularidad: "todo", offset: 0 });
@@ -224,7 +233,9 @@ function LeadsPage() {
   );
 
   const filtered = useMemo(() => {
-    const list = leadsPeriodo;
+    const list = segFiltro === "todos"
+      ? leadsPeriodo
+      : leadsPeriodo.filter((l) => (segFiltro === "sin" ? !l.segmento : l.segmento === segFiltro));
     if (!q.trim()) return list;
     const needle = q.toLowerCase();
     return list.filter((l) =>
@@ -233,7 +244,7 @@ function LeadsPage() {
       l.email?.toLowerCase().includes(needle) ||
       l.producto_nombre?.toLowerCase().includes(needle)
     );
-  }, [leadsPeriodo, q]);
+  }, [leadsPeriodo, q, segFiltro]);
 
   const byEstado = useMemo(() => {
     const map = {} as Record<LeadEstado, Lead[]>;
@@ -287,15 +298,27 @@ function LeadsPage() {
         ))}
       </div>
 
-      {/* Búsqueda */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Buscar por nombre, teléfono, producto…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+      {/* Búsqueda y filtro por segmento */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Buscar por nombre, teléfono, producto…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <Select value={segFiltro} onValueChange={setSegFiltro}>
+          <SelectTrigger className="w-[230px]" aria-label="Filtrar por segmento"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los segmentos</SelectItem>
+            {SEGMENTOS.map((s) => (
+              <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
+            ))}
+            <SelectItem value="sin">Sin segmento</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Kanban */}
@@ -329,6 +352,11 @@ function LeadsPage() {
                         <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
                           <Package className="h-3 w-3" /> {lead.producto_nombre}
                         </p>
+                      )}
+                      {lead.segmento && (
+                        <span className="mt-1.5 inline-block rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium">
+                          {nombreSegmento(lead.segmento)}
+                        </span>
                       )}
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-[10px] text-muted-foreground">

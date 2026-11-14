@@ -244,6 +244,11 @@ export function trackLead(origen: "whatsapp" | "whatsapp_chat" | "cotizacion" | 
   );
 }
 
+/** El visitante dijo «¿para qué es?» en la portada (segmento de lib/segmentos.ts). Solo GA4. */
+export function trackSegmento(segmento: string) {
+  ga("select_segment", limpiar({ segmento }));
+}
+
 /** Búsqueda en el catálogo (todas las búsquedas públicas terminan en /catalogo?q=). */
 export function trackSearch(termino: string) {
   const t = termino.trim();

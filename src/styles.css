@@ -231,8 +231,17 @@
   letter-spacing: -0.02em;
 }
 
-/* Campaña: superficie pastel, sin textura */
+/* Veta de madera muy sutil sobre fondos oscuros (bloque «A medida») */
 .hero-taller {
+  background-image: repeating-linear-gradient(
+    92deg,
+    rgb(255 255 255 / 0.018) 0 2px,
+    transparent 2px 9px
+  );
+}
+
+/* Campaña (Días de locura): superficie pastel durazno, sin textura */
+.hero-campana {
   background-color: var(--campana);
 }
 

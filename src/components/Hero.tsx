@@ -167,7 +167,7 @@ function HeroCampana({ c }: { c: Campana }) {
   return (
     <section
       data-hero
-      className="hero-taller relative overflow-hidden text-foreground"
+      className="hero-campana relative overflow-hidden text-foreground"
     >
       <div className="container mx-auto grid grid-cols-1 items-center gap-6 px-4 py-8 md:px-6 md:py-10 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
         <div data-hero-text className="min-w-0 space-y-4">

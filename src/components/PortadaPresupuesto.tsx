@@ -8,6 +8,10 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { useCatalogoHome } from "@/hooks/useCatalogoHome";
 import { TRAMOS, contarPorTramo, etiquetaRango } from "@/lib/presupuesto";
+import { SelectorSegmento } from "@/components/SelectorSegmento";
+import { useSegmento } from "@/hooks/useSegmento";
+import { accionSugerida } from "@/lib/segmentos";
+import { trackSegmento } from "@/lib/analytics";
 
 const plural = (n: number) => `${n} ${n === 1 ? "pieza" : "piezas"}`;
 
@@ -17,6 +21,10 @@ export function PortadaPresupuesto() {
 
   // Con datos cargados, un tramo sin piezas no se ofrece (llevaría a una lista vacía)
   const tramos = TRAMOS.filter((t) => !conteo || conteo[t.id] > 0);
+
+  // «¿Para qué es?»: opcional; prellena los formularios de cotización y mide qué segmentos llegan
+  const [segmento, setSegmento] = useSegmento();
+  const accion = accionSugerida(segmento);
 
   return (
     <section data-hero className="bg-background">
@@ -51,7 +59,30 @@ export function PortadaPresupuesto() {
           </ul>
         </div>
 
-        <div data-hero-item className="mt-6">
+        <SelectorSegmento
+          deslizable
+          value={segmento}
+          onChange={(v) => {
+            setSegmento(v);
+            if (v) trackSegmento(v);
+          }}
+          className="mt-6"
+        />
+        {accion && (
+          <p data-testid="accion-segmento" className="t-texto mt-3">
+            {accion.destino === "medida" ? (
+              <a href="#a-medida" className="font-semibold text-primary underline underline-offset-4">
+                {accion.texto}
+              </a>
+            ) : (
+              <Link to="/envios" className="font-semibold text-primary underline underline-offset-4">
+                {accion.texto}
+              </Link>
+            )}
+          </p>
+        )}
+
+        <div data-hero-item className="mt-4">
           <Link
             to="/catalogo"
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

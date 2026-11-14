@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { trackLead } from "@/lib/analytics";
+import { SelectorSegmento } from "@/components/SelectorSegmento";
+import { useSegmento } from "@/hooks/useSegmento";
 
 interface LeadFormDialogProps {
   open: boolean;
@@ -33,6 +35,8 @@ export function LeadFormDialog({
 }: LeadFormDialogProps) {
   const [form, setForm] = useState({ nombre: "", telefono: "", email: "", mensaje: "" });
   const [sent, setSent] = useState(false);
+  // Prellenado con lo que el visitante eligió en la portada; si cambia aquí, también cambia allá
+  const [segmento, setSegmento] = useSegmento();
 
   // Al abrir, pre-llenamos el mensaje con las preferencias elegidas (sin pisar lo que ya escribió)
   useEffect(() => {
@@ -51,6 +55,7 @@ export function LeadFormDialog({
         producto_id: productoId ?? null,
         producto_nombre: productoNombre ?? null,
         origen: "web",
+        segmento,
       }),
     onSuccess: () => {
       trackLead("cotizacion", { id: productoId ?? undefined, nombre: productoNombre ?? undefined });
@@ -116,6 +121,7 @@ export function LeadFormDialog({
                   <Input id="lead-email" type="email" value={form.email} onChange={set("email")} />
                 </div>
               </div>
+              <SelectorSegmento variant="select" value={segmento} onChange={setSegmento} />
               <div>
                 <Label htmlFor="lead-mensaje">Cuéntanos qué necesitas</Label>
                 <Textarea

@@ -8,6 +8,9 @@ import { toast } from "sonner";
 import { createLead } from "@/lib/leads.functions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SelectorSegmento } from "@/components/SelectorSegmento";
+import { useSegmento } from "@/hooks/useSegmento";
+import { ambienteDeTipo } from "@/lib/segmentos";
 
 const TIPOS = ["Sala", "Comedor", "Recámara", "Separador de ambiente", "Otro"];
 
@@ -31,6 +34,7 @@ const PASOS = [
 
 export function MedidaCTA() {
   const [tipo, setTipo] = useState<string | null>(null);
+  const [segmento, setSegmento] = useSegmento();
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [detalle, setDetalle] = useState("");
@@ -51,6 +55,8 @@ export function MedidaCTA() {
           `Cotización a medida${tipo ? ` — ${tipo}` : ""}` +
           (detalle.trim() ? `: ${detalle.trim()}` : ""),
         origen: "web",
+        segmento,
+        ambiente: ambienteDeTipo(tipo),
       }),
     onSuccess: () => {
       setEnviado(nombre.trim().split(" ")[0]);
@@ -147,6 +153,8 @@ export function MedidaCTA() {
                   ))}
                 </div>
               </div>
+
+              <SelectorSegmento value={segmento} onChange={setSegmento} />
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>

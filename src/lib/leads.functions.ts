@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAuthenticatedClient } from "@/integrations/supabase/auth-middleware";
 import { getSessionId } from "@/hooks/useEventTracking";
 import { getStoredUtm } from "@/hooks/useUtm";
+import { AMBIENTE_IDS, SEGMENTO_IDS, type AmbienteId, type SegmentoId } from "@/lib/segmentos";
 
 export const LEAD_ESTADOS = [
   "nuevo", "contactado", "interesado", "cotizacion_enviada",
@@ -26,6 +27,9 @@ export interface Lead {
   producto_nombre: string | null;
   mensaje: string | null;
   origen: LeadOrigen;
+  /** Para qué compra / qué ambiente (opcionales; ver lib/segmentos.ts). */
+  segmento?: SegmentoId | null;
+  ambiente?: AmbienteId | null;
   estado: LeadEstado;
   asesor_id: string | null;
   customer_id: string | null;
@@ -43,13 +47,15 @@ const CreateLeadSchema = z.object({
   producto_nombre: z.string().max(255).optional().nullable(),
   mensaje: z.string().max(2000).optional().nullable(),
   origen: z.enum(LEAD_ORIGENES).default("web"),
+  segmento: z.enum(SEGMENTO_IDS).optional().nullable(),
+  ambiente: z.enum(AMBIENTE_IDS).optional().nullable(),
 });
 
 export async function createLead(input: z.infer<typeof CreateLeadSchema>) {
   const data = CreateLeadSchema.parse(input);
   const utm = getStoredUtm();
 
-  const { error } = await supabase.from("leads").insert({
+  const base = {
     nombre: data.nombre,
     telefono: data.telefono || null,
     email: data.email || null,
@@ -61,7 +67,18 @@ export async function createLead(input: z.infer<typeof CreateLeadSchema>) {
     utm_source: utm.utm_source ?? null,
     utm_medium: utm.utm_medium ?? null,
     utm_campaign: utm.utm_campaign ?? null,
-  });
+  };
+  // Segmento y ambiente solo viajan si el cliente los eligió
+  const extra: Record<string, string> = {};
+  if (data.segmento) extra.segmento = data.segmento;
+  if (data.ambiente) extra.ambiente = data.ambiente;
+
+  let { error } = await supabase.from("leads").insert({ ...base, ...extra });
+  // Si la migración 20261117 aún no está aplicada, la columna no existe: no perdemos el lead,
+  // reintentamos sin segmento/ambiente.
+  if (error && Object.keys(extra).length > 0 && (error.code === "PGRST204" || /segmento|ambiente/i.test(error.message))) {
+    ({ error } = await supabase.from("leads").insert(base));
+  }
   if (error) throw new Error(error.message);
   return { ok: true };
 }
