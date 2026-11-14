@@ -11,8 +11,8 @@
 ## Stack
 React, TypeScript, Vite, TanStack Router/Query, Supabase (PostgreSQL, RLS, Edge Functions), Tailwind, shadcn/ui, Cloudinary. Deploy en Render (proxy Express).
 
-## Identidad visual (conservar)
-Nogal, dorado y teal.
+## Identidad visual (Japandi Premium, desde 2026-11-14)
+Marfil `#F5F1E8`, beige `#D8C3A5`, marrón `#8B735B`, verde bosque `#34443A` y gris oscuro `#292824`. Tipografía: Playfair Display (títulos y logo) + Inter. Detalle en RULES.md.
 
 ## Rol de Claude en este proyecto
 Ingeniero full-stack senior + UI/UX e-commerce.

@@ -35,7 +35,7 @@ export function LivePrice({ precioOriginal, precioFinal, enOferta, descuento, ve
           </>
         )}
         {agotado && (
-          <span style={{ fontSize: 13, background: "#fde8e8", color: "#b91c1c", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>
+          <span style={{ fontSize: 13, background: "color-mix(in oklab, var(--destructive) 12%, var(--card))", color: "var(--destructive)", padding: "3px 10px", borderRadius: 20 }}>Agotado</span>
         )}
       </div>
 

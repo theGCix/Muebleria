@@ -2,11 +2,11 @@
    Ruta de compra de la ficha de producto. Usa los tokens --gm-* de la página (con respaldo). */
 
 .gmb {
-  --b-walnut: var(--gm-walnut, #3b2b1f);
-  --b-mid: var(--gm-mid, #5a4035);
-  --b-gold: var(--gm-gold, #c9a96e);
-  --b-line: var(--gm-border, rgba(59, 43, 31, .12));
-  --b-hover: rgba(59, 43, 31, .07);
+  --b-walnut: var(--gm-walnut);
+  --b-mid: var(--gm-mid);
+  --b-gold: var(--gm-gold);
+  --b-line: var(--gm-border);
+  --b-hover: rgba(52, 68, 58, .07);
   max-width: 1300px;
   margin: 0 auto;
   padding: 14px 48px 4px;
@@ -24,10 +24,10 @@
 .gmb-trail {
   list-style: none; margin: 0; padding: 3px;
   display: inline-flex; align-items: center; max-width: 100%;
-  background: rgba(255, 253, 249, .85);
+  background: color-mix(in oklab, var(--card) 85%, transparent);
   border: 1px solid var(--b-line);
   border-radius: 9999px;
-  box-shadow: 0 8px 22px -18px rgba(60, 35, 15, .5);
+  box-shadow: 0 8px 22px -18px rgba(41, 40, 36, .5);
 }
 .gmb-trail > li { display: flex; align-items: center; position: relative; min-width: 0; }
 
@@ -63,14 +63,14 @@
 /* Pieza actual */
 .gmb-now { gap: 9px; padding: 0 14px 0 10px; height: 36px; color: var(--b-walnut); font-weight: 600; }
 .gmb-now-name { max-width: 34ch; }
-.gmb-dot { flex: none; width: 7px; height: 7px; border-radius: 9999px; background: var(--b-gold); box-shadow: 0 0 0 3px rgba(201, 169, 110, .22); }
+.gmb-dot { flex: none; width: 7px; height: 7px; border-radius: 9999px; background: var(--b-gold); box-shadow: 0 0 0 3px rgba(139, 115, 91, .22); }
 
 /* ───────── Menú "Seguir explorando" ───────── */
 .gmb-menu {
   position: absolute; z-index: 30; left: 0; top: calc(100% + 10px);
   width: 270px; padding: 8px;
-  background: #fffdf9; border: 1px solid var(--b-line); border-radius: 18px;
-  box-shadow: 0 24px 48px -20px rgba(60, 35, 15, .45);
+  background: var(--card); border: 1px solid var(--b-line); border-radius: 18px;
+  box-shadow: 0 24px 48px -20px rgba(41, 40, 36, .45);
   transform-origin: 24px -6px;
   animation: gmb-open .16s ease-out;
 }
@@ -82,7 +82,7 @@
   transition: background-color .15s;
 }
 .gmb-opt:hover { background: var(--b-hover); }
-.gmb-opt[aria-current="true"] { background: rgba(201, 169, 110, .18); }
+.gmb-opt[aria-current="true"] { background: rgba(139, 115, 91, .18); }
 .gmb-opt-ok { margin-left: auto; color: var(--b-walnut); }
 .gmb-all {
   display: block; margin-top: 4px; padding: 12px 10px 8px; border-top: 1px solid var(--b-line);
@@ -95,8 +95,8 @@
 /* ───────── Pieza 3 de 8 ───────── */
 .gmb-pager {
   flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 3px;
-  background: rgba(255, 253, 249, .85); border: 1px solid var(--b-line); border-radius: 9999px;
-  box-shadow: 0 8px 22px -18px rgba(60, 35, 15, .5);
+  background: color-mix(in oklab, var(--card) 85%, transparent); border: 1px solid var(--b-line); border-radius: 9999px;
+  box-shadow: 0 8px 22px -18px rgba(41, 40, 36, .5);
 }
 .gmb-count { padding: 0 6px; color: var(--b-mid); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gmb-count b { color: var(--b-walnut); font-weight: 700; }
@@ -106,21 +106,21 @@
   width: 36px; height: 36px; border-radius: 9999px; color: var(--b-walnut); text-decoration: none;
   transition: background-color .18s;
 }
-.gmb-step:hover, .gmb-step:focus-visible { background: var(--b-walnut); color: #fffdf9; }
+.gmb-step:hover, .gmb-step:focus-visible { background: var(--b-walnut); color: var(--card); }
 
 /* Vista previa de la pieza vecina */
 .gmb-peek {
   position: absolute; z-index: 30; top: calc(100% + 10px); width: 250px; padding: 8px;
   display: none; gap: 12px; align-items: center; text-align: left; line-height: 1.25;
-  background: #fffdf9; color: var(--b-walnut);
+  background: var(--card); color: var(--b-walnut);
   border: 1px solid var(--b-line); border-radius: 16px;
-  box-shadow: 0 24px 48px -20px rgba(60, 35, 15, .45);
+  box-shadow: 0 24px 48px -20px rgba(41, 40, 36, .45);
   pointer-events: none;
 }
 .gmb-peek[data-lado="anterior"] { right: -40px; }
 .gmb-peek[data-lado="siguiente"] { right: 0; }
 .gmb-step:hover .gmb-peek, .gmb-step:focus-visible .gmb-peek { display: flex; animation: gmb-open .16s ease-out; }
-.gmb-peek-img { flex: none; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; background: #f3eadc; }
+.gmb-peek-img { flex: none; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; background: var(--muted); }
 .gmb-peek-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gmb-peek-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .gmb-peek-eyebrow { font-size:12px; color: var(--b-mid); }

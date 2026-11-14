@@ -3,7 +3,7 @@
 1. Consultar archivos reales antes de proponer cambios.
 2. Rutas verificadas y lectura selectiva; no analizar todo el repo.
 3. Cambios mínimos, reversibles, **sin dependencias nuevas**.
-4. Conservar diseño: nogal, dorado, teal.
+4. Identidad visual **Japandi Premium** (decisión del dueño, 2026-11-14, reemplaza «nogal, dorado, teal»): marfil, beige, marrón, verde bosque y gris oscuro. No volver a introducir nogal/dorado/teal como colores de interfaz.
 5. No inventar datos legales, comerciales ni técnicos; preguntar si faltan.
 6. Entregar archivos modificados por separado (ruta completa).
 7. Texto legal definitivo requiere aprobación del dueño.
@@ -84,3 +84,15 @@
 - **El servidor decide cuánto se cobra online** (`modalidadPago` / `calcularAdelanto`); el navegador solo lo muestra. Si cambias `PORCENTAJE_ADELANTO`, cámbialo en `server/pagos.js` Y en `src/lib/pagoEfectivo.ts` (una prueba lo verifica).
 - **Efectivo solo en recojo en tienda y delivery Lima.** Provincia nunca. El recojo en efectivo NO reserva stock hasta que ventas confirme (`confirmar_pedido_efectivo`); un pedido en efectivo pendiente pasa a «Pagado» solo con `registrar_cobro_pedido`.
 - **Migración antes que servidor:** el servidor escribe `metodo_pago` y `monto_pagado` en cada pedido nuevo.
+
+## Reglas visuales (Japandi Premium)
+- **Paleta (tokens en `src/styles.css`, siempre `oklch`):** fondo marfil `#F5F1E8` (`--background`), tarjetas blanco cálido `#FFFDF9` (`--card`), botones principales / precios / footer verde bosque `#34443A` (`--primary`), botones secundarios beige `#D8C3A5` (`--secondary`), texto gris oscuro `#292824` (`--foreground`), texto secundario `#6A5D4E` (`--muted-foreground`, 5.7:1).
+- **Marrón `#8B735B` (`--detail`): 4.0:1 sobre marfil → solo líneas, bordes e íconos; nunca texto pequeño.**
+- **Terracota = solo ofertas y descuentos:** `--accent-strong` para texto (7.3:1 sobre marfil, 4.8:1 sobre beige), `--accent-soft` para fondos suaves, `--accent` solo fondos/bordes sin texto (regla 7.1 vigente). Un descuento nunca va en verde ni en rojo.
+- **Sin hex sueltos** en la ficha, tarjetas, footer ni header: usar tokens. Excepciones: blanco sobre fondos oscuros, los acabados reales de producto (p. ej. patas Dorado/Negro) y las ilustraciones SVG.
+- **Tipografía:** una serif (`Playfair Display`, 400 y 700) solo en `h1`/`h2`, `.font-display` y el logo; todo lo demás Inter (400/500/600/700). `h3`/`h4` son Inter (nombres de producto y subtítulos). Cargada en `index.html`; no usar Cormorant.
+- **Escala** (`.t-*` en `styles.css`, móvil/desktop ≥ 640 px): título 32/48 · sección 26/32 · producto 15/16 (Inter 600) · precio 18/20 (Inter 700, verde) · texto 14/16 · botón 14 · apoyo 12 (mínimo, regla 7.3). En la ficha, el título del producto usa 26/32 y el precio principal 24/28 (`.t-precio-ficha`).
+- **Mayúsculas con espaciado:** solo una etiqueta superior por página (`.gmx-eyebrow`); el resto en minúscula normal.
+- **Botón de WhatsApp:** neutro (`.gmx-wa`, fondo `--card`, borde `--border`) con el ícono en `--whatsapp`; nunca un bloque verde sólido.
+- **Footer:** verde bosque con texto `text-primary-foreground` (opacidad ≥ 75 %).
+- **Pendiente (entrega 2):** Hero, HeroSlider, PiezaDestacada y MedidaCTA siguen con la paleta cálida heredada (`--color-walnut/gold/blush` en `styles.css`); catálogo, carrito y checkout solo cambian por los tokens.

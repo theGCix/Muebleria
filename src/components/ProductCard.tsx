@@ -312,9 +312,9 @@ export function ProductCard({ product: p }: Props) {
           {/* ───────── Información ───────── */}
           <div className="flex flex-1 flex-col p-2.5 @[13rem]:p-4 @[13rem]:pt-3.5">
             {p.categoria && (
-              <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{p.categoria}</span>
+              <span className="t-apoyo text-muted-foreground">{p.categoria}</span>
             )}
-            <h3 className="mt-1 text-sm font-semibold leading-snug line-clamp-2 @[13rem]:text-[17px]">{p.nombre}</h3>
+            <h3 className="mt-1 t-producto line-clamp-2">{p.nombre}</h3>
 
             {rating && (
               <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
@@ -340,19 +340,19 @@ export function ProductCard({ product: p }: Props) {
               {/* Precio */}
               {enOferta ? (
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="font-display text-xl font-bold leading-none text-destructive @[13rem]:text-2xl">{fmtPEN(precioOferta)}</span>
+                  <span className="t-precio text-primary">{fmtPEN(precioOferta)}</span>
                   <span className="text-sm text-muted-foreground line-through">{fmtPEN(p.precio)}</span>
-                  <span className="hidden whitespace-nowrap rounded-md bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold text-emerald-700 @[13rem]:inline">
+                  <span className="hidden whitespace-nowrap rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-semibold text-accent-strong @[13rem]:inline">
                     Ahorras {fmtPEN(p.precio - precioOferta)}
                   </span>
                   {cuentaRegresiva && (
-                    <span className="flex basis-full items-center gap-1.5 text-xs font-semibold text-destructive">
+                    <span className="flex basis-full items-center gap-1.5 text-xs font-semibold text-accent-strong">
                       <span className="gmc-dot" /> {cuentaRegresiva}
                     </span>
                   )}
                 </div>
               ) : (
-                <span className="font-display text-xl font-bold leading-none @[13rem]:text-2xl">{fmtPEN(p.precio)}</span>
+                <span className="t-precio text-primary">{fmtPEN(p.precio)}</span>
               )}
 
               {/* Escasez real */}

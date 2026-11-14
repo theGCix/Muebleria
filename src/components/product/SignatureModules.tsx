@@ -94,7 +94,7 @@ function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
             <stop offset="1" stopColor="#FFB860" stopOpacity="0" />
           </radialGradient>
         </defs>
-        <rect width="320" height="200" fill={ambient ? "#2A211B" : "#F7F4EF"} style={{ transition: "fill .6s" }} />
+        <rect width="320" height="200" fill={ambient ? "#2A211B" : "var(--gm-cream)"} style={{ transition: "fill .6s" }} />
         {wall != null && (() => {
           const wPx = wall * S, x1 = cx - wPx / 2, x2 = cx + wPx / 2;
           const col = margen! >= 0 ? "#3F7D4E" : "#B3412E";
@@ -113,7 +113,7 @@ function TvFit({ setPref, ambient, setAmbient }: ModuleProps) {
         <rect x={cx - tvPx / 2 + 3} y={153 - tvH} width={tvPx - 6} height={tvH - 6} rx="2" fill={ambient ? "#26364a" : "#1d2733"} />
         <rect x={cx - unitPx / 2} y="156" width={unitPx} height="26" rx="3" fill="var(--gm-walnut-mid)" />
         <line x1={cx - unitPx / 2} x2={cx + unitPx / 2} y1="192" y2="192" stroke="var(--gmx-accent)" strokeWidth="1.5" />
-        <text x={cx} y="198" textAnchor="middle" fontSize="8" fill={ambient ? "#e9dccb" : "#5A4035"}>{recW} cm</text>
+        <text x={cx} y="198" textAnchor="middle" fontSize="8" fill={ambient ? "#e9dccb" : "var(--gm-mid)"}>{recW} cm</text>
       </svg>
 
       <p className="gmx-readout">
@@ -179,7 +179,7 @@ function Seating({ nombre, subcategoria, setPref }: ModuleProps) {
             <animate attributeName="r" from="0" to="11" dur=".25s" begin={`${i * 0.04}s`} fill="freeze" />
           </circle>
         ))}
-        <text x="160" y="170" textAnchor="middle" fontSize="10" fill="#5A4035">
+        <text x="160" y="170" textAnchor="middle" fontSize="10" fill="var(--gm-mid)">
           {cap ? `Mesa pensada para ${cap}` : `Mesa de ~${ladoCm} cm de largo`}
         </text>
       </svg>
@@ -234,7 +234,7 @@ function Sleep({ setPref }: ModuleProps) {
         ) : (
           <rect x={bx + bw * 0.15} y={by + 10} width={bw * 0.7} height="18" rx="6" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
         )}
-        <text x="160" y={by + bl / 2 + 4} textAnchor="middle" fontSize="11" fill="#5A4035">{cama.w.toFixed(2)} × {cama.l.toFixed(2)} m</text>
+        <text x="160" y={by + bl / 2 + 4} textAnchor="middle" fontSize="11" fill="var(--gm-mid)">{cama.w.toFixed(2)} × {cama.l.toFixed(2)} m</text>
         <text x="160" y={ry + roomL * P + 16} textAnchor="middle" fontSize="9" fill="var(--gmx-accent)">espacio libre recomendado</text>
       </svg>
 

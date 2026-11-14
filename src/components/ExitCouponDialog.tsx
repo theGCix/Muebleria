@@ -37,7 +37,7 @@ interface Oferta {
 
 const dos = (n: number) => String(n).padStart(2, "0");
 const soles = (n: number) => `S/ ${Number.isInteger(n) ? n : n.toFixed(2)}`;
-const SERIF = { fontFamily: '"Cormorant Garamond", Georgia, serif' } as const;
+const SERIF = { fontFamily: "var(--font-display)" } as const;
 
 /** Solo en las páginas donde alguien navega y compra: nunca en checkout, login, perfil ni admin */
 function esPaginaPublica(p: string) {

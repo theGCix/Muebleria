@@ -10,20 +10,20 @@ export function Footer() {
   const hayGaleria = useHayGaleria();
   const hayProyectos = useHayProyectos();
   return (
-    <footer className="border-t border-border bg-secondary/40 mt-20">
+    <footer className="mt-20 bg-primary text-primary-foreground">
       <div className="container mx-auto px-6 py-16">
         <div className="grid md:grid-cols-4 gap-10">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-9 w-9 rounded-md bg-[image:var(--gradient-warm)] flex items-center justify-center text-primary-foreground font-display font-bold">
+              <div className="h-9 w-9 rounded-md bg-primary-foreground flex items-center justify-center text-primary font-display font-bold">
                 G
               </div>
               <span className="font-display text-xl font-semibold">G&amp;M Mueblería</span>
             </div>
-            <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
+            <p className="text-sm text-primary-foreground/75 max-w-sm leading-relaxed">
               Muebles artesanales de madera natural, hechos para durar generaciones.
             </p>
-            <ul className="mt-5 space-y-2 text-sm text-muted-foreground">
+            <ul className="mt-5 space-y-2 text-sm text-primary-foreground/75">
               {EMPRESA.direccion && (
                 <li className="flex items-start gap-2"><MapPin className="h-4 w-4 mt-0.5 shrink-0" />{EMPRESA.direccion}</li>
               )}
@@ -36,7 +36,7 @@ export function Footer() {
                     href={`https://wa.me/${WHATSAPP_NUMBER}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 hover:text-foreground"
+                    className="flex items-center gap-2 hover:text-primary-foreground"
                   >
                     <MessageCircle className="h-4 w-4 shrink-0" />
                     WhatsApp {WHATSAPP_NUMBER.replace(/^51(\d{3})(\d{3})(\d{3})$/, "$1 $2 $3")}
@@ -46,35 +46,35 @@ export function Footer() {
             </ul>
           </div>
           <div>
-            <h4 className="font-medium text-foreground mb-4">Empresa</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link to="/nosotros" className="hover:text-foreground">Nuestro taller</Link></li>
+            <h4 className="font-medium text-primary-foreground mb-4">Empresa</h4>
+            <ul className="space-y-2 text-sm text-primary-foreground/75">
+              <li><Link to="/nosotros" className="hover:text-primary-foreground">Nuestro taller</Link></li>
               {hayProyectos && (
-                <li><Link to="/proyectos" className="hover:text-foreground">Proyectos</Link></li>
+                <li><Link to="/proyectos" className="hover:text-primary-foreground">Proyectos</Link></li>
               )}
               {hayGaleria && (
-                <li><Link to="/testimonios" className="hover:text-foreground">Galería de clientes</Link></li>
+                <li><Link to="/testimonios" className="hover:text-primary-foreground">Galería de clientes</Link></li>
               )}
-              <li><a href="#categorias" className="hover:text-foreground">Categorías</a></li>
-              <li><a href="#catalogo" className="hover:text-foreground">Catálogo</a></li>
+              <li><a href="#categorias" className="hover:text-primary-foreground">Categorías</a></li>
+              <li><a href="#catalogo" className="hover:text-primary-foreground">Catálogo</a></li>
               {hayTestimonios && (
-                <li><a href="#testimonios" className="hover:text-foreground">Testimonios</a></li>
+                <li><a href="#testimonios" className="hover:text-primary-foreground">Testimonios</a></li>
               )}
             </ul>
           </div>
           <div>
-            <h4 className="font-medium text-foreground mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link to="/terminos" className="hover:text-foreground">Términos</Link></li>
-              <li><Link to="/privacidad" className="hover:text-foreground">Privacidad</Link></li>
-              <li><Link to="/envios" className="hover:text-foreground">Envíos</Link></li>
+            <h4 className="font-medium text-primary-foreground mb-4">Legal</h4>
+            <ul className="space-y-2 text-sm text-primary-foreground/75">
+              <li><Link to="/terminos" className="hover:text-primary-foreground">Términos</Link></li>
+              <li><Link to="/privacidad" className="hover:text-primary-foreground">Privacidad</Link></li>
+              <li><Link to="/envios" className="hover:text-primary-foreground">Envíos</Link></li>
               {LIBRO_RECLAMACIONES_URL && (
                 <li>
                   <a
                     href={LIBRO_RECLAMACIONES_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 font-medium text-foreground/80 hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 font-medium text-primary-foreground/90 hover:text-primary-foreground"
                   >
                     <BookOpen className="h-4 w-4" />
                     Libro de Reclamaciones
@@ -85,25 +85,25 @@ export function Footer() {
           </div>
         </div>
         {MEDIOS_PAGO.length > 0 && (
-          <div className="mt-10 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="mr-1 font-medium text-foreground/80">Medios de pago:</span>
+          <div className="mt-10 flex flex-wrap items-center gap-2 text-xs text-primary-foreground/75">
+            <span className="mr-1 font-medium text-primary-foreground/90">Medios de pago:</span>
             {MEDIOS_PAGO.map((m) => (
-              <span key={m} className="rounded-full border border-border bg-background px-3 py-1">{m}</span>
+              <span key={m} className="rounded-full border border-primary-foreground/25 px-3 py-1">{m}</span>
             ))}
           </div>
         )}
-        <div className="mt-8 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} G&amp;M Mueblería. Todos los derechos reservados.</p>
+        <div className="mt-8 pt-8 border-t border-primary-foreground/15 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-primary-foreground/75">© {new Date().getFullYear()} G&amp;M Mueblería. Todos los derechos reservados.</p>
           {(REDES.instagram || REDES.facebook || REDES.twitter) && (
-            <div className="flex items-center gap-4 text-muted-foreground">
+            <div className="flex items-center gap-4 text-primary-foreground/75">
               {REDES.instagram && (
-                <a href={REDES.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-accent transition-colors"><Instagram className="h-4 w-4" /></a>
+                <a href={REDES.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-primary-foreground transition-colors"><Instagram className="h-4 w-4" /></a>
               )}
               {REDES.facebook && (
-                <a href={REDES.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="hover:text-accent transition-colors"><Facebook className="h-4 w-4" /></a>
+                <a href={REDES.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="hover:text-primary-foreground transition-colors"><Facebook className="h-4 w-4" /></a>
               )}
               {REDES.twitter && (
-                <a href={REDES.twitter} target="_blank" rel="noopener noreferrer" aria-label="Twitter" className="hover:text-accent transition-colors"><Twitter className="h-4 w-4" /></a>
+                <a href={REDES.twitter} target="_blank" rel="noopener noreferrer" aria-label="Twitter" className="hover:text-primary-foreground transition-colors"><Twitter className="h-4 w-4" /></a>
               )}
             </div>
           )}

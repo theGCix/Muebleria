@@ -41,6 +41,8 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-detail: var(--detail);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -64,35 +66,42 @@
 
 :root {
   --radius: 0.5rem;
-  /* Warm wood palette — G&M Mueblería */
-  --background: oklch(0.985 0.008 80);
-  --foreground: oklch(0.22 0.025 50);
-  --card: oklch(0.98 0.01 80);
-  --card-foreground: oklch(0.22 0.025 50);
-  --popover: oklch(0.985 0.008 80);
-  --popover-foreground: oklch(0.22 0.025 50);
-  --primary: oklch(0.42 0.07 55);
-  --primary-foreground: oklch(0.985 0.008 80);
-  --secondary: oklch(0.93 0.03 80);
-  --secondary-foreground: oklch(0.28 0.04 50);
-  --muted: oklch(0.94 0.02 80);
-  --muted-foreground: oklch(0.5 0.03 55);
-  --accent: oklch(0.62 0.14 45);
-  --accent-foreground: oklch(0.985 0.008 80);
-  /* H4: mismo naranja (tono 45) más oscuro, solo para TEXTO y fondos con texto claro: ≥ 4.5:1 */
-  --accent-strong: oklch(0.52 0.14 45);
+  /* Japandi Premium — G&M Mueblería (identidad visual desde nov-2026)
+     Marfil #F5F1E8 · beige #D8C3A5 · marrón #8B735B · verde bosque #34443A · texto #292824 */
+  --background: oklch(0.959 0.013 87);
+  --foreground: oklch(0.276 0.007 95);
+  --card: oklch(0.994 0.006 85); /* blanco cálido #FFFDF9 */
+  --card-foreground: oklch(0.276 0.007 95);
+  --popover: oklch(0.994 0.006 85);
+  --popover-foreground: oklch(0.276 0.007 95);
+  --primary: oklch(0.369 0.027 157); /* verde bosque: botones, precios, footer (9.2:1 sobre marfil) */
+  --primary-foreground: oklch(0.959 0.013 87);
+  --secondary: oklch(0.827 0.047 77); /* beige: botones secundarios */
+  --secondary-foreground: oklch(0.276 0.007 95);
+  --muted: oklch(0.927 0.02 85);
+  --muted-foreground: oklch(0.487 0.029 71); /* 5.7:1 sobre marfil */
+  /* Terracota: SOLO ofertas y descuentos. --accent para fondos/bordes sin texto;
+     --accent-strong para texto (7.3:1 sobre marfil, 4.8:1 sobre beige); --accent-soft para fondos suaves */
+  --accent: oklch(0.581 0.118 42);
+  --accent-foreground: oklch(0.994 0.006 85);
+  --accent-strong: oklch(0.438 0.108 40);
+  --accent-soft: oklch(0.924 0.023 53);
+  /* Marrón #8B735B: 4.0:1 sobre marfil → solo líneas, bordes e íconos; NUNCA texto pequeño */
+  --detail: oklch(0.572 0.046 67);
+  --whatsapp: oklch(0.574 0.138 152);
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.985 0.008 80);
-  --border: oklch(0.88 0.025 75);
-  --input: oklch(0.9 0.02 75);
-  --ring: oklch(0.42 0.07 55);
+  --border: oklch(0.893 0.03 82);
+  --input: oklch(0.88 0.032 80);
+  --ring: oklch(0.369 0.027 157);
   --wood-light: oklch(0.91 0.04 75);
   --wood-dark: oklch(0.32 0.05 50);
   --cream: oklch(0.97 0.015 80);
-  --gradient-warm: linear-gradient(135deg, oklch(0.42 0.07 55) 0%, oklch(0.52 0.14 45) 100%);
+  --gradient-warm: linear-gradient(135deg, oklch(0.369 0.027 157) 0%, oklch(0.469 0.037 156) 100%);
   --shadow-soft: 0 4px 24px -8px oklch(0.32 0.05 50 / 0.15);
   --shadow-elegant: 0 20px 60px -20px oklch(0.32 0.05 50 / 0.25);
-  --font-display: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+  /* Tipografía: una sola serif (títulos) y una sola sans (todo lo demás) */
+  --font-display: "Playfair Display", Georgia, serif;
   --font-body: "Inter", system-ui, sans-serif;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -167,9 +176,15 @@
     overflow-x: clip;
   }
 
-  h1, h2, h3, h4, .font-display {
+  /* Serif solo en h1/h2 y en .font-display; h3/h4 son Inter (subtítulos y nombres de producto) */
+  h1, h2, .font-display {
     font-family: var(--font-display);
+    font-weight: 400;
     letter-spacing: -0.02em;
+  }
+  h3, h4 {
+    font-family: var(--font-body);
+    font-weight: 500;
   }
 }
 
@@ -189,12 +204,8 @@
   --color-gold-light:   #E8D5B0;
   --color-blush:        #E8D5CC;
 
-  /* Tipografía display (Playfair Display) */
-  /* Asegúrate de tener esta fuente cargada.
-     Si usas Vite, agrégala en index.html o importa en main.tsx:
-     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap');
-  */
-  --font-display: "Playfair Display", Georgia, serif;
+  /* LEGADO (portada/home): estos hex siguen vivos solo para Hero, HeroSlider, PiezaDestacada y
+     MedidaCTA hasta la entrega 2. La ficha y el resto ya usan los tokens de arriba. */
 }
 
 /* Clase utilitaria para títulos display */
@@ -210,7 +221,7 @@
    Hero de campaña — etiquetas colgadas del riel
    ================================================================ */
 .hero-display {
-  font-family: "Cormorant Garamond", Georgia, serif;
+  font-family: var(--font-display);
   letter-spacing: -0.02em;
 }
 
@@ -359,5 +370,29 @@
   .auth-pop,
   .auth-ring {
     animation: none;
+  }
+}
+
+/* ================================================================
+   Escala tipográfica (móvil / desktop ≥ 640 px)
+   título 32/48 · sección 26/32 · producto 15/16 · precio 18/20
+   texto 14/16 · botón 14 · apoyo 12 (mínimo de la tienda)
+   ================================================================ */
+@layer components {
+  .t-titulo   { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
+  .t-seccion  { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; }
+  .t-producto { font-family: var(--font-body); font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .t-precio   { font-family: var(--font-body); font-weight: 700; font-size: 18px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .t-precio-ficha { font-family: var(--font-body); font-weight: 700; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .t-texto    { font-family: var(--font-body); font-weight: 400; font-size: 14px; line-height: 1.6; }
+  .t-boton    { font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+  .t-apoyo    { font-family: var(--font-body); font-weight: 500; font-size: 12px; line-height: 1.4; }
+  @media (min-width: 640px) {
+    .t-titulo   { font-size: 48px; }
+    .t-seccion  { font-size: 32px; }
+    .t-producto { font-size: 16px; }
+    .t-precio   { font-size: 20px; }
+    .t-precio-ficha { font-size: 28px; }
+    .t-texto    { font-size: 16px; }
   }
 }
