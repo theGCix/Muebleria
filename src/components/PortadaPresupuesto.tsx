@@ -90,17 +90,17 @@ export function PortadaPresupuesto() {
             id="portada-titulo"
             data-hero-title
             className="t-titulo text-foreground"
-            style={{ fontSize: "clamp(2.5rem, 6vw, 4.5rem)", lineHeight: 1.05 }}
+            style={{ fontSize: "clamp(2.25rem, 5vw, 3.75rem)", lineHeight: 1.05 }}
           >
-            Muebles hechos a mano, a tu presupuesto
+            Muebles hechos a mano para tu hogar
           </h1>
           <p data-hero-item className="mt-5 max-w-xl text-base text-foreground/80 md:text-lg">
-            Elige cuánto quieres invertir y mira lo que el taller puede hacer.
+            Piezas en madera natural, hechas con cuidado en nuestro taller. Encuentra la que mejor se acomode a tu espacio.
           </p>
 
           <div data-hero-item className="mt-8">
             <p id="presupuesto-etiqueta" className="t-apoyo mb-3 text-foreground/70">
-              ¿Cuánto quieres invertir?
+              Explora según el rango que te acomode
             </p>
             <ul aria-labelledby="presupuesto-etiqueta" className="grid max-w-2xl gap-3 sm:grid-cols-3">
               {tramos.map((t) => (
@@ -122,6 +122,7 @@ export function PortadaPresupuesto() {
           </div>
 
           <SelectorSegmento
+            label="Cuéntanos para qué lo buscas"
             deslizable
             value={segmento}
             onChange={(v) => {
@@ -147,9 +148,9 @@ export function PortadaPresupuesto() {
           <div data-hero-item className="mt-5">
             <Link
               to="/catalogo"
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold uppercase tracking-wide text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              Ver todo el catálogo <ArrowRight className="h-4 w-4" aria-hidden />
+              Conocer el catálogo <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
           </div>
         </div>
@@ -171,10 +172,7 @@ export function PortadaPresupuesto() {
                   className="h-full w-full object-contain p-3"
                 />
                 <p className="t-apoyo absolute left-3 top-3 rounded-full bg-card px-3 py-1.5 text-foreground shadow">
-                  Lo que alcanza con{" "}
-                  <span className="font-semibold">
-                    {etiquetaRango(activo).charAt(0).toLowerCase() + etiquetaRango(activo).slice(1)}
-                  </span>
+                  Una idea en este rango
                 </p>
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3">
