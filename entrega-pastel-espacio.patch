@@ -1,0 +1,2092 @@
+diff -ruN a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+--- a/docs/claude/TASK_LOG.md	2026-11-14 04:09:31.769290585 -0500
++++ b/docs/claude/TASK_LOG.md	2026-11-14 04:09:31.884109973 -0500
+@@ -281,3 +281,11 @@
+ - **Verificación:** `tsc --noEmit` sin errores nuevos, `vite build` OK, `node --test server/pagos.test.js` 27/27. **No se probó en el flujo real** (cobro Niubiz, datos de Supabase).
+ - **Pendiente / riesgos:** revisar a 360/414/1440 px con y sin oferta; el filtro de precio de `/catalogo` corta en 60 piezas; `HeroSlider.tsx` y `ProductDetail.tsx` quedan como código muerto con paleta heredada (candidatos a borrar); el admin y el modo `.dark` no se tocaron.
+ 
++
++## 2026-11-14 — Paleta pastel, campaña compacta y «Pruébalo en tu espacio» — implementado, falta revisar en navegador con datos reales
++- **Decisión del dueño (cambia la entrega 1 «Japandi Premium»):** colores pastel con regla 60-30-10 para que los muebles resalten: 60 % crema, 30 % salvia/arena pastel, 10 % terracota (solo ofertas). `--primary` pasa a salvia profunda (`oklch(0.43 0.035 158)`) para mantener ≥ 7:1 en botones; nuevos `--campana` y `--campana-soft`. Footer y barra de promoción siguen con `--primary` (ahora más claro): **revisar si el dueño los quiere en pastel**.
++- **«Días de locura»:** solo paleta y tamaño. `HeroCampana` ahora tiene fondo `--campana`, título 36 px (antes hasta 60), reloj 36 px (antes 72), etiquetas de 150 px en una fila; el nombre sigue saliendo de `config_general.campana_nombre`.
++- **Frase del catálogo:** «Define tu presupuesto y descubre las opciones para tu hogar» (`ProductsSection`). Tipografía: fuera cursivas y mayúsculas con tracking en Header, Categories, ProductCard, MedidaCTA, nosotros y proyectos.
++- **Nuevo «Pruébalo en tu espacio»** (`product/ProbarEnTuEspacio.tsx`, `lib/escenaEspacio.ts`; botón bajo la galería de `product.$handle.tsx`, carga diferida ~7 kB gzip): el cliente sube una foto (no se sube a ningún servidor), marca dos puntos sobre una puerta (210 cm) u otra medida para fijar la escala, arrastra el mueble, cambia tamaño, voltea, activa sombra, prueba acabados (colores por foto) y descarga la imagen. El ancho sale de `products.piezas[].ancho_cm` (pieza más ancha; selector si hay varias). El fondo de la foto del producto se quita en el navegador (inundación desde las esquinas): **solo funciona con fotos sobre fondo liso**; si no, se muestra con recuadro y aviso.
++- **Verificación:** `node scripts/test-escena-espacio.mjs` 9/9; `tsc` limpio sobre los archivos nuevos; `vite build` OK; prueba en Chromium con imágenes sintéticas: ancho del mueble = 50 % de la foto con puerta de 210 cm y sofá de 200 cm (esperado 50 %), arrastre, cambio de acabado y de pieza, descarga JPG; móvil 390 px sin scroll horizontal. **No se probó** con fotos reales de productos ni de clientes, ni con iOS Safari.
++- **Pendiente / riesgos:** (1) simulación 2D: sin perspectiva ni luz; una foto del producto en ángulo hace que el ancho salga algo corto (la pantalla avisa si la proporción no coincide con alto/ancho); (2) productos sin `piezas.ancho_cm` se ven «a ojo»; (3) acabados reales requieren fotos por color con fondo liso (idealmente PNG sin fondo: campo futuro `recorte_url`); (4) `src/integrations/supabase/types.ts` del zip está corrupto (contiene el texto de un prompt de `npx`) → `tsc` global falla desde ahí; no es de esta entrega; (5) pendientes de la lista del dueño: origen del producto y segmentación de clientes.
+diff -ruN a/scripts/test-escena-espacio.mjs b/scripts/test-escena-espacio.mjs
+--- a/scripts/test-escena-espacio.mjs	1969-12-31 19:00:00.000000000 -0500
++++ b/scripts/test-escena-espacio.mjs	2026-11-14 04:09:31.884109973 -0500
+@@ -0,0 +1,77 @@
++// Pruebas de src/lib/escenaEspacio.ts. Ejecutar: node scripts/test-escena-espacio.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import { quitarFondo, pxPorCm, anchoFraccion, piezaPrincipal, razonProporcion, ANCHO_POR_DEFECTO } from "../src/lib/escenaEspacio.ts";
++
++/** Imagen w×h de un solo color de fondo con un rectángulo de otro color. */
++function imagen(w, h, bg, rect, color) {
++  const d = new Uint8ClampedArray(w * h * 4);
++  for (let y = 0; y < h; y++)
++    for (let x = 0; x < w; x++) {
++      const dentro = rect && x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h;
++      const c = dentro ? color : bg;
++      const i = (y * w + x) * 4;
++      d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
++    }
++  return d;
++}
++
++test("quita fondo blanco y recorta al mueble", () => {
++  const d = imagen(100, 80, [255, 255, 255], { x: 20, y: 30, w: 50, h: 40 }, [120, 80, 50]);
++  const r = quitarFondo(d, 100, 80);
++  assert.equal(r.fondoQuitado, true);
++  assert.equal(r.width, 50);
++  assert.equal(r.height, 40);
++  assert.ok(r.data[3] > 200, "el interior sigue opaco");
++});
++
++test("un hueco blanco DENTRO del mueble no se vuelve transparente (solo el fondo conectado al borde)", () => {
++  const d = imagen(100, 80, [255, 255, 255], { x: 10, y: 10, w: 80, h: 60 }, [120, 80, 50]);
++  // hueco blanco aislado en el centro
++  for (let y = 35; y < 45; y++) for (let x = 45; x < 55; x++) { const i = (y * 100 + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; }
++  const r = quitarFondo(d, 100, 80);
++  const cx = 50 - 10, cy = 40 - 10; // en coordenadas del recorte
++  assert.equal(r.data[(cy * r.width + cx) * 4 + 3], 255);
++});
++
++test("foto con ambiente (esquinas distintas) no se recorta", () => {
++  const d = imagen(100, 80, [255, 255, 255], null, [0, 0, 0]);
++  for (let y = 0; y < 80; y++) for (let x = 0; x < 50; x++) { const i = (y * 100 + x) * 4; d[i] = 30; d[i + 1] = 60; d[i + 2] = 200; }
++  const r = quitarFondo(d, 100, 80);
++  assert.equal(r.fondoQuitado, false);
++  assert.equal(r.width, 100);
++});
++
++test("imagen toda de un color: no hay mueble", () => {
++  const r = quitarFondo(imagen(60, 60, [250, 250, 250], null, [0, 0, 0]), 60, 60);
++  assert.equal(r.fondoQuitado, false);
++});
++
++test("calibración: puerta de 210 cm marcada con 840 px de alto en foto 1000×1000", () => {
++  const e = pxPorCm({ x: 0.5, y: 0.1 }, { x: 0.5, y: 0.94 }, 1000, 1000, 210);
++  assert.ok(Math.abs(e - 4) < 1e-9); // 840 px / 210 cm
++  // sofá de 200 cm → 800 px → 80 % del ancho de la foto
++  assert.ok(Math.abs(anchoFraccion(200, e, 1000) - 0.8) < 1e-9);
++});
++
++test("calibración rechaza puntos juntos y medidas inválidas", () => {
++  assert.equal(pxPorCm({ x: 0.5, y: 0.5 }, { x: 0.505, y: 0.5 }, 1000, 1000, 210), null);
++  assert.equal(pxPorCm({ x: 0, y: 0 }, { x: 1, y: 1 }, 1000, 1000, 0), null);
++  assert.equal(pxPorCm({ x: 0, y: 0 }, { x: 1, y: 1 }, 1000, 1000, NaN), null);
++});
++
++test("sin calibrar o sin medida usa el ancho por defecto", () => {
++  assert.equal(anchoFraccion(200, null, 1000), ANCHO_POR_DEFECTO);
++  assert.equal(anchoFraccion(null, 4, 1000), ANCHO_POR_DEFECTO);
++});
++
++test("pieza principal = la más ancha; sin medidas → null", () => {
++  const p = (nombre, ancho_cm) => ({ nombre, alto_cm: null, ancho_cm, fondo_cm: null, plazas: null });
++  assert.equal(piezaPrincipal([p("A", 150), p("B", 210), p("C", null)]).nombre, "B");
++  assert.equal(piezaPrincipal([p("A", null)]), null);
++});
++
++test("razón de proporción detecta fotos en ángulo", () => {
++  assert.ok(Math.abs(razonProporcion(200, 85, 210, 89) - 1) < 0.05);
++  assert.equal(razonProporcion(200, 85, null, 89), null);
++});
+diff -ruN a/src/components/Categories.tsx b/src/components/Categories.tsx
+--- a/src/components/Categories.tsx	2026-11-14 04:09:31.773641094 -0500
++++ b/src/components/Categories.tsx	2026-11-14 04:09:31.829968386 -0500
+@@ -23,7 +23,7 @@
+   return (
+     <section data-cat-section id="categorias" className="container mx-auto px-6 py-24">
+       <div data-reveal className="text-center max-w-2xl mx-auto mb-16">
+-        <p className="text-xs uppercase tracking-[0.25em] text-accent-strong font-medium mb-4">
++        <p className="text-sm text-accent-strong font-medium mb-4">
+           Nuestras colecciones
+         </p>
+         <h2 className="t-seccion text-foreground">
+diff -ruN a/src/components/Header.tsx b/src/components/Header.tsx
+--- a/src/components/Header.tsx	2026-11-14 04:09:31.774310588 -0500
++++ b/src/components/Header.tsx	2026-11-14 04:09:31.834365379 -0500
+@@ -161,7 +161,7 @@
+             {/* Logo */}
+             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
+               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
+-              <span className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Mueblería</span>
++              <span className="text-xs tracking-wide text-muted-foreground">Mueblería</span>
+             </Link>
+ 
+             {/* Desktop nav */}
+@@ -271,7 +271,7 @@
+ 
+               {/* Categorías (acordeón) */}
+               <div>
+-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1 px-1">
++                <p className="text-xs font-medium text-muted-foreground mb-1 px-1">
+                   Categorías
+                 </p>
+                 <CategoryMobileAccordion onNavigate={() => setMobileOpen(false)} />
+diff -ruN a/src/components/Hero.tsx b/src/components/Hero.tsx
+--- a/src/components/Hero.tsx	2026-11-14 04:09:31.774354237 -0500
++++ b/src/components/Hero.tsx	2026-11-14 04:09:31.838720372 -0500
+@@ -67,18 +67,18 @@
+ 
+   return (
+     <div role="timer" aria-label={`Tiempo restante: ${resumen}`}>
+-      <p className="text-sm text-secondary/80 mb-2">
++      <p className="mb-1 text-xs text-muted-foreground sm:text-sm">
+         {unificada ? "La oferta termina en" : "La próxima oferta termina en"}
+       </p>
+-      <div className="flex items-end gap-4 sm:gap-6">
++      <div className="flex items-end gap-3 sm:gap-4">
+         {unidades.map((u, i) => (
+-          <div key={u.l} className="flex items-end gap-4 sm:gap-6">
+-            {i > 0 && <span aria-hidden className="mb-6 h-10 w-px bg-secondary/30" />}
++          <div key={u.l} className="flex items-end gap-3 sm:gap-4">
++            {i > 0 && <span aria-hidden className="mb-4 h-6 w-px bg-foreground/20" />}
+             <div>
+-              <div className="hero-display text-5xl sm:text-7xl leading-none">
++              <div className="hero-display text-3xl leading-none text-accent-strong sm:text-4xl">
+                 <Digitos valor={u.v} />
+               </div>
+-              <div className="mt-1.5 text-xs text-secondary/70">{u.l}</div>
++              <div className="mt-1 text-xs text-muted-foreground">{u.l}</div>
+             </div>
+           </div>
+         ))}
+@@ -87,7 +87,7 @@
+   );
+ }
+ 
+-const CUERDAS = [34, 62, 46]; // largos distintos: se ve colgado, no alineado
++const CUERDAS = [16, 30, 22]; // largos distintos: se ve colgado, no alineado
+ 
+ function EtiquetaOferta({ p, i }: { p: Product; i: number }) {
+   const { precioFinal, ahorro } = ofertaInfo(p);
+@@ -101,14 +101,14 @@
+     <Link
+       to="/product/$handle"
+       params={{ handle: p.id }}
+-      className="etiqueta group block w-[200px] shrink-0 snap-center lg:w-auto"
++      className="etiqueta group block w-[150px] shrink-0 snap-center lg:w-auto"
+       style={{ ["--i" as string]: i, ["--cuerda" as string]: `${CUERDAS[i % CUERDAS.length]}px` }}
+     >
+-      <div className="relative overflow-hidden rounded-lg bg-card text-foreground shadow-[0_18px_40px_-18px_rgba(0,0,0,0.7)]">
++      <div className="relative overflow-hidden rounded-lg bg-card text-foreground shadow-[var(--shadow-soft)]">
+         {/* ojal por donde pasa la cuerda */}
+         <span
+           aria-hidden
+-          className="absolute left-1/2 top-2 z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-primary ring-2 ring-secondary/60"
++          className="absolute left-1/2 top-2 z-10 h-3 w-3 -translate-x-1/2 rounded-full bg-primary ring-2 ring-campana"
+         />
+ 
+         <div className="relative aspect-square bg-muted">
+@@ -126,12 +126,12 @@
+           </span>
+         </div>
+ 
+-        <div className="space-y-1.5 p-3">
+-          <h3 className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-tight">
++        <div className="space-y-1 p-2.5">
++          <h3 className="line-clamp-2 min-h-[2.25rem] text-sm font-semibold leading-tight">
+             {p.nombre}
+           </h3>
+           <div className="flex flex-wrap items-baseline gap-x-2">
+-            <span className="text-xl font-bold">{fmtPEN(precioFinal)}</span>
++            <span className="text-lg font-bold">{fmtPEN(precioFinal)}</span>
+             <span className="text-xs line-through opacity-60">{fmtPEN(p.precio)}</span>
+           </div>
+           <p className="text-xs font-medium text-accent-strong">Ahorras {fmtPEN(ahorro)}</p>
+@@ -167,17 +167,17 @@
+   return (
+     <section
+       data-hero
+-      className="hero-taller relative overflow-hidden bg-primary text-primary-foreground"
++      className="hero-taller relative overflow-hidden text-foreground"
+     >
+-      <div className="container mx-auto grid grid-cols-1 items-center gap-12 px-4 py-14 md:px-6 md:py-20 lg:grid-cols-[1.05fr_1fr]">
+-        <div data-hero-text className="min-w-0 space-y-8">
+-          <div className="space-y-4">
+-            <h2 data-hero-title className="hero-display text-4xl font-normal leading-[1.05] sm:text-5xl lg:text-6xl">
++      <div className="container mx-auto grid grid-cols-1 items-center gap-6 px-4 py-8 md:px-6 md:py-10 lg:grid-cols-[1.1fr_1fr] lg:gap-10">
++        <div data-hero-text className="min-w-0 space-y-4">
++          <div className="space-y-2">
++            <h2 data-hero-title className="hero-display text-3xl font-normal leading-[1.1] sm:text-4xl">
+               {titulo}
+             </h2>
+             <p
+               data-hero-item
+-              className="max-w-lg text-lg leading-relaxed text-secondary/85"
++              className="hidden max-w-lg text-base leading-relaxed text-muted-foreground sm:block"
+             >
+               {bajada}
+             </p>
+@@ -193,7 +193,7 @@
+             <Button
+               asChild
+               size="lg"
+-              className="h-12 rounded-full bg-secondary px-7 text-primary hover:bg-card"
++              className="h-11 rounded-full bg-accent-strong px-6 text-accent-foreground hover:bg-accent-strong/90"
+             >
+               <a href="#ofertas">
+                 Ver las {c.ofertas.length} {c.ofertas.length === 1 ? "oferta" : "ofertas"}
+@@ -204,7 +204,7 @@
+               asChild
+               variant="outline"
+               size="lg"
+-              className="h-12 rounded-full border-secondary/50 bg-transparent px-7 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
++              className="h-11 rounded-full border-foreground/25 bg-transparent px-6 text-foreground hover:bg-card"
+             >
+               <a href="#catalogo">Explorar el catálogo</a>
+             </Button>
+@@ -212,7 +212,7 @@
+ 
+           <ul
+             data-hero-item
+-            className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-secondary/80"
++            className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"
+           >
+             <li className="flex items-center gap-2">
+               <Truck className="h-4 w-4" /> Delivery a todo Lima
+@@ -227,13 +227,13 @@
+         <div data-hero-rail ref={railRef} className="relative min-w-0">
+           <div
+             aria-hidden
+-            className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-secondary/70"
++            className="absolute inset-x-0 top-0 h-[3px] rounded-full bg-foreground/25"
+           >
+-            <span className="absolute -left-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-secondary" />
+-            <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-secondary" />
++            <span className="absolute -left-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-foreground/40" />
++            <span className="absolute -right-1 -top-[3px] h-2.5 w-2.5 rounded-full bg-foreground/40" />
+           </div>
+           <div
+-            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden px-4 pb-8 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
++            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden px-4 pb-4 sm:mx-0 sm:px-0 lg:mx-0 lg:grid lg:grid-cols-[repeat(var(--n),minmax(0,1fr))] lg:overflow-visible lg:px-0"
+             style={{ ["--n" as string]: destacadas.length }}
+           >
+             {destacadas.map((p, i) => (
+@@ -250,7 +250,7 @@
+             <button
+               type="button"
+               onClick={movimiento.activar}
+-              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-secondary/50 px-3.5 py-1.5 text-xs text-secondary transition-colors hover:bg-primary-foreground/10"
++              className="mx-auto -mt-2 flex items-center gap-1.5 rounded-full border border-foreground/25 px-3.5 py-1.5 text-xs text-foreground transition-colors hover:bg-card"
+             >
+               <Smartphone className="h-3.5 w-3.5" /> Activar movimiento
+             </button>
+diff -ruN a/src/components/MedidaCTA.tsx b/src/components/MedidaCTA.tsx
+--- a/src/components/MedidaCTA.tsx	2026-11-14 04:09:31.774469634 -0500
++++ b/src/components/MedidaCTA.tsx	2026-11-14 04:09:31.843192490 -0500
+@@ -73,7 +73,7 @@
+           </span>
+           <h2 className="t-seccion">
+             ¿No encuentras el mueble exacto? Lo fabricamos para tu{" "}
+-            <em className="italic text-secondary">espacio</em>.
++            espacio.
+           </h2>
+           <p className="mt-4 max-w-lg text-white/75">
+             Nuestros artesanos fabrican piezas pensadas para las medidas y el estilo de tu espacio.
+diff -ruN a/src/components/ProductCard.tsx b/src/components/ProductCard.tsx
+--- a/src/components/ProductCard.tsx	2026-11-14 04:09:31.775191484 -0500
++++ b/src/components/ProductCard.tsx	2026-11-14 04:09:31.847579256 -0500
+@@ -260,7 +260,7 @@
+                 {insignias.map((b) => (
+                   <span
+                     key={b.key}
+-                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${b.cls}`}
++                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold shadow-sm ${b.cls}`}
+                   >
+                     {b.icono === "estrella" && <Star className="h-3 w-3 fill-current" />}
+                     {b.icono === "chispa" && <Sparkles className="h-3 w-3" />}
+@@ -288,14 +288,14 @@
+             </button>
+ 
+             {agotado && (
+-              <span className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 bg-foreground/80 py-1.5 text-center text-xs font-semibold uppercase tracking-[0.2em] text-background">
++              <span className="absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 bg-foreground/80 py-1.5 text-center text-xs font-semibold tracking-wide text-background">
+                 Agotado
+               </span>
+             )}
+ 
+             {/* Vista rápida (solo con mouse) */}
+             <div className="gmc-quick" aria-hidden>
+-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Vista rápida</p>
++              <p className="text-xs font-semibold tracking-wide text-white/70">Vista rápida</p>
+               {atributos.length > 0 && (
+                 <div className="mt-1.5 flex flex-wrap gap-1.5">
+                   {atributos.map((a) => (
+diff -ruN a/src/components/ProductsSection.tsx b/src/components/ProductsSection.tsx
+--- a/src/components/ProductsSection.tsx	2026-11-14 04:09:31.775260737 -0500
++++ b/src/components/ProductsSection.tsx	2026-11-14 04:09:31.852729095 -0500
+@@ -168,11 +168,10 @@
+               Catálogo G&amp;M
+             </p>
+             <h2 className="t-seccion">
+-              ¿Qué espacio vas a <em className="italic text-accent-strong">transformar</em>?
++              Define tu presupuesto y descubre las opciones para tu hogar
+             </h2>
+             <p className="mt-3 text-muted-foreground">
+-              Elige tu ambiente, marca tu presupuesto y mira al instante lo que el taller tiene para
+-              ti.
++              Elige tu ambiente, marca cuánto quieres invertir y mira al instante lo que el taller tiene para ti.
+             </p>
+           </div>
+           <div className="relative w-full md:max-w-xs">
+diff -ruN a/src/components/product/ProbarEnTuEspacio.tsx b/src/components/product/ProbarEnTuEspacio.tsx
+--- a/src/components/product/ProbarEnTuEspacio.tsx	1969-12-31 19:00:00.000000000 -0500
++++ b/src/components/product/ProbarEnTuEspacio.tsx	2026-11-14 04:09:31.857246433 -0500
+@@ -0,0 +1,590 @@
++// src/components/product/ProbarEnTuEspacio.tsx
++// «Pruébalo en tu espacio»: el cliente sube una foto de su sala o dormitorio y coloca el mueble encima.
++//  1. Foto: se queda en el dispositivo (no se sube a ningún servidor).
++//  2. Escala: marca dos puntos sobre algo de medida conocida (p. ej. una puerta de 210 cm) y el mueble
++//     se dibuja con su ancho real. Se puede omitir y ajustar a ojo.
++//  3. Colocar: arrastrar, cambiar tamaño, voltear, sombra, probar acabados y descargar la imagen.
++// Es una simulación 2D (sin perspectiva ni luz): la pantalla lo avisa.
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
++import { Camera, Check, Download, FlipHorizontal2, ImagePlus, Loader2, RotateCcw, Ruler, Share2, Sparkles } from "lucide-react";
++import { Button } from "@/components/ui/button";
++import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
++import type { Pieza } from "@/lib/piezas";
++import {
++  AJUSTE_MAX,
++  AJUSTE_MIN,
++  REFERENCIAS,
++  anchoFraccion,
++  clamp,
++  etiquetaMedida,
++  piezaPrincipal,
++  pxPorCm,
++  quitarFondo,
++  razonProporcion,
++  type Punto,
++} from "@/lib/escenaEspacio";
++
++export interface AcabadoEspacio {
++  id: string;
++  nombre: string;
++  hex: string | null;
++  /** Foto del producto con este acabado (de preferencia sobre fondo liso). */
++  img: string;
++}
++
++interface Props {
++  open: boolean;
++  onOpenChange: (open: boolean) => void;
++  nombre: string;
++  piezas: Pieza[];
++  acabados: AcabadoEspacio[];
++  /** Índice del acabado que el cliente ya tenía elegido en la ficha. */
++  acabadoInicial?: number;
++}
++
++interface FotoCliente {
++  img: HTMLImageElement;
++  url: string;
++  w: number;
++  h: number;
++}
++
++interface RecorteListo {
++  url: string; // dataURL (PNG con transparencia) o foto original si no se pudo recortar
++  canvas: HTMLCanvasElement | HTMLImageElement;
++  w: number;
++  h: number;
++  fondoQuitado: boolean;
++}
++
++const MAX_LADO = 1600;
++const MAX_RECORTE = 900;
++
++/** Carga una imagen; con crossOrigin anónimo para poder leer sus píxeles (Cloudinary lo permite). */
++function cargarImagen(src: string, cors = false): Promise<HTMLImageElement> {
++  return new Promise((resolve, reject) => {
++    const im = new Image();
++    if (cors) im.crossOrigin = "anonymous";
++    im.onload = () => resolve(im);
++    im.onerror = () => reject(new Error("No se pudo cargar la imagen"));
++    im.src = src;
++  });
++}
++
++/** Foto del cliente → imagen reducida a MAX_LADO (las fotos de celular pesan 10+ MB). */
++async function prepararFoto(file: File): Promise<FotoCliente> {
++  const origen = URL.createObjectURL(file);
++  try {
++    const im = await cargarImagen(origen);
++    const k = Math.min(1, MAX_LADO / Math.max(im.naturalWidth, im.naturalHeight));
++    const w = Math.round(im.naturalWidth * k);
++    const h = Math.round(im.naturalHeight * k);
++    const c = document.createElement("canvas");
++    c.width = w;
++    c.height = h;
++    c.getContext("2d")!.drawImage(im, 0, 0, w, h);
++    const url = c.toDataURL("image/jpeg", 0.9);
++    return { img: await cargarImagen(url), url, w, h };
++  } finally {
++    URL.revokeObjectURL(origen);
++  }
++}
++
++/** Foto del producto → recorte con fondo transparente. Si no se puede, devuelve la foto tal cual. */
++async function prepararRecorte(src: string): Promise<RecorteListo> {
++  try {
++    const im = await cargarImagen(src, true);
++    const k = Math.min(1, MAX_RECORTE / Math.max(im.naturalWidth, im.naturalHeight));
++    const w = Math.round(im.naturalWidth * k);
++    const h = Math.round(im.naturalHeight * k);
++    const c = document.createElement("canvas");
++    c.width = w;
++    c.height = h;
++    const ctx = c.getContext("2d", { willReadFrequently: true })!;
++    ctx.drawImage(im, 0, 0, w, h);
++    const px = ctx.getImageData(0, 0, w, h); // lanza si el canvas quedó «tainted» por CORS
++    const r = quitarFondo(px.data, w, h);
++    if (!r.fondoQuitado) return { url: src, canvas: im, w: im.naturalWidth, h: im.naturalHeight, fondoQuitado: false };
++    const out = document.createElement("canvas");
++    out.width = r.width;
++    out.height = r.height;
++    out.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(r.data), r.width, r.height), 0, 0);
++    return { url: out.toDataURL("image/png"), canvas: out, w: r.width, h: r.height, fondoQuitado: true };
++  } catch {
++    const im = await cargarImagen(src);
++    return { url: src, canvas: im, w: im.naturalWidth, h: im.naturalHeight, fondoQuitado: false };
++  }
++}
++
++type Paso = "foto" | "escala" | "colocar";
++
++export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados, acabadoInicial = 0 }: Props) {
++  const [paso, setPaso] = useState<Paso>("foto");
++  const [foto, setFoto] = useState<FotoCliente | null>(null);
++  const [cargandoFoto, setCargandoFoto] = useState(false);
++  const [errorFoto, setErrorFoto] = useState<string | null>(null);
++
++  // Escala
++  const [refId, setRefId] = useState<(typeof REFERENCIAS)[number]["id"]>("puerta");
++  const [refLibre, setRefLibre] = useState("");
++  const [puntos, setPuntos] = useState<Punto[]>([]);
++  const [escala, setEscala] = useState<number | null>(null); // px de la foto por cm
++
++  // Colocación
++  const [pos, setPos] = useState<Punto>({ x: 0.5, y: 0.72 });
++  const [ajuste, setAjuste] = useState(1);
++  const [volteado, setVolteado] = useState(false);
++  const [sombra, setSombra] = useState(true);
++  const [acabadoIdx, setAcabadoIdx] = useState(acabadoInicial);
++  const [piezaIdx, setPiezaIdx] = useState(0);
++
++  const [recorte, setRecorte] = useState<RecorteListo | null>(null);
++  const [cargandoRecorte, setCargandoRecorte] = useState(false);
++  const cache = useRef(new Map<string, RecorteListo>());
++  const escenaRef = useRef<HTMLDivElement>(null);
++  const arrastre = useRef<{ dx: number; dy: number } | null>(null);
++
++  const conMedidas = useMemo(() => piezas.filter((p) => p.ancho_cm !== null), [piezas]);
++  const pieza: Pieza | null = conMedidas[piezaIdx] ?? piezaPrincipal(piezas);
++  const acabado = acabados[acabadoIdx] ?? acabados[0];
++
++  // Al abrir: acabado que ya tenía elegido y la pieza más ancha por defecto
++  useEffect(() => {
++    if (!open) return;
++    setAcabadoIdx(clamp(acabadoInicial, 0, Math.max(0, acabados.length - 1)));
++    const principal = piezaPrincipal(piezas);
++    setPiezaIdx(Math.max(0, conMedidas.findIndex((p) => p === principal)));
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [open]);
++
++  // Recorte del acabado elegido (con caché por URL)
++  useEffect(() => {
++    if (!open || !acabado) return;
++    const hit = cache.current.get(acabado.img);
++    if (hit) {
++      setRecorte(hit);
++      return;
++    }
++    let vivo = true;
++    setCargandoRecorte(true);
++    prepararRecorte(acabado.img)
++      .then((r) => {
++        cache.current.set(acabado.img, r);
++        if (vivo) setRecorte(r);
++      })
++      .catch(() => vivo && setRecorte(null))
++      .finally(() => vivo && setCargandoRecorte(false));
++    return () => {
++      vivo = false;
++    };
++  }, [open, acabado?.img]);
++
++  const reiniciar = useCallback(() => {
++    setPaso("foto");
++    setFoto(null);
++    setPuntos([]);
++    setEscala(null);
++    setPos({ x: 0.5, y: 0.72 });
++    setAjuste(1);
++    setVolteado(false);
++    setErrorFoto(null);
++  }, []);
++
++  const alElegirFoto = async (file: File | undefined) => {
++    if (!file) return;
++    if (!file.type.startsWith("image/")) {
++      setErrorFoto("Elige una imagen (JPG, PNG o foto del celular).");
++      return;
++    }
++    setErrorFoto(null);
++    setCargandoFoto(true);
++    try {
++      setFoto(await prepararFoto(file));
++      setPuntos([]);
++      setEscala(null);
++      setPaso("escala");
++    } catch {
++      setErrorFoto("No pudimos abrir esa foto. Prueba con otra.");
++    } finally {
++      setCargandoFoto(false);
++    }
++  };
++
++  /* ── Escala ── */
++  const refCm = refId === "puerta" ? 210 : Number(refLibre.replace(",", "."));
++  const escalaPrevia = foto && puntos.length === 2 ? pxPorCm(puntos[0], puntos[1], foto.w, foto.h, refCm) : null;
++
++  const marcarPunto = (e: React.PointerEvent<HTMLDivElement>) => {
++    const r = e.currentTarget.getBoundingClientRect();
++    const p = { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) };
++    setPuntos((prev) => (prev.length >= 2 ? [p] : [...prev, p]));
++  };
++
++  /* ── Colocar ── */
++  const anchoCm = pieza?.ancho_cm ?? null;
++  const calibrada = escala !== null && anchoCm !== null;
++  const wFrac = foto ? anchoFraccion(anchoCm, escala, foto.w) * ajuste : 0;
++  const razon = recorte?.fondoQuitado ? razonProporcion(recorte.w, recorte.h, anchoCm, pieza?.alto_cm ?? null) : null;
++  const enAngulo = razon !== null && (razon < 0.75 || razon > 1.3);
++
++  const iniciarArrastre = (e: React.PointerEvent<HTMLImageElement>) => {
++    const r = escenaRef.current?.getBoundingClientRect();
++    if (!r) return;
++    e.currentTarget.setPointerCapture(e.pointerId);
++    arrastre.current = { dx: (e.clientX - r.left) / r.width - pos.x, dy: (e.clientY - r.top) / r.height - pos.y };
++  };
++  const moverArrastre = (e: React.PointerEvent<HTMLImageElement>) => {
++    const r = escenaRef.current?.getBoundingClientRect();
++    if (!r || !arrastre.current) return;
++    setPos({
++      x: clamp((e.clientX - r.left) / r.width - arrastre.current.dx, 0, 1),
++      y: clamp((e.clientY - r.top) / r.height - arrastre.current.dy, 0, 1),
++    });
++  };
++  const moverConTeclado = (e: React.KeyboardEvent) => {
++    const paso = e.shiftKey ? 0.05 : 0.01;
++    const d: Record<string, [number, number]> = { ArrowLeft: [-paso, 0], ArrowRight: [paso, 0], ArrowUp: [0, -paso], ArrowDown: [0, paso] };
++    const m = d[e.key];
++    if (!m) return;
++    e.preventDefault();
++    setPos((p) => ({ x: clamp(p.x + m[0], 0, 1), y: clamp(p.y + m[1], 0, 1) }));
++  };
++
++  /* ── Exportar ── */
++  const componer = async (): Promise<Blob | null> => {
++    if (!foto || !recorte) return null;
++    const c = document.createElement("canvas");
++    c.width = foto.w;
++    c.height = foto.h;
++    const ctx = c.getContext("2d")!;
++    ctx.drawImage(foto.img, 0, 0, foto.w, foto.h);
++    const wPx = wFrac * foto.w;
++    const hPx = wPx * (recorte.h / recorte.w);
++    ctx.save();
++    ctx.translate(pos.x * foto.w, pos.y * foto.h);
++    if (volteado) ctx.scale(-1, 1);
++    if (sombra) {
++      ctx.shadowColor = "rgba(0,0,0,0.28)";
++      ctx.shadowBlur = Math.max(6, wPx * 0.025);
++      ctx.shadowOffsetY = Math.max(3, wPx * 0.012);
++    }
++    if (!recorte.fondoQuitado) ctx.globalCompositeOperation = "multiply";
++    ctx.drawImage(recorte.canvas, -wPx / 2, -hPx / 2, wPx, hPx);
++    ctx.restore();
++    ctx.font = `${Math.max(12, Math.round(foto.w * 0.016))}px sans-serif`;
++    ctx.fillStyle = "rgba(255,255,255,0.85)";
++    ctx.textAlign = "right";
++    ctx.shadowColor = "rgba(0,0,0,0.6)";
++    ctx.shadowBlur = 4;
++    ctx.fillText("G&M Mueblería · simulación referencial", foto.w - 12, foto.h - 12);
++    return new Promise((res) => c.toBlob((b) => res(b), "image/jpeg", 0.92));
++  };
++
++  const nombreArchivo = `${nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "mueble"}-en-mi-espacio.jpg`;
++
++  const descargar = async () => {
++    const blob = await componer();
++    if (!blob) return;
++    const a = document.createElement("a");
++    a.href = URL.createObjectURL(blob);
++    a.download = nombreArchivo;
++    a.click();
++    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
++  };
++
++  const puedeCompartir = typeof navigator !== "undefined" && typeof navigator.canShare === "function";
++  const compartir = async () => {
++    const blob = await componer();
++    if (!blob) return;
++    const file = new File([blob], nombreArchivo, { type: "image/jpeg" });
++    if (navigator.canShare?.({ files: [file] })) {
++      try {
++        await navigator.share({ files: [file], title: nombre, text: `Así quedaría ${nombre} en mi espacio` });
++      } catch {
++        /* el cliente cerró el menú de compartir */
++      }
++    } else {
++      void descargar();
++    }
++  };
++
++  return (
++    <Dialog open={open} onOpenChange={onOpenChange}>
++      <DialogContent className="max-h-[94vh] w-[calc(100vw-1rem)] max-w-5xl gap-0 overflow-y-auto p-0 sm:rounded-2xl">
++        <div className="border-b border-border/60 px-5 py-4 pr-12">
++          <DialogTitle className="font-display text-xl font-normal tracking-normal">Pruébalo en tu espacio</DialogTitle>
++          <DialogDescription className="mt-1 text-sm">
++            {paso === "foto" && "Sube una foto de tu sala o dormitorio y mira cómo quedaría."}
++            {paso === "escala" && "Marca dos puntos sobre algo que mida lo que ya sabes, para dibujar el mueble a su tamaño real."}
++            {paso === "colocar" && "Arrastra el mueble hasta donde lo quieres. Tu foto se queda en tu dispositivo."}
++          </DialogDescription>
++        </div>
++
++        {/* ───── Paso 1: foto ───── */}
++        {paso === "foto" && (
++          <div className="grid gap-4 p-5 sm:p-8">
++            <label className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center transition-colors hover:border-primary focus-within:ring-2 focus-within:ring-ring">
++              {cargandoFoto ? (
++                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
++              ) : (
++                <ImagePlus className="h-8 w-8 text-primary" aria-hidden />
++              )}
++              <span className="t-producto">{cargandoFoto ? "Preparando tu foto…" : "Subir o tomar una foto"}</span>
++              <span className="t-apoyo max-w-sm text-muted-foreground">
++                Mejor de frente a la pared donde irá el mueble, con el piso a la vista.
++              </span>
++              <input
++                type="file"
++                accept="image/*"
++                className="sr-only"
++                data-testid="subir-foto"
++                onChange={(e) => {
++                  void alElegirFoto(e.target.files?.[0]);
++                  e.target.value = "";
++                }}
++              />
++            </label>
++            {errorFoto && (
++              <p role="alert" className="text-sm text-destructive">
++                {errorFoto}
++              </p>
++            )}
++            <p className="t-apoyo flex items-center justify-center gap-1.5 text-muted-foreground">
++              <Camera className="h-3.5 w-3.5" aria-hidden /> No subimos tu foto: se procesa solo en tu dispositivo.
++            </p>
++          </div>
++        )}
++
++        {/* ───── Paso 2: escala ───── */}
++        {paso === "escala" && foto && (
++          <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[1.6fr_1fr]">
++            <div
++              onPointerDown={marcarPunto}
++              className="relative cursor-crosshair touch-none select-none self-start overflow-hidden rounded-xl bg-muted"
++              data-testid="foto-escala"
++            >
++              <img src={foto.url} alt="Tu espacio" className="block w-full" draggable={false} />
++              <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
++                {puntos.length === 2 && (
++                  <line x1={puntos[0].x * 100} y1={puntos[0].y * 100} x2={puntos[1].x * 100} y2={puntos[1].y * 100} stroke="white" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />
++                )}
++              </svg>
++              {puntos.map((p, i) => (
++                <span
++                  key={i}
++                  aria-hidden
++                  className="pointer-events-none absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-accent-strong text-[11px] font-bold text-accent-foreground shadow"
++                  style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
++                >
++                  {i + 1}
++                </span>
++              ))}
++            </div>
++
++            <div className="space-y-4">
++              <fieldset>
++                <legend className="t-producto mb-2">¿Qué vas a medir en la foto?</legend>
++                <div className="flex flex-wrap gap-2">
++                  {REFERENCIAS.map((r) => (
++                    <button
++                      key={r.id}
++                      type="button"
++                      aria-pressed={refId === r.id}
++                      onClick={() => setRefId(r.id)}
++                      className={`min-h-[44px] rounded-full border px-4 text-sm transition-colors ${refId === r.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-primary"}`}
++                    >
++                      {r.nombre}
++                      {r.cm ? ` (${r.cm} cm)` : ""}
++                    </button>
++                  ))}
++                </div>
++                {refId === "libre" && (
++                  <label className="mt-3 flex items-center gap-2 text-sm">
++                    Mide
++                    <input
++                      inputMode="decimal"
++                      value={refLibre}
++                      onChange={(e) => setRefLibre(e.target.value)}
++                      placeholder="p. ej. 80"
++                      aria-label="Medida real en centímetros"
++                      className="h-11 w-24 rounded-lg border border-input bg-card px-3"
++                    />
++                    cm
++                  </label>
++                )}
++              </fieldset>
++
++              <p className="t-texto text-muted-foreground" aria-live="polite">
++                {puntos.length === 0 && "Toca en la foto el punto 1 (por ejemplo, el piso al pie de la puerta)."}
++                {puntos.length === 1 && "Ahora toca el punto 2 (el borde superior de la puerta)."}
++                {puntos.length === 2 && (escalaPrevia ? "Listo. Si no quedó bien, toca otra vez para marcar de nuevo." : "Los puntos están muy juntos o falta la medida.")}
++              </p>
++
++              <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
++                <Button
++                  type="button"
++                  className="h-11 rounded-full"
++                  disabled={!escalaPrevia}
++                  onClick={() => {
++                    setEscala(escalaPrevia);
++                    setPaso("colocar");
++                  }}
++                >
++                  <Ruler className="mr-2 h-4 w-4" aria-hidden /> Usar esta medida
++                </Button>
++                <Button
++                  type="button"
++                  variant="ghost"
++                  className="h-11 rounded-full"
++                  onClick={() => {
++                    setEscala(null);
++                    setPaso("colocar");
++                  }}
++                >
++                  Omitir y ajustar a ojo
++                </Button>
++              </div>
++            </div>
++          </div>
++        )}
++
++        {/* ───── Paso 3: colocar ───── */}
++        {paso === "colocar" && foto && (
++          <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[1.6fr_1fr]">
++            <div
++              ref={escenaRef}
++              className="relative touch-none select-none self-start overflow-hidden rounded-xl bg-muted"
++              data-testid="escena"
++            >
++              <img src={foto.url} alt="Tu espacio" className="block w-full" draggable={false} />
++              {recorte && (
++                <img
++                  src={recorte.url}
++                  alt={`${nombre}${acabado ? `, acabado ${acabado.nombre}` : ""}, colocado en tu foto. Arrástralo o usa las flechas del teclado para moverlo.`}
++                  tabIndex={0}
++                  draggable={false}
++                  data-testid="mueble"
++                  onPointerDown={iniciarArrastre}
++                  onPointerMove={moverArrastre}
++                  onPointerUp={() => (arrastre.current = null)}
++                  onPointerCancel={() => (arrastre.current = null)}
++                  onKeyDown={moverConTeclado}
++                  className="absolute cursor-grab touch-none outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
++                  style={{
++                    left: `${pos.x * 100}%`,
++                    top: `${pos.y * 100}%`,
++                    width: `${wFrac * 100}%`,
++                    transform: `translate(-50%, -50%) scaleX(${volteado ? -1 : 1})`,
++                    mixBlendMode: recorte.fondoQuitado ? undefined : "multiply",
++                    filter: sombra ? "drop-shadow(0 6px 8px rgba(0,0,0,0.28))" : undefined,
++                  }}
++                />
++              )}
++              {(cargandoRecorte || !recorte) && (
++                <div className="absolute inset-0 grid place-items-center bg-background/40" aria-live="polite">
++                  <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" aria-label="Preparando el mueble" />
++                </div>
++              )}
++            </div>
++
++            <div className="space-y-4">
++              {acabados.length > 1 && (
++                <fieldset>
++                  <legend className="t-producto mb-2">Acabado: <span className="font-normal text-muted-foreground">{acabado?.nombre}</span></legend>
++                  <div className="flex flex-wrap gap-2.5">
++                    {acabados.map((a, i) => (
++                      <button
++                        key={a.id}
++                        type="button"
++                        aria-pressed={i === acabadoIdx}
++                        aria-label={a.nombre}
++                        title={a.nombre}
++                        onClick={() => setAcabadoIdx(i)}
++                        className={`grid h-11 w-11 place-items-center rounded-full border-2 transition-shadow ${i === acabadoIdx ? "border-primary ring-2 ring-primary/30" : "border-border"}`}
++                        style={{ background: a.hex ?? "var(--muted)" }}
++                      >
++                        {i === acabadoIdx && <Check className="h-4 w-4 text-white mix-blend-difference" aria-hidden />}
++                      </button>
++                    ))}
++                  </div>
++                </fieldset>
++              )}
++
++              {conMedidas.length > 1 && (
++                <label className="block text-sm">
++                  <span className="t-producto mb-1.5 block">Pieza</span>
++                  <select
++                    value={piezaIdx}
++                    onChange={(e) => setPiezaIdx(Number(e.target.value))}
++                    className="h-11 w-full rounded-lg border border-input bg-card px-3"
++                  >
++                    {conMedidas.map((p, i) => (
++                      <option key={`${p.nombre}-${i}`} value={i}>
++                        {p.nombre} · {p.ancho_cm} cm
++                      </option>
++                    ))}
++                  </select>
++                </label>
++              )}
++
++              <label className="block">
++                <span className="t-producto mb-1.5 flex items-center justify-between">
++                  Tamaño <span className="t-apoyo font-normal text-muted-foreground">{(calibrada ? etiquetaMedida(anchoCm, ajuste) : null) ?? `a ojo · ${Math.round(ajuste * 100)} %`}</span>
++                </span>
++                <input
++                  type="range"
++                  min={AJUSTE_MIN}
++                  max={AJUSTE_MAX}
++                  step={0.01}
++                  value={ajuste}
++                  onChange={(e) => setAjuste(Number(e.target.value))}
++                  className="h-11 w-full accent-[var(--primary)]"
++                  aria-label="Tamaño del mueble"
++                />
++              </label>
++
++              <div className="flex flex-wrap gap-2">
++                <Button type="button" variant="outline" className="h-11 rounded-full" onClick={() => setVolteado((v) => !v)} aria-pressed={volteado}>
++                  <FlipHorizontal2 className="mr-2 h-4 w-4" aria-hidden /> Voltear
++                </Button>
++                <Button type="button" variant="outline" className="h-11 rounded-full" onClick={() => setSombra((v) => !v)} aria-pressed={sombra}>
++                  <Sparkles className="mr-2 h-4 w-4" aria-hidden /> Sombra {sombra ? "sí" : "no"}
++                </Button>
++                {!calibrada && (
++                  <Button type="button" variant="ghost" className="h-11 rounded-full" onClick={() => setPaso("escala")}>
++                    <Ruler className="mr-2 h-4 w-4" aria-hidden /> Calibrar tamaño
++                  </Button>
++                )}
++              </div>
++
++              <div className="space-y-1.5 text-xs text-muted-foreground" aria-live="polite">
++                {calibrada ? (
++                  <p>Tamaño según la medida que marcaste. Si el mueble va más al fondo del cuarto, hazlo un poco más pequeño.</p>
++                ) : (
++                  <p>Sin calibrar: el tamaño es a ojo. Calibra con una puerta para verlo a escala.</p>
++                )}
++                {recorte && !recorte.fondoQuitado && <p>Esta foto del producto tiene fondo, por eso se ve con un recuadro. Prueba otro acabado o pídenos una foto sobre fondo liso.</p>}
++                {enAngulo && <p>La foto del producto está en ángulo: la medida es aproximada.</p>}
++                <p>Simulación referencial en 2D: no incluye perspectiva ni iluminación.</p>
++              </div>
++
++              <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
++                <Button type="button" className="h-11 rounded-full" onClick={descargar} disabled={!recorte}>
++                  <Download className="mr-2 h-4 w-4" aria-hidden /> Descargar imagen
++                </Button>
++                {puedeCompartir && (
++                  <Button type="button" variant="outline" className="h-11 rounded-full" onClick={compartir} disabled={!recorte}>
++                    <Share2 className="mr-2 h-4 w-4" aria-hidden /> Compartir
++                  </Button>
++                )}
++                <Button type="button" variant="ghost" className="h-11 rounded-full" onClick={reiniciar}>
++                  <RotateCcw className="mr-2 h-4 w-4" aria-hidden /> Usar otra foto
++                </Button>
++              </div>
++            </div>
++          </div>
++        )}
++      </DialogContent>
++    </Dialog>
++  );
++}
+diff -ruN a/src/lib/escenaEspacio.ts b/src/lib/escenaEspacio.ts
+--- a/src/lib/escenaEspacio.ts	1969-12-31 19:00:00.000000000 -0500
++++ b/src/lib/escenaEspacio.ts	2026-11-14 04:09:31.861661571 -0500
+@@ -0,0 +1,205 @@
++// src/lib/escenaEspacio.ts
++// «Pruébalo en tu espacio»: lógica pura (sin DOM) para recortar el fondo de la foto del producto,
++// calibrar la escala de la foto del cliente y calcular el tamaño del mueble en pantalla.
++// Todo es aproximado: es una imagen 2D, sin perspectiva ni luz. La página lo dice al cliente.
++import type { Pieza } from "./piezas";
++
++export interface Punto {
++  /** Fracción del ancho de la foto (0–1). */
++  x: number;
++  /** Fracción del alto de la foto (0–1). */
++  y: number;
++}
++
++export interface Recorte {
++  /** RGBA ya recortado al borde del mueble (sin márgenes de fondo). */
++  data: Uint8ClampedArray;
++  width: number;
++  height: number;
++  /** false = no se pudo separar el fondo (foto con ambiente, degradado, etc.). */
++  fondoQuitado: boolean;
++  /** Fracción de píxeles que se consideró fondo (0–1). */
++  cobertura: number;
++}
++
++/** Referencias que el cliente reconoce en su foto, con su medida real. */
++export const REFERENCIAS = [
++  { id: "puerta", nombre: "Alto de una puerta", cm: 210 },
++  { id: "libre", nombre: "Otra medida que conozco", cm: null },
++] as const;
++
++/** Sin calibrar, el mueble ocupa esta fracción del ancho de la foto. */
++export const ANCHO_POR_DEFECTO = 0.45;
++export const AJUSTE_MIN = 0.4;
++export const AJUSTE_MAX = 2;
++
++export const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
++
++/* ───────────────────────── Recorte de fondo ───────────────────────── */
++
++const distRgb = (d: Uint8ClampedArray, i: number, r: number, g: number, b: number) => {
++  const dr = d[i] - r;
++  const dg = d[i + 1] - g;
++  const db = d[i + 2] - b;
++  return Math.sqrt(dr * dr + dg * dg + db * db);
++};
++
++/**
++ * Quita el fondo liso de una foto de estudio (blanco, gris claro, crema…): inunda desde los bordes
++ * los píxeles parecidos al color de las esquinas y los vuelve transparentes. Suaviza el borde y
++ * recorta al contorno del mueble. Si las esquinas no son parecidas o casi todo cambia de fondo,
++ * devuelve `fondoQuitado: false` y la imagen original.
++ */
++export function quitarFondo(rgba: Uint8ClampedArray, w: number, h: number, tolerancia = 34): Recorte {
++  const total = w * h;
++  const out = new Uint8ClampedArray(rgba);
++
++  // Color de fondo = promedio de las 4 esquinas (bloques de hasta 3×3)
++  const esquinas: [number, number][] = [
++    [0, 0],
++    [w - 1, 0],
++    [0, h - 1],
++    [w - 1, h - 1],
++  ];
++  const colores = esquinas.map(([cx, cy]) => {
++    let r = 0, g = 0, b = 0, n = 0;
++    for (let dy = 0; dy < 3; dy++)
++      for (let dx = 0; dx < 3; dx++) {
++        const x = clamp(cx === 0 ? dx : cx - dx, 0, w - 1);
++        const y = clamp(cy === 0 ? dy : cy - dy, 0, h - 1);
++        const i = (y * w + x) * 4;
++        r += rgba[i]; g += rgba[i + 1]; b += rgba[i + 2]; n++;
++      }
++    return [r / n, g / n, b / n];
++  });
++  const bg = [0, 1, 2].map((c) => colores.reduce((s, col) => s + col[c], 0) / colores.length);
++  const esquinasParecidas = colores.every(
++    (col) => Math.hypot(col[0] - bg[0], col[1] - bg[1], col[2] - bg[2]) <= tolerancia * 1.2,
++  );
++
++  const esFondo = (p: number) => {
++    const i = p * 4;
++    return rgba[i + 3] < 16 || distRgb(rgba, i, bg[0], bg[1], bg[2]) <= tolerancia;
++  };
++
++  // Inundación desde el borde (pila de enteros: sin recursión)
++  const fondo = new Uint8Array(total);
++  const pila = new Int32Array(total);
++  let tope = 0;
++  const meter = (p: number) => {
++    if (!fondo[p] && esFondo(p)) {
++      fondo[p] = 1;
++      pila[tope++] = p;
++    }
++  };
++  for (let x = 0; x < w; x++) { meter(x); meter((h - 1) * w + x); }
++  for (let y = 0; y < h; y++) { meter(y * w); meter(y * w + w - 1); }
++  while (tope > 0) {
++    const p = pila[--tope];
++    const x = p % w;
++    const y = (p - x) / w;
++    if (x > 0) meter(p - 1);
++    if (x < w - 1) meter(p + 1);
++    if (y > 0) meter(p - w);
++    if (y < h - 1) meter(p + w);
++  }
++
++  let nFondo = 0;
++  for (let p = 0; p < total; p++) if (fondo[p]) nFondo++;
++  const cobertura = nFondo / total;
++  const fondoQuitado = esquinasParecidas && cobertura >= 0.08 && cobertura <= 0.97;
++
++  if (!fondoQuitado) return { data: out, width: w, height: h, fondoQuitado: false, cobertura };
++
++  // Aplicar transparencia; el borde se suaviza según qué tan lejos está del color de fondo
++  for (let p = 0; p < total; p++) {
++    const i = p * 4;
++    if (fondo[p]) {
++      out[i + 3] = 0;
++      continue;
++    }
++    const x = p % w;
++    const y = (p - x) / w;
++    const tocaFondo =
++      (x > 0 && fondo[p - 1]) || (x < w - 1 && fondo[p + 1]) || (y > 0 && fondo[p - w]) || (y < h - 1 && fondo[p + w]);
++    if (tocaFondo) {
++      const d = distRgb(rgba, i, bg[0], bg[1], bg[2]);
++      const a = clamp((d - tolerancia * 0.5) / (tolerancia * 1.2), 0, 1);
++      out[i + 3] = Math.round(out[i + 3] * a);
++    }
++  }
++
++  // Contorno del mueble: filas/columnas con al menos 2 píxeles opacos (ignora motas sueltas)
++  const cols = new Uint16Array(w);
++  const filas = new Uint16Array(h);
++  for (let y = 0; y < h; y++)
++    for (let x = 0; x < w; x++)
++      if (out[(y * w + x) * 4 + 3] > 40) {
++        cols[x]++;
++        filas[y]++;
++      }
++  const primero = (a: Uint16Array) => a.findIndex((v) => v >= 2);
++  const ultimo = (a: Uint16Array) => {
++    for (let i = a.length - 1; i >= 0; i--) if (a[i] >= 2) return i;
++    return -1;
++  };
++  const x0 = primero(cols), x1 = ultimo(cols), y0 = primero(filas), y1 = ultimo(filas);
++  if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0) {
++    return { data: out, width: w, height: h, fondoQuitado: false, cobertura };
++  }
++
++  const cw = x1 - x0 + 1;
++  const ch = y1 - y0 + 1;
++  const crop = new Uint8ClampedArray(cw * ch * 4);
++  for (let y = 0; y < ch; y++) {
++    const desde = ((y + y0) * w + x0) * 4;
++    crop.set(out.subarray(desde, desde + cw * 4), y * cw * 4);
++  }
++  return { data: crop, width: cw, height: ch, fondoQuitado: true, cobertura };
++}
++
++/* ───────────────────────── Escala ───────────────────────── */
++
++/**
++ * Píxeles (de la foto original) que equivalen a 1 cm, a partir de dos puntos marcados sobre algo de
++ * medida conocida. Devuelve null si los puntos están casi juntos o la medida no es válida.
++ */
++export function pxPorCm(a: Punto, b: Punto, fotoW: number, fotoH: number, refCm: number): number | null {
++  if (!Number.isFinite(refCm) || refCm <= 0) return null;
++  const px = Math.hypot((b.x - a.x) * fotoW, (b.y - a.y) * fotoH);
++  // Menos de 2 % de la diagonal: el cliente tocó dos veces el mismo sitio
++  if (px < Math.hypot(fotoW, fotoH) * 0.02) return null;
++  return px / refCm;
++}
++
++/** Pieza principal (la más ancha) para mostrar cuando el producto trae varias. */
++export function piezaPrincipal(piezas: Pieza[]): Pieza | null {
++  const conAncho = piezas.filter((p) => p.ancho_cm !== null);
++  if (conAncho.length === 0) return null;
++  return conAncho.reduce((m, p) => ((p.ancho_cm ?? 0) > (m.ancho_cm ?? 0) ? p : m));
++}
++
++/**
++ * Ancho del mueble como fracción del ancho de la foto.
++ * Calibrada: ancho real × px/cm. Sin calibrar o sin medida: ANCHO_POR_DEFECTO.
++ */
++export function anchoFraccion(anchoCm: number | null, escala: number | null, fotoW: number): number {
++  if (anchoCm && escala) return clamp((anchoCm * escala) / fotoW, 0.03, 1.5);
++  return ANCHO_POR_DEFECTO;
++}
++
++/**
++ * ¿La foto del producto está de frente? Compara la proporción alto/ancho del recorte con la real.
++ * Una foto en ángulo hace que el ancho visible sea menor que el real y la escala salga algo corta.
++ * Devuelve la razón (1 = coincide); null si falta alguna medida.
++ */
++export function razonProporcion(recW: number, recH: number, anchoCm: number | null, altoCm: number | null): number | null {
++  if (!anchoCm || !altoCm || recW <= 0 || recH <= 0) return null;
++  return recH / recW / (altoCm / anchoCm);
++}
++
++/** Texto corto con la medida mostrada, p. ej. «≈ 210 cm de ancho». */
++export function etiquetaMedida(anchoCm: number | null, ajuste: number): string | null {
++  if (!anchoCm) return null;
++  return `≈ ${Math.round(anchoCm * ajuste)} cm de ancho`;
++}
+diff -ruN a/src/routes/nosotros.tsx b/src/routes/nosotros.tsx
+--- a/src/routes/nosotros.tsx	2026-11-14 04:09:31.779483823 -0500
++++ b/src/routes/nosotros.tsx	2026-11-14 04:09:31.865903110 -0500
+@@ -110,7 +110,7 @@
+         <section className="px-4 pb-10 pt-14 md:pt-20">
+           <div className="container mx-auto grid max-w-6xl items-center gap-10 md:grid-cols-2">
+             <div className="reveal">
+-              <p className="mb-3 text-xs uppercase tracking-[0.25em] text-muted-foreground">Nuestro taller · Lima</p>
++              <p className="mb-3 text-sm font-medium text-muted-foreground">Nuestro taller · Lima</p>
+               <h1 className="font-display text-4xl font-semibold leading-tight md:text-5xl">
+                 Hecho a mano, pieza por pieza
+               </h1>
+@@ -156,7 +156,7 @@
+                       <div>
+                         <div className="flex items-center gap-2 text-accent">
+                           <Icono className="h-4 w-4" aria-hidden="true" />
+-                          <span className="text-xs font-medium uppercase tracking-wide">Paso {i + 1}</span>
++                          <span className="text-xs font-medium">Paso {i + 1}</span>
+                         </div>
+                         <h3 className="mt-1 font-display text-2xl font-semibold">{paso.titulo}</h3>
+                         <p className="mt-2 max-w-xl text-muted-foreground">{paso.descripcion}</p>
+@@ -272,7 +272,7 @@
+                       <MapPin className="h-4 w-4" aria-hidden="true" />
+                     </span>
+                     <div>
+-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Dirección</p>
++                      <p className="text-xs font-medium text-muted-foreground">Dirección</p>
+                       <p className="font-medium">{direccionTienda}</p>
+                     </div>
+                   </li>
+@@ -282,7 +282,7 @@
+                         <Clock className="h-4 w-4" aria-hidden="true" />
+                       </span>
+                       <div>
+-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Horario</p>
++                        <p className="text-xs font-medium text-muted-foreground">Horario</p>
+                         <p className="font-medium">{HORARIO}</p>
+                       </div>
+                     </li>
+diff -ruN a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+--- a/src/routes/product.$handle.tsx	2026-11-14 04:09:31.779772524 -0500
++++ b/src/routes/product.$handle.tsx	2026-11-14 04:09:31.870302176 -0500
+@@ -1,4 +1,4 @@
+-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
++import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
+ import { useQuery } from "@tanstack/react-query";
+ import { useAuth } from "@/hooks/useAuth";
+ import { useWishlist } from "@/context/WishlistContext";
+@@ -8,7 +8,7 @@
+ import { supabase } from "@/integrations/supabase/client";
+ import { Header } from "@/components/Header";
+ import { Footer } from "@/components/Footer";
+-import { Loader2, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
++import { Loader2, Camera, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
+ import { calcLineId, useCartStore } from "@/stores/cartStore";
+ import { toast } from "sonner";
+ import { avisoCarrito } from "@/lib/avisoCarrito";
+@@ -36,6 +36,12 @@
+ import { ProductGallery } from "@/components/product/ProductGallery";
+ import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
+ import { MedidasPiezas } from "@/components/product/MedidasPiezas";
++import type { AcabadoEspacio } from "@/components/product/ProbarEnTuEspacio";
++
++// «Pruébalo en tu espacio» se descarga solo cuando el cliente lo abre
++const ProbarEnTuEspacio = lazy(() =>
++  import("@/components/product/ProbarEnTuEspacio").then((m) => ({ default: m.ProbarEnTuEspacio })),
++);
+ import { piezasDeProducto } from "@/lib/piezas";
+ import "@/components/product/product-experience.css";
+ import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
+@@ -659,6 +665,8 @@
+   const [activeImg, setActiveImg] = useState(0);
+   const [vista, setVista] = useState<"foto" | "3d">("foto");
+   const [leadOpen, setLeadOpen] = useState(false);
++  const [espacioOpen, setEspacioOpen] = useState(false);
++  const [espacioMontado, setEspacioMontado] = useState(false);
+   const [ambient, setAmbient] = useState(false);
+   const [finishIdx, setFinishIdx] = useState(0);
+   const [fotoColor, setFotoColor] = useState(0);
+@@ -760,6 +768,19 @@
+   }, [product.imagenes]);
+   const hayColoresFoto = fotoColores.length > 0;
+ 
++  const piezasProducto = useMemo(() => piezasDeProducto(product).piezas, [product]);
++
++  // «Pruébalo en tu espacio»: cada color por foto es un acabado; sin colores, la foto que se está viendo
++  const acabadosEspacio: AcabadoEspacio[] = useMemo(() => {
++    if (hayColoresFoto) {
++      return fotoColores
++        .filter((c) => allImgs[c.imgIdx])
++        .map((c) => ({ id: c.hex, nombre: c.name, hex: c.hex, img: allImgs[c.imgIdx] }));
++    }
++    return displayImg ? [{ id: "foto", nombre: "Original", hex: null, img: displayImg }] : [];
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [fotoColores, hayColoresFoto, displayImg, allImgs.join("|")]);
++
+   // Al pasar de foto en la galería, el color seleccionado sigue a la foto
+   useEffect(() => {
+     const hex = product.imagenes?.[activeImg]?.color?.hex?.toLowerCase();
+@@ -957,6 +978,19 @@
+                     : esNuevo && <div className="gm-badge-new">Nuevo</div>}
+                 </ProductGallery>
+               )}
++
++              {acabadosEspacio.length > 0 && (
++                <button
++                  type="button"
++                  onClick={() => {
++                    setEspacioMontado(true);
++                    setEspacioOpen(true);
++                  }}
++                  className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++                >
++                  <Camera size={16} aria-hidden /> Pruébalo en tu espacio
++                </button>
++              )}
+             </div>
+           </div>
+ 
+@@ -1165,6 +1199,19 @@
+           base={{ id: product.id, nombre: product.nombre, precio: precioSinOpciones, image: mainImg, sku: product.sku, categoria: product.categoria }}
+         />
+ 
++        {espacioMontado && (
++          <Suspense fallback={null}>
++            <ProbarEnTuEspacio
++              open={espacioOpen}
++              onOpenChange={setEspacioOpen}
++              nombre={product.nombre}
++              piezas={piezasProducto}
++              acabados={acabadosEspacio}
++              acabadoInicial={hayColoresFoto ? Math.min(fotoColor, Math.max(0, acabadosEspacio.length - 1)) : 0}
++            />
++          </Suspense>
++        )}
++
+         <Footer />
+         {/* En móvil la barra de compra es fija: este espacio evita que tape el final de la página */}
+         <div className="gmx-sticky-spacer" aria-hidden />
+diff -ruN a/src/routes/proyectos.tsx b/src/routes/proyectos.tsx
+--- a/src/routes/proyectos.tsx	2026-11-14 04:09:31.779827994 -0500
++++ b/src/routes/proyectos.tsx	2026-11-14 04:09:31.874656786 -0500
+@@ -57,7 +57,7 @@
+       <main>
+         <section className="px-4 pb-8 pt-14 md:pt-20">
+           <div className="container mx-auto max-w-6xl">
+-            <p className="mb-3 text-xs uppercase tracking-[0.25em] text-muted-foreground">Proyectos</p>
++            <p className="mb-3 text-sm font-medium text-muted-foreground">Proyectos</p>
+             <h1 className="max-w-3xl font-display text-4xl font-semibold leading-tight md:text-5xl">
+               Lo que nace cuando una idea nueva llega al taller
+             </h1>
+diff -ruN a/src/styles.css b/src/styles.css
+--- a/src/styles.css	2026-11-14 04:09:31.780979037 -0500
++++ b/src/styles.css	2026-11-14 04:09:31.879500225 -0500
+@@ -1,398 +1,400 @@
+-@import "tailwindcss" source(none);
+-@source "../src";
+-@import "tw-animate-css";
+-
+-@custom-variant dark (&:is(.dark *));
+-
+-/*
+- * Design system definition.
+- *
+- * The @theme inline block maps CSS custom properties to Tailwind utility
+- * classes (e.g. --color-primary -> bg-primary, text-primary).
+- *
+- * The :root and .dark blocks define the actual color values using oklch.
+- * All colors MUST use oklch format.
+- *
+- * To add a new semantic color:
+- * 1. Add the variable to :root (light value) and .dark (dark value)
+- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+- */
+-
+-@theme inline {
+-  --radius-sm: calc(var(--radius) - 4px);
+-  --radius-md: calc(var(--radius) - 2px);
+-  --radius-lg: var(--radius);
+-  --radius-xl: calc(var(--radius) + 4px);
+-  --radius-2xl: calc(var(--radius) + 8px);
+-  --radius-3xl: calc(var(--radius) + 12px);
+-  --radius-4xl: calc(var(--radius) + 16px);
+-  --color-background: var(--background);
+-  --color-foreground: var(--foreground);
+-  --color-card: var(--card);
+-  --color-card-foreground: var(--card-foreground);
+-  --color-popover: var(--popover);
+-  --color-popover-foreground: var(--popover-foreground);
+-  --color-primary: var(--primary);
+-  --color-primary-foreground: var(--primary-foreground);
+-  --color-secondary: var(--secondary);
+-  --color-secondary-foreground: var(--secondary-foreground);
+-  --color-muted: var(--muted);
+-  --color-muted-foreground: var(--muted-foreground);
+-  --color-accent: var(--accent);
+-  --color-accent-foreground: var(--accent-foreground);
+-  --color-accent-strong: var(--accent-strong);
+-  --color-accent-soft: var(--accent-soft);
+-  --color-detail: var(--detail);
+-  --color-destructive: var(--destructive);
+-  --color-destructive-foreground: var(--destructive-foreground);
+-  --color-border: var(--border);
+-  --color-input: var(--input);
+-  --color-ring: var(--ring);
+-  --color-ring-offset-background: var(--background);
+-  --color-chart-1: var(--chart-1);
+-  --color-chart-2: var(--chart-2);
+-  --color-chart-3: var(--chart-3);
+-  --color-chart-4: var(--chart-4);
+-  --color-chart-5: var(--chart-5);
+-  --color-sidebar: var(--sidebar);
+-  --color-sidebar-foreground: var(--sidebar-foreground);
+-  --color-sidebar-primary: var(--sidebar-primary);
+-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+-  --color-sidebar-accent: var(--sidebar-accent);
+-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+-  --color-sidebar-border: var(--sidebar-border);
+-  --color-sidebar-ring: var(--sidebar-ring);
+-}
+-
+-:root {
+-  --radius: 0.5rem;
+-  /* Japandi Premium — G&M Mueblería (identidad visual desde nov-2026)
+-     Marfil #F5F1E8 · beige #D8C3A5 · marrón #8B735B · verde bosque #34443A · texto #292824 */
+-  --background: oklch(0.959 0.013 87);
+-  --foreground: oklch(0.276 0.007 95);
+-  --card: oklch(0.994 0.006 85); /* blanco cálido #FFFDF9 */
+-  --card-foreground: oklch(0.276 0.007 95);
+-  --popover: oklch(0.994 0.006 85);
+-  --popover-foreground: oklch(0.276 0.007 95);
+-  --primary: oklch(0.369 0.027 157); /* verde bosque: botones, precios, footer (9.2:1 sobre marfil) */
+-  --primary-foreground: oklch(0.959 0.013 87);
+-  --secondary: oklch(0.827 0.047 77); /* beige: botones secundarios */
+-  --secondary-foreground: oklch(0.276 0.007 95);
+-  --muted: oklch(0.927 0.02 85);
+-  --muted-foreground: oklch(0.487 0.029 71); /* 5.7:1 sobre marfil */
+-  /* Terracota: SOLO ofertas y descuentos. --accent para fondos/bordes sin texto;
+-     --accent-strong para texto (7.3:1 sobre marfil, 4.8:1 sobre beige); --accent-soft para fondos suaves */
+-  --accent: oklch(0.581 0.118 42);
+-  --accent-foreground: oklch(0.994 0.006 85);
+-  --accent-strong: oklch(0.438 0.108 40);
+-  --accent-soft: oklch(0.924 0.023 53);
+-  /* Marrón #8B735B: 4.0:1 sobre marfil → solo líneas, bordes e íconos; NUNCA texto pequeño */
+-  --detail: oklch(0.572 0.046 67);
+-  --whatsapp: oklch(0.574 0.138 152);
+-  --destructive: oklch(0.55 0.2 25);
+-  --destructive-foreground: oklch(0.985 0.008 80);
+-  --border: oklch(0.893 0.03 82);
+-  --input: oklch(0.88 0.032 80);
+-  --ring: oklch(0.369 0.027 157);
+-  --wood-light: oklch(0.91 0.04 75);
+-  --wood-dark: oklch(0.32 0.05 50);
+-  --cream: oklch(0.97 0.015 80);
+-  --gradient-warm: linear-gradient(135deg, oklch(0.369 0.027 157) 0%, oklch(0.469 0.037 156) 100%);
+-  --shadow-soft: 0 4px 24px -8px oklch(0.32 0.05 50 / 0.15);
+-  --shadow-elegant: 0 20px 60px -20px oklch(0.32 0.05 50 / 0.25);
+-  /* Tipografía: una sola serif (títulos) y una sola sans (todo lo demás) */
+-  --font-display: "Playfair Display", Georgia, serif;
+-  --font-body: "Inter", system-ui, sans-serif;
+-  --chart-1: oklch(0.646 0.222 41.116);
+-  --chart-2: oklch(0.6 0.118 184.704);
+-  --chart-3: oklch(0.398 0.07 227.392);
+-  --chart-4: oklch(0.828 0.189 84.429);
+-  --chart-5: oklch(0.769 0.188 70.08);
+-  --sidebar: oklch(0.984 0.003 247.858);
+-  --sidebar-foreground: oklch(0.129 0.042 264.695);
+-  --sidebar-primary: oklch(0.208 0.042 265.755);
+-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+-  --sidebar-accent: oklch(0.968 0.007 247.896);
+-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
+-  --sidebar-border: oklch(0.929 0.013 255.508);
+-  --sidebar-ring: oklch(0.704 0.04 256.788);
+-}
+-
+-.dark {
+-  --background: oklch(0.129 0.042 264.695);
+-  --foreground: oklch(0.984 0.003 247.858);
+-  --card: oklch(0.208 0.042 265.755);
+-  --card-foreground: oklch(0.984 0.003 247.858);
+-  --popover: oklch(0.208 0.042 265.755);
+-  --popover-foreground: oklch(0.984 0.003 247.858);
+-  --primary: oklch(0.929 0.013 255.508);
+-  --primary-foreground: oklch(0.208 0.042 265.755);
+-  --secondary: oklch(0.279 0.041 260.031);
+-  --secondary-foreground: oklch(0.984 0.003 247.858);
+-  --muted: oklch(0.279 0.041 260.031);
+-  --muted-foreground: oklch(0.704 0.04 256.788);
+-  --accent: oklch(0.279 0.041 260.031);
+-  --accent-foreground: oklch(0.984 0.003 247.858);
+-  --accent-strong: var(--accent);
+-  --destructive: oklch(0.704 0.191 22.216);
+-  --destructive-foreground: oklch(0.984 0.003 247.858);
+-  --border: oklch(1 0 0 / 10%);
+-  --input: oklch(1 0 0 / 15%);
+-  --ring: oklch(0.551 0.027 264.364);
+-  --chart-1: oklch(0.488 0.243 264.376);
+-  --chart-2: oklch(0.696 0.17 162.48);
+-  --chart-3: oklch(0.769 0.188 70.08);
+-  --chart-4: oklch(0.627 0.265 303.9);
+-  --chart-5: oklch(0.645 0.246 16.439);
+-  --sidebar: oklch(0.208 0.042 265.755);
+-  --sidebar-foreground: oklch(0.984 0.003 247.858);
+-  --sidebar-primary: oklch(0.488 0.243 264.376);
+-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+-  --sidebar-accent: oklch(0.279 0.041 260.031);
+-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+-  --sidebar-border: oklch(1 0 0 / 10%);
+-  --sidebar-ring: oklch(0.551 0.027 264.364);
+-}
+-
+-@layer base {
+-  * {
+-    border-color: var(--color-border);
+-  }
+-
+-  html, body {
+-    max-width: 100vw;
+-    overflow-x: clip;
+-  }
+-
+-  body {
+-    background-color: var(--color-background);
+-    color: var(--color-foreground);
+-    font-family: var(--font-body);
+-    font-feature-settings: "ss01", "ss02";
+-  }
+-
+-  #root {
+-    max-width: 100vw;
+-    overflow-x: clip;
+-  }
+-
+-  /* Serif solo en h1/h2 y en .font-display; h3/h4 son Inter (subtítulos y nombres de producto) */
+-  h1, h2, .font-display {
+-    font-family: var(--font-display);
+-    font-weight: 400;
+-    letter-spacing: -0.02em;
+-  }
+-  h3, h4 {
+-    font-family: var(--font-body);
+-    font-weight: 500;
+-  }
+-}
+-
+-
+-/* ================================================================
+-   G&M Mueblería — Variables de diseño para la página de producto
+-   Agregar al FINAL de src/styles.css (o en tu index.css, dentro de :root)
+-   ================================================================ */
+-
+-:root {
+-  /* Paleta cálida */
+-  --color-warm-white:   #FDFAF6;
+-  --color-cream:        #F7F4EF;
+-  --color-walnut:       #3B2B1F;
+-  --color-walnut-mid:   #6B4C38;
+-  --color-gold:         #C9A96E;
+-  --color-gold-light:   #E8D5B0;
+-  --color-blush:        #E8D5CC;
+-
+-  /* LEGADO (portada/home): estos hex siguen vivos solo para Hero, HeroSlider, PiezaDestacada y
+-     MedidaCTA hasta la entrega 2. La ficha y el resto ya usan los tokens de arriba. */
+-}
+-
+-/* Clase utilitaria para títulos display */
+-.font-display {
+-  font-family: var(--font-display);
+-}
+-
+-/* Altura de botón extra (h-13) — si no la tienes en tu config de Tailwind */
+-.h-13 { height: 3.25rem; }
+-.w-13 { width:  3.25rem; }
+-
+-/* ================================================================
+-   Hero de campaña — etiquetas colgadas del riel
+-   ================================================================ */
+-.hero-display {
+-  font-family: var(--font-display);
+-  letter-spacing: -0.02em;
+-}
+-
+-/* Veta de madera muy sutil sobre el nogal */
+-.hero-taller {
+-  background-image: repeating-linear-gradient(
+-    92deg,
+-    rgb(255 255 255 / 0.018) 0 2px,
+-    transparent 2px 9px
+-  );
+-}
+-
+-/* La cuerda: del ojal de la etiqueta hasta el riel */
+-.etiqueta {
+-  position: relative;
+-  transform-origin: 50% calc(var(--cuerda, 36px) * -1);
+-  animation: etiqueta-balanceo 2.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+-  animation-delay: calc(var(--i, 0) * 160ms + 150ms);
+-}
+-.etiqueta::before {
+-  content: "";
+-  position: absolute;
+-  left: 50%;
+-  bottom: calc(100% - 6px);
+-  width: 2px;
+-  height: var(--cuerda, 36px);
+-  background: var(--color-gold);
+-  opacity: 0.8;
+-  transform: translateX(-50%);
+-}
+-/* Un solo momento de movimiento: las etiquetas se balancean al cargar y se asientan */
+-@keyframes etiqueta-balanceo {
+-  0%   { transform: rotate(-9deg); }
+-  20%  { transform: rotate(6deg); }
+-  40%  { transform: rotate(-4deg); }
+-  60%  { transform: rotate(2.5deg); }
+-  80%  { transform: rotate(-1deg); }
+-  100% { transform: rotate(0); }
+-}
+-/* Respuesta al pasar el mouse */
+-.etiqueta:hover {
+-  animation: etiqueta-roce 0.9s ease-in-out;
+-}
+-@keyframes etiqueta-roce {
+-  0%, 100% { transform: rotate(0); }
+-  35%      { transform: rotate(2.5deg); }
+-  70%      { transform: rotate(-1.5deg); }
+-}
+-@media (prefers-reduced-motion: reduce) {
+-  .etiqueta,
+-  .etiqueta:hover {
+-    animation: none;
+-  }
+-}
+-
+-.no-scrollbar { scrollbar-width: none; }
+-.no-scrollbar::-webkit-scrollbar { display: none; }
+-
+-
+-
+-/* Animaciones de acceso (AuthButton). Pegar al final de src/styles.css */
+-
+-/* Brillo que cruza la pastilla "Iniciar sesión" */
+-.auth-shine {
+-  position: relative;
+-  overflow: hidden;
+-  isolation: isolate;
+-}
+-.auth-shine::after {
+-  content: "";
+-  position: absolute;
+-  inset: 0;
+-  z-index: -1;
+-  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.35) 50%, transparent 65%);
+-  transform: translateX(-120%);
+-  animation: auth-sweep 4.5s ease-in-out 1.2s infinite;
+-}
+-.auth-shine:hover::after {
+-  animation-duration: 1.4s;
+-}
+-@keyframes auth-sweep {
+-  0%,
+-  60% {
+-    transform: translateX(-120%);
+-  }
+-  100% {
+-    transform: translateX(120%);
+-  }
+-}
+-
+-/* Llave que se balancea como las etiquetas colgantes del hero */
+-.auth-cta-icon {
+-  transform-origin: 50% 0;
+-  animation: auth-sway 3.2s ease-in-out infinite;
+-}
+-.auth-cta:hover .auth-cta-icon {
+-  animation-duration: 0.9s;
+-}
+-@keyframes auth-sway {
+-  0%,
+-  100% {
+-    transform: rotate(-10deg);
+-  }
+-  50% {
+-    transform: rotate(10deg);
+-  }
+-}
+-
+-/* Aparición del avatar tras un login exitoso */
+-.auth-pop {
+-  animation: auth-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+-}
+-@keyframes auth-pop {
+-  0% {
+-    transform: scale(0.4);
+-    opacity: 0;
+-  }
+-  70% {
+-    transform: scale(1.12);
+-    opacity: 1;
+-  }
+-  100% {
+-    transform: scale(1);
+-  }
+-}
+-
+-/* Aro que se expande alrededor del avatar */
+-.auth-ring {
+-  border: 2px solid var(--color-accent, currentColor);
+-  animation: auth-ring 1.4s ease-out 0.2s 2 both;
+-}
+-@keyframes auth-ring {
+-  0% {
+-    transform: scale(1);
+-    opacity: 0.7;
+-  }
+-  100% {
+-    transform: scale(1.9);
+-    opacity: 0;
+-  }
+-}
+-
+-@media (prefers-reduced-motion: reduce) {
+-  .auth-shine::after,
+-  .auth-cta-icon,
+-  .auth-pop,
+-  .auth-ring {
+-    animation: none;
+-  }
+-}
+-
+-/* ================================================================
+-   Escala tipográfica (móvil / desktop ≥ 640 px)
+-   título 32/48 · sección 26/32 · producto 15/16 · precio 18/20
+-   texto 14/16 · botón 14 · apoyo 12 (mínimo de la tienda)
+-   ================================================================ */
+-@layer components {
+-  .t-titulo   { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
+-  .t-seccion  { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; }
+-  .t-producto { font-family: var(--font-body); font-weight: 600; font-size: 15px; line-height: 1.3; }
+-  .t-precio   { font-family: var(--font-body); font-weight: 700; font-size: 18px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+-  .t-precio-ficha { font-family: var(--font-body); font-weight: 700; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+-  .t-texto    { font-family: var(--font-body); font-weight: 400; font-size: 14px; line-height: 1.6; }
+-  .t-boton    { font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+-  .t-apoyo    { font-family: var(--font-body); font-weight: 500; font-size: 12px; line-height: 1.4; }
+-  @media (min-width: 640px) {
+-    .t-titulo   { font-size: 48px; }
+-    .t-seccion  { font-size: 32px; }
+-    .t-producto { font-size: 16px; }
+-    .t-precio   { font-size: 20px; }
+-    .t-precio-ficha { font-size: 28px; }
+-    .t-texto    { font-size: 16px; }
+-  }
+-}
++@import "tailwindcss" source(none);
++@source "../src";
++@import "tw-animate-css";
++
++@custom-variant dark (&:is(.dark *));
++
++/*
++ * Design system definition.
++ *
++ * The @theme inline block maps CSS custom properties to Tailwind utility
++ * classes (e.g. --color-primary -> bg-primary, text-primary).
++ *
++ * The :root and .dark blocks define the actual color values using oklch.
++ * All colors MUST use oklch format.
++ *
++ * To add a new semantic color:
++ * 1. Add the variable to :root (light value) and .dark (dark value)
++ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
++ */
++
++@theme inline {
++  --radius-sm: calc(var(--radius) - 4px);
++  --radius-md: calc(var(--radius) - 2px);
++  --radius-lg: var(--radius);
++  --radius-xl: calc(var(--radius) + 4px);
++  --radius-2xl: calc(var(--radius) + 8px);
++  --radius-3xl: calc(var(--radius) + 12px);
++  --radius-4xl: calc(var(--radius) + 16px);
++  --color-background: var(--background);
++  --color-foreground: var(--foreground);
++  --color-card: var(--card);
++  --color-card-foreground: var(--card-foreground);
++  --color-popover: var(--popover);
++  --color-popover-foreground: var(--popover-foreground);
++  --color-primary: var(--primary);
++  --color-primary-foreground: var(--primary-foreground);
++  --color-secondary: var(--secondary);
++  --color-secondary-foreground: var(--secondary-foreground);
++  --color-muted: var(--muted);
++  --color-muted-foreground: var(--muted-foreground);
++  --color-accent: var(--accent);
++  --color-accent-foreground: var(--accent-foreground);
++  --color-accent-strong: var(--accent-strong);
++  --color-accent-soft: var(--accent-soft);
++  --color-detail: var(--detail);
++  --color-campana: var(--campana);
++  --color-campana-soft: var(--campana-soft);
++  --color-destructive: var(--destructive);
++  --color-destructive-foreground: var(--destructive-foreground);
++  --color-border: var(--border);
++  --color-input: var(--input);
++  --color-ring: var(--ring);
++  --color-ring-offset-background: var(--background);
++  --color-chart-1: var(--chart-1);
++  --color-chart-2: var(--chart-2);
++  --color-chart-3: var(--chart-3);
++  --color-chart-4: var(--chart-4);
++  --color-chart-5: var(--chart-5);
++  --color-sidebar: var(--sidebar);
++  --color-sidebar-foreground: var(--sidebar-foreground);
++  --color-sidebar-primary: var(--sidebar-primary);
++  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
++  --color-sidebar-accent: var(--sidebar-accent);
++  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
++  --color-sidebar-border: var(--sidebar-border);
++  --color-sidebar-ring: var(--sidebar-ring);
++}
++
++:root {
++  --radius: 0.5rem;
++  /* G&M Mueblería — paleta pastel (nov-2026), regla 60-30-10:
++     60% crema (--background) · 30% salvia/arena pastel (--secondary, --muted) · 10% terracota (--accent, solo ofertas).
++     Los muebles de madera son el color fuerte; el fondo pastel los hace resaltar. Texto siempre oscuro. */
++  --background: oklch(0.972 0.014 88); /* 60%: crema pastel */
++  --foreground: oklch(0.276 0.007 95);
++  --card: oklch(0.992 0.007 88); /* blanco cálido */
++  --card-foreground: oklch(0.276 0.007 95);
++  --popover: oklch(0.994 0.006 85);
++  --popover-foreground: oklch(0.276 0.007 95);
++  --primary: oklch(0.43 0.035 158); /* salvia profunda: botones, precios, footer (≥7:1 sobre crema) */
++  --primary-foreground: oklch(0.975 0.012 88);
++  --secondary: oklch(0.905 0.04 150); /* 30%: salvia pastel (superficies y botones secundarios) */
++  --secondary-foreground: oklch(0.276 0.007 95);
++  --muted: oklch(0.946 0.022 92); /* arena pastel */
++  --muted-foreground: oklch(0.487 0.029 71); /* 5.7:1 sobre marfil */
++  /* Terracota: SOLO ofertas y descuentos. --accent para fondos/bordes sin texto;
++     --accent-strong para texto (7.3:1 sobre marfil, 4.8:1 sobre beige); --accent-soft para fondos suaves */
++  --accent: oklch(0.581 0.118 42);
++  --accent-foreground: oklch(0.994 0.006 85);
++  --accent-strong: oklch(0.438 0.108 40);
++  --accent-soft: oklch(0.935 0.04 50); /* durazno pastel */
++  /* Marrón #8B735B: 4.0:1 sobre marfil → solo líneas, bordes e íconos; NUNCA texto pequeño */
++  --detail: oklch(0.572 0.046 67);
++  --whatsapp: oklch(0.574 0.138 152);
++  --destructive: oklch(0.55 0.2 25);
++  --destructive-foreground: oklch(0.985 0.008 80);
++  --border: oklch(0.9 0.024 90);
++  --input: oklch(0.89 0.026 88);
++  --ring: oklch(0.43 0.035 158);
++  /* Campaña (Días de locura): superficie pastel durazno; el 10% de acento es la terracota de --accent */
++  --campana: oklch(0.925 0.05 58);
++  --campana-soft: oklch(0.955 0.03 62);
++  --wood-light: oklch(0.91 0.04 75);
++  --wood-dark: oklch(0.32 0.05 50);
++  --cream: oklch(0.97 0.015 80);
++  --gradient-warm: linear-gradient(135deg, oklch(0.43 0.035 158) 0%, oklch(0.53 0.04 156) 100%);
++  --shadow-soft: 0 4px 24px -8px oklch(0.32 0.05 50 / 0.15);
++  --shadow-elegant: 0 20px 60px -20px oklch(0.32 0.05 50 / 0.25);
++  /* Tipografía: una sola serif (títulos) y una sola sans (todo lo demás) */
++  --font-display: "Playfair Display", Georgia, serif;
++  --font-body: "Inter", system-ui, sans-serif;
++  --chart-1: oklch(0.646 0.222 41.116);
++  --chart-2: oklch(0.6 0.118 184.704);
++  --chart-3: oklch(0.398 0.07 227.392);
++  --chart-4: oklch(0.828 0.189 84.429);
++  --chart-5: oklch(0.769 0.188 70.08);
++  --sidebar: oklch(0.984 0.003 247.858);
++  --sidebar-foreground: oklch(0.129 0.042 264.695);
++  --sidebar-primary: oklch(0.208 0.042 265.755);
++  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
++  --sidebar-accent: oklch(0.968 0.007 247.896);
++  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
++  --sidebar-border: oklch(0.929 0.013 255.508);
++  --sidebar-ring: oklch(0.704 0.04 256.788);
++}
++
++.dark {
++  --background: oklch(0.129 0.042 264.695);
++  --foreground: oklch(0.984 0.003 247.858);
++  --card: oklch(0.208 0.042 265.755);
++  --card-foreground: oklch(0.984 0.003 247.858);
++  --popover: oklch(0.208 0.042 265.755);
++  --popover-foreground: oklch(0.984 0.003 247.858);
++  --primary: oklch(0.929 0.013 255.508);
++  --primary-foreground: oklch(0.208 0.042 265.755);
++  --secondary: oklch(0.279 0.041 260.031);
++  --secondary-foreground: oklch(0.984 0.003 247.858);
++  --muted: oklch(0.279 0.041 260.031);
++  --muted-foreground: oklch(0.704 0.04 256.788);
++  --accent: oklch(0.279 0.041 260.031);
++  --accent-foreground: oklch(0.984 0.003 247.858);
++  --accent-strong: var(--accent);
++  --destructive: oklch(0.704 0.191 22.216);
++  --destructive-foreground: oklch(0.984 0.003 247.858);
++  --border: oklch(1 0 0 / 10%);
++  --input: oklch(1 0 0 / 15%);
++  --ring: oklch(0.551 0.027 264.364);
++  --chart-1: oklch(0.488 0.243 264.376);
++  --chart-2: oklch(0.696 0.17 162.48);
++  --chart-3: oklch(0.769 0.188 70.08);
++  --chart-4: oklch(0.627 0.265 303.9);
++  --chart-5: oklch(0.645 0.246 16.439);
++  --sidebar: oklch(0.208 0.042 265.755);
++  --sidebar-foreground: oklch(0.984 0.003 247.858);
++  --sidebar-primary: oklch(0.488 0.243 264.376);
++  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
++  --sidebar-accent: oklch(0.279 0.041 260.031);
++  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
++  --sidebar-border: oklch(1 0 0 / 10%);
++  --sidebar-ring: oklch(0.551 0.027 264.364);
++}
++
++@layer base {
++  * {
++    border-color: var(--color-border);
++  }
++
++  html, body {
++    max-width: 100vw;
++    overflow-x: clip;
++  }
++
++  body {
++    background-color: var(--color-background);
++    color: var(--color-foreground);
++    font-family: var(--font-body);
++    font-feature-settings: "ss01", "ss02";
++  }
++
++  #root {
++    max-width: 100vw;
++    overflow-x: clip;
++  }
++
++  /* Serif solo en h1/h2 y en .font-display; h3/h4 son Inter (subtítulos y nombres de producto) */
++  h1, h2, .font-display {
++    font-family: var(--font-display);
++    font-weight: 400;
++    letter-spacing: -0.02em;
++  }
++  h3, h4 {
++    font-family: var(--font-body);
++    font-weight: 500;
++  }
++}
++
++
++/* ================================================================
++   G&M Mueblería — Variables de diseño para la página de producto
++   Agregar al FINAL de src/styles.css (o en tu index.css, dentro de :root)
++   ================================================================ */
++
++:root {
++  /* Paleta cálida */
++  --color-warm-white:   #FDFAF6;
++  --color-cream:        #F7F4EF;
++  --color-walnut:       #3B2B1F;
++  --color-walnut-mid:   #6B4C38;
++  --color-gold:         #C9A96E;
++  --color-gold-light:   #E8D5B0;
++  --color-blush:        #E8D5CC;
++
++  /* LEGADO (portada/home): estos hex siguen vivos solo para Hero, HeroSlider, PiezaDestacada y
++     MedidaCTA hasta la entrega 2. La ficha y el resto ya usan los tokens de arriba. */
++}
++
++/* Clase utilitaria para títulos display */
++.font-display {
++  font-family: var(--font-display);
++}
++
++/* Altura de botón extra (h-13) — si no la tienes en tu config de Tailwind */
++.h-13 { height: 3.25rem; }
++.w-13 { width:  3.25rem; }
++
++/* ================================================================
++   Hero de campaña — etiquetas colgadas del riel
++   ================================================================ */
++.hero-display {
++  font-family: var(--font-display);
++  letter-spacing: -0.02em;
++}
++
++/* Campaña: superficie pastel, sin textura */
++.hero-taller {
++  background-color: var(--campana);
++}
++
++/* La cuerda: del ojal de la etiqueta hasta el riel */
++.etiqueta {
++  position: relative;
++  transform-origin: 50% calc(var(--cuerda, 36px) * -1);
++  animation: etiqueta-balanceo 2.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
++  animation-delay: calc(var(--i, 0) * 160ms + 150ms);
++}
++.etiqueta::before {
++  content: "";
++  position: absolute;
++  left: 50%;
++  bottom: calc(100% - 6px);
++  width: 2px;
++  height: var(--cuerda, 36px);
++  background: var(--color-gold);
++  opacity: 0.8;
++  transform: translateX(-50%);
++}
++/* Un solo momento de movimiento: las etiquetas se balancean al cargar y se asientan */
++@keyframes etiqueta-balanceo {
++  0%   { transform: rotate(-9deg); }
++  20%  { transform: rotate(6deg); }
++  40%  { transform: rotate(-4deg); }
++  60%  { transform: rotate(2.5deg); }
++  80%  { transform: rotate(-1deg); }
++  100% { transform: rotate(0); }
++}
++/* Respuesta al pasar el mouse */
++.etiqueta:hover {
++  animation: etiqueta-roce 0.9s ease-in-out;
++}
++@keyframes etiqueta-roce {
++  0%, 100% { transform: rotate(0); }
++  35%      { transform: rotate(2.5deg); }
++  70%      { transform: rotate(-1.5deg); }
++}
++@media (prefers-reduced-motion: reduce) {
++  .etiqueta,
++  .etiqueta:hover {
++    animation: none;
++  }
++}
++
++.no-scrollbar { scrollbar-width: none; }
++.no-scrollbar::-webkit-scrollbar { display: none; }
++
++
++
++/* Animaciones de acceso (AuthButton). Pegar al final de src/styles.css */
++
++/* Brillo que cruza la pastilla "Iniciar sesión" */
++.auth-shine {
++  position: relative;
++  overflow: hidden;
++  isolation: isolate;
++}
++.auth-shine::after {
++  content: "";
++  position: absolute;
++  inset: 0;
++  z-index: -1;
++  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.35) 50%, transparent 65%);
++  transform: translateX(-120%);
++  animation: auth-sweep 4.5s ease-in-out 1.2s infinite;
++}
++.auth-shine:hover::after {
++  animation-duration: 1.4s;
++}
++@keyframes auth-sweep {
++  0%,
++  60% {
++    transform: translateX(-120%);
++  }
++  100% {
++    transform: translateX(120%);
++  }
++}
++
++/* Llave que se balancea como las etiquetas colgantes del hero */
++.auth-cta-icon {
++  transform-origin: 50% 0;
++  animation: auth-sway 3.2s ease-in-out infinite;
++}
++.auth-cta:hover .auth-cta-icon {
++  animation-duration: 0.9s;
++}
++@keyframes auth-sway {
++  0%,
++  100% {
++    transform: rotate(-10deg);
++  }
++  50% {
++    transform: rotate(10deg);
++  }
++}
++
++/* Aparición del avatar tras un login exitoso */
++.auth-pop {
++  animation: auth-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
++}
++@keyframes auth-pop {
++  0% {
++    transform: scale(0.4);
++    opacity: 0;
++  }
++  70% {
++    transform: scale(1.12);
++    opacity: 1;
++  }
++  100% {
++    transform: scale(1);
++  }
++}
++
++/* Aro que se expande alrededor del avatar */
++.auth-ring {
++  border: 2px solid var(--color-accent, currentColor);
++  animation: auth-ring 1.4s ease-out 0.2s 2 both;
++}
++@keyframes auth-ring {
++  0% {
++    transform: scale(1);
++    opacity: 0.7;
++  }
++  100% {
++    transform: scale(1.9);
++    opacity: 0;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .auth-shine::after,
++  .auth-cta-icon,
++  .auth-pop,
++  .auth-ring {
++    animation: none;
++  }
++}
++
++/* ================================================================
++   Escala tipográfica (móvil / desktop ≥ 640 px)
++   título 32/48 · sección 26/32 · producto 15/16 · precio 18/20
++   texto 14/16 · botón 14 · apoyo 12 (mínimo de la tienda)
++   ================================================================ */
++@layer components {
++  .t-titulo   { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
++  .t-seccion  { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; }
++  .t-producto { font-family: var(--font-body); font-weight: 600; font-size: 15px; line-height: 1.3; }
++  .t-precio   { font-family: var(--font-body); font-weight: 700; font-size: 18px; line-height: 1.1; font-variant-numeric: tabular-nums; }
++  .t-precio-ficha { font-family: var(--font-body); font-weight: 700; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
++  .t-texto    { font-family: var(--font-body); font-weight: 400; font-size: 14px; line-height: 1.6; }
++  .t-boton    { font-family: var(--font-body); font-weight: 600; font-size: 14px; }
++  .t-apoyo    { font-family: var(--font-body); font-weight: 500; font-size: 12px; line-height: 1.4; }
++  @media (min-width: 640px) {
++    .t-titulo   { font-size: 48px; }
++    .t-seccion  { font-size: 32px; }
++    .t-producto { font-size: 16px; }
++    .t-precio   { font-size: 20px; }
++    .t-precio-ficha { font-size: 28px; }
++    .t-texto    { font-size: 16px; }
++  }
++}

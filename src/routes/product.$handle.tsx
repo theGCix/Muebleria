@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useWishlist } from "@/context/WishlistContext";
@@ -8,7 +8,7 @@ import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Loader2, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
+import { Loader2, Camera, Heart, ShoppingBag, Check, ChevronLeft, ChevronRight, Shield, Truck, Hammer, Star, MessageCircle, Share2 } from "lucide-react";
 import { calcLineId, useCartStore } from "@/stores/cartStore";
 import { toast } from "sonner";
 import { avisoCarrito } from "@/lib/avisoCarrito";
@@ -36,6 +36,12 @@ import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBu
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
 import { MedidasPiezas } from "@/components/product/MedidasPiezas";
+import type { AcabadoEspacio } from "@/components/product/ProbarEnTuEspacio";
+
+// «Pruébalo en tu espacio» se descarga solo cuando el cliente lo abre
+const ProbarEnTuEspacio = lazy(() =>
+  import("@/components/product/ProbarEnTuEspacio").then((m) => ({ default: m.ProbarEnTuEspacio })),
+);
 import { piezasDeProducto } from "@/lib/piezas";
 import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
@@ -659,6 +665,8 @@ function ProductView({ product: base }: { product: ProductData }) {
   const [activeImg, setActiveImg] = useState(0);
   const [vista, setVista] = useState<"foto" | "3d">("foto");
   const [leadOpen, setLeadOpen] = useState(false);
+  const [espacioOpen, setEspacioOpen] = useState(false);
+  const [espacioMontado, setEspacioMontado] = useState(false);
   const [ambient, setAmbient] = useState(false);
   const [finishIdx, setFinishIdx] = useState(0);
   const [fotoColor, setFotoColor] = useState(0);
@@ -759,6 +767,19 @@ function ProductView({ product: base }: { product: ProductData }) {
     return out;
   }, [product.imagenes]);
   const hayColoresFoto = fotoColores.length > 0;
+
+  const piezasProducto = useMemo(() => piezasDeProducto(product).piezas, [product]);
+
+  // «Pruébalo en tu espacio»: cada color por foto es un acabado; sin colores, la foto que se está viendo
+  const acabadosEspacio: AcabadoEspacio[] = useMemo(() => {
+    if (hayColoresFoto) {
+      return fotoColores
+        .filter((c) => allImgs[c.imgIdx])
+        .map((c) => ({ id: c.hex, nombre: c.name, hex: c.hex, img: allImgs[c.imgIdx] }));
+    }
+    return displayImg ? [{ id: "foto", nombre: "Original", hex: null, img: displayImg }] : [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fotoColores, hayColoresFoto, displayImg, allImgs.join("|")]);
 
   // Al pasar de foto en la galería, el color seleccionado sigue a la foto
   useEffect(() => {
@@ -956,6 +977,19 @@ function ProductView({ product: base }: { product: ProductData }) {
                     ? <div className="gm-badge-discount">-{product.descuento_porcentaje}%</div>
                     : esNuevo && <div className="gm-badge-new">Nuevo</div>}
                 </ProductGallery>
+              )}
+
+              {acabadosEspacio.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEspacioMontado(true);
+                    setEspacioOpen(true);
+                  }}
+                  className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Camera size={16} aria-hidden /> Pruébalo en tu espacio
+                </button>
               )}
             </div>
           </div>
@@ -1164,6 +1198,19 @@ function ProductView({ product: base }: { product: ProductData }) {
           profile={profile}
           base={{ id: product.id, nombre: product.nombre, precio: precioSinOpciones, image: mainImg, sku: product.sku, categoria: product.categoria }}
         />
+
+        {espacioMontado && (
+          <Suspense fallback={null}>
+            <ProbarEnTuEspacio
+              open={espacioOpen}
+              onOpenChange={setEspacioOpen}
+              nombre={product.nombre}
+              piezas={piezasProducto}
+              acabados={acabadosEspacio}
+              acabadoInicial={hayColoresFoto ? Math.min(fotoColor, Math.max(0, acabadosEspacio.length - 1)) : 0}
+            />
+          </Suspense>
+        )}
 
         <Footer />
         {/* En móvil la barra de compra es fija: este espacio evita que tape el final de la página */}
