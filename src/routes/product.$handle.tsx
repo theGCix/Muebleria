@@ -36,6 +36,7 @@ import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBu
 import { ProductGallery } from "@/components/product/ProductGallery";
 import { ProductBreadcrumb } from "@/components/product/ProductBreadcrumb";
 import { MedidasPiezas } from "@/components/product/MedidasPiezas";
+import { OrigenProducto } from "@/components/product/OrigenProducto";
 import type { AcabadoEspacio } from "@/components/product/ProbarEnTuEspacio";
 
 // «Pruébalo en tu espacio» se descarga solo cuando el cliente lo abre
@@ -231,6 +232,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
               </ul>
             </div>
             <MedidasPiezas piezas={medidas.piezas} esquemaUrl={medidas.esquemaUrl} producto={product?.nombre ?? ""} />
+            <OrigenProducto producto={product} />
           </div>
         )}
 

@@ -20,6 +20,7 @@ import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 import { ofertaInfo } from "@/lib/pricing";
+import { limpiarOrigen, origenParaGuardar } from "@/lib/origen";
 import { EmptyState, TableSkeleton } from "@/components/states";
 import { TarjetaFila, TarjetasMovil, BTN_TACTIL } from "@/components/admin/TarjetaFila";
 import { ColorFotoEditor, type ColorFoto } from "@/components/admin/ColorFotoEditor";
@@ -68,6 +69,8 @@ type ProductForm = {
   categoria: string;
   subcategoria: string;
   material_base: string;
+  // Origen que ve el cliente en la ficha (se guarda como JSON en products.origen)
+  origen: { material: string; procedencia: string; artesano: string; dias: string };
   tipo_gestion: "manufactura" | "retail";
   proveedor_id: string;
   // Campos legacy (se mantienen sincronizados con imagenes[0])
@@ -81,6 +84,7 @@ const emptyForm = (): ProductForm => ({
   nombre: "", descripcion: "", sku: "", precio: "",
   descuento_porcentaje: "", oferta_vence_el: "",
   stock: "", volumen_m3: "", peso_kg: "", categoria: "", subcategoria: "", material_base: "",
+  origen: { material: "", procedencia: "", artesano: "", dias: "" },
   tipo_gestion: "manufactura",
   proveedor_id: "",
   imagen_url: "", imagen_public_id: "",
@@ -310,6 +314,7 @@ function ProductFormModal({
         stock: form.tipo_gestion === "retail" ? undefined : parseInt(form.stock, 10),
         subcategoria: form.subcategoria || null,
         material_base: form.material_base || null,
+        origen: origenParaGuardar(form.origen),
         proveedor_id: form.tipo_gestion === "retail" ? (form.proveedor_id || null) : null,
         imagenes: form.imagenes,
         ...(form.id ? { id: form.id } : {}),
@@ -610,6 +615,45 @@ function ProductFormModal({
           )}
         </div>
 
+        {/* Origen: lo que escribas aquí lo ve el cliente en «De dónde viene». Lo vacío no se muestra. */}
+        <fieldset className="space-y-3 rounded-lg border border-border p-3">
+          <legend className="px-1 text-sm font-medium">Origen (lo ve el cliente)</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="origen_material">Material</Label>
+              <Input id="origen_material" maxLength={120} value={form.origen.material} placeholder="Ej. Madera tornillo"
+                onChange={(e) => setForm((f) => ({ ...f, origen: { ...f.origen, material: e.target.value } }))} />
+            </div>
+            <div>
+              <Label htmlFor="origen_procedencia">
+                {form.tipo_gestion === "retail" ? "Marca o procedencia" : "Procedencia del material"}
+              </Label>
+              <Input id="origen_procedencia" maxLength={120} value={form.origen.procedencia}
+                placeholder={form.tipo_gestion === "retail" ? "Ej. nombre de la marca" : "Ej. Pucallpa"}
+                onChange={(e) => setForm((f) => ({ ...f, origen: { ...f.origen, procedencia: e.target.value } }))} />
+            </div>
+            {form.tipo_gestion !== "retail" && (
+              <>
+                <div>
+                  <Label htmlFor="origen_artesano">Hecho por</Label>
+                  <Input id="origen_artesano" maxLength={120} value={form.origen.artesano} placeholder="Ej. nombre del carpintero"
+                    onChange={(e) => setForm((f) => ({ ...f, origen: { ...f.origen, artesano: e.target.value } }))} />
+                </div>
+                <div>
+                  <Label htmlFor="origen_dias">Días hábiles de fabricación</Label>
+                  <Input id="origen_dias" type="number" min="1" max="365" value={form.origen.dias} placeholder="Ej. 15"
+                    onChange={(e) => setForm((f) => ({ ...f, origen: { ...f.origen, dias: e.target.value } }))} />
+                </div>
+              </>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {form.tipo_gestion === "retail"
+              ? "Sin marca ni material, la ficha no muestra este bloque. No escribas el nombre de tu proveedor si no quieres que se vea."
+              : "Los pasos del taller salen de la página «Nuestro taller». Escribe solo datos reales: lo vacío no se muestra."}
+          </p>
+        </fieldset>
+
         {/* Medidas embaladas: sin volumen, el envío a provincias se cotiza manualmente */}
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -713,6 +757,10 @@ function ProductosPage() {
       categoria: p.categoria ?? "",
       subcategoria: p.subcategoria ?? "",
       material_base: p.material_base ?? "",
+      origen: (() => {
+        const o = limpiarOrigen(p.origen);
+        return { material: o.material ?? "", procedencia: o.procedencia ?? "", artesano: o.artesano ?? "", dias: o.dias_fabricacion ? String(o.dias_fabricacion) : "" };
+      })(),
       tipo_gestion: p.tipo_gestion ?? "manufactura",
       proveedor_id: p.proveedor_id ?? "",
       imagen_url: p.imagen_url ?? "",

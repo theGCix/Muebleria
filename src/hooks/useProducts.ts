@@ -11,6 +11,10 @@ export interface Product {
   categoria: string | null;
   subcategoria: string | null;
   material_base: string | null;
+  /** "manufactura" (se fabrica en el taller) o "retail" (de proveedor). */
+  tipo_gestion?: string | null;
+  /** Datos públicos de origen (ver src/lib/origen.ts). */
+  origen?: unknown;
   imagen_url: string | null;
   imagen_public_id: string | null;
   created_at: string;
