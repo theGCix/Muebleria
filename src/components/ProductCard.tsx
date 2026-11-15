@@ -4,7 +4,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCartStore } from "@/stores/cartStore";
 import {
-  ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, Ruler, ArrowUpRight, Sparkles, Minus, Plus, Trash2, Zap,
+  ShoppingBag, Image as ImageIcon, Heart, Check, Star, Truck, ArrowUpRight, Sparkles, Minus, Plus, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { avisoCarrito } from "@/lib/avisoCarrito";
@@ -13,7 +13,6 @@ import { cloudinaryUrl } from "@/lib/cloudinary";
 import type { Product } from "@/hooks/useProducts";
 import { useWishlist } from "@/context/WishlistContext";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LeadFormDialog } from "./LeadFormDialog";
 import { fmtPEN, ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
 import { useProductRating } from "@/hooks/useProductRatings";
 import { rangoEntregaCorto } from "@/lib/entrega";
@@ -56,7 +55,7 @@ function Estrellas({ promedio }: { promedio: number }) {
     <span className="relative inline-flex" aria-hidden>
       {fila("text-muted-foreground/30")}
       <span className="absolute inset-0 overflow-hidden" style={{ width: `${pct}%` }}>
-        {fila("text-amber-500 fill-amber-500")}
+        {fila("text-detail fill-detail")}
       </span>
     </span>
   );
@@ -108,7 +107,6 @@ export function ProductCard({ product: p }: Props) {
   const items = useCartStore((s) => s.items);
   const { toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
-  const [medidaOpen, setMedidaOpen] = useState(false);
   // Distrito compartido con la ficha y el checkout (nunca se asume uno)
   const { distrito: distritoEnvio, envio: envioDistrito, desde: envioDesde } = useDistritoEnvio();
   const [entrega, setEntrega] = useState<{ rango: string; distrito: string; envio: number | null } | null>(null);
@@ -146,7 +144,7 @@ export function ProductCard({ product: p }: Props) {
       out.push({ key: "oferta", texto: `-${p.descuento_porcentaje}%`, cls: "bg-accent-strong text-accent-foreground" });
     }
     if (rating && rating.promedio >= MIN_PROMEDIO_TOP && rating.total >= MIN_RESENAS_TOP) {
-      out.push({ key: "top", texto: "Favorito", cls: "bg-amber-500 text-white", icono: "estrella" });
+      out.push({ key: "top", texto: "Favorito", cls: "bg-secondary text-secondary-foreground", icono: "estrella" });
     }
     const dias = (Date.now() - new Date(p.created_at).getTime()) / 86_400_000;
     if (dias >= 0 && dias <= DIAS_NUEVO) {
@@ -165,17 +163,6 @@ export function ProductCard({ product: p }: Props) {
     addItem({ id: p.id, title: p.nombre, price: precioOferta, image: imgSrc ?? "", sku: p.sku ?? undefined });
     avisoCarrito(`"${p.nombre}" añadido al carrito`);
     volarAlCarrito(mediaRef.current, imgSrc ?? "");
-  };
-
-  // Compra rápida: agrega (si aún no está) y va directo al checkout, igual que "Ir a pagar" del carrito
-  const handleBuyNow = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (agotado) return;
-    if (!enCarrito) {
-      addItem({ id: p.id, title: p.nombre, price: precioOferta, image: imgSrc ?? "", sku: p.sku ?? undefined });
-    }
-    window.location.href = "/checkout";
   };
 
   // Control de cantidad en la propia tarjeta (dentro de un <Link>: nunca debe navegar)
@@ -204,12 +191,6 @@ export function ProductCard({ product: p }: Props) {
     if (!estaba && !added) toast.error("No pudimos guardar el favorito");
     else avisoFavorito(p.nombre, added, () => (added ? removeFromWishlist(p.id) : addToWishlist(p.id)));
     setWishPending(false);
-  };
-
-  const handleMedida = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMedidaOpen(true);
   };
 
   // Inclinación 3D suave + brillo que sigue al mouse (solo mouse; en táctil no hace nada)
@@ -257,10 +238,10 @@ export function ProductCard({ product: p }: Props) {
 
             {insignias.length > 0 && (
               <div className="absolute left-2.5 top-2.5 z-10 flex max-w-[calc(100%-3.75rem)] flex-col items-start gap-1.5">
-                {insignias.map((b) => (
+                {insignias.map((b, i) => (
                   <span
                     key={b.key}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold shadow-sm ${b.cls}`}
+                    className={`${i === 0 ? "inline-flex" : "hidden @[13rem]:inline-flex"} max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold shadow-sm ${b.cls}`}
                   >
                     {b.icono === "estrella" && <Star className="h-3 w-3 fill-current" />}
                     {b.icono === "chispa" && <Sparkles className="h-3 w-3" />}
@@ -312,7 +293,7 @@ export function ProductCard({ product: p }: Props) {
           {/* ───────── Información ───────── */}
           <div className="flex flex-1 flex-col p-2.5 @[13rem]:p-4 @[13rem]:pt-3.5">
             {p.categoria && (
-              <span className="t-apoyo text-muted-foreground">{p.categoria}</span>
+              <span className="t-apoyo hidden text-muted-foreground @[13rem]:block">{p.categoria}</span>
             )}
             <h3 className="mt-1 t-producto line-clamp-2">{p.nombre}</h3>
 
@@ -358,13 +339,13 @@ export function ProductCard({ product: p }: Props) {
               {/* Escasez real */}
               {pocoStock && (
                 <div>
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-destructive">
                     <span className="gmc-dot" />
                     {p.stock === 1 ? "Queda 1 unidad" : `Quedan ${p.stock} unidades`}
                   </div>
-                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-amber-500/15">
+                  <div className="mt-1 hidden h-1 overflow-hidden rounded-full bg-destructive/15 @[13rem]:block">
                     <div
-                      className="h-full rounded-full bg-amber-500"
+                      className="h-full rounded-full bg-destructive"
                       style={{ width: `${Math.max(10, ((p.stock as number) / umbral) * 100)}%` }}
                     />
                   </div>
@@ -463,55 +444,10 @@ export function ProductCard({ product: p }: Props) {
                   )}
                 </button>
               )}
-
-              {/* Compra rápida: mismos tokens del tema (borde y texto primary); oculto si está agotado */}
-              {!agotado && (
-                <button
-                  type="button"
-                  onClick={handleBuyNow}
-                  aria-label={`Comprar ahora: ${p.nombre}`}
-                  className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-primary/40 bg-background/60 px-3 text-sm font-semibold text-primary transition-all hover:bg-primary/10 active:scale-[0.97]"
-                >
-                  <Zap className="h-4 w-4 shrink-0" />
-                  <span className="whitespace-nowrap">
-                    Comprar<span className="hidden @[11rem]:inline"> ahora</span>
-                  </span>
-                </button>
-              )}
-
-              {/* Captura de leads: el taller fabrica a medida */}
-              <button
-                type="button"
-                onClick={handleMedida}
-                aria-haspopup="dialog"
-                aria-expanded={medidaOpen}
-                className={`inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-medium underline-offset-4 transition-all hover:border-primary/30 hover:bg-primary/[0.06] hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-[0.97] active:bg-primary/10 motion-reduce:transition-none motion-reduce:active:scale-100 ${
-                  medidaOpen ? "border-primary/30 bg-primary/10 text-primary" : "border-transparent text-muted-foreground"
-                }`}
-              >
-                <Ruler className="h-3.5 w-3.5" />
-                {agotado ? (
-                  <><span className="@[13rem]:hidden">Cotiza a medida</span><span className="hidden @[13rem]:inline">Cotiza este modelo a medida</span></>
-                ) : (
-                  <><span className="@[13rem]:hidden">Cotiza a medida</span><span className="hidden @[13rem]:inline">¿Otra medida? Cotiza a medida</span></>
-                )}
-              </button>
             </div>
           </div>
         </article>
       </Link>
-
-      {/* Fuera del <Link>: los eventos de un portal burbujean por el árbol de React y navegarían */}
-      {medidaOpen && (
-        <LeadFormDialog
-          open={medidaOpen}
-          onOpenChange={setMedidaOpen}
-          productoId={p.id}
-          productoNombre={p.nombre}
-          title={`Cotiza a medida: ${p.nombre}`}
-          description="Cuéntanos las medidas de tu espacio y un asesor te contactará a la brevedad."
-        />
-      )}
     </>
   );
 }
