@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ChevronLeft, ChevronRight, Sofa } from "lucide-react";
+import { CampanaTicker } from "@/components/CampanaTicker";
 import { useCampana } from "@/hooks/useCampana";
 import { useCatalogoHome } from "@/hooks/useCatalogoHome";
 import { cloudinaryUrl } from "@/lib/cloudinary";
@@ -49,6 +50,7 @@ interface Diapositiva {
   id: DiapositivaId;
   pestana: string;
   etiqueta: string | null; // «TERMINA EN 13 DÍAS»
+  reloj?: boolean; // true: la etiqueta se reemplaza por el reloj visual de la campaña (CampanaTicker)
   titulo: string;
   fantasma: string[]; // palabra grande de fondo, una por línea
   pre: string; // «Hasta» / «Desde»
@@ -104,6 +106,7 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
             id,
             pestana: c.nombre ?? "Ofertas vigentes",
             etiqueta: textoTermina(diasRestantes(c.venceMs, ahora)),
+            reloj: c.venceMs != null,
             titulo: c.nombre ?? "Ofertas vigentes",
             fantasma: lineasFantasma(c.nombre ?? "Ofertas vigentes"),
             pre: "Hasta",
@@ -293,9 +296,13 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
 
       {/* Texto */}
       <div className="relative z-10 flex h-full max-w-[60%] flex-col px-5 pb-12 pt-6 md:max-w-[46%] md:justify-center md:px-0 md:pb-10 md:pl-[6%] md:pt-0">
-        {d.etiqueta && (
-          <p className="text-xs font-semibold uppercase tracking-wide text-gm-durazno md:text-sm">{d.etiqueta}</p>
-        )}
+        {(() => {
+          const etiqueta = d.etiqueta ? (
+            <p className="text-xs font-semibold uppercase tracking-wide text-gm-durazno md:text-sm">{d.etiqueta}</p>
+          ) : null;
+          // Campaña con vencimiento: reloj visual en vivo; si ya terminó, queda la etiqueta de texto.
+          return d.reloj ? <CampanaTicker variante="portada" fallback={etiqueta} /> : etiqueta;
+        })()}
         <h2
           className="mt-2 font-display font-normal leading-[1.05] tracking-tight text-background md:mt-3"
           style={{ fontSize: "clamp(1.75rem, 4.4vw, 4rem)" }}
