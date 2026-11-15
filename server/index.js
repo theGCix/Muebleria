@@ -149,14 +149,16 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
     if (Array.isArray(items) && items.length > 0 && order) {
       const itemsCalculo = items.map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones, sku: i.sku, title: i.title, image: i.image }));
       let descuento = 0;
+      let cuponMotivo = null;
       if (cupon_codigo) {
         const rc = await validarCupon({
           codigo: cupon_codigo,
-          items: itemsCalculo.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+          items: itemsCalculo,
           customer_id: null,
           user_id: user_id ?? null,
         });
         if (rc.valid) descuento = rc.descuento;
+        else cuponMotivo = rc.motivo ?? "El cupón ya no aplica a tu pedido";
       }
       const calculo = await calcularPedido({
         supabase: supabaseAdmin,
@@ -179,8 +181,10 @@ app.post("/api/niubiz/session", niubizLimiter, async (req, res) => {
           code: "PRECIO_CAMBIO",
           error: "Los precios de tu pedido cambiaron. Actualizamos tu carrito con el total correcto.",
           total: calculo.total,
+          subtotal: calculo.subtotal,
           aCobrar,
           descuento,
+          cuponMotivo,
           lineas: calculo.lineas.map((l) => ({ product_id: l.product_id, opciones: l.opciones ?? null, unit_price: l.unit_price })),
         });
       }
@@ -261,26 +265,28 @@ async function calcularSubtotalReal(items) {
   const productIds = items.map((i) => i.product_id).filter(Boolean);
   if (productIds.length === 0) return { subtotal: 0, detalle: [] };
 
+  // Precio FINAL por línea (oferta + opciones + combos): la misma regla que calcularPedido(),
+  // para que el cupón se calcule sobre lo que realmente se cobra y no sobre el precio de lista.
+  const calculo = await calcularPedido({
+    supabase: supabaseAdmin,
+    order: { metodo_entrega: "recojo_tienda", modo_entrega: null, destino: "lima", distrito: null },
+    items: items.map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones, sku: i.sku, title: i.title })),
+  });
+
   const { data: productos, error } = await supabaseAdmin
     .from("products")
-    .select("id, precio, categoria")
-    .in("id", productIds);
-
+    .select("id, categoria")
+    .in("id", [...new Set(productIds)]);
   if (error) throw new Error(error.message);
+  const categoriaPorId = Object.fromEntries((productos ?? []).map((p) => [p.id, p.categoria]));
 
-  const precioPorId = Object.fromEntries((productos ?? []).map((p) => [p.id, p]));
-  let subtotal = 0;
-  const detalle = [];
-
-  for (const item of items) {
-    const prod = precioPorId[item.product_id];
-    if (!prod) continue; // ítem sin product_id (ej. combo suelto) — no participa en validación de cupón por producto/categoría
-    const precioReal = Number(prod.precio);
-    subtotal += precioReal * item.qty;
-    detalle.push({ product_id: item.product_id, categoria: prod.categoria, precio: precioReal, qty: item.qty });
-  }
-
-  return { subtotal, detalle };
+  const detalle = calculo.lineas.map((l) => ({
+    product_id: l.product_id,
+    categoria: categoriaPorId[l.product_id] ?? null,
+    precio: l.unit_price,
+    qty: l.qty,
+  }));
+  return { subtotal: calculo.subtotal, detalle };
 }
 
 // ── Valida un cupón contra reglas + subtotal real. NO lo marca como usado
@@ -302,7 +308,13 @@ async function validarCupon({ codigo, items, customer_id, user_id }) {
     return { valid: false, motivo: "Este cupón alcanzó su límite de usos" };
   }
 
-  const { subtotal, detalle } = await calcularSubtotalReal(items);
+  let subtotal, detalle;
+  try {
+    ({ subtotal, detalle } = await calcularSubtotalReal(items));
+  } catch (e) {
+    if (e instanceof PagoError) return { valid: false, motivo: e.message };
+    throw e;
+  }
 
   if (subtotal < Number(cupon.monto_minimo_compra)) {
     return {
@@ -435,7 +447,7 @@ app.post("/api/orders", async (req, res) => {
     let descuento = 0;
 
     if (order.cupon_codigo) {
-      const itemsParaValidar = (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty }));
+      const itemsParaValidar = (items ?? []).map((i) => ({ product_id: i.product_id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones, sku: i.sku, title: i.title }));
       const resultado = await validarCupon({
         codigo: order.cupon_codigo,
         items: itemsParaValidar,
@@ -689,7 +701,7 @@ app.post("/api/orders/efectivo", niubizLimiter, requireAuth, async (req, res) =>
     if (order.cupon_codigo) {
       const resultado = await validarCupon({
         codigo: order.cupon_codigo,
-        items: itemsCalculo.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+        items: itemsCalculo,
         customer_id: null,
         user_id: req.user.id,
       });

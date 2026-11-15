@@ -269,3 +269,14 @@ test("el % de adelanto que muestra el navegador (src/lib/pagoEfectivo.ts) es el 
   assert.ok(m, "no se encontró PORCENTAJE_ADELANTO en src/lib/pagoEfectivo.ts");
   assert.equal(Number(m[1]), PORCENTAJE_ADELANTO);
 });
+
+test("base del cupón: el subtotal del servidor usa el precio con oferta, no el de lista", async () => {
+  // Es lo que usa validarCupon (calcularSubtotalReal): 2 % de 450 = 9.00, no de 500 = 10.00
+  const r = await calcularPedido({
+    supabase: fakeSupabase({ products: [P2] }),
+    order: { metodo_entrega: "recojo_tienda", modo_entrega: null, destino: "lima", distrito: null },
+    items: [{ product_id: "p2", qty: 1 }],
+  });
+  assert.equal(r.subtotal, 450);
+  assert.equal(Math.round(r.subtotal * 0.02 * 100) / 100, 9);
+});

@@ -95,6 +95,8 @@ class PrecioCambioError extends Error {
     public total: number,
     public descuento: number,
     public lineas: { product_id: string; opciones?: string[] | null; unit_price: number }[],
+    public subtotal: number | null = null,
+    public cuponMotivo: string | null = null,
   ) { super(message); }
 }
 
@@ -116,7 +118,10 @@ async function fetchNiubizSession(payload: {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     if (res.status === 409 && err.code === "PRECIO_CAMBIO") {
-      throw new PrecioCambioError(err.error, Number(err.total), Number(err.descuento) || 0, err.lineas ?? []);
+      throw new PrecioCambioError(
+        err.error, Number(err.total), Number(err.descuento) || 0, err.lineas ?? [],
+        err.subtotal != null ? Number(err.subtotal) : null, err.cuponMotivo ?? null,
+      );
     }
     throw new Error(err.error ?? "Error al conectar con Niubiz");
   }
@@ -146,6 +151,10 @@ function CheckoutPage() {
   const orderIdRef    = useRef<string>("");
   const niubizRef     = useRef<{ sessionKey: string; merchantId: string } | null>(null);
   const orderSavedRef = useRef(false); // ← evita guardar el pedido dos veces
+  // ¿Se abrió la página al volver de Niubiz? (se calcula una sola vez, antes de limpiar la URL)
+  const volviendoDePagoRef = useRef(
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("transactionToken"),
+  );
 
   const [modalTipo, setModalTipo] = useState<ModalTipo>(null);
   const [modalDatos, setModalDatos] = useState<ModalDatos>({});
@@ -333,7 +342,7 @@ function CheckoutPage() {
   // Cupón de salida guardado en este navegador: se rellena y se aplica solo (una vez)
   const [cuponAuto, setCuponAuto] = useState(false);
   useEffect(() => {
-    const guardado = leerCuponSalida();
+    const guardado = volviendoDePagoRef.current ? null : leerCuponSalida();
     if (guardado && !cuponCodigo && !cuponAplicado) {
       setCuponCodigo(guardado.codigo);
       setCuponAuto(true);
@@ -341,12 +350,25 @@ function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (cuponAuto && cuponCodigo && items.length > 0 && !cuponAplicado) {
+    // Espera a saber quién es el cliente: las reglas «solo primera compra» y «uso por cliente»
+    // dependen de la cuenta, y validar antes mostraría un descuento que luego se rechaza al pagar.
+    if (cuponAuto && cuponCodigo && items.length > 0 && !cuponAplicado && !authLoading) {
       setCuponAuto(false);
       validarCupon();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cuponAuto, cuponCodigo, items.length]);
+  }, [cuponAuto, cuponCodigo, items.length, authLoading]);
+
+  // Si cambia la cuenta (p. ej. inicia sesión al pagar), el cupón aplicado se vuelve a validar con esa cuenta.
+  const userIdPrevioRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (authLoading) return;
+    const actual = user?.id ?? null;
+    const previo = userIdPrevioRef.current;
+    userIdPrevioRef.current = actual;
+    if (previo !== undefined && previo !== actual && cuponAplicado) validarCupon();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
 
   async function validarCupon() {
     if (!cuponCodigo.trim()) return;
@@ -358,7 +380,7 @@ function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           codigo: cuponCodigo,
-          items: items.map((i) => ({ product_id: i.id, qty: i.qty })),
+          items: items.map((i) => ({ product_id: i.id, qty: i.qty, comboId: i.comboId ?? null, opciones: i.opciones })),
           user_id: user?.id ?? null,
         }),
       });
@@ -689,9 +711,15 @@ useEffect(() => {
         actualizarPrecios(Object.fromEntries(err.lineas.map((l) => [calcLineId(l.product_id, l.opciones), l.unit_price])));
         if (cuponAplicado) {
           if (err.descuento > 0) setCuponAplicado({ codigo: cuponAplicado.codigo, descuento: err.descuento });
-          else { setCuponAplicado(null); setCuponCodigo(""); setErrorCupon("El cupón ya no aplica a tu pedido"); }
+          else { setCuponAplicado(null); setCuponCodigo(""); setErrorCupon(err.cuponMotivo ?? "El cupón ya no aplica a tu pedido"); }
         }
-        toast.error(`Actualizamos los precios de tu pedido. El total correcto es ${fmt(err.total)}; revísalo y vuelve a pagar.`, { duration: 8000 });
+        const preciosIguales = err.subtotal !== null && Math.abs(err.subtotal - subtotal) < 0.01;
+        if (preciosIguales && err.cuponMotivo) {
+          // Los precios no cambiaron: solo no se pudo aplicar el cupón. Se dice tal cual.
+          toast.error(`${err.cuponMotivo}. El total es ${fmt(err.total)}; revísalo y vuelve a pagar.`, { duration: 8000 });
+        } else {
+          toast.error(`Actualizamos los precios de tu pedido. El total correcto es ${fmt(err.total)}; revísalo y vuelve a pagar.`, { duration: 8000 });
+        }
         return;
       }
       console.error("Error Niubiz:", err);

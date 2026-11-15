@@ -112,3 +112,8 @@
 - **Franja de beneficios:** solo lo que el sitio ya ofrece (envíos a todo el Perú, tarjeta/Yape/Plin, pago con Niubiz, WhatsApp). **No anunciar cuotas** (el mockup decía «Hasta 12 cuotas sin intereses»: el cobro no las ofrece, regla 15).
 - **Categorías:** salen de `lib/categories.ts`, no de los nombres del mockup. Ya no se fija la sección al hacer scroll (se quitó `data-cat-section`); la etiqueta superior «Nuestras colecciones» se reemplaza por el título «Categorías» y el enlace «Ver todas las categorías» (`/catalogo`). La frase «Diseña tu espacio, vive mejor» del banner va en minúscula normal.
 - **Botón principal:** verde bosque de los tokens, no el marrón del mockup (terracota solo para ofertas, regla 4).
+
+## Reglas de cupones (checkout)
+- **Base del descuento:** el cupón se calcula sobre el subtotal FINAL del servidor (oferta + opciones + combos, vía `calcularPedido`), nunca sobre `products.precio`. `validarCupon` (`server/index.js`) recibe los ítems completos (`product_id`, `qty`, `comboId`, `opciones`) en sus cuatro llamadas.
+- **Una sola validación coherente:** el cupón de salida no se auto-aplica hasta que la sesión esté resuelta (`authLoading`) ni al volver de Niubiz; si cambia la cuenta, el cupón aplicado se vuelve a validar.
+- **Mensajes:** `PRECIO_CAMBIO` devuelve `subtotal` y `cuponMotivo`; si los precios no cambiaron y solo cae el cupón, el aviso dice el motivo del cupón, no «actualizamos los precios».
