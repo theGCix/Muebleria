@@ -1,0 +1,927 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index 7d8217c..884ed80 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -153,3 +153,4 @@
+ - **Tipografía:** `Manrope` (títulos, peso 700 en `h1`/`h2`/`.font-display`/`.t-seccion`) + `Inter` (cuerpo). Los títulos con `font-normal` explícito pasaron a `font-bold`.
+ - **«Días de locura» / súper rebaja:** no se muestra salvo que el dueño marque piezas como «súper rebaja» desde el panel admin (pendiente de implementar; ver TASK_LOG). Las ofertas normales siguen en «Ofertas vigentes».
+ - **Home según el mockup (fase 2):** orden y secciones en `TASK_LOG` (2026-11-15, fase 2). Portada con foto grande = archivos `00-hero-N` en `src/assets/portada/` (horizontal 16:9, sujeto a la derecha, sin texto). La campaña «Días de locura» está oculta por `CAMPANA_POR_SUPER_REBAJA` en `useCampana.ts` hasta que exista la súper rebaja. «Calidad que se adapta a ti» reemplaza a «¿No encuentras tu medida?» (mismo `id="a-medida"` y mismo formulario). Beneficios: solo los que el sitio ya ofrece (regla 15), nunca «garantía» ni «soporte 24/7» sin confirmar.
++- **Catálogo (fase 3):** filtros en la URL (`q`, `cat`, `sub`, `mat`, `min`, `max`, `oferta`, `sort`). Material solo con valores reales de `material_base`. En PC, columna lateral (`ControlesFiltros` variante `lateral`); en móvil, hoja inferior (variante `hoja`). No se inventan filtros (color, marca) sin datos reales en el catálogo.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index c5b97d7..b22eca6 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -430,3 +430,10 @@
+ - **Sin cambios de negocio:** precios, carrito, checkout, pagos y RLS intactos.
+ - **Verificación:** `vite build` OK, 10 suites sin fallos, `tsc` con los mismos 10 errores de `types.ts`. **No se probó** en navegador (sin fotos `00-hero` la portada nueva no se ve).
+ - **Pendiente / riesgos:** (1) súper rebaja (SQL + admin + `useCampana`); (2) la portada con foto necesita 00-hero-N; (3) el modo `.dark` no se tocó; (4) revisar contraste del texto sobre fotos y que «Ver todos» no duplique el botón inferior de «Directo del taller»; (5) el mockup trae «Garantía G&M» y «Soporte 24/7»: no se copiaron porque no están confirmados.
++
++## 2026-11-15 — Rediseño azul marino, fase 3: catálogo con columna de filtros — implementado, falta revisar en navegador
++- **Qué cambió:** `routes/catalogo.tsx` (en PC, columna izquierda fija «Filtrar por» con precio, categoría, tipo, material y ofertas, y resultados a la derecha en 3 columnas; en móvil/tablet sigue el botón «Filtros · n» con la hoja inferior; paginación numerada de 12 en 12 en el cliente en vez de «Ver más»; el título muestra la categoría elegida; param nuevo `mat`); `components/catalogo/PanelFiltros.tsx` (nuevo `ControlesFiltros` con variante `lateral` —filas con casilla, como el mockup— y `hoja`; `PanelFiltros` lo reutiliza); `BarraFiltros.tsx` (sin chips de categoría en PC, botón «Filtros» solo < lg, etiqueta del material); `lib/filtrosCatalogo.ts` + `scripts/test-filtros-catalogo.mjs` (filtro `mat`, 10/10).
++- **Material:** sale de `products.material_base` (valores reales, con conteo); si ninguna pieza lo tiene, la sección no aparece. **Color no se filtra:** los colores viven en las opciones de cada producto (`producto_opcion_valores`), no en el catálogo del home; filtrarlos requiere otra consulta (decisión pendiente). Las valoraciones con estrellas del mockup no se muestran (no hay reseñas confirmadas en la tarjeta).
++- **Sin cambios de negocio:** precios, carrito, checkout, pagos y RLS intactos; la tarjeta de producto no cambia.
++- **Verificación:** `vite build` OK, 10 suites sin fallos, `tsc` con los mismos 10 errores de `types.ts`. **No se probó** en navegador.
++- **Pendiente / riesgos:** (1) la columna usa `sticky top-28` bajo el header sticky: confirmar a ojo que no lo tape; (2) el tope de 60 piezas (`LIMITE_CATALOGO`); (3) el banner con foto por categoría del mockup no se hizo (no hay fotos de categoría); (4) fase 4: ficha, carrito y checkout; fase 5: móvil.
+diff --git a/scripts/test-filtros-catalogo.mjs b/scripts/test-filtros-catalogo.mjs
+index 91deb5f..1c7d2e9 100644
+--- a/scripts/test-filtros-catalogo.mjs
++++ b/scripts/test-filtros-catalogo.mjs
+@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
+ import { filtrarCatalogo, contarFiltros, contarPor, coincideBusqueda } from "../src/lib/filtrosCatalogo.ts";
+ 
+ const it = (nombre, precioFinal, extra = {}) => ({
+-  nombre, descripcion: null, categoria: "muebles", subcategoria: "sala",
++  nombre, descripcion: null, categoria: "muebles", subcategoria: "sala", material: "madera",
+   precioFinal, enOferta: false, descuento: 0, creado: "2026-11-01T00:00:00Z", ...extra,
+ });
+ const lista = [
+@@ -26,6 +26,13 @@ test("categoría y tipo; el tipo se ignora sin categoría", () => {
+   assert.equal(filtrarCatalogo(lista, { sub: "6-sillas" }).length, 4);
+ });
+ 
++test("material: filtra por valor exacto y se cuenta como filtro", () => {
++  const l = [it("A", 100, { material: "cedro" }), it("B", 200), it("C", 300, { material: null })];
++  assert.deepEqual(nombres(filtrarCatalogo(l, { mat: "cedro" })), ["A"]);
++  assert.equal(contarFiltros({ mat: "cedro" }), 1);
++  assert.deepEqual(contarPor(l, { mat: "cedro" }, "material"), { cedro: 1, madera: 1 });
++});
++
+ test("solo ofertas", () => {
+   assert.equal(filtrarCatalogo(lista, { oferta: true }).length, 2);
+ });
+diff --git a/src/components/catalogo/BarraFiltros.tsx b/src/components/catalogo/BarraFiltros.tsx
+index 891d800..9992125 100644
+--- a/src/components/catalogo/BarraFiltros.tsx
++++ b/src/components/catalogo/BarraFiltros.tsx
+@@ -1,6 +1,7 @@
+ // src/components/catalogo/BarraFiltros.tsx
+ // Barra de /catalogo: botón «Filtros · n», orden y etiquetas de filtros activos con ✕.
+-// No es fija (el header ya es sticky y su alto cambia al ocultar la barra superior); en PC muestra los chips de categoría.
++// No es fija (el header ya es sticky y su alto cambia al ocultar la barra superior). En PC los filtros viven en la columna
++// izquierda (ControlesFiltros) y aquí solo quedan el orden y las etiquetas activas; en móvil, el botón abre la hoja.
+ import { SlidersHorizontal, X } from "lucide-react";
+ import {
+   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+@@ -16,8 +17,6 @@ interface Props {
+   onAbrirPanel: () => void;
+   onChange: (patch: Partial<FiltrosCatalogo>) => void;
+   onOrden: (o: OrdenCatalogo) => void;
+-  conteoCategorias: Record<string, number>;
+-  totalCategorias: number;
+ }
+ 
+ function Etiqueta({ texto, onQuitar }: { texto: string; onQuitar: () => void }) {
+@@ -35,7 +34,7 @@ function Etiqueta({ texto, onQuitar }: { texto: string; onQuitar: () => void })
+ }
+ 
+ export function BarraFiltros({
+-  filtros, cantidadFiltros, orden, onAbrirPanel, onChange, onOrden, conteoCategorias, totalCategorias,
++  filtros, cantidadFiltros, orden, onAbrirPanel, onChange, onOrden,
+ }: Props) {
+   const categoria = CATEGORIAS.find((c) => c.slug === filtros.cat);
+   const tipo = categoria?.subcategorias.find((s) => s.slug === filtros.sub);
+@@ -47,24 +46,12 @@ export function BarraFiltros({
+         <button
+           type="button"
+           onClick={onAbrirPanel}
+-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border/60 bg-background px-4 text-sm font-medium hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border/60 bg-background px-4 text-sm font-medium hover:border-foreground/30 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+         >
+           <SlidersHorizontal className="h-4 w-4" aria-hidden />
+           Filtros{cantidadFiltros > 0 && <span> · {cantidadFiltros}</span>}
+         </button>
+ 
+-        {/* PC: categorías visibles en una fila; en móvil están dentro del panel */}
+-        <div className="hidden flex-1 flex-wrap items-center gap-2 md:flex" role="group" aria-label="Categoría">
+-          <ChipCat activo={!filtros.cat} onClick={() => onChange({ cat: undefined, sub: undefined })}>
+-            Todas · {totalCategorias}
+-          </ChipCat>
+-          {CATEGORIAS.map((c) => (
+-            <ChipCat key={c.slug} activo={filtros.cat === c.slug} onClick={() => onChange({ cat: c.slug, sub: undefined })}>
+-              {c.nombre} · {conteoCategorias[c.slug] ?? 0}
+-            </ChipCat>
+-          ))}
+-        </div>
+-
+         <div className="ml-auto">
+           <Select value={orden} onValueChange={(v) => onOrden(v as OrdenCatalogo)}>
+             <SelectTrigger className="min-h-11 w-[9.5rem] sm:w-[200px]" aria-label="Ordenar por">
+@@ -92,27 +79,10 @@ export function BarraFiltros({
+               onQuitar={() => onChange({ min: undefined, max: undefined })}
+             />
+           )}
++          {filtros.mat && <Etiqueta texto={filtros.mat} onQuitar={() => onChange({ mat: undefined })} />}
+           {filtros.oferta && <Etiqueta texto="Solo ofertas" onQuitar={() => onChange({ oferta: undefined })} />}
+         </div>
+       )}
+     </div>
+   );
+ }
+-
+-function ChipCat({ activo, onClick, children }: { activo: boolean; onClick: () => void; children: React.ReactNode }) {
+-  return (
+-    <button
+-      type="button"
+-      onClick={onClick}
+-      aria-pressed={activo}
+-      className={
+-        "min-h-11 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+-        (activo
+-          ? "border-primary bg-primary text-primary-foreground"
+-          : "border-border/60 bg-background text-foreground/70 hover:border-foreground/30 hover:text-foreground")
+-      }
+-    >
+-      {children}
+-    </button>
+-  );
+-}
+diff --git a/src/components/catalogo/PanelFiltros.tsx b/src/components/catalogo/PanelFiltros.tsx
+index 5b130b7..0f7ea57 100644
+--- a/src/components/catalogo/PanelFiltros.tsx
++++ b/src/components/catalogo/PanelFiltros.tsx
+@@ -1,6 +1,7 @@
+ // src/components/catalogo/PanelFiltros.tsx
+-// Panel de filtros de /catalogo: móvil = hoja inferior, PC = hoja lateral. Mismos controles y
+-// misma lógica en ambos; los filtros se aplican al instante y el botón final solo cierra el panel.
++// Filtros de /catalogo. `ControlesFiltros` son los controles (precio, categoría, tipo, material, ofertas): van fijos en la
++// columna izquierda en PC (mockup azul marino) y dentro de la hoja inferior en móvil (`PanelFiltros`). Los filtros se
++// aplican al instante y el botón final de la hoja solo la cierra.
+ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+ import { Slider } from "@/components/ui/slider";
+ import { Button } from "@/components/ui/button";
+@@ -10,27 +11,48 @@ import { TRAMOS, etiquetaRango, mismoRango } from "@/lib/presupuesto";
+ import { fmtPEN } from "@/lib/pricing";
+ import type { FiltrosCatalogo } from "@/lib/filtrosCatalogo";
+ 
+-interface Props {
+-  open: boolean;
+-  onOpenChange: (v: boolean) => void;
++interface ControlesProps {
+   filtros: FiltrosCatalogo;
+   onChange: (patch: Partial<FiltrosCatalogo>) => void;
+-  onLimpiar: () => void;
+-  /** piezas que quedan con los filtros actuales */
+-  total: number;
+   /** tope del deslizador (precio final más alto, redondeado) */
+   topeMax: number;
+   paso?: number;
+   conteoCategorias: Record<string, number>;
+   conteoTipos: Record<string, number>;
++  /** material_base de las piezas, con su conteo (solo se muestra si hay al menos uno) */
++  conteoMateriales: Record<string, number>;
+   ofertasDisponibles: number;
++  /** «lateral»: columna fija de PC (filas con casilla, como el mockup); «hoja»: panel del móvil (botones redondeados) */
++  variante: "lateral" | "hoja";
+ }
+ 
+ const fmt = (n: number) => fmtPEN(n).replace(/\.00$/, "");
+ 
+ function Opcion({
+-  activo, onClick, children,
+-}: { activo: boolean; onClick: () => void; children: React.ReactNode }) {
++  activo, onClick, children, lateral,
++}: { activo: boolean; onClick: () => void; children: React.ReactNode; lateral?: boolean }) {
++  if (lateral) {
++    return (
++      <button
++        type="button"
++        role="checkbox"
++        aria-checked={activo}
++        onClick={onClick}
++        className="flex min-h-11 w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++      >
++        <span
++          aria-hidden
++          className={
++            "flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[0.7rem] leading-none " +
++            (activo ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-transparent")
++          }
++        >
++          ✓
++        </span>
++        <span className="min-w-0 flex-1">{children}</span>
++      </button>
++    );
++  }
+   return (
+     <button
+       type="button"
+@@ -48,146 +70,155 @@ function Opcion({
+   );
+ }
+ 
+-export function PanelFiltros({
+-  open, onOpenChange, filtros, onChange, onLimpiar, total, topeMax, paso = 50,
+-  conteoCategorias, conteoTipos, ofertasDisponibles,
+-}: Props) {
+-  const esMovil = useIsMobile();
++/** Los controles de filtro, iguales en la columna lateral (PC) y en la hoja (móvil). */
++export function ControlesFiltros({
++  filtros, onChange, topeMax, paso = 50, conteoCategorias, conteoTipos, conteoMateriales, ofertasDisponibles, variante,
++}: ControlesProps) {
++  const lateral = variante === "lateral";
+   const categoria = CATEGORIAS.find((c) => c.slug === filtros.cat);
+   const tipos = categoria?.subcategorias ?? [];
++  const materiales = Object.keys(conteoMateriales).sort((a, b) => a.localeCompare(b, "es"));
+   const rango = { min: filtros.min, max: filtros.max };
+   const hayPrecio = filtros.min != null || filtros.max != null;
+   // El deslizador fija solo el tope («Hasta S/ X»); los tramos con mínimo salen como atajos.
+   const tope = filtros.max != null ? Math.min(filtros.max, topeMax) : topeMax;
+-  const hayFiltros = !!filtros.cat || hayPrecio || !!filtros.oferta;
++  const grupo = lateral ? "flex flex-col gap-0.5" : "flex flex-wrap gap-2";
++  const idp = lateral ? "fl" : "fh";
++
++  return (
++    <div className={lateral ? "space-y-6" : "space-y-7"}>
++      {/* Presupuesto */}
++      <section aria-labelledby={`${idp}-presupuesto`}>
++        <div className="flex items-baseline justify-between gap-3">
++          <h2 id={`${idp}-presupuesto`} className="font-sans text-sm font-semibold">Precio</h2>
++          <p className="t-precio-ficha !text-base">
++            {hayPrecio && (filtros.min != null || (filtros.max != null && filtros.max < topeMax))
++              ? filtros.min != null
++                ? etiquetaRango(rango)
++                : `Hasta ${fmt(filtros.max as number)}`
++              : "Sin límite"}
++          </p>
++        </div>
++        <Slider
++          aria-label="Presupuesto máximo"
++          min={0}
++          max={topeMax}
++          step={paso}
++          value={[tope]}
++          onValueChange={([v]) => onChange({ min: undefined, max: v >= topeMax ? undefined : v })}
++          className="my-5 [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-2 [&_[role=slider]]:border-primary"
++        />
++        <div className={grupo} role="group" aria-label="Atajos de presupuesto">
++          <Opcion lateral={lateral} activo={!hayPrecio} onClick={() => onChange({ min: undefined, max: undefined })}>
++            Sin límite
++          </Opcion>
++          {TRAMOS.map((t) => (
++            <Opcion
++              key={t.id}
++              lateral={lateral}
++              activo={hayPrecio && mismoRango(t, rango)}
++              onClick={() => onChange({ min: t.min, max: t.max })}
++            >
++              {etiquetaRango(t)}
++            </Opcion>
++          ))}
++        </div>
++      </section>
++
++      {/* Categoría */}
++      <section aria-labelledby={`${idp}-categoria`}>
++        <h2 id={`${idp}-categoria`} className="mb-3 font-sans text-sm font-semibold">Categoría</h2>
++        <div className={grupo}>
++          <Opcion lateral={lateral} activo={!filtros.cat} onClick={() => onChange({ cat: undefined, sub: undefined })}>
++            Todas
++          </Opcion>
++          {CATEGORIAS.map((c) => (
++            <Opcion
++              key={c.slug}
++              lateral={lateral}
++              activo={filtros.cat === c.slug}
++              onClick={() => onChange({ cat: c.slug, sub: undefined })}
++            >
++              {c.nombre}
++              <span className="text-muted-foreground"> · {conteoCategorias[c.slug] ?? 0}</span>
++            </Opcion>
++          ))}
++        </div>
++      </section>
++
++      {/* Tipo: solo cuando la categoría elegida tiene subcategorías */}
++      {tipos.length > 0 && (
++        <section aria-labelledby={`${idp}-tipo`}>
++          <h2 id={`${idp}-tipo`} className="mb-3 font-sans text-sm font-semibold">Tipo de {categoria?.nombre.toLowerCase()}</h2>
++          <div className={grupo}>
++            <Opcion lateral={lateral} activo={!filtros.sub} onClick={() => onChange({ sub: undefined })}>Todos</Opcion>
++            {tipos.map((t) => (
++              <Opcion key={t.slug} lateral={lateral} activo={filtros.sub === t.slug} onClick={() => onChange({ sub: t.slug })}>
++                {t.label}
++                <span className="text-muted-foreground"> · {conteoTipos[t.slug] ?? 0}</span>
++              </Opcion>
++            ))}
++          </div>
++        </section>
++      )}
++
++      {/* Material: solo los que existen en las piezas (material_base), nunca una lista inventada */}
++      {materiales.length > 0 && (
++        <section aria-labelledby={`${idp}-material`}>
++          <h2 id={`${idp}-material`} className="mb-3 font-sans text-sm font-semibold">Material</h2>
++          <div className={grupo}>
++            <Opcion lateral={lateral} activo={!filtros.mat} onClick={() => onChange({ mat: undefined })}>Todos</Opcion>
++            {materiales.map((m) => (
++              <Opcion key={m} lateral={lateral} activo={filtros.mat === m} onClick={() => onChange({ mat: m })}>
++                <span className="capitalize">{m}</span>
++                <span className="text-muted-foreground"> · {conteoMateriales[m]}</span>
++              </Opcion>
++            ))}
++          </div>
++        </section>
++      )}
++
++      {/* Ofertas */}
++      {(ofertasDisponibles > 0 || filtros.oferta) && (
++        <section>
++          <Opcion lateral={lateral} activo={!!filtros.oferta} onClick={() => onChange({ oferta: filtros.oferta ? undefined : true })}>
++            Solo piezas en oferta
++            <span className="text-muted-foreground"> · {ofertasDisponibles}</span>
++          </Opcion>
++        </section>
++      )}
++    </div>
++  );
++}
++
++interface Props extends Omit<ControlesProps, "variante"> {
++  open: boolean;
++  onOpenChange: (v: boolean) => void;
++  onLimpiar: () => void;
++  /** piezas que quedan con los filtros actuales */
++  total: number;
++}
++
++export function PanelFiltros({ open, onOpenChange, onLimpiar, total, ...controles }: Props) {
++  const esMovil = useIsMobile();
++  const f = controles.filtros;
++  const hayFiltros = !!f.cat || !!f.mat || f.min != null || f.max != null || !!f.oferta;
+ 
+   return (
+     <Sheet open={open} onOpenChange={onOpenChange}>
+       <SheetContent
+         side={esMovil ? "bottom" : "right"}
+-        className={
+-          "flex flex-col gap-0 p-0 " +
+-          (esMovil ? "max-h-[85vh] rounded-t-2xl" : "w-full max-w-sm")
+-        }
++        className={"flex flex-col gap-0 p-0 " + (esMovil ? "max-h-[85vh] rounded-t-2xl" : "w-full max-w-sm")}
+       >
+         <SheetHeader className="border-b border-border/50 px-5 py-4 text-left">
+           <SheetTitle className="text-base">Filtros</SheetTitle>
+           <SheetDescription className="sr-only">
+-            Filtra el catálogo por presupuesto, categoría, tipo y ofertas.
++            Filtra el catálogo por precio, categoría, tipo, material y ofertas.
+           </SheetDescription>
+         </SheetHeader>
+ 
+-        <div className="flex-1 space-y-7 overflow-y-auto px-5 py-5">
+-          {/* Presupuesto */}
+-          <section aria-labelledby="f-presupuesto">
+-            <div className="flex items-baseline justify-between gap-3">
+-              <h2 id="f-presupuesto" className="text-sm font-semibold font-sans">Presupuesto</h2>
+-              <p className="t-precio-ficha">
+-                {filtros.min != null && filtros.max != null
+-                  ? etiquetaRango(rango)
+-                  : filtros.min != null
+-                    ? etiquetaRango(rango)
+-                    : filtros.max != null && filtros.max < topeMax
+-                      ? `Hasta ${fmt(filtros.max)}`
+-                      : "Sin límite"}
+-              </p>
+-            </div>
+-            <Slider
+-              aria-label="Presupuesto máximo"
+-              min={0}
+-              max={topeMax}
+-              step={paso}
+-              value={[tope]}
+-              onValueChange={([v]) => onChange({ min: undefined, max: v >= topeMax ? undefined : v })}
+-              className="my-5 [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-2 [&_[role=slider]]:border-primary"
+-            />
+-            <div className="flex flex-wrap gap-2" role="group" aria-label="Atajos de presupuesto">
+-              <Opcion activo={!hayPrecio} onClick={() => onChange({ min: undefined, max: undefined })}>
+-                Sin límite
+-              </Opcion>
+-              {TRAMOS.map((t) => (
+-                <Opcion
+-                  key={t.id}
+-                  activo={hayPrecio && mismoRango(t, rango)}
+-                  onClick={() => onChange({ min: t.min, max: t.max })}
+-                >
+-                  {etiquetaRango(t)}
+-                </Opcion>
+-              ))}
+-            </div>
+-          </section>
+-
+-          {/* Categoría */}
+-          <section aria-labelledby="f-categoria">
+-            <h2 id="f-categoria" className="mb-3 text-sm font-semibold font-sans">Categoría</h2>
+-            <div className="flex flex-wrap gap-2">
+-              <Opcion activo={!filtros.cat} onClick={() => onChange({ cat: undefined, sub: undefined })}>
+-                Todas
+-              </Opcion>
+-              {CATEGORIAS.map((c) => (
+-                <Opcion
+-                  key={c.slug}
+-                  activo={filtros.cat === c.slug}
+-                  onClick={() => onChange({ cat: c.slug, sub: undefined })}
+-                >
+-                  {c.nombre}
+-                  <span className="opacity-60"> · {conteoCategorias[c.slug] ?? 0}</span>
+-                </Opcion>
+-              ))}
+-            </div>
+-          </section>
+-
+-          {/* Tipo: solo cuando la categoría elegida tiene subcategorías */}
+-          {tipos.length > 0 && (
+-            <section aria-labelledby="f-tipo">
+-              <h2 id="f-tipo" className="mb-3 text-sm font-semibold font-sans">Tipo de {categoria?.nombre.toLowerCase()}</h2>
+-              <div className="flex flex-wrap gap-2">
+-                <Opcion activo={!filtros.sub} onClick={() => onChange({ sub: undefined })}>Todos</Opcion>
+-                {tipos.map((s) => (
+-                  <Opcion
+-                    key={s.slug}
+-                    activo={filtros.sub === s.slug}
+-                    onClick={() => onChange({ sub: s.slug })}
+-                  >
+-                    {s.label}
+-                    <span className="opacity-60"> · {conteoTipos[s.slug] ?? 0}</span>
+-                  </Opcion>
+-                ))}
+-              </div>
+-            </section>
+-          )}
+-
+-          {/* Ofertas */}
+-          {(ofertasDisponibles > 0 || filtros.oferta) && (
+-            <section>
+-              <button
+-                type="button"
+-                role="switch"
+-                aria-checked={!!filtros.oferta}
+-                onClick={() => onChange({ oferta: filtros.oferta ? undefined : true })}
+-                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-border/60 bg-background px-4 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+-              >
+-                <span className="font-medium">
+-                  Solo piezas en oferta
+-                  <span className="ml-1.5 text-muted-foreground">· {ofertasDisponibles}</span>
+-                </span>
+-                <span
+-                  aria-hidden
+-                  className={
+-                    "relative h-6 w-11 shrink-0 rounded-full transition-colors " +
+-                    (filtros.oferta ? "bg-primary" : "bg-border")
+-                  }
+-                >
+-                  <span
+-                    className={
+-                      "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-all " +
+-                      (filtros.oferta ? "left-[1.375rem]" : "left-0.5")
+-                    }
+-                  />
+-                </span>
+-              </button>
+-            </section>
+-          )}
++        <div className="flex-1 overflow-y-auto px-5 py-5">
++          <ControlesFiltros {...controles} variante="hoja" />
+         </div>
+ 
+         <div className="flex items-center gap-3 border-t border-border/50 bg-background px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+@@ -196,11 +227,7 @@ export function PanelFiltros({
+               Quitar filtros
+             </Button>
+           )}
+-          <Button
+-            type="button"
+-            className="min-h-11 flex-1 rounded-full"
+-            onClick={() => onOpenChange(false)}
+-          >
++          <Button type="button" className="min-h-11 flex-1 rounded-full" onClick={() => onOpenChange(false)}>
+             {total === 0 ? "Sin resultados" : `Ver ${total} ${total === 1 ? "pieza" : "piezas"}`}
+           </Button>
+         </div>
+diff --git a/src/lib/filtrosCatalogo.ts b/src/lib/filtrosCatalogo.ts
+index b0657fe..14afe4d 100644
+--- a/src/lib/filtrosCatalogo.ts
++++ b/src/lib/filtrosCatalogo.ts
+@@ -14,6 +14,8 @@ export interface FiltrosCatalogo {
+   cat?: string;
+   /** slug de subcategoría («tipo»); solo tiene sentido junto con `cat` */
+   sub?: string;
++  /** material_base de la pieza (texto tal como está en el producto) */
++  mat?: string;
+   min?: number;
+   max?: number;
+   /** solo piezas con oferta vigente */
+@@ -26,6 +28,7 @@ export interface ItemFiltrable {
+   descripcion: string | null;
+   categoria: string | null;
+   subcategoria: string | null;
++  material: string | null;
+   precioFinal: number;
+   enOferta: boolean;
+   /** porcentaje de descuento vigente (0 si no hay oferta) */
+@@ -55,11 +58,12 @@ export function coincideBusqueda(it: ItemFiltrable, q?: string): boolean {
+ export function aplicarFiltros<T extends ItemFiltrable>(
+   items: readonly T[],
+   f: FiltrosCatalogo,
+-  omitir?: "cat" | "sub" | "precio" | "oferta",
++  omitir?: "cat" | "sub" | "mat" | "precio" | "oferta",
+ ): T[] {
+   return items.filter((it) => {
+     if (omitir !== "cat" && f.cat && it.categoria !== f.cat) return false;
+     if (omitir !== "sub" && omitir !== "cat" && f.cat && f.sub && it.subcategoria !== f.sub) return false;
++    if (omitir !== "mat" && f.mat && it.material !== f.mat) return false;
+     if (omitir !== "precio") {
+       if (f.min != null && !(it.precioFinal > f.min)) return false;
+       if (f.max != null && !(it.precioFinal <= f.max)) return false;
+@@ -90,6 +94,7 @@ export function contarFiltros(f: FiltrosCatalogo): number {
+   let n = 0;
+   if (f.cat) n++;
+   if (f.cat && f.sub) n++;
++  if (f.mat) n++;
+   if (f.min != null || f.max != null) n++;
+   if (f.oferta) n++;
+   return n;
+@@ -99,9 +104,9 @@ export function contarFiltros(f: FiltrosCatalogo): number {
+ export function contarPor<T extends ItemFiltrable>(
+   items: readonly T[],
+   f: FiltrosCatalogo,
+-  campo: "categoria" | "subcategoria",
++  campo: "categoria" | "subcategoria" | "material",
+ ): Record<string, number> {
+-  const base = aplicarFiltros(items, f, campo === "categoria" ? "cat" : "sub");
++  const base = aplicarFiltros(items, f, campo === "categoria" ? "cat" : campo === "material" ? "mat" : "sub");
+   const out: Record<string, number> = {};
+   for (const it of base) {
+     const v = it[campo];
+diff --git a/src/routes/catalogo.tsx b/src/routes/catalogo.tsx
+index 1dfbbf7..0675adb 100644
+--- a/src/routes/catalogo.tsx
++++ b/src/routes/catalogo.tsx
+@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
+ import { Footer } from "@/components/Footer";
+ import { ProductCard } from "@/components/ProductCard";
+ import { BarraFiltros } from "@/components/catalogo/BarraFiltros";
+-import { PanelFiltros } from "@/components/catalogo/PanelFiltros";
++import { ControlesFiltros, PanelFiltros } from "@/components/catalogo/PanelFiltros";
+ import { Skeleton } from "@/components/ui/skeleton";
+ import { Input } from "@/components/ui/input";
+ import { Button } from "@/components/ui/button";
+@@ -27,12 +27,12 @@ import { useSearchStore } from "@/stores/searchStore";
+ import { trackEvent } from "@/hooks/useEventTracking";
+ import { trackSearch } from "@/lib/analytics";
+ import { useSeo, migasJsonLd } from "@/lib/seo";
+-import { PackageSearch, Search } from "lucide-react";
++import { ChevronLeft, ChevronRight, PackageSearch, Search } from "lucide-react";
+ 
+ /** Piezas que se piden de una vez. Si el catálogo activo supera este número, subirlo aquí. */
+ const LIMITE_CATALOGO = 60;
+-/** Piezas visibles por tanda («Ver más»). */
+-const POR_PAGINA = 24;
++/** Piezas por página (paginación numerada del mockup, en el cliente). */
++const POR_PAGINA = 12;
+ const PASO_PRECIO = 50;
+ 
+ interface CatalogoSearch {
+@@ -40,6 +40,8 @@ interface CatalogoSearch {
+   cat?: string;
+   /** tipo (subcategoría); solo vale junto con `cat` */
+   sub?: string;
++  /** material_base (solo los que existen en las piezas) */
++  mat?: string;
+   sort?: OrdenCatalogo;
+   /** Presupuesto (precio final con oferta): min exclusivo, max inclusivo. Ver lib/presupuesto.ts */
+   min?: number;
+@@ -64,6 +66,7 @@ const aItem = (p: Product): Item => {
+     descripcion: p.descripcion,
+     categoria: p.categoria,
+     subcategoria: p.subcategoria,
++    material: p.material_base?.trim() || null,
+     precioFinal: o.precioFinal,
+     enOferta: o.activa,
+     descuento: o.activa ? (p.descuento_porcentaje ?? 0) : 0,
+@@ -76,6 +79,7 @@ export const Route = createFileRoute("/catalogo")({
+     q: typeof search.q === "string" ? search.q : undefined,
+     cat: typeof search.cat === "string" ? search.cat : undefined,
+     sub: typeof search.sub === "string" ? search.sub : undefined,
++    mat: typeof search.mat === "string" && search.mat.trim() ? search.mat : undefined,
+     sort: ORDENES_CATALOGO.includes(search.sort as OrdenCatalogo) ? (search.sort as OrdenCatalogo) : undefined,
+     min: monto(search.min),
+     max: monto(search.max),
+@@ -91,7 +95,7 @@ export const Route = createFileRoute("/catalogo")({
+ });
+ 
+ function CatalogoPage() {
+-  const { q, cat, sub, sort, min, max, oferta } = Route.useSearch();
++  const { q, cat, sub, mat, sort, min, max, oferta } = Route.useSearch();
+   const navigate = Route.useNavigate();
+   const storeQuery = useSearchStore((s) => s.query);
+   const setStoreQuery = useSearchStore((s) => s.setQuery);
+@@ -110,7 +114,7 @@ function CatalogoPage() {
+   // El buscador del header (goToCatalogo) escribe en el store global de
+   // búsqueda; si llegamos con un término pendiente ahí, lo adoptamos.
+   const [searchInput, setSearchInput] = useState(q ?? storeQuery ?? "");
+-  const [visibles, setVisibles] = useState(POR_PAGINA);
++  const [pagina, setPagina] = useState(1);
+   const [panelAbierto, setPanelAbierto] = useState(false);
+ 
+   const activeSort: OrdenCatalogo = sort ?? "recientes";
+@@ -120,25 +124,25 @@ function CatalogoPage() {
+       ? sub
+       : undefined;
+ 
+-  const filtros: FiltrosCatalogo = { q: q || undefined, cat: activeCat, sub: activeSub, min, max, oferta, sort: activeSort };
++  const filtros: FiltrosCatalogo = { q: q || undefined, cat: activeCat, sub: activeSub, mat, min, max, oferta, sort: activeSort };
+   const cantidadFiltros = contarFiltros(filtros);
+   const hasActiveFilters = cantidadFiltros > 0 || !!q;
+ 
+   const { data: productos, isLoading, isError } = useCatalogoHome(LIMITE_CATALOGO);
+   const items = useMemo(() => (productos ?? []).map(aItem), [productos]);
+ 
+-  const lista = useMemo(() => ordenar(aplicarFiltros(items, filtros), activeSort), [items, q, activeCat, activeSub, min, max, oferta, activeSort]); // eslint-disable-line react-hooks/exhaustive-deps
+-  const conteoCategorias = useMemo(() => contarPor(items, filtros, "categoria"), [items, q, activeCat, activeSub, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
+-  const conteoTipos = useMemo(() => contarPor(items, filtros, "subcategoria"), [items, q, activeCat, activeSub, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
+-  const totalCategorias = Object.values(conteoCategorias).reduce((a, b) => a + b, 0);
+-  const ofertasDisponibles = useMemo(() => aplicarFiltros(items, filtros, "oferta").filter((i) => i.enOferta).length, [items, q, activeCat, activeSub, min, max]); // eslint-disable-line react-hooks/exhaustive-deps
++  const lista = useMemo(() => ordenar(aplicarFiltros(items, filtros), activeSort), [items, q, activeCat, activeSub, mat, min, max, oferta, activeSort]); // eslint-disable-line react-hooks/exhaustive-deps
++  const conteoCategorias = useMemo(() => contarPor(items, filtros, "categoria"), [items, q, activeCat, activeSub, mat, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
++  const conteoTipos = useMemo(() => contarPor(items, filtros, "subcategoria"), [items, q, activeCat, activeSub, mat, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
++  const conteoMateriales = useMemo(() => contarPor(items, filtros, "material"), [items, q, activeCat, activeSub, mat, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
++  const ofertasDisponibles = useMemo(() => aplicarFiltros(items, filtros, "oferta").filter((i) => i.enOferta).length, [items, q, activeCat, activeSub, mat, min, max]); // eslint-disable-line react-hooks/exhaustive-deps
+   const topeMax = useMemo(() => {
+     const mayor = items.reduce((m, i) => Math.max(m, i.precioFinal), 0);
+     return Math.max(PASO_PRECIO, Math.ceil(mayor / PASO_PRECIO) * PASO_PRECIO);
+   }, [items]);
+ 
+   // Cada cambio de filtro vuelve a la primera tanda.
+-  useEffect(() => setVisibles(POR_PAGINA), [q, activeCat, activeSub, min, max, oferta, activeSort]);
++  useEffect(() => setPagina(1), [q, activeCat, activeSub, mat, min, max, oferta, activeSort]);
+ 
+   useEffect(() => {
+     trackEvent({ tipo: "pagina_vista", path: "/catalogo" });
+@@ -167,8 +171,15 @@ function CatalogoPage() {
+   // Sin categoría no hay tipo: al cambiar de categoría se limpia el tipo.
+   const cambiarFiltros = (patch: Partial<FiltrosCatalogo>) => setSearch(patch as Partial<CatalogoSearch>);
+   const total = lista.length;
+-  const mostrados = lista.slice(0, visibles);
+-  const hayMas = mostrados.length < total;
++  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
++  const paginaActual = Math.min(pagina, paginas);
++  const mostrados = lista.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA);
++  const irAPagina = (n: number) => {
++    setPagina(n);
++    document.getElementById("resultados")?.scrollIntoView({ behavior: "smooth", block: "start" });
++  };
++  const catActual = CATEGORIAS.find((c) => c.slug === activeCat);
++  const titulo = catActual ? (catActual.slug === "muebles" ? "Salas" : catActual.slug === "separadores" ? "Separadores" : catActual.nombre) : "Catálogo completo";
+ 
+   return (
+     <div className="min-h-screen bg-background flex flex-col">
+@@ -187,7 +198,7 @@ function CatalogoPage() {
+               </BreadcrumbList>
+             </Breadcrumb>
+ 
+-            <h1 className="t-seccion mt-4 text-foreground md:mt-6">Catálogo completo</h1>
++            <h1 className="t-seccion mt-4 text-foreground md:mt-6">{titulo}</h1>
+             <p className="mt-1.5 hidden max-w-2xl text-muted-foreground md:block">
+               Todos nuestros muebles en un solo lugar: filtra por categoría, busca y ordena a tu gusto.
+             </p>
+@@ -205,98 +216,156 @@ function CatalogoPage() {
+           </div>
+         </section>
+ 
+-        {/* ── Filtros + resultados ── */}
++        {/* ── Filtros (columna fija en PC) + resultados ── */}
+         <section className="container mx-auto max-w-7xl px-4 py-6 md:py-10">
+-          <BarraFiltros
+-            filtros={filtros}
+-            cantidadFiltros={cantidadFiltros}
+-            orden={activeSort}
+-            onAbrirPanel={() => setPanelAbierto(true)}
+-            onChange={cambiarFiltros}
+-            onOrden={(o) => setSearch({ sort: o === "recientes" ? undefined : o })}
+-            conteoCategorias={conteoCategorias}
+-            totalCategorias={totalCategorias}
+-          />
++          <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-10">
++            <aside aria-label="Filtros" className="hidden lg:block">
++              <div className="sticky top-28 rounded-2xl border border-border/60 bg-card p-5">
++                <div className="mb-5 flex items-center justify-between gap-3">
++                  <p className="font-sans text-base font-semibold">Filtrar por</p>
++                  {cantidadFiltros > 0 && (
++                    <button
++                      type="button"
++                      onClick={clearFilters}
++                      className="min-h-11 text-sm font-semibold text-accent-strong hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++                    >
++                      Quitar
++                    </button>
++                  )}
++                </div>
++                <ControlesFiltros
++                  variante="lateral"
++                  filtros={filtros}
++                  onChange={cambiarFiltros}
++                  topeMax={topeMax}
++                  paso={PASO_PRECIO}
++                  conteoCategorias={conteoCategorias}
++                  conteoTipos={conteoTipos}
++                  conteoMateriales={conteoMateriales}
++                  ofertasDisponibles={ofertasDisponibles}
++                />
++              </div>
++            </aside>
+ 
+-          <PanelFiltros
+-            open={panelAbierto}
+-            onOpenChange={setPanelAbierto}
+-            filtros={filtros}
+-            onChange={cambiarFiltros}
+-            onLimpiar={clearFilters}
+-            total={total}
+-            topeMax={topeMax}
+-            paso={PASO_PRECIO}
+-            conteoCategorias={conteoCategorias}
+-            conteoTipos={conteoTipos}
+-            ofertasDisponibles={ofertasDisponibles}
+-          />
++            <div id="resultados" className="min-w-0 scroll-mt-28">
++              <BarraFiltros
++                filtros={filtros}
++                cantidadFiltros={cantidadFiltros}
++                orden={activeSort}
++                onAbrirPanel={() => setPanelAbierto(true)}
++                onChange={cambiarFiltros}
++                onOrden={(o) => setSearch({ sort: o === "recientes" ? undefined : o })}
++              />
+ 
+-          <p className="mb-5 text-sm text-muted-foreground" aria-live="polite">
+-            {isLoading ? "Buscando…" : `${total} producto${total === 1 ? "" : "s"}`}
+-            {q && !isLoading && <span> para «{q}»</span>}
+-            {hasActiveFilters && (
+-              <button
+-                type="button"
+-                onClick={clearFilters}
+-                className="ml-3 inline-flex min-h-[44px] items-center text-accent-strong hover:underline"
+-              >
+-                Quitar filtros
+-              </button>
+-            )}
+-          </p>
++              <PanelFiltros
++                open={panelAbierto}
++                onOpenChange={setPanelAbierto}
++                filtros={filtros}
++                onChange={cambiarFiltros}
++                onLimpiar={clearFilters}
++                total={total}
++                topeMax={topeMax}
++                paso={PASO_PRECIO}
++                conteoCategorias={conteoCategorias}
++                conteoTipos={conteoTipos}
++                conteoMateriales={conteoMateriales}
++                ofertasDisponibles={ofertasDisponibles}
++              />
+ 
+-          {isLoading ? (
+-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+-              {Array.from({ length: 8 }).map((_, i) => (
+-                <div key={i} className="space-y-3">
+-                  <Skeleton className="aspect-[4/3] w-full rounded-xl" />
+-                  <Skeleton className="h-4 w-3/4" />
+-                  <Skeleton className="h-4 w-1/2" />
+-                </div>
+-              ))}
+-            </div>
+-          ) : isError ? (
+-            <div className="text-center py-24 text-muted-foreground">
+-              Ocurrió un error al cargar los productos. Intenta de nuevo en un momento.
+-            </div>
+-          ) : total === 0 ? (
+-            <div className="flex flex-col items-center text-center py-24 gap-3">
+-              <PackageSearch className="h-10 w-10 text-muted-foreground/50" />
+-              <p className="font-medium text-foreground">No encontramos productos</p>
+-              <p className="text-sm text-muted-foreground max-w-sm">
+-                {min != null || max != null
+-                  ? "Prueba ampliando tu presupuesto o quita los filtros aplicados."
+-                  : "Prueba con otra búsqueda o quita los filtros aplicados."}
++              <p className="mb-5 text-sm text-muted-foreground" aria-live="polite">
++                {isLoading ? "Buscando…" : `${total} producto${total === 1 ? "" : "s"}`}
++                {q && !isLoading && <span> para «{q}»</span>}
++                {hasActiveFilters && (
++                  <button
++                    type="button"
++                    onClick={clearFilters}
++                    className="ml-3 inline-flex min-h-[44px] items-center text-accent-strong hover:underline lg:hidden"
++                  >
++                    Quitar filtros
++                  </button>
++                )}
+               </p>
+-              {hasActiveFilters && (
+-                <Button variant="outline" className="rounded-full mt-2" onClick={clearFilters}>
+-                  Quitar filtros
+-                </Button>
+-              )}
+-            </div>
+-          ) : (
+-            <>
+-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+-                {mostrados.map((i) => (
+-                  <ProductCard key={i.p.id} product={i.p} />
+-                ))}
+-              </div>
+ 
+-              {hayMas && (
+-                <div className="flex justify-center mt-10">
+-                  <Button
+-                    variant="outline"
+-                    size="lg"
+-                    className="rounded-full px-8"
+-                    onClick={() => setVisibles((v) => v + POR_PAGINA)}
+-                  >
+-                    {`Ver más (${mostrados.length} de ${total})`}
+-                  </Button>
++              {isLoading ? (
++                <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3">
++                  {Array.from({ length: 6 }).map((_, i) => (
++                    <div key={i} className="space-y-3">
++                      <Skeleton className="aspect-[4/3] w-full rounded-xl" />
++                      <Skeleton className="h-4 w-3/4" />
++                      <Skeleton className="h-4 w-1/2" />
++                    </div>
++                  ))}
++                </div>
++              ) : isError ? (
++                <div className="py-24 text-center text-muted-foreground">
++                  Ocurrió un error al cargar los productos. Intenta de nuevo en un momento.
+                 </div>
++              ) : total === 0 ? (
++                <div className="flex flex-col items-center gap-3 py-24 text-center">
++                  <PackageSearch className="h-10 w-10 text-muted-foreground/50" />
++                  <p className="font-medium text-foreground">No encontramos productos</p>
++                  <p className="max-w-sm text-sm text-muted-foreground">
++                    {min != null || max != null
++                      ? "Prueba ampliando tu presupuesto o quita los filtros aplicados."
++                      : "Prueba con otra búsqueda o quita los filtros aplicados."}
++                  </p>
++                  {hasActiveFilters && (
++                    <Button variant="outline" className="mt-2 rounded-full" onClick={clearFilters}>
++                      Quitar filtros
++                    </Button>
++                  )}
++                </div>
++              ) : (
++                <>
++                  <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3">
++                    {mostrados.map((i) => (
++                      <ProductCard key={i.p.id} product={i.p} />
++                    ))}
++                  </div>
++
++                  {paginas > 1 && (
++                    <nav aria-label="Páginas de resultados" className="mt-10 flex items-center justify-center gap-2">
++                      <button
++                        type="button"
++                        onClick={() => irAPagina(paginaActual - 1)}
++                        disabled={paginaActual === 1}
++                        aria-label="Página anterior"
++                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/60 text-foreground disabled:opacity-40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++                      >
++                        <ChevronLeft className="h-4 w-4" aria-hidden />
++                      </button>
++                      {Array.from({ length: paginas }, (_, i) => i + 1).map((n) => (
++                        <button
++                          key={n}
++                          type="button"
++                          onClick={() => irAPagina(n)}
++                          aria-label={`Página ${n}`}
++                          aria-current={n === paginaActual ? "page" : undefined}
++                          className={
++                            "inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
++                            (n === paginaActual
++                              ? "bg-primary text-primary-foreground"
++                              : "border border-border/60 text-foreground hover:bg-secondary")
++                          }
++                        >
++                          {n}
++                        </button>
++                      ))}
++                      <button
++                        type="button"
++                        onClick={() => irAPagina(paginaActual + 1)}
++                        disabled={paginaActual === paginas}
++                        aria-label="Página siguiente"
++                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/60 text-foreground disabled:opacity-40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++                      >
++                        <ChevronRight className="h-4 w-4" aria-hidden />
++                      </button>
++                    </nav>
++                  )}
++                </>
+               )}
+-            </>
+-          )}
++            </div>
++          </div>
+         </section>
+       </main>
+       <Footer />

@@ -14,6 +14,8 @@ export interface FiltrosCatalogo {
   cat?: string;
   /** slug de subcategoría («tipo»); solo tiene sentido junto con `cat` */
   sub?: string;
+  /** material_base de la pieza (texto tal como está en el producto) */
+  mat?: string;
   min?: number;
   max?: number;
   /** solo piezas con oferta vigente */
@@ -26,6 +28,7 @@ export interface ItemFiltrable {
   descripcion: string | null;
   categoria: string | null;
   subcategoria: string | null;
+  material: string | null;
   precioFinal: number;
   enOferta: boolean;
   /** porcentaje de descuento vigente (0 si no hay oferta) */
@@ -55,11 +58,12 @@ export function coincideBusqueda(it: ItemFiltrable, q?: string): boolean {
 export function aplicarFiltros<T extends ItemFiltrable>(
   items: readonly T[],
   f: FiltrosCatalogo,
-  omitir?: "cat" | "sub" | "precio" | "oferta",
+  omitir?: "cat" | "sub" | "mat" | "precio" | "oferta",
 ): T[] {
   return items.filter((it) => {
     if (omitir !== "cat" && f.cat && it.categoria !== f.cat) return false;
     if (omitir !== "sub" && omitir !== "cat" && f.cat && f.sub && it.subcategoria !== f.sub) return false;
+    if (omitir !== "mat" && f.mat && it.material !== f.mat) return false;
     if (omitir !== "precio") {
       if (f.min != null && !(it.precioFinal > f.min)) return false;
       if (f.max != null && !(it.precioFinal <= f.max)) return false;
@@ -90,6 +94,7 @@ export function contarFiltros(f: FiltrosCatalogo): number {
   let n = 0;
   if (f.cat) n++;
   if (f.cat && f.sub) n++;
+  if (f.mat) n++;
   if (f.min != null || f.max != null) n++;
   if (f.oferta) n++;
   return n;
@@ -99,9 +104,9 @@ export function contarFiltros(f: FiltrosCatalogo): number {
 export function contarPor<T extends ItemFiltrable>(
   items: readonly T[],
   f: FiltrosCatalogo,
-  campo: "categoria" | "subcategoria",
+  campo: "categoria" | "subcategoria" | "material",
 ): Record<string, number> {
-  const base = aplicarFiltros(items, f, campo === "categoria" ? "cat" : "sub");
+  const base = aplicarFiltros(items, f, campo === "categoria" ? "cat" : campo === "material" ? "mat" : "sub");
   const out: Record<string, number> = {};
   for (const it of base) {
     const v = it[campo];

@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ProductCard } from "@/components/ProductCard";
 import { BarraFiltros } from "@/components/catalogo/BarraFiltros";
-import { PanelFiltros } from "@/components/catalogo/PanelFiltros";
+import { ControlesFiltros, PanelFiltros } from "@/components/catalogo/PanelFiltros";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,12 @@ import { useSearchStore } from "@/stores/searchStore";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { trackSearch } from "@/lib/analytics";
 import { useSeo, migasJsonLd } from "@/lib/seo";
-import { PackageSearch, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, PackageSearch, Search } from "lucide-react";
 
 /** Piezas que se piden de una vez. Si el catálogo activo supera este número, subirlo aquí. */
 const LIMITE_CATALOGO = 60;
-/** Piezas visibles por tanda («Ver más»). */
-const POR_PAGINA = 24;
+/** Piezas por página (paginación numerada del mockup, en el cliente). */
+const POR_PAGINA = 12;
 const PASO_PRECIO = 50;
 
 interface CatalogoSearch {
@@ -40,6 +40,8 @@ interface CatalogoSearch {
   cat?: string;
   /** tipo (subcategoría); solo vale junto con `cat` */
   sub?: string;
+  /** material_base (solo los que existen en las piezas) */
+  mat?: string;
   sort?: OrdenCatalogo;
   /** Presupuesto (precio final con oferta): min exclusivo, max inclusivo. Ver lib/presupuesto.ts */
   min?: number;
@@ -64,6 +66,7 @@ const aItem = (p: Product): Item => {
     descripcion: p.descripcion,
     categoria: p.categoria,
     subcategoria: p.subcategoria,
+    material: p.material_base?.trim() || null,
     precioFinal: o.precioFinal,
     enOferta: o.activa,
     descuento: o.activa ? (p.descuento_porcentaje ?? 0) : 0,
@@ -76,6 +79,7 @@ export const Route = createFileRoute("/catalogo")({
     q: typeof search.q === "string" ? search.q : undefined,
     cat: typeof search.cat === "string" ? search.cat : undefined,
     sub: typeof search.sub === "string" ? search.sub : undefined,
+    mat: typeof search.mat === "string" && search.mat.trim() ? search.mat : undefined,
     sort: ORDENES_CATALOGO.includes(search.sort as OrdenCatalogo) ? (search.sort as OrdenCatalogo) : undefined,
     min: monto(search.min),
     max: monto(search.max),
@@ -91,7 +95,7 @@ export const Route = createFileRoute("/catalogo")({
 });
 
 function CatalogoPage() {
-  const { q, cat, sub, sort, min, max, oferta } = Route.useSearch();
+  const { q, cat, sub, mat, sort, min, max, oferta } = Route.useSearch();
   const navigate = Route.useNavigate();
   const storeQuery = useSearchStore((s) => s.query);
   const setStoreQuery = useSearchStore((s) => s.setQuery);
@@ -110,7 +114,7 @@ function CatalogoPage() {
   // El buscador del header (goToCatalogo) escribe en el store global de
   // búsqueda; si llegamos con un término pendiente ahí, lo adoptamos.
   const [searchInput, setSearchInput] = useState(q ?? storeQuery ?? "");
-  const [visibles, setVisibles] = useState(POR_PAGINA);
+  const [pagina, setPagina] = useState(1);
   const [panelAbierto, setPanelAbierto] = useState(false);
 
   const activeSort: OrdenCatalogo = sort ?? "recientes";
@@ -120,25 +124,25 @@ function CatalogoPage() {
       ? sub
       : undefined;
 
-  const filtros: FiltrosCatalogo = { q: q || undefined, cat: activeCat, sub: activeSub, min, max, oferta, sort: activeSort };
+  const filtros: FiltrosCatalogo = { q: q || undefined, cat: activeCat, sub: activeSub, mat, min, max, oferta, sort: activeSort };
   const cantidadFiltros = contarFiltros(filtros);
   const hasActiveFilters = cantidadFiltros > 0 || !!q;
 
   const { data: productos, isLoading, isError } = useCatalogoHome(LIMITE_CATALOGO);
   const items = useMemo(() => (productos ?? []).map(aItem), [productos]);
 
-  const lista = useMemo(() => ordenar(aplicarFiltros(items, filtros), activeSort), [items, q, activeCat, activeSub, min, max, oferta, activeSort]); // eslint-disable-line react-hooks/exhaustive-deps
-  const conteoCategorias = useMemo(() => contarPor(items, filtros, "categoria"), [items, q, activeCat, activeSub, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const conteoTipos = useMemo(() => contarPor(items, filtros, "subcategoria"), [items, q, activeCat, activeSub, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const totalCategorias = Object.values(conteoCategorias).reduce((a, b) => a + b, 0);
-  const ofertasDisponibles = useMemo(() => aplicarFiltros(items, filtros, "oferta").filter((i) => i.enOferta).length, [items, q, activeCat, activeSub, min, max]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lista = useMemo(() => ordenar(aplicarFiltros(items, filtros), activeSort), [items, q, activeCat, activeSub, mat, min, max, oferta, activeSort]); // eslint-disable-line react-hooks/exhaustive-deps
+  const conteoCategorias = useMemo(() => contarPor(items, filtros, "categoria"), [items, q, activeCat, activeSub, mat, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const conteoTipos = useMemo(() => contarPor(items, filtros, "subcategoria"), [items, q, activeCat, activeSub, mat, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const conteoMateriales = useMemo(() => contarPor(items, filtros, "material"), [items, q, activeCat, activeSub, mat, min, max, oferta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ofertasDisponibles = useMemo(() => aplicarFiltros(items, filtros, "oferta").filter((i) => i.enOferta).length, [items, q, activeCat, activeSub, mat, min, max]); // eslint-disable-line react-hooks/exhaustive-deps
   const topeMax = useMemo(() => {
     const mayor = items.reduce((m, i) => Math.max(m, i.precioFinal), 0);
     return Math.max(PASO_PRECIO, Math.ceil(mayor / PASO_PRECIO) * PASO_PRECIO);
   }, [items]);
 
   // Cada cambio de filtro vuelve a la primera tanda.
-  useEffect(() => setVisibles(POR_PAGINA), [q, activeCat, activeSub, min, max, oferta, activeSort]);
+  useEffect(() => setPagina(1), [q, activeCat, activeSub, mat, min, max, oferta, activeSort]);
 
   useEffect(() => {
     trackEvent({ tipo: "pagina_vista", path: "/catalogo" });
@@ -167,8 +171,15 @@ function CatalogoPage() {
   // Sin categoría no hay tipo: al cambiar de categoría se limpia el tipo.
   const cambiarFiltros = (patch: Partial<FiltrosCatalogo>) => setSearch(patch as Partial<CatalogoSearch>);
   const total = lista.length;
-  const mostrados = lista.slice(0, visibles);
-  const hayMas = mostrados.length < total;
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+  const paginaActual = Math.min(pagina, paginas);
+  const mostrados = lista.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA);
+  const irAPagina = (n: number) => {
+    setPagina(n);
+    document.getElementById("resultados")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const catActual = CATEGORIAS.find((c) => c.slug === activeCat);
+  const titulo = catActual ? (catActual.slug === "muebles" ? "Salas" : catActual.slug === "separadores" ? "Separadores" : catActual.nombre) : "Catálogo completo";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -187,7 +198,7 @@ function CatalogoPage() {
               </BreadcrumbList>
             </Breadcrumb>
 
-            <h1 className="t-seccion mt-4 text-foreground md:mt-6">Catálogo completo</h1>
+            <h1 className="t-seccion mt-4 text-foreground md:mt-6">{titulo}</h1>
             <p className="mt-1.5 hidden max-w-2xl text-muted-foreground md:block">
               Todos nuestros muebles en un solo lugar: filtra por categoría, busca y ordena a tu gusto.
             </p>
@@ -205,98 +216,156 @@ function CatalogoPage() {
           </div>
         </section>
 
-        {/* ── Filtros + resultados ── */}
+        {/* ── Filtros (columna fija en PC) + resultados ── */}
         <section className="container mx-auto max-w-7xl px-4 py-6 md:py-10">
-          <BarraFiltros
-            filtros={filtros}
-            cantidadFiltros={cantidadFiltros}
-            orden={activeSort}
-            onAbrirPanel={() => setPanelAbierto(true)}
-            onChange={cambiarFiltros}
-            onOrden={(o) => setSearch({ sort: o === "recientes" ? undefined : o })}
-            conteoCategorias={conteoCategorias}
-            totalCategorias={totalCategorias}
-          />
-
-          <PanelFiltros
-            open={panelAbierto}
-            onOpenChange={setPanelAbierto}
-            filtros={filtros}
-            onChange={cambiarFiltros}
-            onLimpiar={clearFilters}
-            total={total}
-            topeMax={topeMax}
-            paso={PASO_PRECIO}
-            conteoCategorias={conteoCategorias}
-            conteoTipos={conteoTipos}
-            ofertasDisponibles={ofertasDisponibles}
-          />
-
-          <p className="mb-5 text-sm text-muted-foreground" aria-live="polite">
-            {isLoading ? "Buscando…" : `${total} producto${total === 1 ? "" : "s"}`}
-            {q && !isLoading && <span> para «{q}»</span>}
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="ml-3 inline-flex min-h-[44px] items-center text-accent-strong hover:underline"
-              >
-                Quitar filtros
-              </button>
-            )}
-          </p>
-
-          {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="space-y-3">
-                  <Skeleton className="aspect-[4/3] w-full rounded-xl" />
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
+          <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-10">
+            <aside aria-label="Filtros" className="hidden lg:block">
+              <div className="sticky top-28 rounded-2xl border border-border/60 bg-card p-5">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <p className="font-sans text-base font-semibold">Filtrar por</p>
+                  {cantidadFiltros > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="min-h-11 text-sm font-semibold text-accent-strong hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      Quitar
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : isError ? (
-            <div className="text-center py-24 text-muted-foreground">
-              Ocurrió un error al cargar los productos. Intenta de nuevo en un momento.
-            </div>
-          ) : total === 0 ? (
-            <div className="flex flex-col items-center text-center py-24 gap-3">
-              <PackageSearch className="h-10 w-10 text-muted-foreground/50" />
-              <p className="font-medium text-foreground">No encontramos productos</p>
-              <p className="text-sm text-muted-foreground max-w-sm">
-                {min != null || max != null
-                  ? "Prueba ampliando tu presupuesto o quita los filtros aplicados."
-                  : "Prueba con otra búsqueda o quita los filtros aplicados."}
-              </p>
-              {hasActiveFilters && (
-                <Button variant="outline" className="rounded-full mt-2" onClick={clearFilters}>
-                  Quitar filtros
-                </Button>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {mostrados.map((i) => (
-                  <ProductCard key={i.p.id} product={i.p} />
-                ))}
+                <ControlesFiltros
+                  variante="lateral"
+                  filtros={filtros}
+                  onChange={cambiarFiltros}
+                  topeMax={topeMax}
+                  paso={PASO_PRECIO}
+                  conteoCategorias={conteoCategorias}
+                  conteoTipos={conteoTipos}
+                  conteoMateriales={conteoMateriales}
+                  ofertasDisponibles={ofertasDisponibles}
+                />
               </div>
+            </aside>
 
-              {hayMas && (
-                <div className="flex justify-center mt-10">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="rounded-full px-8"
-                    onClick={() => setVisibles((v) => v + POR_PAGINA)}
+            <div id="resultados" className="min-w-0 scroll-mt-28">
+              <BarraFiltros
+                filtros={filtros}
+                cantidadFiltros={cantidadFiltros}
+                orden={activeSort}
+                onAbrirPanel={() => setPanelAbierto(true)}
+                onChange={cambiarFiltros}
+                onOrden={(o) => setSearch({ sort: o === "recientes" ? undefined : o })}
+              />
+
+              <PanelFiltros
+                open={panelAbierto}
+                onOpenChange={setPanelAbierto}
+                filtros={filtros}
+                onChange={cambiarFiltros}
+                onLimpiar={clearFilters}
+                total={total}
+                topeMax={topeMax}
+                paso={PASO_PRECIO}
+                conteoCategorias={conteoCategorias}
+                conteoTipos={conteoTipos}
+                conteoMateriales={conteoMateriales}
+                ofertasDisponibles={ofertasDisponibles}
+              />
+
+              <p className="mb-5 text-sm text-muted-foreground" aria-live="polite">
+                {isLoading ? "Buscando…" : `${total} producto${total === 1 ? "" : "s"}`}
+                {q && !isLoading && <span> para «{q}»</span>}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="ml-3 inline-flex min-h-[44px] items-center text-accent-strong hover:underline lg:hidden"
                   >
-                    {`Ver más (${mostrados.length} de ${total})`}
-                  </Button>
+                    Quitar filtros
+                  </button>
+                )}
+              </p>
+
+              {isLoading ? (
+                <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="space-y-3">
+                      <Skeleton className="aspect-[4/3] w-full rounded-xl" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/2" />
+                    </div>
+                  ))}
                 </div>
+              ) : isError ? (
+                <div className="py-24 text-center text-muted-foreground">
+                  Ocurrió un error al cargar los productos. Intenta de nuevo en un momento.
+                </div>
+              ) : total === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-24 text-center">
+                  <PackageSearch className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="font-medium text-foreground">No encontramos productos</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    {min != null || max != null
+                      ? "Prueba ampliando tu presupuesto o quita los filtros aplicados."
+                      : "Prueba con otra búsqueda o quita los filtros aplicados."}
+                  </p>
+                  {hasActiveFilters && (
+                    <Button variant="outline" className="mt-2 rounded-full" onClick={clearFilters}>
+                      Quitar filtros
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3">
+                    {mostrados.map((i) => (
+                      <ProductCard key={i.p.id} product={i.p} />
+                    ))}
+                  </div>
+
+                  {paginas > 1 && (
+                    <nav aria-label="Páginas de resultados" className="mt-10 flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => irAPagina(paginaActual - 1)}
+                        disabled={paginaActual === 1}
+                        aria-label="Página anterior"
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/60 text-foreground disabled:opacity-40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ChevronLeft className="h-4 w-4" aria-hidden />
+                      </button>
+                      {Array.from({ length: paginas }, (_, i) => i + 1).map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => irAPagina(n)}
+                          aria-label={`Página ${n}`}
+                          aria-current={n === paginaActual ? "page" : undefined}
+                          className={
+                            "inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+                            (n === paginaActual
+                              ? "bg-primary text-primary-foreground"
+                              : "border border-border/60 text-foreground hover:bg-secondary")
+                          }
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => irAPagina(paginaActual + 1)}
+                        disabled={paginaActual === paginas}
+                        aria-label="Página siguiente"
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/60 text-foreground disabled:opacity-40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <ChevronRight className="h-4 w-4" aria-hidden />
+                      </button>
+                    </nav>
+                  )}
+                </>
               )}
-            </>
-          )}
+            </div>
+          </div>
         </section>
       </main>
       <Footer />

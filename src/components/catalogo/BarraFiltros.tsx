@@ -1,6 +1,7 @@
 // src/components/catalogo/BarraFiltros.tsx
 // Barra de /catalogo: botón «Filtros · n», orden y etiquetas de filtros activos con ✕.
-// No es fija (el header ya es sticky y su alto cambia al ocultar la barra superior); en PC muestra los chips de categoría.
+// No es fija (el header ya es sticky y su alto cambia al ocultar la barra superior). En PC los filtros viven en la columna
+// izquierda (ControlesFiltros) y aquí solo quedan el orden y las etiquetas activas; en móvil, el botón abre la hoja.
 import { SlidersHorizontal, X } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -16,8 +17,6 @@ interface Props {
   onAbrirPanel: () => void;
   onChange: (patch: Partial<FiltrosCatalogo>) => void;
   onOrden: (o: OrdenCatalogo) => void;
-  conteoCategorias: Record<string, number>;
-  totalCategorias: number;
 }
 
 function Etiqueta({ texto, onQuitar }: { texto: string; onQuitar: () => void }) {
@@ -35,7 +34,7 @@ function Etiqueta({ texto, onQuitar }: { texto: string; onQuitar: () => void }) 
 }
 
 export function BarraFiltros({
-  filtros, cantidadFiltros, orden, onAbrirPanel, onChange, onOrden, conteoCategorias, totalCategorias,
+  filtros, cantidadFiltros, orden, onAbrirPanel, onChange, onOrden,
 }: Props) {
   const categoria = CATEGORIAS.find((c) => c.slug === filtros.cat);
   const tipo = categoria?.subcategorias.find((s) => s.slug === filtros.sub);
@@ -47,23 +46,11 @@ export function BarraFiltros({
         <button
           type="button"
           onClick={onAbrirPanel}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border/60 bg-background px-4 text-sm font-medium hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border/60 bg-background px-4 text-sm font-medium hover:border-foreground/30 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <SlidersHorizontal className="h-4 w-4" aria-hidden />
           Filtros{cantidadFiltros > 0 && <span> · {cantidadFiltros}</span>}
         </button>
-
-        {/* PC: categorías visibles en una fila; en móvil están dentro del panel */}
-        <div className="hidden flex-1 flex-wrap items-center gap-2 md:flex" role="group" aria-label="Categoría">
-          <ChipCat activo={!filtros.cat} onClick={() => onChange({ cat: undefined, sub: undefined })}>
-            Todas · {totalCategorias}
-          </ChipCat>
-          {CATEGORIAS.map((c) => (
-            <ChipCat key={c.slug} activo={filtros.cat === c.slug} onClick={() => onChange({ cat: c.slug, sub: undefined })}>
-              {c.nombre} · {conteoCategorias[c.slug] ?? 0}
-            </ChipCat>
-          ))}
-        </div>
 
         <div className="ml-auto">
           <Select value={orden} onValueChange={(v) => onOrden(v as OrdenCatalogo)}>
@@ -92,27 +79,10 @@ export function BarraFiltros({
               onQuitar={() => onChange({ min: undefined, max: undefined })}
             />
           )}
+          {filtros.mat && <Etiqueta texto={filtros.mat} onQuitar={() => onChange({ mat: undefined })} />}
           {filtros.oferta && <Etiqueta texto="Solo ofertas" onQuitar={() => onChange({ oferta: undefined })} />}
         </div>
       )}
     </div>
-  );
-}
-
-function ChipCat({ activo, onClick, children }: { activo: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={activo}
-      className={
-        "min-h-11 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
-        (activo
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border/60 bg-background text-foreground/70 hover:border-foreground/30 hover:text-foreground")
-      }
-    >
-      {children}
-    </button>
   );
 }

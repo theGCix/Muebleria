@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { filtrarCatalogo, contarFiltros, contarPor, coincideBusqueda } from "../src/lib/filtrosCatalogo.ts";
 
 const it = (nombre, precioFinal, extra = {}) => ({
-  nombre, descripcion: null, categoria: "muebles", subcategoria: "sala",
+  nombre, descripcion: null, categoria: "muebles", subcategoria: "sala", material: "madera",
   precioFinal, enOferta: false, descuento: 0, creado: "2026-11-01T00:00:00Z", ...extra,
 });
 const lista = [
@@ -24,6 +24,13 @@ test("categoría y tipo; el tipo se ignora sin categoría", () => {
   assert.deepEqual(nombres(filtrarCatalogo(lista, { cat: "comedores", sub: "6-sillas" })), ["Comedor 6 sillas"]);
   assert.equal(filtrarCatalogo(lista, { cat: "comedores", sub: "4-sillas" }).length, 0);
   assert.equal(filtrarCatalogo(lista, { sub: "6-sillas" }).length, 4);
+});
+
+test("material: filtra por valor exacto y se cuenta como filtro", () => {
+  const l = [it("A", 100, { material: "cedro" }), it("B", 200), it("C", 300, { material: null })];
+  assert.deepEqual(nombres(filtrarCatalogo(l, { mat: "cedro" })), ["A"]);
+  assert.equal(contarFiltros({ mat: "cedro" }), 1);
+  assert.deepEqual(contarPor(l, { mat: "cedro" }, "material"), { cedro: 1, madera: 1 });
 });
 
 test("solo ofertas", () => {
