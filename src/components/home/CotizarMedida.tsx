@@ -15,7 +15,7 @@ export function CotizarMedida() {
   }, [hash]);
 
   return (
-    <section id="a-medida" aria-labelledby="medida-titulo" className="scroll-mt-28 bg-gm-bosque text-white">
+    <section id="a-medida" aria-labelledby="medida-titulo" className="scroll-mt-28 border-t border-white/15 bg-gm-bosque text-white">
       <div className="container mx-auto max-w-6xl px-4 py-9 md:py-12">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-10">
           <div>

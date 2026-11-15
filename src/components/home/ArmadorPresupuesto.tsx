@@ -61,7 +61,7 @@ export function ArmadorPresupuesto() {
   const cta = textoOpciones(alcance.total);
 
   return (
-    <section id="presupuesto" aria-labelledby="presupuesto-titulo" className="bg-gm-durazno">
+    <section id="presupuesto" aria-labelledby="presupuesto-titulo" className="bg-gm-salvia">
       <div className="container mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 md:py-16 lg:grid-cols-[1fr_1.1fr] lg:gap-14">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-gm-terracota md:text-sm">Tu estilo no tiene límites.</p>

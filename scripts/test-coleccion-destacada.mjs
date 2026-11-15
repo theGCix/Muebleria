@@ -23,7 +23,7 @@ test("poseTarjeta: centro grande y visible, vecinas giradas hacia el centro, lej
   const d = poseTarjeta(1);
   const i = poseTarjeta(-1);
   assert.ok(d.x > 0 && i.x < 0 && d.rot < 0 && i.rot > 0);
-  assert.ok(d.opacidad < 1 && d.escala < 1);
+  assert.ok(d.opacidad === 1 && d.velo > 0 && c.velo === 0 && d.escala < 1);
   assert.equal(poseTarjeta(2).opacidad, 0);
   assert.equal(poseTarjeta(-3).opacidad, 0);
   assert.ok(c.z > d.z && d.z > poseTarjeta(2).z);

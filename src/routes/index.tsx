@@ -49,4 +49,4 @@ function Index() {
        <CombosSection /> <PromoCategoriaBanner /> <Testimonials /> <ClientesSatisfechos />
        <PruebaloEnTuEspacio /> <CotizarMedida />
      </main> 
-     <Footer /></div> ); }
+     <Footer pegado /></div> ); }

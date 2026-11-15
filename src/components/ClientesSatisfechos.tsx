@@ -21,8 +21,8 @@ export function ClientesSatisfechos() {
   if (fotos.length === 0) return null;
 
   return (
-    <section id="clientes-satisfechos" className="scroll-mt-28 bg-secondary/30 px-4 py-20 md:py-24">
-      <div className="container mx-auto max-w-7xl">
+    <section id="clientes-satisfechos" className="scroll-mt-28 bg-gm-salvia px-4 py-16 md:py-20">
+      <div className="container mx-auto max-w-6xl">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <p className="mb-3 text-sm font-medium text-accent-strong">Clientes satisfechos</p>
           <h2 className="t-seccion">

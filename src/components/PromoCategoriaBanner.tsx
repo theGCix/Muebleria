@@ -45,8 +45,8 @@ export function PromoCategoriaBanner({
   if (!desde) return null;
 
   return (
-    <section className="px-4 pt-10" aria-label={titulo}>
-      <div className="container mx-auto max-w-7xl" data-reveal="panel">
+    <section className="pt-10" aria-label={titulo}>
+      <div className="container mx-auto max-w-6xl px-4" data-reveal="panel">
         <Link
           to="/categoria/$slug"
           params={{ slug: categoria }}

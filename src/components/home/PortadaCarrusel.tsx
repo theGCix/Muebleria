@@ -234,10 +234,12 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
         activa ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
+      {/* Columna única: texto y tendedero comparten el ancho (max-w-6xl) del resto del home */}
+      <div className="relative mx-auto h-full w-full max-w-6xl">
       {/* Palabra fantasma de fondo */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-[5%] top-[6%] select-none font-display font-bold uppercase leading-[0.86] tracking-tight text-gm-bosque-2/70"
+        className="pointer-events-none absolute left-[5%] top-[6%] select-none md:left-0 font-display font-bold uppercase leading-[0.86] tracking-tight text-gm-bosque-2/70"
         style={{ fontSize: "clamp(4.25rem, 13.5vw, 12.5rem)" }}
       >
         {d.fantasma.map((l) => (
@@ -248,7 +250,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
       </div>
 
       {/* Texto */}
-      <div className="relative z-10 flex h-full max-w-[60%] flex-col px-5 pb-12 pt-6 md:max-w-[46%] md:justify-center md:px-0 md:pb-10 md:pl-[6%] md:pt-0">
+      <div className="relative z-10 flex h-full max-w-[60%] flex-col px-5 pb-12 pt-6 md:max-w-[50%] md:justify-center md:px-4 md:pb-10 md:pt-0 lg:max-w-[44%]">
         {(() => {
           const etiqueta = d.etiqueta ? (
             <p className="text-xs font-semibold uppercase tracking-wide text-gm-durazno md:text-sm">{d.etiqueta}</p>
@@ -281,7 +283,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
       </div>
 
       {/* Tendedero */}
-      <div className="absolute inset-0 md:inset-auto md:right-[7%] md:top-1/2 md:w-[50%] lg:w-[52%] md:max-w-[760px] md:-translate-y-1/2 md:aspect-[570/450]">
+      <div className="absolute inset-0 md:inset-auto md:right-4 md:top-1/2 md:w-[50%] lg:w-[58%] md:max-w-[760px] md:-translate-y-1/2 md:aspect-[570/450]">
         {/* PC: una cuerda con hasta 3 piezas. Móvil: dos cuerdas cortas, una pieza en cada una. */}
         <TendederoPiezas variante="pc" piezas={d.piezas} className="hidden md:block inset-x-0 top-[14%]" />
         <TendederoPiezas variante="movil" indice={0} piezas={d.piezas.slice(0, 1)} className="md:hidden right-1 top-3 w-[48%]" />
@@ -295,6 +297,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
             <span className="mt-1 text-xs font-bold leading-none lg:text-lg">{d.insignia.valor}</span>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

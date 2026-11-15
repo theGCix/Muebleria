@@ -5,12 +5,13 @@ import { useHayTestimonios } from "@/hooks/useResenasDestacadas";
 import { useHayGaleria } from "@/hooks/useGaleriaClientes";
 import { useHayProyectos } from "@/hooks/useProyectos";
 
-export function Footer() {
+/** `pegado`: sin el margen superior de 5rem (el home termina en una banda de color y no quiere una tira vacía antes del pie). */
+export function Footer({ pegado = false }: { pegado?: boolean } = {}) {
   const hayTestimonios = useHayTestimonios();
   const hayGaleria = useHayGaleria();
   const hayProyectos = useHayProyectos();
   return (
-    <footer className="mt-20 bg-primary text-primary-foreground">
+    <footer className={`${pegado ? "" : "mt-20"} bg-primary text-primary-foreground`}>
       <div className="container mx-auto px-6 py-16">
         <div className="grid md:grid-cols-4 gap-10">
           <div className="md:col-span-2">

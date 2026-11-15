@@ -52,7 +52,7 @@ export function ColeccionDestacada() {
       return {
         key: p.id,
         nombre: p.nombre,
-        foto: p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w: 480, h: 600 }) : p.imagen_url,
+        foto: p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w: 720, h: 540 }) : p.imagen_url,
         detalle: fmtPEN(info.precioFinal),
         etiqueta: info.activa ? `-${Math.round(p.descuento_porcentaje ?? 0)}%` : null,
         cta: "Ver pieza",
@@ -98,7 +98,7 @@ export function ColeccionDestacada() {
           onPointerUp={alSubir}
           className="mt-4 touch-pan-y select-none rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
-          <div className="relative h-[17.5rem] overflow-hidden [perspective:900px] md:h-[23rem]">
+          <div className="relative h-[14rem] overflow-hidden [perspective:900px] md:h-[20rem]">
             <button type="button" aria-label="Pieza anterior" onClick={() => ir(-1)} className={`${FLECHA} left-2 md:left-6`}>
               <ChevronLeft className="h-5 w-5" aria-hidden />
             </button>
@@ -121,7 +121,7 @@ export function ColeccionDestacada() {
                     zIndex: p.z,
                     pointerEvents: Math.abs(o) > 1 ? "none" : "auto",
                   }}
-                  className={`absolute left-1/2 top-1/2 aspect-[4/5] w-[9.5rem] overflow-hidden rounded-2xl bg-gm-arena shadow-xl transition-[transform,opacity] duration-700 ease-out motion-reduce:transition-none md:w-[14rem] ${
+                  className={`absolute left-1/2 top-1/2 aspect-[4/3] w-[11.5rem] overflow-hidden rounded-2xl bg-gm-arena shadow-xl transition-[transform,opacity] duration-700 ease-out motion-reduce:transition-none md:w-[18rem] ${
                     lateral ? "cursor-pointer" : ""
                   }`}
                 >
@@ -129,8 +129,8 @@ export function ColeccionDestacada() {
                     <img
                       src={it.foto}
                       alt=""
-                      width={480}
-                      height={600}
+                      width={720}
+                      height={540}
                       draggable={false}
                       loading={i === 0 ? "eager" : "lazy"}
                       className="h-full w-full object-cover"
@@ -140,6 +140,11 @@ export function ColeccionDestacada() {
                       <Sofa className="h-1/3 w-1/3" aria-hidden />
                     </span>
                   )}
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 bg-gm-bosque transition-opacity duration-700 motion-reduce:transition-none"
+                    style={{ opacity: p.velo }}
+                  />
                   {it.etiqueta && (
                     <span className="absolute left-2 top-2 rounded-full bg-gm-terracota px-2.5 py-0.5 text-xs font-semibold text-white">
                       {it.etiqueta}

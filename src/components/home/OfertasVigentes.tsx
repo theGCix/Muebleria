@@ -37,8 +37,9 @@ export function OfertasVigentes() {
   if (ofertas.length === 0) return null;
 
   return (
-    <section id="ofertas" aria-labelledby="ofertas-titulo" className="scroll-mt-28 bg-gm-terracota text-white">
-      <div className="container mx-auto grid max-w-6xl items-center gap-5 px-4 py-9 md:py-10 lg:grid-cols-[auto_1fr] lg:gap-12">
+    <section id="ofertas" aria-labelledby="ofertas-titulo" className="scroll-mt-28 py-9 md:py-12">
+      <div className="container mx-auto max-w-6xl px-4">
+      <div className="grid items-center gap-5 rounded-3xl bg-gm-terracota p-5 text-white md:p-8 lg:grid-cols-[auto_1fr] lg:gap-12">
         <div>
           <h2 id="ofertas-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
             Ofertas vigentes
@@ -56,7 +57,7 @@ export function OfertasVigentes() {
         {deslizables.length > 0 && (
           <ul
             aria-label="Piezas en oferta"
-            className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
+            className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 md:-mx-8 md:px-8 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
           >
             {deslizables.map((o) => (
               <li key={o.id} className="w-[8.75rem] flex-none snap-start sm:w-44">
@@ -118,6 +119,7 @@ export function OfertasVigentes() {
             ))}
           </ul>
         )}
+      </div>
       </div>
     </section>
   );

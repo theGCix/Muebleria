@@ -1,5 +1,12 @@
 # TASK_LOG
 
+## 2026-11-15 — Home: columna única, tres fondos, panel de ofertas y ajustes del carrusel — implementado, falta revisar en navegador
+- **Decisión del dueño:** aprobó la «primera entrega» tras la valoración 7/10: ancho único (hero incluido), menos colores de fondo, panel de ofertas, ancho del banner, tira antes del pie y corrección del carrusel destacado.
+- **Qué cambió:** `PortadaCarrusel.tsx` (columna `max-w-6xl` para texto y tendedero; tendedero `lg:w-[58%]`, texto `lg:max-w-[44%]`), `OfertasVigentes.tsx` (panel terracota redondeado sobre crema; desliz móvil con sangrado al borde del panel), `ArmadorPresupuesto.tsx` (salvia), `PruebaloEnTuEspacio.tsx` (bosque), `CotizarMedida.tsx` (línea divisoria), `ClientesSatisfechos.tsx` (salvia, `max-w-6xl`), `RecienSalidos.tsx` y `PromoCategoriaBanner.tsx` (mismo ancho que el resto), `Footer.tsx` (`pegado`) y `routes/index.tsx`, `ColeccionDestacada.tsx` + `lib/coleccionDestacada.ts` + su prueba (velo y tarjetas 4:3), `RULES.md`.
+- **No se tocó:** el color del avatar (es la foto de Google de la cuenta), el corazón rojo de favoritos, la fusión real de «Pruébalo» y «A medida» (siguen siendo 2 secciones, ahora del mismo color), ni las fotos del catálogo.
+- **Verificación:** sintaxis de los 12 archivos y 10 suites de `scripts/test-*.mjs` en verde; sin build ni navegador.
+- **Pendiente / riesgos:** (1) `npx tsc --noEmit` y `npm run build`; (2) mirar el hero a 768, 1280 y 1920 px (el tendedero ahora es más pequeño a 1920 y el texto no debe tocarlo); (3) `Footer` con `pegado`: comprobar que el home no quede pegado en exceso; (4) el panel de ofertas en móvil (deslizable) y a 1024 px.
+
 ## 2026-11-15 — Home: Colección destacada (carrusel 3D) y dos títulos nuevos — implementado, falta revisar en navegador
 - **Decisión del dueño:** carrusel 3D de piezas después de «Elige tu ambiente»; las piezas las elige él en el panel «Carrusel del home» y, de momento, van automáticas las recientes. Títulos: «Tu estilo no tiene límites.» (antes «Tu presupuesto manda») y «Directo del taller a tu hogar» (antes «Recién salidos del taller»).
 - **Qué cambió:** `ColeccionDestacada.tsx` + `lib/coleccionDestacada.ts` + `scripts/test-coleccion-destacada.mjs` (5/5) nuevos; `routes/index.tsx` (lo monta), `ArmadorPresupuesto.tsx` y `RecienSalidos.tsx` (solo el texto), `RULES.md`. Archivos NUEVOS: `git add` explícito.

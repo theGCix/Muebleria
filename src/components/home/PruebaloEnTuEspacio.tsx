@@ -23,7 +23,7 @@ export function PruebaloEnTuEspacio() {
   const fotoCon = propias[1] ?? fotoPieza;
 
   return (
-    <section id="pruebalo" aria-labelledby="pruebalo-titulo" className="scroll-mt-28 bg-gm-cafe text-white">
+    <section id="pruebalo" aria-labelledby="pruebalo-titulo" className="scroll-mt-28 bg-gm-bosque text-white">
       <div className="container mx-auto grid max-w-6xl items-center gap-5 px-4 py-9 md:py-10 lg:grid-cols-[1fr_auto] lg:gap-12">
         <div className="grid grid-cols-[1fr_auto] items-center gap-4 lg:block">
           <div>
