@@ -115,7 +115,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
   return (
     <div className={cn("relative", className)}>
       {!ready ? (
-        <div className={compact ? "h-10 w-10" : "h-10 w-24"} aria-hidden="true" />
+        <div className={compact ? "h-11 w-11" : "h-11 w-24"} aria-hidden="true" />
       ) : session ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
@@ -123,7 +123,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
               ref={avatarRef}
               type="button"
               aria-label="Menú de tu cuenta"
-              className="grid h-10 w-10 place-items-center overflow-hidden rounded-full bg-primary text-sm font-semibold text-primary-foreground ring-offset-background transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="grid h-11 w-11 place-items-center overflow-hidden rounded-full bg-primary text-sm font-semibold text-primary-foreground ring-offset-background transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
@@ -181,7 +181,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
               type="button"
               onClick={openLogin}
               aria-label="Iniciar sesión"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <UserRound className="h-5 w-5" />
             </button>
@@ -189,7 +189,7 @@ export function AuthButton({ className, compact = false }: { className?: string;
           <button
             type="button"
             onClick={openLogin}
-            className="group relative inline-flex h-10 items-center gap-2 overflow-hidden rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="group relative inline-flex h-11 items-center gap-2 overflow-hidden rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <UserRound className="h-4 w-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
             <span className="relative block h-5 min-w-[4.6rem] overflow-hidden">

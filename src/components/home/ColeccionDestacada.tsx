@@ -182,7 +182,7 @@ export function ColeccionDestacada() {
               aria-label={`Ir a la pieza ${i + 1}`}
               aria-current={i === c}
               onClick={() => setCur(i)}
-              className="flex h-6 w-6 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="flex h-11 w-11 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               <span className={`h-2 w-2 rounded-full ${i === c ? "bg-white" : "bg-white/40"}`} />
             </button>

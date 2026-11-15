@@ -407,3 +407,13 @@
 - **Qué cambió:** solo `components/Footer.tsx` (fondo `bg-gm-carbon`, tile del logo con `text-gm-carbon`, enlace «A medida»). Sin dependencias nuevas.
 - **Verificación:** `tsc` con los mismos 10 errores previos, `vite build` OK, todas las suites pasan; en Chromium (1440 y 390 px) el pie queda pegado a «A medida» (0 px de hueco), sin scroll horizontal; en otras páginas conserva su margen de 5rem.
 - **Pendiente:** nada de la lista de fases; queda por decidir si se limpian del repo los `.rej` y los `.patch` sueltos.
+
+## 2026-11-15 — Auditoría UX/UI, Etapa 1 (accesibilidad rápida): P1-2, P1-3, P1-4, P1-5 — implementado, falta revisar en navegador
+- **Qué cambió:** `WishlistDrawer.tsx` y `CartDrawer.tsx` (nombre accesible «Favoritos» / «Carrito (N)» y botón de 44 px), `AuthButton.tsx` (40 → 44 px), `PortadaCarrusel.tsx` y `ColeccionDestacada.tsx` (área táctil de los puntos a 44 px, el punto visual no cambia), `ArmadorPresupuesto.tsx` («Tu estilo no tiene límites.» pasa a `text-accent-strong`), `OfertasVigentes.tsx` (texto blanco pleno sobre terracota), `product/BundleBuilder.tsx` + `product-experience.css` (la tarjeta ya no es un botón que contiene un enlace: botón de selección y enlace «Ver detalle» son hermanos), `routes/product.$handle.tsx` (`--gmx-accent-text`: el acento mezclado 70 % con negro, solo para texto), `.gitattributes` (nuevo: `eol=lf`).
+- **Sin cambios de negocio:** no se tocaron precios, carrito, checkout, pagos ni RLS.
+- **Verificación:** `vite build` OK; 10 suites `scripts/test-*.mjs` y 28/28 de `server/pagos.test.js` pasan; `tsc` mantiene los 10 errores de `types.ts` (y con ellos no revisa tipos del resto: ver P0-1). **No se probó** en navegador ni con axe después del cambio; falta confirmar que el tono del texto de acento en la ficha no pierda calidez.
+- **Pendiente:** Etapa 0 (regenerar `types.ts`; requiere que corras el comando con tu proyecto), Etapa 2 (rendimiento), decisiones P2-1, P2-3 y P2-6.
+
+## 2026-11-15 — Auditoría, Etapa 0 (cimientos) — parcial: limpieza hecha, falta regenerar `types.ts` (lo corre el dueño)
+- **Qué cambió:** se borran 15 `.patch` sueltos de entregas anteriores (siguen en el historial de git), 3 `.rej` (`PortadaCarrusel.tsx.rej`, `docs/claude/RULES.md.rej`, `TASK_LOG.md.rej`) y `test-tendedero.mjs` de la raíz (copia vieja con una ruta de importación que no resuelve desde ahí; la vigente es `scripts/test-tendedero.mjs`). `dist` entra en `.gitignore`. Los 6 componentes sin uso y `routes/CuponInput.tsx` NO se tocaron (decisión pendiente, P2-3).
+- **Pendiente (dueño):** regenerar `src/integrations/supabase/types.ts` en UTF-8 (hoy es UTF-16 con el texto de un comando fallido). Después se medirán los errores reales de `tsc` antes de clasificarlos.

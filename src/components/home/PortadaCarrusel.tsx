@@ -384,7 +384,7 @@ export function PortadaCarrusel() {
                   onClick={() => ir(i)}
                   aria-label={`Ver ${i + 1} de ${total}: ${d.titulo}`}
                   aria-current={i === idx ? "true" : undefined}
-                  className="group flex h-11 w-7 items-center justify-center focus-visible:outline-none"
+                  className="group flex h-11 w-11 items-center justify-center focus-visible:outline-none"
                 >
                   <span
                     aria-hidden

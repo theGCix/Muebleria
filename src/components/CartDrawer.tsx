@@ -125,8 +125,14 @@ export const CartDrawer = () => {
     <>
       <Sheet open={isOpen} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>
-          <Button variant="outline" size="icon" data-cart-target className="relative rounded-full border-border/60">
-            <ShoppingCart className="h-5 w-5" />
+          <Button
+            variant="outline"
+            size="icon"
+            data-cart-target
+            className="relative h-11 w-11 rounded-full border-border/60"
+            aria-label={totalItems > 0 ? `Carrito (${totalItems})` : "Carrito"}
+          >
+            <ShoppingCart aria-hidden className="h-5 w-5" />
             {totalItems > 0 && (
               <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-accent-strong text-accent-foreground">
                 {totalItems}

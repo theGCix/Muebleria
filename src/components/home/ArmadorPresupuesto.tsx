@@ -64,7 +64,7 @@ export function ArmadorPresupuesto() {
     <section id="presupuesto" aria-labelledby="presupuesto-titulo" className="bg-gm-salvia">
       <div className="container mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 md:py-16 lg:grid-cols-[1fr_1.1fr] lg:gap-14">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gm-terracota md:text-sm">Tu estilo no tiene límites.</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-accent-strong md:text-sm">Tu estilo no tiene límites.</p>
           <h2
             id="presupuesto-titulo"
             className="mt-2 font-display font-normal leading-[1.15] tracking-tight text-foreground md:mt-3"

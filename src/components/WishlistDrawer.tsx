@@ -65,10 +65,11 @@ export function WishlistDrawer() {
           <Button
             variant="outline"
             size="icon"
-            className="relative rounded-full border-border/60"
+            className="relative h-11 w-11 rounded-full border-border/60"
+            aria-label={items.length > 0 ? `Favoritos (${items.length})` : "Favoritos"}
             onClick={handleOpenDrawer}
           >
-            <Heart className={`h-5 w-5 transition-colors ${items.length > 0 ? "fill-destructive text-destructive" : ""}`} />
+            <Heart aria-hidden className={`h-5 w-5 transition-colors ${items.length > 0 ? "fill-destructive text-destructive" : ""}`} />
             {items.length > 0 && (
               <Badge className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs bg-destructive text-destructive-foreground">
                 {items.length}

@@ -142,7 +142,7 @@
 .gmx-viz { width: 100%; height: auto; display: block; border-radius: 8px; background: var(--gm-cream); }
 .gmx-readout { font-size: 13px; color: var(--gm-mid); line-height: 1.6; margin-top: 12px; }
 .gmx-readout b { color: var(--gm-walnut); }
-.gmx-readout a { color: var(--gmx-accent); text-decoration: underline; }
+.gmx-readout a { color: var(--gmx-accent-text); text-decoration: underline; }
 
 .gmx-switch {
   display: inline-flex; align-items: center; gap: 10px; cursor: pointer; text-align: left;
@@ -260,9 +260,18 @@
   display: flex; flex-direction: column;
 }
 .gmx-bcard:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(41,40,36,.10); }
-.gmx-bcard[aria-pressed="true"] { border-color: var(--gmx-accent); }
+.gmx-bcard[data-selected="true"] { border-color: var(--gmx-accent); }
 .gmx-bcard.fixed { cursor: default; border-color: var(--gm-walnut); }
 .gmx-bcard.fixed:hover { transform: none; box-shadow: none; }
+.gmx-bpick {
+  display: flex; flex-direction: column; flex: 1; width: 100%; text-align: left; padding: 0;
+  background: none; border: 0; cursor: pointer; color: inherit; font: inherit;
+}
+.gmx-bpick:focus-visible { outline: 2px solid var(--gmx-accent-text); outline-offset: -4px; }
+.gmx-blink {
+  display: block; padding: 0 14px 14px; font-size: 12px; text-decoration: underline;
+  color: var(--gmx-accent-text); min-height: 44px; line-height: 44px; margin-top: -8px;
+}
 .gmx-bimg { aspect-ratio: 4/3; background: var(--muted); overflow: hidden; }
 .gmx-bimg img { width: 100%; height: 100%; object-fit: cover; }
 .gmx-bbody { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
@@ -273,7 +282,7 @@
   display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
   background: rgba(255,255,255,.92); color: var(--gm-muted); border: 1px solid var(--gm-border);
 }
-.gmx-bcard[aria-pressed="true"] .gmx-bcheck { background: var(--gmx-accent); color: #fff; border-color: var(--gmx-accent); }
+.gmx-bcard[data-selected="true"] .gmx-bcheck { background: var(--gmx-accent); color: #fff; border-color: var(--gmx-accent); }
 .gmx-bcard.fixed .gmx-bcheck { background: var(--gm-walnut); color: #fff; border-color: var(--gm-walnut); }
 .gmx-bar {
   margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;

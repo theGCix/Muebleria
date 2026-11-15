@@ -44,7 +44,7 @@ export function OfertasVigentes() {
           <h2 id="ofertas-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
             Ofertas vigentes
           </h2>
-          <p className="mt-1 text-sm text-white/90">{textoPiezasConDescuento(ofertas.length)}</p>
+          <p className="mt-1 text-sm text-white">{textoPiezasConDescuento(ofertas.length)}</p>
           <Link
             to="/catalogo"
             search={{ oferta: true }}

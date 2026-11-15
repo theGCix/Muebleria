@@ -16,6 +16,7 @@
 14. UX móvil (360–414 px): controles táctiles ≥ 44 px y contraste ≥ 4.5:1.
 15. Niubiz: no asumir parámetros del SDK ni medios habilitados; pedir la documentación o confirmación. No anunciar medios de pago que el cobro no ofrezca. Medios confirmados por el dueño (2026-11-05): tarjetas, Yape, Plin y PagoEfectivo (`src/lib/mediosPago.ts`).
 16. Entrega de código como patch (`git apply`). Los archivos NUEVOS (p. ej. `public/pagos/*.svg`) van dentro del patch; revisar `git status` antes del commit.
+17. `src/integrations/supabase/types.ts` debe generarse siempre en UTF-8 (en PowerShell, `>` escribe UTF-16: usar `Out-File -Encoding utf8`). Con `npx` usar `--yes` para que no pida confirmación.
 
 ## Reglas de negocio (H1)
 - Urgencia de stock solo si stock ≤ 3.
@@ -137,3 +138,10 @@
 - **Botón de WhatsApp (fase 4) — RETIRADO (2026-11-15):** el dueño pidió quitar el círculo verde de llamada del home en móvil; `BotonWhatsApp` ya no se monta en `routes/index.tsx` (el archivo queda sin montar). Vuelve a regir la regla de «WhatsApp neutro» (`.gmx-wa`) para el botón flotante.
 - **Tendedero de la portada (2026-11-15):** en las diapositivas, las piezas ya no son un collage de tarjetas sino fotos colgadas de una cuerda de pita con pinzas (`components/home/TendederoPiezas.tsx`, sustituye a `TarjetaPieza`). PC: una cuerda con hasta 3 piezas, con ≥ 11 % de aire entre ellas y casi al unísono para que no se tapen al balancearse (ángulo máx. 18°). Móvil: dos cuerdas cortas, una pieza en cada una, solo el precio (sin nombre). Lógica pura en `lib/tendedero.ts` (prueba `node scripts/test-tendedero.mjs`); movimiento compartido en `hooks/useInclinacion.ts` (inclinación del celular, sacudidas y toque; iPhone pide permiso con el primer toque sobre la cuerda). Con «reducir movimiento» las piezas quedan quietas y apenas ladeadas. El precio de cada foto es el precio final real (`ofertaInfo`). Tokens nuevos `--gm-madera` (pinzas) y `--gm-pita` (cuerda). El reloj de la campaña no cambia.
 - **Footer (fase 5):** `components/Footer.tsx` pasa a carbón (`bg-gm-carbon`, #2B2A27, el token que ya existía para el pie), como el boceto v3: así se distingue de las bandas bosque de «Pruébalo» y «A medida» que lo preceden. El contenido no cambia (dirección, horario, WhatsApp, Empresa, Legal, medios de pago, redes); se añade el enlace «A medida» en «Empresa». Aplica a todas las páginas. `pegado` sigue igual.
+
+## Reglas visuales (Auditoría, Etapa 1)
+- **Botones solo ícono:** siempre con `aria-label` (favoritos y carrito incluyen el conteo); íconos decorativos con `aria-hidden`.
+- **Áreas táctiles ≥ 44 px** también en los puntos de los carruseles (el punto visual puede ser pequeño; el botón no).
+- **No anidar interactivos:** un botón nunca contiene un enlace (ver `BundleBuilder`: contenedor + botón + enlace hermanos).
+- **Acento en la ficha:** `--gmx-accent` solo para fondos y bordes; para texto, `--gmx-accent-text`.
+- **Fin de línea:** `.gitattributes` fija `eol=lf`.

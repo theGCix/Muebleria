@@ -33,3 +33,5 @@ server/.env
 *.sln
 *.sw?
 public/sitemap.xml
+
+dist

@@ -63,7 +63,7 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
   return (
     <section className="gmx-bundle">
       <div className="gm-container">
-        <p className="gm-eyebrow" style={{ color: "var(--gmx-accent)" }}>Completa el ambiente</p>
+        <p className="gm-eyebrow" style={{ color: "var(--gmx-accent-text)" }}>Completa el ambiente</p>
         <h2 className="gm-section-title">{profile.bundleTitle}</h2>
         <p className="gm-section-sub">{profile.bundleSub}</p>
 
@@ -79,19 +79,21 @@ export function BundleBuilder({ base, profile }: { base: Base; profile: ProductP
           </div>
 
           {items.map(({ p, img, precio }) => (
-            <button key={p.id} type="button" className="gmx-bcard" aria-pressed={sel.has(p.id)} onClick={() => toggle(p.id)}>
-              <span className="gmx-bcheck">{sel.has(p.id) ? "✓" : "+"}</span>
-              <div className="gmx-bimg">{img && <img src={img} alt="" loading="lazy" />}</div>
-              <div className="gmx-bbody">
-                <div className="gmx-bname">{p.nombre}</div>
-                {p.categoria && <div style={{ fontSize: 12, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
-                <div className="gmx-bprice">{fmtPEN(precio)}</div>
-                <Link to="/product/$handle" params={{ handle: p.id }} onClick={(e) => e.stopPropagation()}
-                  style={{ fontSize: 12, color: "var(--gmx-accent)", textDecoration: "underline", marginTop: 2 }}>
-                  Ver detalle
-                </Link>
-              </div>
-            </button>
+            // La tarjeta es un contenedor: el botón de selección y el enlace son hermanos (no se anidan).
+            <div key={p.id} className="gmx-bcard" data-selected={sel.has(p.id)}>
+              <button type="button" className="gmx-bpick" aria-pressed={sel.has(p.id)} onClick={() => toggle(p.id)}>
+                <span className="gmx-bcheck" aria-hidden>{sel.has(p.id) ? "✓" : "+"}</span>
+                <div className="gmx-bimg">{img && <img src={img} alt="" loading="lazy" />}</div>
+                <div className="gmx-bbody">
+                  <div className="gmx-bname">{p.nombre}</div>
+                  {p.categoria && <div style={{ fontSize: 12, color: "var(--gm-muted)", textTransform: "capitalize" }}>{p.categoria}</div>}
+                  <div className="gmx-bprice">{fmtPEN(precio)}</div>
+                </div>
+              </button>
+              <Link to="/product/$handle" params={{ handle: p.id }} className="gmx-blink">
+                Ver detalle<span className="sr-only">: {p.nombre}</span>
+              </Link>
+            </div>
           ))}
         </div>
 

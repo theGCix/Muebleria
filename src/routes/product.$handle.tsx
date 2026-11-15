@@ -942,7 +942,7 @@ function ProductView({ product: base }: { product: ProductData }) {
 
       <div
         className="min-h-screen bg-background gmx-page"
-        style={{ "--gmx-accent": profile.accent, "--gmx-accent-soft": profile.accentSoft } as React.CSSProperties}
+        style={{ "--gmx-accent": profile.accent, "--gmx-accent-soft": profile.accentSoft, "--gmx-accent-text": `color-mix(in srgb, ${profile.accent} 70%, #000)` } as React.CSSProperties}
       >
         <Header />
 
