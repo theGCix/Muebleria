@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"; 
 import { useEffect, useRef } from "react";
 import { Header } from "@/components/Header"; 
+import { BeneficiosFranja } from "@/components/BeneficiosFranja";
 import { PortadaCarrusel } from "@/components/home/PortadaCarrusel";
 
 import { ElegirAmbiente } from "@/components/home/ElegirAmbiente";
@@ -44,9 +45,9 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <ColeccionDestacada /> <ArmadorPresupuesto /> <OfertasVigentes /> <HechoEnTaller /> <RecienSalidos />
+     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <RecienSalidos /> <ColeccionDestacada /> <ArmadorPresupuesto /> <OfertasVigentes /> <HechoEnTaller />
        {/* Fuera del boceto, se conservan por ahora (el menú apunta a #combos y el pie a #testimonios) */}
        <CombosSection /> <PromoCategoriaBanner /> <Testimonials /> <ClientesSatisfechos />
-       <PruebaloEnTuEspacio /> <CotizarMedida />
+       <PruebaloEnTuEspacio /> <CotizarMedida /> <BeneficiosFranja />
      </main> 
      <Footer pegado /></div> ); }

@@ -38,6 +38,7 @@ const reducirMovimiento = () =>
 
 type Destino =
   | { tipo: "oferta" }
+  | { tipo: "catalogo" }
   | { tipo: "categoria"; slug: string }
   | { tipo: "hash"; hash: string };
 
@@ -49,7 +50,9 @@ interface Pieza {
 }
 
 interface Diapositiva {
-  id: DiapositivaId;
+  id: DiapositivaId | `hero-${number}`;
+  /** Foto de fondo a todo el ancho (src/assets/portada/00-hero-N): usa el diseño del mockup en vez del tendedero. */
+  fondo?: string;
   pestana: string;
   etiqueta: string | null; // «TERMINA EN 13 DÍAS»
   reloj?: boolean; // true: la etiqueta se reemplaza por el reloj visual de la campaña (CampanaTicker)
@@ -193,17 +196,40 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
           };
       }
     });
-    return { lista, hayCampana };
+    // Fotos grandes del mockup (00-hero-1, 00-hero-2…): una diapositiva por foto, antes de las demás. Sin fotos, no cambia nada.
+    const heros: Diapositiva[] = fotosPortada("00-hero").map((fondo, i) => ({
+      id: `hero-${i + 1}` as const,
+      fondo,
+      pestana: i === 0 ? "Tu hogar" : `Colección ${i + 1}`,
+      etiqueta: null,
+      titulo: "Tu hogar merece muebles extraordinarios",
+      fantasma: [],
+      pre: "",
+      valor: "",
+      detalle: "Hechos a mano en nuestro taller, con entrega a todo el Perú.",
+      boton: "Explorar catálogo",
+      destino: { tipo: "catalogo" },
+      nota: null,
+      piezas: [],
+      insignia: null,
+    }));
+    return { lista: [...heros, ...lista], hayCampana };
   }, [campana, catalogo, ahora]);
 }
 
 function Boton({ d, texto }: { d: Destino; texto: string }) {
   const cls =
-    "inline-flex min-h-[48px] items-center gap-2 rounded-full bg-white px-6 text-sm font-semibold uppercase tracking-wide text-gm-bosque shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque md:min-h-[56px] md:px-8";
+    "inline-flex min-h-[48px] items-center gap-2 rounded-full bg-gm-tan px-6 text-sm font-semibold uppercase tracking-wide text-gm-bosque shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque md:min-h-[56px] md:px-8";
   const flecha = <ArrowRight className="h-4 w-4" aria-hidden />;
   if (d.tipo === "categoria")
     return (
       <Link to="/categoria/$slug" params={{ slug: d.slug }} className={cls}>
+        {texto} {flecha}
+      </Link>
+    );
+  if (d.tipo === "catalogo")
+    return (
+      <Link to="/catalogo" className={cls}>
         {texto} {flecha}
       </Link>
     );
@@ -221,6 +247,50 @@ function Boton({ d, texto }: { d: Destino; texto: string }) {
 }
 
 function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; indice: number; total: number }) {
+  if (d.fondo) {
+    // Diseño del mockup: foto a todo el ancho, degradado marino a la izquierda, título, línea de apoyo y dos botones.
+    return (
+      <div
+        id={`portada-slide-${d.id}`}
+        role="tabpanel"
+        aria-roledescription="diapositiva"
+        aria-label={`${indice + 1} de ${total}: ${d.titulo}`}
+        aria-hidden={!activa}
+        // @ts-expect-error `inert` aún no está en los tipos de React 18
+        inert={activa ? undefined : ""}
+        className={`relative col-start-1 row-start-1 h-full transition-opacity duration-700 motion-reduce:transition-none ${
+          activa ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
+        <img
+          src={d.fondo}
+          alt=""
+          fetchPriority={indice === 0 ? "high" : "auto"}
+          loading={indice === 0 ? "eager" : "lazy"}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-gm-carbon/90 via-gm-carbon/55 to-gm-carbon/10 md:via-gm-carbon/40 md:to-transparent" />
+        <div className="relative mx-auto flex h-full w-full max-w-6xl flex-col justify-center px-5 pb-12 md:px-4 md:pb-8">
+          <h2
+            className="max-w-[14ch] font-display font-bold leading-[1.05] tracking-tight text-white md:max-w-[16ch]"
+            style={{ fontSize: "clamp(2rem, 5vw, 4.25rem)" }}
+          >
+            {d.titulo}
+          </h2>
+          <p className="mt-4 max-w-md text-base text-white md:mt-5 md:text-lg">{d.detalle}</p>
+          <div className="mt-6 flex flex-wrap items-center gap-3 md:mt-8">
+            <Boton d={d.destino} texto={d.boton} />
+            <Link
+              to="/nosotros"
+              className="inline-flex min-h-[48px] items-center rounded-full border border-white/70 px-6 text-sm font-semibold text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-carbon"
+            >
+              Conocer más
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       id={`portada-slide-${d.id}`}

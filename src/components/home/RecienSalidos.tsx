@@ -20,9 +20,17 @@ export function RecienSalidos() {
   return (
     <section id="catalogo" aria-labelledby="recientes-titulo" className="scroll-mt-28 py-10 md:py-14">
       <div className="container mx-auto max-w-6xl px-4">
-        <h2 id="recientes-titulo" className="t-seccion">
-          Directo del taller a tu hogar
-        </h2>
+        <div className="flex items-end justify-between gap-4">
+          <h2 id="recientes-titulo" className="t-seccion">
+            Directo del taller a tu hogar
+          </h2>
+          <Link
+            to="/catalogo"
+            className="hidden min-h-[44px] items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
+          >
+            Ver todos <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
 
         {isLoading ? (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-4" aria-hidden>

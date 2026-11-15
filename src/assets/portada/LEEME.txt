@@ -1,11 +1,14 @@
 Fotos propias de la portada v3 (components/home/PortadaCarrusel.tsx, lib/portadaFotos.ts)
 
 Copia aquí las fotos (.jpg, .jpeg, .png, .webp o .avif). El nombre decide dónde va:
+  00-hero-1, 00-hero-2 ...                FOTO GRANDE de la portada (como el mockup): una diapositiva por foto, antes de las demás.
+                                          Horizontal 16:9 (2400 × 1350 px, JPG/WebP calidad 80, ≤ 400 KB); sala armada con luz natural,
+                                          el sujeto a la DERECHA (el texto va a la izquierda sobre un degradado) y SIN texto en la foto.
   01-locura-1, 01-locura-2, 01-locura-3   las 3 tarjetas de «Días de locura» (arriba, derecha, abajo)
   02-salas-1 .. 02-salas-3                tarjetas de la diapositiva «Salas»
   03-a-medida-1 .. 03-a-medida-3          tarjetas de «Hecho a tu medida»
   04-pruebalo-1 .. 04-pruebalo-3          tarjetas de «Pruébalo en tu espacio»
-  taller.jpg                              sección «Hecho en nuestro taller» (fase 3)
+  taller.jpg                              sección «Hecho en nuestro taller» y banda «Calidad que se adapta a ti» (a la derecha, difuminada)
 Sin foto propia, cada tarjeta usa la foto real de una pieza del catálogo (con su nombre y enlace a la ficha).
 
 Recomendado:

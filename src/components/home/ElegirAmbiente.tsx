@@ -1,5 +1,5 @@
 // src/components/home/ElegirAmbiente.tsx
-// «Elige tu ambiente» (boceto v3): collage con Salas grande a la izquierda y 4 ambientes a la derecha (2×2); en móvil,
+// «Elige tu ambiente» (mockup azul marino): 5 fichas iguales en una fila con foto y nombre; en móvil,
 // 2×2 con Salas, Comedores, Recámaras y Separadores (el boceto móvil no muestra Accesorios; sigue en «Ver todas»).
 // Las categorías salen de lib/categories.ts; el conteo y la foto, de las piezas reales (misma consulta y caché que el
 // resto del home). En la vista pública «Muebles» se llama «Salas» y «Separadores de ambiente», «Separadores» (boceto).
@@ -15,11 +15,11 @@ const ETIQUETA: Record<string, string> = { muebles: "Salas", separadores: "Separ
 
 // Orden del DOM = orden móvil. En PC cada tarjeta ocupa su lugar del boceto con posiciones explícitas.
 const TARJETAS = [
-  { slug: "muebles", fondo: "bg-gm-arena", sitio: "md:col-start-1 md:row-start-1 md:row-span-2", movil: true },
-  { slug: "comedores", fondo: "bg-gm-salvia", sitio: "md:col-start-2 md:row-start-1", movil: true },
-  { slug: "recamaras", fondo: "bg-gm-salvia", sitio: "md:col-start-2 md:row-start-2", movil: true },
-  { slug: "separadores", fondo: "bg-gm-arena", sitio: "md:col-start-3 md:row-start-1", movil: true },
-  { slug: "accesorios", fondo: "bg-gm-arena", sitio: "md:col-start-3 md:row-start-2", movil: false },
+  { slug: "muebles", fondo: "bg-gm-arena", sitio: "", movil: true },
+  { slug: "comedores", fondo: "bg-gm-salvia", sitio: "", movil: true },
+  { slug: "recamaras", fondo: "bg-gm-salvia", sitio: "", movil: true },
+  { slug: "separadores", fondo: "bg-gm-arena", sitio: "", movil: true },
+  { slug: "accesorios", fondo: "bg-gm-arena", sitio: "", movil: false },
 ] as const;
 
 export function ElegirAmbiente() {
@@ -42,9 +42,12 @@ export function ElegirAmbiente() {
   return (
     <section id="categorias" aria-labelledby="ambientes-titulo" className="container mx-auto max-w-6xl px-4 py-10 md:py-14">
       <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
-        <h2 id="ambientes-titulo" className="t-seccion text-foreground">
-          Elige tu ambiente
-        </h2>
+        <div>
+          <h2 id="ambientes-titulo" className="t-seccion text-foreground">
+            Elige tu ambiente
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground md:text-base">Encuentra el estilo perfecto para cada espacio.</p>
+        </div>
         <Link
           to="/catalogo"
           className="hidden min-h-[44px] items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:inline-flex"
@@ -53,7 +56,7 @@ export function ElegirAmbiente() {
         </Link>
       </div>
 
-      <ul className="grid grid-cols-2 gap-3 md:grid-cols-[1.5fr_1fr_1fr] md:grid-rows-2 md:gap-4 md:h-[420px] lg:h-[460px]">
+      <ul className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
         {TARJETAS.map(({ slug, fondo, sitio, movil }) => {
           const cat = getCategoria(slug);
           if (!cat) return null;
@@ -64,7 +67,7 @@ export function ElegirAmbiente() {
               <Link
                 to="/categoria/$slug"
                 params={{ slug }}
-                className={`group relative block aspect-[226/190] overflow-hidden rounded-2xl md:aspect-auto md:h-full md:rounded-[28px] ${fondo} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+                className={`group relative block aspect-[226/190] overflow-hidden rounded-2xl md:aspect-[3/4] md:rounded-[24px] ${fondo} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
               >
                 {foto ? (
                   <img
