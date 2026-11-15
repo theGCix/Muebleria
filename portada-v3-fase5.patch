@@ -1,0 +1,49 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index dc6e94a..053c342 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -136,3 +136,4 @@
+ - **Header y menú (fase 4):** `components/Header.tsx` sigue el boceto v3: barra superior bosque (`bg-gm-bosque`, `CampanaTicker`), fila de logo + buscador («¿Qué mueble estás buscando?») + accesos, y debajo un menú de secciones (`<nav aria-label="Secciones de la tienda">`). PC: Salas, Comedores, Recámaras, Separadores, A medida | Ofertas (terracota, negrita), Nosotros. Móvil: Salas, Comedores, Recámaras y «Más» (abre el menú anterior con el acordeón de categorías y subcategorías, A medida, Nosotros, Combos y Ofertas); el botón de hamburguesa desaparece. En la tienda «Muebles» se llama «Salas» (`NAV_CATEGORIAS`). Son enlaces normales (teclado y `aria-current` en la categoría o sección actual); controles táctiles ≥ 44 px. «Ofertas» y «Combos» solo aparecen si existen (como antes). `CategoryMegaMenu` queda sin montar (no se borra).
+ - **Botón de WhatsApp (fase 4) — RETIRADO (2026-11-15):** el dueño pidió quitar el círculo verde de llamada del home en móvil; `BotonWhatsApp` ya no se monta en `routes/index.tsx` (el archivo queda sin montar). Vuelve a regir la regla de «WhatsApp neutro» (`.gmx-wa`) para el botón flotante.
+ - **Tendedero de la portada (2026-11-15):** en las diapositivas, las piezas ya no son un collage de tarjetas sino fotos colgadas de una cuerda de pita con pinzas (`components/home/TendederoPiezas.tsx`, sustituye a `TarjetaPieza`). PC: una cuerda con hasta 3 piezas, con ≥ 11 % de aire entre ellas y casi al unísono para que no se tapen al balancearse (ángulo máx. 18°). Móvil: dos cuerdas cortas, una pieza en cada una, solo el precio (sin nombre). Lógica pura en `lib/tendedero.ts` (prueba `node scripts/test-tendedero.mjs`); movimiento compartido en `hooks/useInclinacion.ts` (inclinación del celular, sacudidas y toque; iPhone pide permiso con el primer toque sobre la cuerda). Con «reducir movimiento» las piezas quedan quietas y apenas ladeadas. El precio de cada foto es el precio final real (`ofertaInfo`). Tokens nuevos `--gm-madera` (pinzas) y `--gm-pita` (cuerda). El reloj de la campaña no cambia.
++- **Footer (fase 5):** `components/Footer.tsx` pasa a carbón (`bg-gm-carbon`, #2B2A27, el token que ya existía para el pie), como el boceto v3: así se distingue de las bandas bosque de «Pruébalo» y «A medida» que lo preceden. El contenido no cambia (dirección, horario, WhatsApp, Empresa, Legal, medios de pago, redes); se añade el enlace «A medida» en «Empresa». Aplica a todas las páginas. `pegado` sigue igual.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 7030e1d..9500314 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -402,3 +402,8 @@
+ - **Verificación:** `tsc` sin errores nuevos, `vite build` OK, todas las suites `scripts/test-*.mjs` pasan. Chromium con productos simulados a 1440 y 390 px: sin scroll horizontal ni errores; enlaces a `/categoria/…`, `/#a-medida`, `/#ofertas` y `/nosotros`; «Más» abre y cierra; `aria-current` en la categoría abierta; el WhatsApp solo se ve en móvil y en el home. **No se probó** con Playfair, ni iOS Safari, ni con sesión iniciada (el botón de cuenta no se tocó).
+ - **Diferencias con el boceto:** la barra superior móvil es una franja completa, no la píldora (la píldora rompería el desplazamiento de 32 px que oculta la barra al bajar); no hay mega-menú de subcategorías en PC (se llega a ellas desde la página de categoría y desde «Más» en móvil); «Combos» sigue como enlace si hay combos, aunque no está en el boceto.
+ - **Pendiente:** fase 5 (footer). Decisiones del dueño abiertas: Combos/Testimonios/Clientes en el home; «Probar ahora» abre una ficha; WhatsApp verde sobre el asistente (dos círculos en móvil).
++
++## 2026-11-15 — Portada v3 (fase 5): footer en carbón — implementado, falta revisar con datos reales
++- **Qué cambió:** solo `components/Footer.tsx` (fondo `bg-gm-carbon`, tile del logo con `text-gm-carbon`, enlace «A medida»). Sin dependencias nuevas.
++- **Verificación:** `tsc` con los mismos 10 errores previos, `vite build` OK, todas las suites pasan; en Chromium (1440 y 390 px) el pie queda pegado a «A medida» (0 px de hueco), sin scroll horizontal; en otras páginas conserva su margen de 5rem.
++- **Pendiente:** nada de la lista de fases; queda por decidir si se limpian del repo los `.rej` y los `.patch` sueltos.
+diff --git a/src/components/Footer.tsx b/src/components/Footer.tsx
+index 626ae38..f0aa1fb 100644
+--- a/src/components/Footer.tsx
++++ b/src/components/Footer.tsx
+@@ -11,12 +11,12 @@ export function Footer({ pegado = false }: { pegado?: boolean } = {}) {
+   const hayGaleria = useHayGaleria();
+   const hayProyectos = useHayProyectos();
+   return (
+-    <footer className={`${pegado ? "" : "mt-20"} bg-primary text-primary-foreground`}>
++    <footer className={`${pegado ? "" : "mt-20"} bg-gm-carbon text-primary-foreground`}>
+       <div className="container mx-auto px-6 py-16">
+         <div className="grid md:grid-cols-4 gap-10">
+           <div className="md:col-span-2">
+             <div className="flex items-center gap-2 mb-4">
+-              <div className="h-9 w-9 rounded-md bg-primary-foreground flex items-center justify-center text-primary font-display font-bold">
++              <div className="h-9 w-9 rounded-md bg-primary-foreground flex items-center justify-center text-gm-carbon font-display font-bold">
+                 G
+               </div>
+               <span className="font-display text-xl font-semibold">G&amp;M Mueblería</span>
+@@ -56,6 +56,7 @@ export function Footer({ pegado = false }: { pegado?: boolean } = {}) {
+               {hayGaleria && (
+                 <li><Link to="/testimonios" className="hover:text-primary-foreground">Galería de clientes</Link></li>
+               )}
++              <li><Link to="/" hash="a-medida" className="hover:text-primary-foreground">A medida</Link></li>
+               <li><a href="#categorias" className="hover:text-primary-foreground">Categorías</a></li>
+               <li><a href="#catalogo" className="hover:text-primary-foreground">Catálogo</a></li>
+               {hayTestimonios && (

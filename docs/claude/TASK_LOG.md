@@ -402,3 +402,8 @@
 - **Verificación:** `tsc` sin errores nuevos, `vite build` OK, todas las suites `scripts/test-*.mjs` pasan. Chromium con productos simulados a 1440 y 390 px: sin scroll horizontal ni errores; enlaces a `/categoria/…`, `/#a-medida`, `/#ofertas` y `/nosotros`; «Más» abre y cierra; `aria-current` en la categoría abierta; el WhatsApp solo se ve en móvil y en el home. **No se probó** con Playfair, ni iOS Safari, ni con sesión iniciada (el botón de cuenta no se tocó).
 - **Diferencias con el boceto:** la barra superior móvil es una franja completa, no la píldora (la píldora rompería el desplazamiento de 32 px que oculta la barra al bajar); no hay mega-menú de subcategorías en PC (se llega a ellas desde la página de categoría y desde «Más» en móvil); «Combos» sigue como enlace si hay combos, aunque no está en el boceto.
 - **Pendiente:** fase 5 (footer). Decisiones del dueño abiertas: Combos/Testimonios/Clientes en el home; «Probar ahora» abre una ficha; WhatsApp verde sobre el asistente (dos círculos en móvil).
+
+## 2026-11-15 — Portada v3 (fase 5): footer en carbón — implementado, falta revisar con datos reales
+- **Qué cambió:** solo `components/Footer.tsx` (fondo `bg-gm-carbon`, tile del logo con `text-gm-carbon`, enlace «A medida»). Sin dependencias nuevas.
+- **Verificación:** `tsc` con los mismos 10 errores previos, `vite build` OK, todas las suites pasan; en Chromium (1440 y 390 px) el pie queda pegado a «A medida» (0 px de hueco), sin scroll horizontal; en otras páginas conserva su margen de 5rem.
+- **Pendiente:** nada de la lista de fases; queda por decidir si se limpian del repo los `.rej` y los `.patch` sueltos.

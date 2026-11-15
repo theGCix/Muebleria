@@ -11,12 +11,12 @@ export function Footer({ pegado = false }: { pegado?: boolean } = {}) {
   const hayGaleria = useHayGaleria();
   const hayProyectos = useHayProyectos();
   return (
-    <footer className={`${pegado ? "" : "mt-20"} bg-primary text-primary-foreground`}>
+    <footer className={`${pegado ? "" : "mt-20"} bg-gm-carbon text-primary-foreground`}>
       <div className="container mx-auto px-6 py-16">
         <div className="grid md:grid-cols-4 gap-10">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-9 w-9 rounded-md bg-primary-foreground flex items-center justify-center text-primary font-display font-bold">
+              <div className="h-9 w-9 rounded-md bg-primary-foreground flex items-center justify-center text-gm-carbon font-display font-bold">
                 G
               </div>
               <span className="font-display text-xl font-semibold">G&amp;M Mueblería</span>
@@ -56,6 +56,7 @@ export function Footer({ pegado = false }: { pegado?: boolean } = {}) {
               {hayGaleria && (
                 <li><Link to="/testimonios" className="hover:text-primary-foreground">Galería de clientes</Link></li>
               )}
+              <li><Link to="/" hash="a-medida" className="hover:text-primary-foreground">A medida</Link></li>
               <li><a href="#categorias" className="hover:text-primary-foreground">Categorías</a></li>
               <li><a href="#catalogo" className="hover:text-primary-foreground">Catálogo</a></li>
               {hayTestimonios && (
