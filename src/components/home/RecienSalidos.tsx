@@ -21,7 +21,7 @@ export function RecienSalidos() {
     <section id="catalogo" aria-labelledby="recientes-titulo" className="scroll-mt-28 px-4 py-10 md:py-14">
       <div className="container mx-auto max-w-6xl">
         <h2 id="recientes-titulo" className="t-seccion">
-          Recién salidos del taller
+          Directo del taller a tu hogar
         </h2>
 
         {isLoading ? (

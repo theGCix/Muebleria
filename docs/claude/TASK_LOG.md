@@ -1,5 +1,10 @@
 # TASK_LOG
 
+## 2026-11-15 — Home: Colección destacada (carrusel 3D) y dos títulos nuevos — implementado, falta revisar en navegador
+- **Decisión del dueño:** carrusel 3D de piezas después de «Elige tu ambiente»; las piezas las elige él en el panel «Carrusel del home» y, de momento, van automáticas las recientes. Títulos: «Tu estilo no tiene límites.» (antes «Tu presupuesto manda») y «Directo del taller a tu hogar» (antes «Recién salidos del taller»).
+- **Qué cambió:** `ColeccionDestacada.tsx` + `lib/coleccionDestacada.ts` + `scripts/test-coleccion-destacada.mjs` (5/5) nuevos; `routes/index.tsx` (lo monta), `ArmadorPresupuesto.tsx` y `RecienSalidos.tsx` (solo el texto), `RULES.md`. Archivos NUEVOS: `git add` explícito.
+- **Pendiente / riesgos:** (1) `tsc` y `vite build`; (2) lo que ya esté publicado en «Carrusel del home» saldrá en esta sección: revisar `/carrusel` antes de publicar; (3) los enlaces del panel (`/ruta`, `#ancla`, `https`) abren con recarga completa (`<a href>`); (4) probar en móvil el arrastre y que el 3D no se vea cortado a 360 px; (5) si el catálogo tiene < 8 piezas con foto, el automático repite las de «Directo del taller».
+
 ## 2026-11-15 — Home móvil: ofertas deslizables, taller en 2×2 y 4 recientes — implementado, falta revisar en navegador
 - **Decisión del dueño:** las secciones «Ofertas vigentes» y «Hecho en nuestro taller» se veían vacías en móvil y «Recién salidos» mostraba solo 2; aprobó el boceto (colores existentes: terracota, salvia, crema, bosque) y dejó «Juegos de sala desde…» como está. Estos cambios reemplazan lo que el boceto v3 decía para móvil.
 - **Qué cambió:** `OfertasVigentes.tsx` (móvil/tablet: fila deslizable de hasta 8 tarjetas con foto 400×300, `-N %`, precio final y original tachado; PC igual), `HechoEnTaller.tsx` (móvil: 4 pasos en tarjetas 2×2; subtítulo único), `RecienSalidos.tsx` (4 piezas también en móvil, 2×2), `RULES.md`. Sin dependencias ni colores nuevos; `lib/seccionesHome.ts` no cambia.
