@@ -343,3 +343,10 @@
 - **Búsqueda:** una sola regla para todos los casos (nombre, descripción, categoría y tipo, sin tildes, todas las palabras).
 - **Verificación:** `tsc` con los mismos 10 errores previos (ninguno nuevo), `vite build` OK, todas las suites `node scripts/test-*.mjs` pasan. **No se probó en navegador** (360/414/768/1280 px, hoja inferior vs lateral, teclado).
 - **Pendiente / riesgos:** (1) la barra «Filtros · n» NO es fija: el header es sticky y su alto cambia al ocultar la barra superior; fijarla requiere medirlo en navegador; (2) el límite sigue en 60 piezas (`LIMITE_CATALOGO`); (3) el deslizador fija solo el tope, los tramos con mínimo salen como atajos; (4) en `/catalogo` el panel aplica al instante y «Ver N piezas» solo lo cierra; (5) enlaces antiguos con `sort=precio_*` siguen funcionando.
+
+## 2026-11-15 — Fase C: catálogo del home como acceso corto a /catalogo — implementado, falta revisar en navegador
+- **Decisiones del dueño:** la sección del home pasa a ser un acceso corto; fila de piezas de 4 en PC y 2 en móvil; las piezas son las más recientes con foto.
+- **Qué cambió:** `ProductsSection.tsx` (537 → ~130 líneas) conserva `id="catalogo"` (lo usan Footer, Header y `Hero.tsx`) y `data-reveal`. Atajos como enlaces a `/catalogo` con el filtro puesto: ambiente (`cat`), presupuesto (`TRAMOS`, `min`/`max`) y «Solo ofertas» (`oferta`), cada uno con su conteo real; fila de `ProductCard`; botón «Ver todo el catálogo (N piezas)». Se quitó el buscador (el del header ya lleva a `/catalogo?q=`), el deslizador, el orden y `PiezaDestacada`.
+- **Depende de la fase B:** el atajo «Solo ofertas» usa `oferta=true`, que solo existe en el nuevo `/catalogo`.
+- **Verificación:** `tsc` con los mismos 10 errores previos (ninguno nuevo), `vite build` OK, suites `scripts/test-*.mjs` sin fallos. No se probó en navegador.
+- **Pendiente / riesgos:** `PiezaDestacada.tsx` queda sin montar (no se borra); revisar a 360/414/1280 px; el conteo «N piezas» sale de las 60 piezas que se piden (`useCatalogoHome(60)`).
