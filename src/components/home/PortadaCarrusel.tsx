@@ -281,7 +281,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
       </div>
 
       {/* Tendedero */}
-      <div className="absolute inset-0 md:inset-auto md:right-[3%] md:top-1/2 md:w-[54%] lg:w-[58%] md:max-w-[760px] md:-translate-y-1/2 md:aspect-[570/450]">
+      <div className="absolute inset-0 md:inset-auto md:right-[7%] md:top-1/2 md:w-[50%] lg:w-[52%] md:max-w-[760px] md:-translate-y-1/2 md:aspect-[570/450]">
         {/* PC: una cuerda con hasta 3 piezas. Móvil: dos cuerdas cortas, una pieza en cada una. */}
         <TendederoPiezas variante="pc" piezas={d.piezas} className="hidden md:block inset-x-0 top-[14%]" />
         <TendederoPiezas variante="movil" indice={0} piezas={d.piezas.slice(0, 1)} className="md:hidden right-1 top-3 w-[48%]" />
@@ -289,7 +289,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
         {d.insignia && (
           <div
             aria-hidden
-            className="absolute left-[78%] top-[12%] hidden aspect-square w-[15%] lg:left-[80.5%] lg:top-[13.3%] lg:w-[12.3%] flex-col items-center justify-center rounded-full bg-gm-terracota text-center text-white shadow-lg md:flex"
+            className="absolute bottom-[4%] right-[2%] hidden aspect-square w-[15%] lg:w-[12.3%] flex-col items-center justify-center rounded-full bg-gm-terracota text-center text-white shadow-lg md:flex"
           >
             <span className="text-xs leading-none">{d.insignia.pre}</span>
             <span className="mt-1 text-xs font-bold leading-none lg:text-lg">{d.insignia.valor}</span>

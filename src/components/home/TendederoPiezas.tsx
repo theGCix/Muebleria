@@ -97,7 +97,7 @@ function Colgante({ indice, pc, children }: { indice: number; pc: boolean; child
 
 function Marco({ pieza, aspecto, pc }: { pieza: PiezaColgante; aspecto: Aspecto; pc: boolean }) {
   const cls =
-    "block rounded-lg bg-cream p-1.5 pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque";
+    "block rounded-lg bg-[#F7F4EF] p-1.5 pb-2 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque";
   const contenido = (
     <>
       <span className={`relative block w-full overflow-hidden rounded bg-gm-arena ${ASPECTO[aspecto]}`}>
