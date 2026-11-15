@@ -5,6 +5,8 @@ import { CATEGORIAS } from "@/lib/categories";
 import { useCatalogoHome } from "@/hooks/useCatalogoHome";
 import { cloudinaryUrl } from "@/lib/cloudinary";
 
+// Categorías del home (réplica de la portada propuesta): una fila de fotos con el nombre encima y el enlace
+// «Ver todas las categorías». Las categorías salen de lib/categories.ts (una sola fuente), no del mockup.
 export function Categories() {
   // Misma consulta y caché que el catálogo del home: no agrega peticiones
   const { data = [] } = useCatalogoHome(60);
@@ -21,28 +23,35 @@ export function Categories() {
   }, [data]);
 
   return (
-    <section data-cat-section id="categorias" className="container mx-auto px-6 py-24">
-      <div data-reveal className="text-center max-w-2xl mx-auto mb-16">
-        <p className="text-sm text-accent-strong font-medium mb-4">
-          Nuestras colecciones
-        </p>
-        <h2 className="t-seccion text-foreground">
-          Piezas para cada rincón de tu hogar
-        </h2>
+    <section id="categorias" aria-labelledby="categorias-titulo" className="container mx-auto max-w-6xl px-4 py-10 md:py-14">
+      <div data-reveal className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h2 id="categorias-titulo" className="t-seccion text-foreground">
+            Categorías
+          </h2>
+          <p className="t-texto mt-1 text-muted-foreground">Encuentra el mueble ideal para cada ambiente</p>
+        </div>
+        <Link
+          to="/catalogo"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-detail px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          Ver todas las categorías <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {CATEGORIAS.map((cat) => {
+
+      <ul className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
+        {CATEGORIAS.map((cat, i) => {
           const foto = fotos[cat.slug];
+          // Con 5 categorías en 2 columnas, la última ocupa todo el ancho (sin hueco)
+          const ultimaSola = i === CATEGORIAS.length - 1 && CATEGORIAS.length % 2 === 1;
           return (
-            <Link
-              data-cat-card
-              key={cat.slug}
-              to="/categoria/$slug"
-              params={{ slug: cat.slug }}
-              className="group overflow-hidden rounded-xl bg-card border border-border/60 hover:shadow-[var(--shadow-soft)] hover:-translate-y-1 transition-[translate,box-shadow] duration-300 text-left"
-            >
-              {foto ? (
-                <div className="aspect-[4/3] overflow-hidden bg-muted">
+            <li key={cat.slug} data-reveal className={ultimaSola ? "col-span-2 md:col-span-1" : undefined}>
+              <Link
+                to="/categoria/$slug"
+                params={{ slug: cat.slug }}
+                className="group relative block aspect-[4/3] overflow-hidden rounded-xl border border-border/60 bg-secondary transition-shadow hover:shadow-[var(--shadow-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {foto ? (
                   <img
                     src={foto}
                     alt=""
@@ -51,24 +60,25 @@ export function Categories() {
                     loading="lazy"
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                   />
-                </div>
-              ) : null}
-              <div className="p-6 sm:p-8">
-                {!foto && (
-                  <div className="h-12 w-12 rounded-lg bg-secondary flex items-center justify-center mb-6 group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
-                    <cat.icon className="h-6 w-6" />
-                  </div>
+                ) : (
+                  <span aria-hidden className="flex h-full w-full items-center justify-center text-primary/50">
+                    <cat.icon className="h-10 w-10" />
+                  </span>
                 )}
-                <h3 className="text-xl font-semibold mb-2 text-foreground">{cat.nombre}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">{cat.descripcion}</p>
-                <span className="inline-flex items-center gap-1 text-sm font-medium text-accent-strong opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">
-                  Ver colección <ArrowRight className="h-3.5 w-3.5" />
+                {/* Blanco sobre degradado oscuro (excepción de las reglas visuales: texto claro sobre fondo oscuro) */}
+                <span
+                  className={`absolute inset-x-0 bottom-0 flex items-center gap-2 px-3 pb-2.5 pt-8 ${
+                    foto ? "bg-gradient-to-t from-black/70 to-transparent text-white" : "text-foreground"
+                  }`}
+                >
+                  <cat.icon className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="truncate text-sm font-semibold">{cat.nombre}</span>
                 </span>
-              </div>
-            </Link>
+              </Link>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </section>
   );
 }

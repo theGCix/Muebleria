@@ -39,3 +39,26 @@ test("tramoInicial: el del medio, o el último si hay menos de dos", () => {
   assert.equal(tramoInicial([{ id: "1" }]).id, "1");
   assert.equal(tramoInicial([]), null);
 });
+
+import { piezasPorTramo, moverIndice } from "../src/lib/portada.ts";
+
+test("piezasPorTramo: una pieza por tramo, en el orden de los tramos, sin inventar", () => {
+  const tramos = [
+    { id: "a", min: null, max: 1500 },
+    { id: "b", min: 1500, max: 2000 },
+    { id: "c", min: 2000, max: null },
+  ];
+  const enTramo = (n, t) => (t.min == null || n > t.min) && (t.max == null || n <= t.max);
+  const lista = [p("x", 1485), p("y", 1700), p("z", 1800), p("sin-foto", 2500, null)];
+  const r = piezasPorTramo(lista, tramos, enTramo);
+  assert.deepEqual(r.map((s) => [s.tramo.id, s.pieza.id]), [["a", "x"], ["b", "z"]]); // «c» solo tenía una pieza sin foto
+  assert.deepEqual(piezasPorTramo([], tramos, enTramo), []);
+});
+
+test("moverIndice: da la vuelta y tolera 0 o 1 diapositivas", () => {
+  assert.equal(moverIndice(0, 1, 3), 1);
+  assert.equal(moverIndice(2, 1, 3), 0);
+  assert.equal(moverIndice(0, -1, 3), 2);
+  assert.equal(moverIndice(0, 1, 1), 0);
+  assert.equal(moverIndice(0, -1, 0), 0);
+});

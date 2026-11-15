@@ -105,3 +105,10 @@
 - **Verde `primary`** para «Sin costo» y confirmaciones; nunca `green-600` / `emerald` / `amber` sueltos (no llegan a 4.5:1).
 - **Una sola etiqueta superior en mayúsculas por página:** home = «Nuestras colecciones» (`Categories`); página de pago aprobado y rechazado = su etiqueta de cabecera. El resto, en minúscula normal (`text-sm font-medium`).
 - **Títulos:** h1/h2 de sección con `.t-seccion` (Playfair 400, 26/32); portada con `.t-titulo` (48/32). h3/h4 en Inter, nunca `font-display`.
+
+## Reglas de portada (Parte 8.5 — réplica de la portada propuesta por el dueño)
+- **Orden del home:** `BannerPortada` → `BeneficiosFranja` → `HeroCampanaHome` (la campaña sigue justo debajo de la portada) → `Categories` → `PresupuestoHome` → ofertas y resto. Esto reemplaza a `PortadaPresupuesto.tsx` (renombrado a `PresupuestoHome.tsx`; ya no es la portada ni lleva h1).
+- **Banner:** carrusel con una pieza real por tramo de presupuesto (`piezasPorTramo` en `lib/portada.ts`); un tramo sin pieza con foto no genera diapositiva y sin ninguna el banner queda solo con texto. Abre en el tramo del medio. Flechas y puntos de 44 px, pausa con cursor o foco, se detiene al usarlo a mano, sin avance automático con «reducir movimiento». Conserva `data-hero`, `data-hero-title` y `data-hero-item`.
+- **Franja de beneficios:** solo lo que el sitio ya ofrece (envíos a todo el Perú, tarjeta/Yape/Plin, pago con Niubiz, WhatsApp). **No anunciar cuotas** (el mockup decía «Hasta 12 cuotas sin intereses»: el cobro no las ofrece, regla 15).
+- **Categorías:** salen de `lib/categories.ts`, no de los nombres del mockup. Ya no se fija la sección al hacer scroll (se quitó `data-cat-section`); la etiqueta superior «Nuestras colecciones» se reemplaza por el título «Categorías» y el enlace «Ver todas las categorías» (`/catalogo`). La frase «Diseña tu espacio, vive mejor» del banner va en minúscula normal.
+- **Botón principal:** verde bosque de los tokens, no el marrón del mockup (terracota solo para ofertas, regla 4).

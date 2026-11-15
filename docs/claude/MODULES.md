@@ -142,3 +142,6 @@
 ## Método de pago y efectivo (2026-11-15, Parte 8.4)
 - Reglas: `server/pagos.js` (`modalidadPago`, `calcularAdelanto`) ↔ `src/lib/pagoEfectivo.ts` (copia solo de lectura). Servidor: `/api/niubiz/session`, `/api/orders`, `/api/orders/efectivo`. BD: `20261115_pago_efectivo.sql`.
 - Cliente: `routes/checkout.tsx` + `components/checkout/MetodosPago.tsx`, `PagoExitoso.tsx`; panel: `components/admin/PagoEfectivoAdmin.tsx` en `routes/_authenticated/pedidos.tsx`; «Mis pedidos»: `routes/perfil/pedidos.tsx`.
+
+## Portada del home (2026-11-15, Parte 8.5)
+- `routes/index.tsx` → `BannerPortada` (usa `hooks/usePiezasPorTramo`, `EscenaPortada`, `lib/portada`), `BeneficiosFranja`, `HeroCampanaHome`, `Categories`, `PresupuestoHome` (antes `PortadaPresupuesto`).

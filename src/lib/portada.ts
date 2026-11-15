@@ -33,3 +33,31 @@ export function tramoInicial<T extends { id: string }>(tramos: readonly T[]): T 
   if (tramos.length === 0) return null;
   return tramos[Math.min(1, tramos.length - 1)];
 }
+
+export interface SlidePortada<T, R> {
+  tramo: R;
+  pieza: T;
+}
+
+/**
+ * Carrusel del banner: una pieza por tramo de presupuesto (la mejor con foto, ver `elegirPiezaEscena`).
+ * Un tramo sin pieza con foto no genera diapositiva (no se inventa nada). Respeta el orden de `tramos`.
+ */
+export function piezasPorTramo<T extends CandidataEscena, R extends { min: number | null; max: number | null }>(
+  piezas: readonly T[],
+  tramos: readonly R[],
+  enTramo: (precioFinal: number, tramo: R) => boolean,
+): SlidePortada<T, R>[] {
+  const out: SlidePortada<T, R>[] = [];
+  for (const tramo of tramos) {
+    const pieza = elegirPiezaEscena(piezas, (n) => enTramo(n, tramo));
+    if (pieza) out.push({ tramo, pieza });
+  }
+  return out;
+}
+
+/** Siguiente / anterior posición del carrusel, dando la vuelta en los extremos. Con 0 o 1 diapositivas siempre 0. */
+export function moverIndice(actual: number, paso: 1 | -1, total: number): number {
+  if (total <= 1) return 0;
+  return (((actual + paso) % total) + total) % total;
+}
