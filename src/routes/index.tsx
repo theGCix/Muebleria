@@ -12,7 +12,6 @@ import { HechoEnTaller } from "@/components/home/HechoEnTaller";
 import { RecienSalidos } from "@/components/home/RecienSalidos";
 import { PruebaloEnTuEspacio } from "@/components/home/PruebaloEnTuEspacio";
 import { CotizarMedida } from "@/components/home/CotizarMedida";
-import { BotonWhatsApp } from "@/components/home/BotonWhatsApp";
 import { CombosSection } from "@/components/CombosSection";
 import { PromoCategoriaBanner } from "@/components/PromoCategoriaBanner";
 import { Testimonials } from "@/components/Testimonials";
@@ -49,4 +48,4 @@ function Index() {
        <CombosSection /> <PromoCategoriaBanner /> <Testimonials /> <ClientesSatisfechos />
        <PruebaloEnTuEspacio /> <CotizarMedida />
      </main> 
-     <Footer /> <BotonWhatsApp /> </div> ); }
+     <Footer /></div> ); }

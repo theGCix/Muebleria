@@ -142,7 +142,7 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
             pre: "Desde",
             valor: desde != null ? montoCorto(desde) : "Salas",
             detalle: (
-              <span className="block text-xs italic opacity-90 md:text-sm">
+              <span className="hidden text-xs italic opacity-90 md:block md:text-sm">
                 {salas.length > 0 ? `${salas.length} ${salas.length === 1 ? "pieza" : "piezas"} en madera, hechas en nuestro taller` : "Hechas en nuestro taller"}
               </span>
             ),
@@ -163,7 +163,7 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
             pre: "El taller",
             valor: "A tu medida",
             detalle: (
-              <span className="block text-xs italic opacity-90 md:text-sm">
+              <span className="hidden text-xs italic opacity-90 md:block md:text-sm">
                 Cuéntanos tu espacio y un asesor te contacta.
               </span>
             ),
@@ -183,7 +183,7 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
             pre: "Sube una foto",
             valor: "de tu sala",
             detalle: (
-              <span className="block text-xs italic opacity-90 md:text-sm">y mira cómo queda la pieza.</span>
+              <span className="hidden text-xs italic opacity-90 md:block md:text-sm">y mira cómo queda la pieza.</span>
             ),
             boton: "Probar ahora",
             destino: { tipo: "hash", hash: "pruebalo" },
