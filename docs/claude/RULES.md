@@ -91,7 +91,7 @@
 - **Marrón `#8B735B` (`--detail`): 4.0:1 sobre marfil → solo líneas, bordes e íconos; nunca texto pequeño.**
 - **Terracota = solo ofertas y descuentos:** `--accent-strong` para texto (7.3:1 sobre marfil, 4.8:1 sobre beige), `--accent-soft` para fondos suaves, `--accent` solo fondos/bordes sin texto (regla 7.1 vigente). Un descuento nunca va en verde ni en rojo.
 - **Sin hex sueltos** en la ficha, tarjetas, footer ni header: usar tokens. Excepciones: blanco sobre fondos oscuros, los acabados reales de producto (p. ej. patas Dorado/Negro) y las ilustraciones SVG.
-- **Tipografía:** una serif (`Playfair Display`, 400 y 700) solo en `h1`/`h2`, `.font-display` y el logo; todo lo demás Inter (400/500/600/700). `h3`/`h4` son Inter (nombres de producto y subtítulos). Cargada en `index.html`; no usar Cormorant.
+- **Tipografía (actualizada 2026-11-15, rediseño azul marino: ver «Rediseño azul marino»):** una sola familia display, `Manrope` (700/800, antes Playfair Display), solo en `h1`/`h2`, `.font-display` y el logo; todo lo demás Inter (400/500/600/700). `h3`/`h4` son Inter (nombres de producto y subtítulos). Cargada en `index.html`; no usar Cormorant.
 - **Escala** (`.t-*` en `styles.css`, móvil/desktop ≥ 640 px): título 32/48 · sección 26/32 · producto 15/16 (Inter 600) · precio 18/20 (Inter 700, verde) · texto 14/16 · botón 14 · apoyo 12 (mínimo, regla 7.3). En la ficha, el título del producto usa 26/32 y el precio principal 24/28 (`.t-precio-ficha`).
 - **Mayúsculas con espaciado:** solo una etiqueta superior por página (`.gmx-eyebrow`); el resto en minúscula normal.
 - **Botón de WhatsApp:** neutro (`.gmx-wa`, fondo `--card`, borde `--border`) con el ícono en `--whatsapp`; nunca un bloque verde sólido.
@@ -145,3 +145,10 @@
 - **No anidar interactivos:** un botón nunca contiene un enlace (ver `BundleBuilder`: contenedor + botón + enlace hermanos).
 - **Acento en la ficha:** `--gmx-accent` solo para fondos y bordes; para texto, `--gmx-accent-text`.
 - **Fin de línea:** `.gitattributes` fija `eol=lf`.
+
+## Rediseño azul marino (2026-11-15, decisión del dueño; sustituye lo anterior donde choca)
+- **Fuente de verdad:** el mockup del dueño (home, catálogo con filtros laterales, ficha, carrito, checkout y móvil). Paleta medida de la imagen: marino `#152A42`, dorado/arena `#D9A66B`, crema `#F8F2EC`, carbón azulado `#0F2034`. Se aplica a **toda la tienda y al panel admin** (comparten tokens).
+- **Cómo se aplica:** se cambian los VALORES de los tokens de `styles.css`, no los nombres: `--gm-bosque` = marino, `--gm-bosque-2` = marino medio, `--gm-salvia` = gris azulado, `--gm-cafe` = marino azulado, `--gm-terracota` = rojo ladrillo `#B8402F` (solo ofertas y descuentos), `--gm-carbon` = marino oscuro (footer). Token nuevo `--gm-tan` (`bg-gm-tan`, `#D9A66B`) para llamadas a la acción sobre marino, con texto marino (6.7:1). Los nombres «bosque», «salvia», etc. son históricos.
+- **Contrastes medidos:** marino/crema 13:1, tinta/crema 14:1, gris de apoyo/crema 5.4:1, blanco/ladrillo 5.5:1, ladrillo oscuro/crema 6.7:1, marino/dorado 6.7:1. El dorado `--detail` (~3:1) solo para líneas, bordes e íconos.
+- **Tipografía:** `Manrope` (títulos, peso 700 en `h1`/`h2`/`.font-display`/`.t-seccion`) + `Inter` (cuerpo). Los títulos con `font-normal` explícito pasaron a `font-bold`.
+- **«Días de locura» / súper rebaja:** no se muestra salvo que el dueño marque piezas como «súper rebaja» desde el panel admin (pendiente de implementar; ver TASK_LOG). Las ofertas normales siguen en «Ofertas vigentes».

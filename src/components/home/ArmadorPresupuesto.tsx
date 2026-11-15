@@ -67,7 +67,7 @@ export function ArmadorPresupuesto() {
           <p className="text-xs font-semibold uppercase tracking-wide text-accent-strong md:text-sm">Tu estilo no tiene límites.</p>
           <h2
             id="presupuesto-titulo"
-            className="mt-2 font-display font-normal leading-[1.15] tracking-tight text-foreground md:mt-3"
+            className="mt-2 font-display font-bold leading-[1.15] tracking-tight text-foreground md:mt-3"
             style={{ fontSize: "clamp(1.625rem, 3.3vw, 3rem)" }}
           >
             Dinos cuánto quieres invertir y te mostramos lo que el taller tiene.

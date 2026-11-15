@@ -1,0 +1,270 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index 216f1c6..1e30435 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -91,7 +91,7 @@
+ - **Marrón `#8B735B` (`--detail`): 4.0:1 sobre marfil → solo líneas, bordes e íconos; nunca texto pequeño.**
+ - **Terracota = solo ofertas y descuentos:** `--accent-strong` para texto (7.3:1 sobre marfil, 4.8:1 sobre beige), `--accent-soft` para fondos suaves, `--accent` solo fondos/bordes sin texto (regla 7.1 vigente). Un descuento nunca va en verde ni en rojo.
+ - **Sin hex sueltos** en la ficha, tarjetas, footer ni header: usar tokens. Excepciones: blanco sobre fondos oscuros, los acabados reales de producto (p. ej. patas Dorado/Negro) y las ilustraciones SVG.
+-- **Tipografía:** una serif (`Playfair Display`, 400 y 700) solo en `h1`/`h2`, `.font-display` y el logo; todo lo demás Inter (400/500/600/700). `h3`/`h4` son Inter (nombres de producto y subtítulos). Cargada en `index.html`; no usar Cormorant.
++- **Tipografía (actualizada 2026-11-15, rediseño azul marino: ver «Rediseño azul marino»):** una sola familia display, `Manrope` (700/800, antes Playfair Display), solo en `h1`/`h2`, `.font-display` y el logo; todo lo demás Inter (400/500/600/700). `h3`/`h4` son Inter (nombres de producto y subtítulos). Cargada en `index.html`; no usar Cormorant.
+ - **Escala** (`.t-*` en `styles.css`, móvil/desktop ≥ 640 px): título 32/48 · sección 26/32 · producto 15/16 (Inter 600) · precio 18/20 (Inter 700, verde) · texto 14/16 · botón 14 · apoyo 12 (mínimo, regla 7.3). En la ficha, el título del producto usa 26/32 y el precio principal 24/28 (`.t-precio-ficha`).
+ - **Mayúsculas con espaciado:** solo una etiqueta superior por página (`.gmx-eyebrow`); el resto en minúscula normal.
+ - **Botón de WhatsApp:** neutro (`.gmx-wa`, fondo `--card`, borde `--border`) con el ícono en `--whatsapp`; nunca un bloque verde sólido.
+@@ -145,3 +145,10 @@
+ - **No anidar interactivos:** un botón nunca contiene un enlace (ver `BundleBuilder`: contenedor + botón + enlace hermanos).
+ - **Acento en la ficha:** `--gmx-accent` solo para fondos y bordes; para texto, `--gmx-accent-text`.
+ - **Fin de línea:** `.gitattributes` fija `eol=lf`.
++
++## Rediseño azul marino (2026-11-15, decisión del dueño; sustituye lo anterior donde choca)
++- **Fuente de verdad:** el mockup del dueño (home, catálogo con filtros laterales, ficha, carrito, checkout y móvil). Paleta medida de la imagen: marino `#152A42`, dorado/arena `#D9A66B`, crema `#F8F2EC`, carbón azulado `#0F2034`. Se aplica a **toda la tienda y al panel admin** (comparten tokens).
++- **Cómo se aplica:** se cambian los VALORES de los tokens de `styles.css`, no los nombres: `--gm-bosque` = marino, `--gm-bosque-2` = marino medio, `--gm-salvia` = gris azulado, `--gm-cafe` = marino azulado, `--gm-terracota` = rojo ladrillo `#B8402F` (solo ofertas y descuentos), `--gm-carbon` = marino oscuro (footer). Token nuevo `--gm-tan` (`bg-gm-tan`, `#D9A66B`) para llamadas a la acción sobre marino, con texto marino (6.7:1). Los nombres «bosque», «salvia», etc. son históricos.
++- **Contrastes medidos:** marino/crema 13:1, tinta/crema 14:1, gris de apoyo/crema 5.4:1, blanco/ladrillo 5.5:1, ladrillo oscuro/crema 6.7:1, marino/dorado 6.7:1. El dorado `--detail` (~3:1) solo para líneas, bordes e íconos.
++- **Tipografía:** `Manrope` (títulos, peso 700 en `h1`/`h2`/`.font-display`/`.t-seccion`) + `Inter` (cuerpo). Los títulos con `font-normal` explícito pasaron a `font-bold`.
++- **«Días de locura» / súper rebaja:** no se muestra salvo que el dueño marque piezas como «súper rebaja» desde el panel admin (pendiente de implementar; ver TASK_LOG). Las ofertas normales siguen en «Ofertas vigentes».
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 2af315e..eae4736 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -417,3 +417,9 @@
+ ## 2026-11-15 — Auditoría, Etapa 0 (cimientos) — parcial: limpieza hecha, falta regenerar `types.ts` (lo corre el dueño)
+ - **Qué cambió:** se borran 15 `.patch` sueltos de entregas anteriores (siguen en el historial de git), 3 `.rej` (`PortadaCarrusel.tsx.rej`, `docs/claude/RULES.md.rej`, `TASK_LOG.md.rej`) y `test-tendedero.mjs` de la raíz (copia vieja con una ruta de importación que no resuelve desde ahí; la vigente es `scripts/test-tendedero.mjs`). `dist` entra en `.gitignore`. Los 6 componentes sin uso y `routes/CuponInput.tsx` NO se tocaron (decisión pendiente, P2-3).
+ - **Pendiente (dueño):** regenerar `src/integrations/supabase/types.ts` en UTF-8 (hoy es UTF-16 con el texto de un comando fallido). Después se medirán los errores reales de `tsc` antes de clasificarlos.
++
++## 2026-11-15 — Rediseño azul marino, fase 1: tokens, tipografía y contrastes — implementado, falta revisar en navegador
++- **Decisiones del dueño:** paleta azul marino en toda la tienda y en el admin; «Días de locura» no sale hasta que el dueño marque piezas como «súper rebaja» (distinta de una oferta normal) desde el panel admin; fotos nuevas con el estilo del mockup.
++- **Qué cambió:** `styles.css` (valores de `:root` y de los `--gm-*`, token nuevo `--gm-tan`, `h1/h2/.font-display` y `.t-seccion` en peso 700, `--font-display` = Manrope), `index.html` (Google Fonts: Manrope en lugar de Playfair), y `font-normal` → `font-bold` en los títulos de `ArmadorPresupuesto`, `PortadaCarrusel`, `CotizarMedida`, `HechoEnTaller`, `OfertasVigentes` y `PruebaloEnTuEspacio`. Sin cambios de lógica, precios, carrito, checkout ni RLS. La ficha de producto y el panel admin siguen los tokens semánticos y cambian solos.
++- **No se tocó:** el modo `.dark` (ya era azul), los componentes (los nombres `gm-bosque`, etc. se conservan).
++- **Pendiente:** fase 2 (home como el mockup: portada con foto, categorías con foto, destacados, «Calidad que se adapta a ti», fila de 5 beneficios), súper rebaja (migración SQL + panel admin + `useCampana`), catálogo con columna de filtros, ficha, carrito y checkout, revisión en móvil. Revisar a ojo: contraste del texto sobre fotos en la portada, `PortadaCarrusel` y el tendedero sobre marino.
+diff --git a/index.html b/index.html
+index d7c4d56..79e74f9 100644
+--- a/index.html
++++ b/index.html
+@@ -33,7 +33,7 @@
+     </script>
+     <link rel="preconnect" href="https://fonts.googleapis.com" />
+     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
++    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+   </head>
+   <body>
+     <div id="root"></div>
+diff --git a/src/components/home/ArmadorPresupuesto.tsx b/src/components/home/ArmadorPresupuesto.tsx
+index b003556..ddf451b 100644
+--- a/src/components/home/ArmadorPresupuesto.tsx
++++ b/src/components/home/ArmadorPresupuesto.tsx
+@@ -67,7 +67,7 @@ export function ArmadorPresupuesto() {
+           <p className="text-xs font-semibold uppercase tracking-wide text-accent-strong md:text-sm">Tu estilo no tiene límites.</p>
+           <h2
+             id="presupuesto-titulo"
+-            className="mt-2 font-display font-normal leading-[1.15] tracking-tight text-foreground md:mt-3"
++            className="mt-2 font-display font-bold leading-[1.15] tracking-tight text-foreground md:mt-3"
+             style={{ fontSize: "clamp(1.625rem, 3.3vw, 3rem)" }}
+           >
+             Dinos cuánto quieres invertir y te mostramos lo que el taller tiene.
+diff --git a/src/components/home/CotizarMedida.tsx b/src/components/home/CotizarMedida.tsx
+index dba2049..3e1ad7c 100644
+--- a/src/components/home/CotizarMedida.tsx
++++ b/src/components/home/CotizarMedida.tsx
+@@ -19,7 +19,7 @@ export function CotizarMedida() {
+       <div className="container mx-auto max-w-6xl px-4 py-9 md:py-12">
+         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-10">
+           <div>
+-            <h2 id="medida-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
++            <h2 id="medida-titulo" className="font-display text-[1.625rem] font-bold leading-tight md:text-[2rem]">
+               ¿No encuentras tu medida?
+             </h2>
+             <p className="mt-1 text-sm text-white/90 md:text-base">
+diff --git a/src/components/home/HechoEnTaller.tsx b/src/components/home/HechoEnTaller.tsx
+index 13b9bd0..93169ab 100644
+--- a/src/components/home/HechoEnTaller.tsx
++++ b/src/components/home/HechoEnTaller.tsx
+@@ -25,7 +25,7 @@ export function HechoEnTaller() {
+         }`}
+       >
+         <div>
+-          <h2 id="taller-titulo" className="font-display text-[1.625rem] font-normal leading-tight text-gm-bosque md:text-[2rem]">
++          <h2 id="taller-titulo" className="font-display text-[1.625rem] font-bold leading-tight text-gm-bosque md:text-[2rem]">
+             Hecho en nuestro taller
+           </h2>
+           <p className="mt-1 text-sm text-foreground/80 md:text-base">
+diff --git a/src/components/home/OfertasVigentes.tsx b/src/components/home/OfertasVigentes.tsx
+index 7c45adb..1546859 100644
+--- a/src/components/home/OfertasVigentes.tsx
++++ b/src/components/home/OfertasVigentes.tsx
+@@ -41,7 +41,7 @@ export function OfertasVigentes() {
+       <div className="container mx-auto max-w-6xl px-4">
+       <div className="grid items-center gap-5 rounded-3xl bg-gm-terracota p-5 text-white md:p-8 lg:grid-cols-[auto_1fr] lg:gap-12">
+         <div>
+-          <h2 id="ofertas-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
++          <h2 id="ofertas-titulo" className="font-display text-[1.625rem] font-bold leading-tight md:text-[2rem]">
+             Ofertas vigentes
+           </h2>
+           <p className="mt-1 text-sm text-white">{textoPiezasConDescuento(ofertas.length)}</p>
+diff --git a/src/components/home/PortadaCarrusel.tsx b/src/components/home/PortadaCarrusel.tsx
+index 98ac152..98af3b3 100644
+--- a/src/components/home/PortadaCarrusel.tsx
++++ b/src/components/home/PortadaCarrusel.tsx
+@@ -259,7 +259,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean;
+           return d.reloj ? <CampanaTicker variante="portada" fallback={etiqueta} /> : etiqueta;
+         })()}
+         <h2
+-          className="mt-2 font-display font-normal leading-[1.05] tracking-tight text-background md:mt-3"
++          className="mt-2 font-display font-bold leading-[1.05] tracking-tight text-background md:mt-3"
+           style={{ fontSize: "clamp(1.75rem, 4.4vw, 4rem)" }}
+         >
+           {d.titulo}
+@@ -269,7 +269,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean;
+         </p>
+         <div className="flex items-end gap-2 md:gap-4">
+           <span
+-            className="whitespace-nowrap font-display font-normal leading-none text-gm-durazno"
++            className="whitespace-nowrap font-display font-bold leading-none text-gm-durazno"
+             style={{ fontSize: d.valor.length > 5 ? "clamp(2.25rem, 5.6vw, 5.25rem)" : "clamp(3.25rem, 8vw, 7.25rem)" }}
+           >
+             {d.valor}
+diff --git a/src/components/home/PruebaloEnTuEspacio.tsx b/src/components/home/PruebaloEnTuEspacio.tsx
+index 3c854a3..49ff7a8 100644
+--- a/src/components/home/PruebaloEnTuEspacio.tsx
++++ b/src/components/home/PruebaloEnTuEspacio.tsx
+@@ -27,7 +27,7 @@ export function PruebaloEnTuEspacio() {
+       <div className="container mx-auto grid max-w-6xl items-center gap-5 px-4 py-9 md:py-10 lg:grid-cols-[1fr_auto] lg:gap-12">
+         <div className="grid grid-cols-[1fr_auto] items-center gap-4 lg:block">
+           <div>
+-            <h2 id="pruebalo-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
++            <h2 id="pruebalo-titulo" className="font-display text-[1.625rem] font-bold leading-tight md:text-[2rem]">
+               Pruébalo en tu espacio
+             </h2>
+             <p className="mt-1 text-sm text-white/90 md:text-base">
+diff --git a/src/styles.css b/src/styles.css
+index dd6a745..430bff5 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -55,6 +55,7 @@
+   --color-gm-carbon: var(--gm-carbon);
+   --color-gm-madera: var(--gm-madera);
+   --color-gm-pita: var(--gm-pita);
++  --color-gm-tan: var(--gm-tan);
+   --color-destructive: var(--destructive);
+   --color-destructive-foreground: var(--destructive-foreground);
+   --color-border: var(--border);
+@@ -78,47 +79,50 @@
+ 
+ :root {
+   --radius: 0.5rem;
+-  /* G&M Mueblería — paleta pastel (nov-2026), regla 60-30-10:
+-     60% crema (--background) · 30% salvia/arena pastel (--secondary, --muted) · 10% terracota (--accent, solo ofertas).
+-     Los muebles de madera son el color fuerte; el fondo pastel los hace resaltar. Texto siempre oscuro. */
+-  --background: oklch(0.972 0.014 88); /* 60%: crema pastel */
+-  --foreground: oklch(0.276 0.007 95);
+-  --card: oklch(0.992 0.007 88); /* blanco cálido */
+-  --card-foreground: oklch(0.276 0.007 95);
+-  --popover: oklch(0.994 0.006 85);
+-  --popover-foreground: oklch(0.276 0.007 95);
+-  --primary: oklch(0.43 0.035 158); /* salvia profunda: botones, precios, footer (≥7:1 sobre crema) */
+-  --primary-foreground: oklch(0.975 0.012 88);
+-  --secondary: oklch(0.905 0.04 150); /* 30%: salvia pastel (superficies y botones secundarios) */
+-  --secondary-foreground: oklch(0.276 0.007 95);
+-  --muted: oklch(0.946 0.022 92); /* arena pastel */
+-  --muted-foreground: oklch(0.487 0.029 71); /* 5.7:1 sobre marfil */
+-  /* Terracota: SOLO ofertas y descuentos. --accent para fondos/bordes sin texto;
+-     --accent-strong para texto (7.3:1 sobre marfil, 4.8:1 sobre beige); --accent-soft para fondos suaves */
+-  --accent: oklch(0.581 0.118 42);
+-  --accent-foreground: oklch(0.994 0.006 85);
+-  --accent-strong: oklch(0.438 0.108 40);
+-  --accent-soft: oklch(0.935 0.04 50); /* durazno pastel */
+-  /* Marrón #8B735B: 4.0:1 sobre marfil → solo líneas, bordes e íconos; NUNCA texto pequeño */
+-  --detail: oklch(0.572 0.046 67);
++  /* G&M Mueblería — paleta azul marino + arena (nov-2026, mockup del dueño). Regla 60-30-10:
++     60% crema cálida (--background) · 30% arena y gris azulado (--secondary, --muted) · 10% acento.
++     Azul marino (--primary): botones, precios, navegación y pie. Arena/dorado (--gm-tan): llamadas a la acción sobre marino.
++     Rojo ladrillo (--accent): SOLO descuentos y ofertas. Texto siempre oscuro sobre claro, claro sobre marino. */
++  --background: oklch(0.964 0.010 68); /* #F8F2EC crema cálida */
++  --foreground: oklch(0.259 0.031 260); /* #1B2433 tinta azulada (14:1 sobre crema) */
++  --card: oklch(0.995 0.003 68); /* #FFFDFB */
++  --card-foreground: oklch(0.259 0.031 260);
++  --popover: oklch(0.995 0.003 68);
++  --popover-foreground: oklch(0.259 0.031 260);
++  --primary: oklch(0.280 0.052 253); /* #152A42 azul marino (13:1 sobre crema) */
++  --primary-foreground: oklch(0.964 0.010 68);
++  --secondary: oklch(0.936 0.009 258); /* #E6EAF0 gris azulado claro */
++  --secondary-foreground: oklch(0.259 0.031 260);
++  --muted: oklch(0.943 0.013 75); /* #F1EBE3 arena clara */
++  --muted-foreground: oklch(0.501 0.030 261); /* #5A6475: 5.4:1 sobre crema, 5.0:1 sobre arena */
++  /* Rojo ladrillo: SOLO ofertas y descuentos. --accent para fondos/bordes (blanco encima 5.5:1);
++     --accent-strong para texto (6.7:1 sobre crema); --accent-soft para fondos suaves */
++  --accent: oklch(0.538 0.158 31); /* #B8402F */
++  --accent-foreground: oklch(0.995 0.003 68);
++  --accent-strong: oklch(0.465 0.145 30); /* #9A2F22 */
++  --accent-soft: oklch(0.942 0.023 37); /* #FBE7E1 */
++  /* Dorado #B58B63: ~3:1 sobre crema → solo líneas, bordes e íconos; NUNCA texto pequeño */
++  --detail: oklch(0.667 0.075 65);
+   --whatsapp: oklch(0.574 0.138 152);
+   --destructive: oklch(0.55 0.2 25);
+   --destructive-foreground: oklch(0.985 0.008 80);
+-  --border: oklch(0.9 0.024 90);
+-  --input: oklch(0.89 0.026 88);
+-  --ring: oklch(0.43 0.035 158);
+-  /* Campaña (Días de locura): superficie pastel durazno; el 10% de acento es la terracota de --accent */
+-  --campana: oklch(0.925 0.05 58);
+-  --campana-soft: oklch(0.955 0.03 62);
+-  /* Paleta del boceto v3 de la portada (medida de las imágenes del dueño, 2026-11-15) */
+-  --gm-bosque: oklch(0.382 0.043 158); /* #2F4A3A portada y A medida */
+-  --gm-bosque-2: oklch(0.443 0.045 156); /* #3F5B49 palabra fantasma y tarjetas sobre el bosque */
+-  --gm-salvia: oklch(0.892 0.021 138); /* #D5DFD2 tarjetas y taller */
+-  --gm-durazno: oklch(0.913 0.042 57); /* #F9DCC8 presupuesto y cifra «30%» */
+-  --gm-cafe: oklch(0.428 0.037 63); /* #5E4B3A «Pruébalo en tu espacio» */
+-  --gm-terracota: oklch(0.559 0.137 40); /* #B5532F ofertas, insignia y pestaña activa */
+-  --gm-arena: oklch(0.907 0.028 84); /* #E9DFCC franja de envíos y tarjetas */
+-  --gm-carbon: oklch(0.285 0.006 92); /* #2B2A27 footer */
++  --border: oklch(0.898 0.016 74); /* #E4DCD2 */
++  --input: oklch(0.874 0.018 73); /* #DDD4C9 */
++  --ring: oklch(0.280 0.052 253);
++  /* Campaña (súper rebaja): superficie arena cálida; el acento es el rojo ladrillo de --accent */
++  --campana: oklch(0.926 0.034 69); /* #F6E3CF */
++  --campana-soft: oklch(0.957 0.021 72); /* #FAEFE2 */
++  /* Tokens --gm-* de la portada y el home (mismos nombres que en el boceto v3; valores del mockup azul marino 2026-11-15).
++     Los nombres son históricos (bosque = azul marino, salvia = gris azulado, etc.): no se renombran para no tocar los componentes. */
++  --gm-bosque: oklch(0.280 0.052 253); /* #152A42 portada y «A medida» (antes verde bosque) */
++  --gm-bosque-2: oklch(0.367 0.063 251); /* #24415F palabra fantasma y tarjetas sobre el marino */
++  --gm-salvia: oklch(0.932 0.010 253); /* #E4E9EF tarjetas y taller */
++  --gm-durazno: oklch(0.913 0.042 57); /* #F9DCC8 cifra «30%» sobre marino */
++  --gm-cafe: oklch(0.345 0.069 255); /* #1F3A5C «Pruébalo en tu espacio» */
++  --gm-terracota: oklch(0.538 0.158 31); /* #B8402F ofertas, insignia y pestaña activa (ahora rojo ladrillo) */
++  --gm-arena: oklch(0.921 0.025 75); /* #EFE3D3 franja de envíos y tarjetas */
++  --gm-carbon: oklch(0.240 0.045 254); /* #0F2034 footer */
++  --gm-tan: oklch(0.760 0.097 70); /* #D9A66B botones de llamada a la acción sobre marino (texto marino encima: 6.7:1) */
+   --gm-madera: oklch(0.746 0.066 72); /* #C9A57A pinzas del tendedero de la portada */
+   --gm-pita: oklch(0.836 0.05 85); /* #D9C7A3 cuerda del tendedero de la portada */
+   --wood-light: oklch(0.91 0.04 75);
+@@ -128,7 +132,7 @@
+   --shadow-soft: 0 4px 24px -8px oklch(0.32 0.05 50 / 0.15);
+   --shadow-elegant: 0 20px 60px -20px oklch(0.32 0.05 50 / 0.25);
+   /* Tipografía: una sola serif (títulos) y una sola sans (todo lo demás) */
+-  --font-display: "Playfair Display", Georgia, serif;
++  --font-display: "Manrope", system-ui, sans-serif;
+   --font-body: "Inter", system-ui, sans-serif;
+   --chart-1: oklch(0.646 0.222 41.116);
+   --chart-2: oklch(0.6 0.118 184.704);
+@@ -203,10 +207,10 @@
+     overflow-x: clip;
+   }
+ 
+-  /* Serif solo en h1/h2 y en .font-display; h3/h4 son Inter (subtítulos y nombres de producto) */
++  /* Manrope (negrita) en h1/h2 y en .font-display; h3/h4 son Inter (subtítulos y nombres de producto) */
+   h1, h2, .font-display {
+     font-family: var(--font-display);
+-    font-weight: 400;
++    font-weight: 700;
+     letter-spacing: -0.02em;
+   }
+   h3, h4 {
+@@ -548,7 +552,7 @@
+    ================================================================ */
+ @layer components {
+   .t-titulo   { font-family: var(--font-display); font-weight: 400; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; }
+-  .t-seccion  { font-family: var(--font-display); font-weight: 400; font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; }
++  .t-seccion  { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; }
+   .t-producto { font-family: var(--font-body); font-weight: 600; font-size: 15px; line-height: 1.3; }
+   .t-precio   { font-family: var(--font-body); font-weight: 700; font-size: 18px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+   .t-precio-ficha { font-family: var(--font-body); font-weight: 700; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }

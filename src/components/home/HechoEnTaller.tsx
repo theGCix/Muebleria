@@ -25,7 +25,7 @@ export function HechoEnTaller() {
         }`}
       >
         <div>
-          <h2 id="taller-titulo" className="font-display text-[1.625rem] font-normal leading-tight text-gm-bosque md:text-[2rem]">
+          <h2 id="taller-titulo" className="font-display text-[1.625rem] font-bold leading-tight text-gm-bosque md:text-[2rem]">
             Hecho en nuestro taller
           </h2>
           <p className="mt-1 text-sm text-foreground/80 md:text-base">

@@ -41,7 +41,7 @@ export function OfertasVigentes() {
       <div className="container mx-auto max-w-6xl px-4">
       <div className="grid items-center gap-5 rounded-3xl bg-gm-terracota p-5 text-white md:p-8 lg:grid-cols-[auto_1fr] lg:gap-12">
         <div>
-          <h2 id="ofertas-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
+          <h2 id="ofertas-titulo" className="font-display text-[1.625rem] font-bold leading-tight md:text-[2rem]">
             Ofertas vigentes
           </h2>
           <p className="mt-1 text-sm text-white">{textoPiezasConDescuento(ofertas.length)}</p>

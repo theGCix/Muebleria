@@ -27,7 +27,7 @@ export function PruebaloEnTuEspacio() {
       <div className="container mx-auto grid max-w-6xl items-center gap-5 px-4 py-9 md:py-10 lg:grid-cols-[1fr_auto] lg:gap-12">
         <div className="grid grid-cols-[1fr_auto] items-center gap-4 lg:block">
           <div>
-            <h2 id="pruebalo-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
+            <h2 id="pruebalo-titulo" className="font-display text-[1.625rem] font-bold leading-tight md:text-[2rem]">
               Pruébalo en tu espacio
             </h2>
             <p className="mt-1 text-sm text-white/90 md:text-base">

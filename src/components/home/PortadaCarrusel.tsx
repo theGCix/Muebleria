@@ -259,7 +259,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
           return d.reloj ? <CampanaTicker variante="portada" fallback={etiqueta} /> : etiqueta;
         })()}
         <h2
-          className="mt-2 font-display font-normal leading-[1.05] tracking-tight text-background md:mt-3"
+          className="mt-2 font-display font-bold leading-[1.05] tracking-tight text-background md:mt-3"
           style={{ fontSize: "clamp(1.75rem, 4.4vw, 4rem)" }}
         >
           {d.titulo}
@@ -269,7 +269,7 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
         </p>
         <div className="flex items-end gap-2 md:gap-4">
           <span
-            className="whitespace-nowrap font-display font-normal leading-none text-gm-durazno"
+            className="whitespace-nowrap font-display font-bold leading-none text-gm-durazno"
             style={{ fontSize: d.valor.length > 5 ? "clamp(2.25rem, 5.6vw, 5.25rem)" : "clamp(3.25rem, 8vw, 7.25rem)" }}
           >
             {d.valor}

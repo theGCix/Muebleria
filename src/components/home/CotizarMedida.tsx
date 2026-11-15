@@ -19,7 +19,7 @@ export function CotizarMedida() {
       <div className="container mx-auto max-w-6xl px-4 py-9 md:py-12">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-10">
           <div>
-            <h2 id="medida-titulo" className="font-display text-[1.625rem] font-normal leading-tight md:text-[2rem]">
+            <h2 id="medida-titulo" className="font-display text-[1.625rem] font-bold leading-tight md:text-[2rem]">
               ¿No encuentras tu medida?
             </h2>
             <p className="mt-1 text-sm text-white/90 md:text-base">
