@@ -1,0 +1,13 @@
+Fotos del banner de la portada (BannerPortada.tsx)
+
+Copia aquí la(s) foto(s) del banner (.jpg, .jpeg, .png, .webp o .avif). Se muestran en orden alfabético del nombre
+(01-sala.jpg, 02-comedor.jpg, …). Con una sola foto no hay carrusel; con varias, se muestran con flechas y puntos.
+Sin ninguna foto aquí, el banner usa el carrusel de piezas del catálogo.
+
+Recomendado:
+  · Archivo ORIGINAL (no una captura de pantalla) y SIN texto: el título, la línea de apoyo y el botón son texto
+    real de la página (se lee en celular, lo ve Google y lo leen los lectores de pantalla).
+  · 2400 × 1000 px (proporción 12:5), JPG o WebP de calidad 80, de 150–350 KB.
+  · El tercio izquierdo de la foto lo cubre el texto: ahí conviene una zona tranquila (pared, luz), sin objetos
+    importantes. El mueble principal, hacia la derecha.
+  · Solo imágenes tuyas o con licencia; una foto generada por IA debe poder usarse comercialmente.
