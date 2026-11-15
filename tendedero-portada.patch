@@ -1,0 +1,652 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index b19a07c..bb4dab5 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -133,3 +133,4 @@
+ - **Orden del home (fase 3):** portada → ambientes → presupuesto → ofertas vigentes → taller → recién salidos → [Combos, PromoCategoriaBanner, Testimonios, Clientes satisfechos: no están en el boceto; se conservan porque el menú apunta a `#combos` y el pie a `#testimonios`] → pruébalo → a medida → footer.
+ - **Header y menú (fase 4):** `components/Header.tsx` sigue el boceto v3: barra superior bosque (`bg-gm-bosque`, `CampanaTicker`), fila de logo + buscador («¿Qué mueble estás buscando?») + accesos, y debajo un menú de secciones (`<nav aria-label="Secciones de la tienda">`). PC: Salas, Comedores, Recámaras, Separadores, A medida | Ofertas (terracota, negrita), Nosotros. Móvil: Salas, Comedores, Recámaras y «Más» (abre el menú anterior con el acordeón de categorías y subcategorías, A medida, Nosotros, Combos y Ofertas); el botón de hamburguesa desaparece. En la tienda «Muebles» se llama «Salas» (`NAV_CATEGORIAS`). Son enlaces normales (teclado y `aria-current` en la categoría o sección actual); controles táctiles ≥ 44 px. «Ofertas» y «Combos» solo aparecen si existen (como antes). `CategoryMegaMenu` queda sin montar (no se borra).
+ - **Botón de WhatsApp (fase 4):** `components/home/BotonWhatsApp.tsx`, círculo verde (`--whatsapp`) solo en el home y solo en móvil (< md), sobre el botón del asistente, que no se toca. Número desde `WHATSAPP_NUMBER` (`config.ts`); abre `wa.me` con un saludo y registra `trackLead("whatsapp")`. Esto reemplaza, solo para este botón flotante, la regla de «WhatsApp neutro» (el boceto lo pide verde).
++- **Tendedero de la portada (2026-11-15):** en las diapositivas, las piezas ya no son un collage de tarjetas sino fotos colgadas de una cuerda de pita con pinzas (`components/home/TendederoPiezas.tsx`, sustituye a `TarjetaPieza`). PC: una cuerda con hasta 3 piezas, con ≥ 11 % de aire entre ellas y casi al unísono para que no se tapen al balancearse (ángulo máx. 18°). Móvil: dos cuerdas cortas, una pieza en cada una, solo el precio (sin nombre). Lógica pura en `lib/tendedero.ts` (prueba `node scripts/test-tendedero.mjs`); movimiento compartido en `hooks/useInclinacion.ts` (inclinación del celular, sacudidas y toque; iPhone pide permiso con el primer toque sobre la cuerda). Con «reducir movimiento» las piezas quedan quietas y apenas ladeadas. El precio de cada foto es el precio final real (`ofertaInfo`). Tokens nuevos `--gm-madera` (pinzas) y `--gm-pita` (cuerda). El reloj de la campaña no cambia.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 44e1dc5..b5b1106 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -1,5 +1,12 @@
+ # TASK_LOG
+ 
++## 2026-11-15 — Portada v3: tendedero de piezas (reemplaza el collage de tarjetas) — implementado, falta revisar en navegador
++- **Decisión del dueño:** aprobó el boceto del tendedero (fotos con marco colgadas de una cuerda con pinzas); en PC las fotos van separadas y casi al unísono (no una por detrás de otra); el móvil queda como el boceto.
++- **Qué cambió:** `components/home/TendederoPiezas.tsx` (nuevo), `lib/tendedero.ts` + `scripts/test-tendedero.mjs` (7/7), `hooks/useInclinacion.ts` (nuevo: estado compartido, un solo par de escuchas), `components/home/PortadaCarrusel.tsx` (monta 1 cuerda en PC y 2 en móvil en lugar de `TarjetaPieza`; `Pieza` suma `precio` real), tokens `--gm-madera` y `--gm-pita` en `styles.css`, `RULES.md`. Archivos NUEVOS: `git add` explícito.
++- **Cómo se retomó:** el chat anterior se cortó a mitad de la implementación; en el zip faltaban `useInclinacion.ts`, la prueba, `RULES.md` y el montaje en la portada. Se completaron.
++- **Verificación:** `node scripts/test-tendedero.mjs` 7/7. **No se pudo comprobar tipos ni compilar** (sin `node_modules` ni red en este entorno; `tsc` solo muestra los errores de sintaxis de `types.ts`, que está en UTF-16, y no llega a revisar el resto). **No se probó en navegador.**
++- **Pendiente / riesgos:** (1) correr `tsc` y `vite build` en tu máquina; (2) revisar a 360/414/768/1280 px que las cuerdas móviles (48 % del ancho, a la derecha) no pisen el texto (el texto llega al 60 %); (3) `useInclinacion` se escribió de cero (el original se perdió con el chat): el sentido del empujón y la fuerza hay que sentirlos en un celular real; (4) `TarjetaPieza` se borró de `PortadaCarrusel.tsx`.
++
+ ## 2026-11-04 — Parte 3/8: Confianza, legal y contenido
+ - Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo.
+ - Tareas: T1, D1, D2, H1, H2 (ver PROJECT.md).
+diff --git a/scripts/test-tendedero.mjs b/scripts/test-tendedero.mjs
+new file mode 100644
+index 0000000..f0dbe80
+--- /dev/null
++++ b/scripts/test-tendedero.mjs
+@@ -0,0 +1,58 @@
++// Pruebas de src/lib/tendedero.ts. Ejecutar: node scripts/test-tendedero.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import { caida, disposicionPC, DISPOSICION_MOVIL, anguloInclinacion, paramsPendulo, pasoPendulo } from "../src/lib/tendedero.ts";
++
++test("la cuerda baja 0 en los extremos y `sag` en el centro", () => {
++  assert.equal(caida(0, 10), 0);
++  assert.equal(caida(1, 10), 0);
++  assert.equal(caida(0.5, 10), 10);
++});
++
++test("PC: huecos según la cantidad de piezas, dentro de la cuerda y sin montarse", () => {
++  assert.equal(disposicionPC(0).length, 0);
++  for (const n of [1, 2, 3, 5]) {
++    const h = disposicionPC(n);
++    assert.equal(h.length, Math.min(n, 3));
++    h.forEach((x) => assert.ok(x.x >= 0 && x.x + x.w <= 1));
++    for (let i = 1; i < h.length; i++) assert.ok(h[i].x - (h[i - 1].x + h[i - 1].w) >= 0.11 - 1e-9, "≥ 11 % de aire");
++  }
++});
++
++test("móvil: dos disposiciones dentro de la cuerda", () => {
++  assert.equal(DISPOSICION_MOVIL.length, 2);
++  DISPOSICION_MOVIL.forEach((x) => assert.ok(x.x + x.w <= 1));
++});
++
++test("inclinación: contraria al celular, solo en vertical, con tope", () => {
++  assert.equal(anguloInclinacion(20, 0), -10);
++  assert.equal(anguloInclinacion(20, 180), 10);
++  assert.equal(anguloInclinacion(20, 90), 0);
++  assert.equal(anguloInclinacion(90, 0), -18);
++  assert.equal(anguloInclinacion(null, 0), 0);
++  assert.equal(anguloInclinacion(NaN, 0), 0);
++});
++
++test("péndulo: converge a 0 sin objetivo y respeta el límite", () => {
++  const p = paramsPendulo(0, true);
++  const e = { a: 15, v: 0 };
++  for (let i = 0; i < 60 * 12; i++) pasoPendulo(e, p, 0, i / 60, 1 / 60);
++  assert.ok(Math.abs(e.a) < 2);
++  const f = { a: 0, v: 5000 };
++  pasoPendulo(f, p, 0, 0, 1 / 60);
++  assert.ok(Math.abs(f.a) <= p.lim);
++});
++
++test("PC: las tres piezas casi iguales (al unísono); móvil: cada una a su ritmo", () => {
++  const pc = [0, 1, 2].map((i) => paramsPendulo(i, true));
++  assert.ok(Math.max(...pc.map((x) => x.k)) - Math.min(...pc.map((x) => x.k)) <= 2);
++  assert.ok(pc.every((x) => x.lim === 18));
++  assert.notEqual(paramsPendulo(0, false).k, paramsPendulo(1, false).k);
++});
++
++test("péndulo: sigue un objetivo constante", () => {
++  const p = paramsPendulo(1, true);
++  const e = { a: 0, v: 0 };
++  for (let i = 0; i < 60 * 10; i++) pasoPendulo(e, p, 10, 0, 1 / 60);
++  assert.ok(e.a > 8 && e.a <= 18);
++});
+diff --git a/src/components/home/PortadaCarrusel.tsx b/src/components/home/PortadaCarrusel.tsx
+index 5a42d3f..7f0ebb6 100644
+--- a/src/components/home/PortadaCarrusel.tsx
++++ b/src/components/home/PortadaCarrusel.tsx
+@@ -10,12 +10,13 @@
+ // automático con «reducir movimiento», diapositivas inactivas con aria-hidden + inert.
+ import { useEffect, useMemo, useState, type ReactNode } from "react";
+ import { Link } from "@tanstack/react-router";
+-import { ArrowRight, ChevronLeft, ChevronRight, Sofa } from "lucide-react";
++import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+ import { CampanaTicker } from "@/components/CampanaTicker";
++import { TendederoPiezas } from "@/components/home/TendederoPiezas";
+ import { useCampana } from "@/hooks/useCampana";
+ import { useCatalogoHome } from "@/hooks/useCatalogoHome";
+ import { cloudinaryUrl } from "@/lib/cloudinary";
+-import { ofertaInfo } from "@/lib/pricing";
++import { fmtPEN, ofertaInfo } from "@/lib/pricing";
+ import { fotosPortada } from "@/lib/portadaFotos";
+ import {
+   diapositivasActivas,
+@@ -44,6 +45,7 @@ interface Pieza {
+   src: string | null;
+   nombre: string;
+   id?: string;
++  precio: string | null; // precio final real (con oferta vigente si la hay)
+ }
+ 
+ interface Diapositiva {
+@@ -72,7 +74,12 @@ function lineasFantasma(texto: string): string[] {
+ const imagenDe = (p: Product, w: number, h: number) =>
+   p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w, h }) : p.imagen_url;
+ 
+-const aPieza = (p: Product): Pieza => ({ src: imagenDe(p, 720, 540), nombre: p.nombre, id: p.id });
++const aPieza = (p: Product): Pieza => ({
++  src: imagenDe(p, 720, 540),
++  nombre: p.nombre,
++  id: p.id,
++  precio: fmtPEN(ofertaInfo(p).precioFinal),
++});
+ 
+ /** Foto propia (src/assets/portada) si existe; si no, la de la pieza. */
+ function conFotos(piezas: Pieza[], propias: string[]): Pieza[] {
+@@ -190,60 +197,6 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
+   }, [campana, catalogo, ahora]);
+ }
+ 
+-/* ───────────────────────── Piezas del collage ───────────────────────── */
+-
+-// Tres tarjetas con las posiciones del boceto (en % del collage de 570×450). En móvil solo se ven la beige de
+-// arriba y la salvia de abajo, con las medidas del boceto de 390 px.
+-const POSICION = [
+-  // A · beige, arriba al centro
+-  "right-2 top-4 w-[42%] aspect-[163/114] md:right-auto md:left-[6.8%] md:top-[8.9%] md:w-[41.8%] md:h-[36%] md:aspect-auto",
+-  // B · beige, alta, a la derecha (solo PC)
+-  "hidden md:block md:left-[51%] md:top-[17.1%] md:w-[42.6%] md:h-[53.8%]",
+-  // C · salvia, abajo a la izquierda
+-  "right-2 top-[39%] w-[38%] aspect-[150/108] md:right-auto md:left-[0.5%] md:top-[52.9%] md:w-[41.8%] md:h-[33.8%] md:aspect-auto",
+-] as const;
+-const FONDO = ["bg-gm-arena", "bg-gm-arena", "bg-gm-salvia"] as const;
+-
+-function TarjetaPieza({ pieza, i }: { pieza: Pieza; i: number }) {
+-  const contenido = (
+-    <>
+-      <span
+-        className={`relative block h-full w-full overflow-hidden rounded-2xl md:rounded-[28px] lg:rounded-[34px] ${FONDO[i]}`}
+-      >
+-        {pieza.src ? (
+-          <img
+-            src={pieza.src}
+-            alt={pieza.nombre}
+-            width={720}
+-            height={540}
+-            loading={i === 0 ? "eager" : "lazy"}
+-            className="h-full w-full object-cover"
+-          />
+-        ) : (
+-          <span aria-hidden className="flex h-full w-full items-center justify-center text-gm-cafe/50">
+-            <Sofa className="h-1/3 w-1/3" />
+-          </span>
+-        )}
+-      </span>
+-      <span className="absolute left-1 top-full mt-2 hidden max-w-full truncate border-l-2 border-white/70 pl-2 text-xs font-semibold text-white md:block lg:text-sm">
+-        {pieza.nombre}
+-      </span>
+-    </>
+-  );
+-  const cls = `absolute ${POSICION[i]}`;
+-  return pieza.id ? (
+-    <Link
+-      to="/product/$handle"
+-      params={{ handle: pieza.id }}
+-      className={`${cls} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque rounded-2xl md:rounded-[28px]`}
+-    >
+-      {contenido}
+-    </Link>
+-  ) : (
+-    <div className={cls}>{contenido}</div>
+-  );
+-}
+-
+ function Boton({ d, texto }: { d: Destino; texto: string }) {
+   const cls =
+     "inline-flex min-h-[48px] items-center gap-2 rounded-full bg-white px-6 text-sm font-semibold uppercase tracking-wide text-gm-bosque shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque md:min-h-[56px] md:px-8";
+@@ -327,11 +280,12 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean;
+         {d.nota && <p className="mt-4 hidden text-xs text-background/75 lg:block lg:mt-8">{d.nota}</p>}
+       </div>
+ 
+-      {/* Collage */}
++      {/* Tendedero */}
+       <div className="absolute inset-0 md:inset-auto md:right-[3%] md:top-1/2 md:w-[54%] lg:w-[58%] md:max-w-[760px] md:-translate-y-1/2 md:aspect-[570/450]">
+-        {d.piezas.map((p, i) => (
+-          <TarjetaPieza key={`${p.id ?? p.nombre}-${i}`} pieza={p} i={i} />
+-        ))}
++        {/* PC: una cuerda con hasta 3 piezas. Móvil: dos cuerdas cortas, una pieza en cada una. */}
++        <TendederoPiezas variante="pc" piezas={d.piezas} className="hidden md:block inset-x-0 top-[14%]" />
++        <TendederoPiezas variante="movil" indice={0} piezas={d.piezas.slice(0, 1)} className="md:hidden right-1 top-3 w-[48%]" />
++        <TendederoPiezas variante="movil" indice={1} piezas={d.piezas.slice(1, 2)} className="md:hidden right-1 top-[40%] w-[48%]" />
+         {d.insignia && (
+           <div
+             aria-hidden
+diff --git a/src/components/home/TendederoPiezas.tsx b/src/components/home/TendederoPiezas.tsx
+new file mode 100644
+index 0000000..5c870d8
+--- /dev/null
++++ b/src/components/home/TendederoPiezas.tsx
+@@ -0,0 +1,195 @@
++// src/components/home/TendederoPiezas.tsx
++// Las piezas de la portada colgadas de una cuerda con pinzas, como fotos en un tendedero (boceto aprobado).
++//  · PC: una cuerda con hasta 3 piezas, bien separadas y casi al unísono para que no se tapen al balancearse.
++//  · Móvil: dos cuerdas cortas, una pieza en cada una (solo el precio, sin nombre).
++// Cada pieza es un péndulo (lib/tendedero.ts): se mece sola, se inclina con el celular, reacciona a sacudidas y
++// al toque (hooks/useInclinacion.ts). Con «reducir movimiento» queda quieta y apenas ladeada. Cada pieza sigue
++// siendo un enlace a su ficha.
++import { useEffect, useRef, type ReactNode } from "react";
++import { Link } from "@tanstack/react-router";
++import { Sofa } from "lucide-react";
++import { alTocar, empujar, inclinacion, useInclinacion } from "@/hooks/useInclinacion";
++import {
++  caida,
++  disposicionPC,
++  DISPOSICION_MOVIL,
++  paramsPendulo,
++  pasoPendulo,
++  type Aspecto,
++} from "@/lib/tendedero";
++
++export interface PiezaColgante {
++  src: string | null;
++  nombre: string;
++  id?: string;
++  precio: string | null;
++}
++
++const ASPECTO: Record<Aspecto, string> = {
++  "4/5": "aspect-[4/5]",
++  "7/10": "aspect-[7/10]",
++  "4/3": "aspect-[4/3]",
++};
++
++function Colgante({ indice, pc, children }: { indice: number; pc: boolean; children: ReactNode }) {
++  const ref = useRef<HTMLDivElement>(null);
++
++  useEffect(() => {
++    const el = ref.current;
++    if (!el) return;
++    const inicial = indice % 2 === 0 ? -1.5 : 1.5;
++    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
++      el.style.transform = `rotate(${inicial}deg)`;
++      return;
++    }
++
++    const par = paramsPendulo(indice, pc);
++    const e = { a: inicial, v: 0 };
++    let golpeVisto = inclinacion.golpe.n;
++    let anterior = performance.now();
++    let raf = 0;
++    let timer = 0;
++    let vivo = true;
++
++    const paso = (ahora: number) => {
++      if (!vivo) return;
++      // Pestaña oculta, versión no visible (PC/móvil) o diapositiva inactiva: se duerme y se revisa de vez en cuando.
++      if (document.hidden || el.offsetParent === null || el.closest('[role="tabpanel"][aria-hidden="true"]')) {
++        anterior = performance.now();
++        timer = window.setTimeout(() => {
++          raf = requestAnimationFrame(paso);
++        }, 400);
++        return;
++      }
++      const dt = Math.min((ahora - anterior) / 1000, 0.032);
++      anterior = ahora;
++      if (inclinacion.golpe.n !== golpeVisto) {
++        golpeVisto = inclinacion.golpe.n;
++        e.v += inclinacion.golpe.fuerza * par.s * par.g;
++      }
++      pasoPendulo(e, par, inclinacion.objetivo, ahora / 1000, dt);
++      el.style.transform = `rotate(${e.a.toFixed(2)}deg)`;
++      raf = requestAnimationFrame(paso);
++    };
++    raf = requestAnimationFrame(paso);
++
++    return () => {
++      vivo = false;
++      cancelAnimationFrame(raf);
++      window.clearTimeout(timer);
++    };
++  }, [indice, pc]);
++
++  return (
++    <div ref={ref} className="relative origin-top will-change-transform">
++      {[24, 76].map((x) => (
++        <span
++          key={x}
++          aria-hidden
++          style={{ left: `${x}%` }}
++          className="absolute -top-2 z-10 h-4 w-[9px] -translate-x-1/2 rounded-[2px] border border-gm-cafe/60 bg-gm-madera after:absolute after:inset-x-0 after:top-1/2 after:h-px after:bg-gm-cafe/60 after:content-['']"
++        />
++      ))}
++      {children}
++    </div>
++  );
++}
++
++function Marco({ pieza, aspecto, pc }: { pieza: PiezaColgante; aspecto: Aspecto; pc: boolean }) {
++  const cls =
++    "block rounded-lg bg-cream p-1.5 pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque";
++  const contenido = (
++    <>
++      <span className={`relative block w-full overflow-hidden rounded bg-gm-arena ${ASPECTO[aspecto]}`}>
++        {pieza.src ? (
++          <img
++            src={pieza.src}
++            alt={pieza.nombre}
++            width={720}
++            height={540}
++            loading="lazy"
++            draggable={false}
++            className="h-full w-full object-cover"
++          />
++        ) : (
++          <span aria-hidden className="flex h-full w-full items-center justify-center text-gm-cafe/50">
++            <Sofa className="h-1/3 w-1/3" />
++          </span>
++        )}
++      </span>
++      {pc && (
++        <span className="mt-2 block truncate px-0.5 text-xs font-medium leading-tight text-gm-carbon lg:text-sm">
++          {pieza.nombre}
++        </span>
++      )}
++      {pieza.precio && (
++        <span className="mt-0.5 block px-0.5 text-xs text-gm-terracota lg:text-sm">{pieza.precio}</span>
++      )}
++    </>
++  );
++  return pieza.id ? (
++    <Link to="/product/$handle" params={{ handle: pieza.id }} className={cls}>
++      {contenido}
++    </Link>
++  ) : (
++    <div className={cls}>{contenido}</div>
++  );
++}
++
++/**
++ * Una cuerda con sus piezas. `className` la coloca dentro de la diapositiva (posición absoluta). En móvil se usa una
++ * cuerda por pieza: `indice` (0 o 1) elige su disposición y su ritmo.
++ */
++export function TendederoPiezas({
++  piezas,
++  variante,
++  indice = 0,
++  className = "",
++}: {
++  piezas: PiezaColgante[];
++  variante: "pc" | "movil";
++  indice?: 0 | 1;
++  className?: string;
++}) {
++  useInclinacion();
++  const pc = variante === "pc";
++  const sag = pc ? 10 : 6;
++  const huecos = pc ? disposicionPC(piezas.length) : [DISPOSICION_MOVIL[indice]];
++  const curva = `M0 3 Q50 ${3 + 2 * sag} 100 3`;
++
++  return (
++    <div className={`absolute z-[5] h-8 ${className}`}>
++      {/* Cuerda de pita */}
++      <svg
++        aria-hidden
++        viewBox="0 0 100 30"
++        preserveAspectRatio="none"
++        className="pointer-events-none absolute left-0 top-0 h-[30px] w-full overflow-visible"
++      >
++        <path d={curva} fill="none" strokeWidth="2.4" strokeLinecap="round" vectorEffect="non-scaling-stroke" className="stroke-gm-pita" />
++        <path d={curva} fill="none" strokeWidth="1.6" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" className="stroke-gm-madera" />
++      </svg>
++      <span aria-hidden className="absolute -left-1 -top-px h-[9px] w-[9px] rounded-full border border-gm-madera bg-gm-pita" />
++      {/* Zona táctil de la cuerda: empuja y, en iPhone, pide el permiso del movimiento */}
++      <div aria-hidden className="absolute inset-x-0 -top-3 h-8 [touch-action:manipulation]" onPointerDown={alTocar} />
++
++      {huecos.map((h, i) => {
++        const pieza = piezas[i];
++        if (!pieza) return null;
++        const t = h.x + h.w / 2;
++        return (
++          <div
++            key={`${pieza.id ?? pieza.nombre}-${i}`}
++            className="absolute select-none"
++            style={{ left: `${h.x * 100}%`, width: `${h.w * 100}%`, top: caida(t, sag) + 4 }}
++            onPointerDown={empujar}
++          >
++            <Colgante indice={pc ? i : indice} pc={pc}>
++              <Marco pieza={pieza} aspecto={h.aspecto} pc={pc} />
++            </Colgante>
++          </div>
++        );
++      })}
++    </div>
++  );
++}
+diff --git a/src/hooks/useInclinacion.ts b/src/hooks/useInclinacion.ts
+new file mode 100644
+index 0000000..331a211
+--- /dev/null
++++ b/src/hooks/useInclinacion.ts
+@@ -0,0 +1,124 @@
++// src/hooks/useInclinacion.ts
++// Estado compartido para las piezas colgantes del tendedero de la portada (TendederoPiezas).
++//  · `inclinacion.objetivo`: ángulo (°) hacia el que tiende lo que cuelga según la inclinación del celular.
++//  · `inclinacion.golpe`: empujón (sacudida del celular o toque). `n` cambia en cada golpe; `fuerza` es °/s.
++// Un solo par de escuchas (deviceorientation / devicemotion) sirve a todas las cuerdas: se cuentan los usos y se
++// quitan al desmontar la última. Android/Chrome funciona directo (HTTPS); iPhone/Safari pide permiso con un toque
++// (`alTocar`). Respeta «reducir movimiento» (no escucha nada).
++import { useEffect, type PointerEvent } from "react";
++import { anguloInclinacion } from "@/lib/tendedero";
++
++type ConPermiso = { requestPermission?: () => Promise<"granted" | "denied"> };
++
++export const inclinacion = {
++  objetivo: 0,
++  golpe: { n: 0, fuerza: 0 },
++};
++
++const MAX_FUERZA = 140; // °/s: recorte de empujones y sacudidas fuertes
++const ZONA_MUERTA = 1.2; // m/s²: ignora el temblor normal de la mano
++const ENTRE_GOLPES_MS = 90;
++
++let usos = 0;
++let quitar: (() => void) | null = null;
++let ultimoGolpe = 0;
++let permisoPedido = false;
++
++const reducirMovimiento = () =>
++  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
++
++const anguloPantalla = () =>
++  window.screen?.orientation?.angle ?? (window as unknown as { orientation?: number }).orientation ?? 0;
++
++function golpear(fuerza: number) {
++  const ahora = performance.now();
++  if (ahora - ultimoGolpe < ENTRE_GOLPES_MS) return;
++  ultimoGolpe = ahora;
++  inclinacion.golpe.fuerza = Math.max(-MAX_FUERZA, Math.min(MAX_FUERZA, fuerza));
++  inclinacion.golpe.n += 1;
++}
++
++/** Aceleración lateral respecto a la pantalla (igual que useSacudida): en vertical es `x`. */
++function lateral(x: number, y: number): number {
++  const ang = ((anguloPantalla() % 360) + 360) % 360;
++  if (ang === 90) return y;
++  if (ang === 180) return -x;
++  if (ang === 270) return -y;
++  return x;
++}
++
++function escuchar() {
++  const g = { x: 0, y: 0 }; // gravedad estimada, solo si el equipo no entrega `acceleration`
++
++  const onOrientacion = (e: DeviceOrientationEvent) => {
++    inclinacion.objetivo = anguloInclinacion(e.gamma, anguloPantalla());
++  };
++
++  const onMovimiento = (e: DeviceMotionEvent) => {
++    let x = e.acceleration?.x;
++    let y = e.acceleration?.y;
++    if (x == null || y == null) {
++      const a = e.accelerationIncludingGravity;
++      if (!a || a.x == null || a.y == null) return;
++      g.x = 0.8 * g.x + 0.2 * a.x;
++      g.y = 0.8 * g.y + 0.2 * a.y;
++      x = a.x - g.x;
++      y = a.y - g.y;
++    }
++    const a = lateral(x, y);
++    if (Math.abs(a) < ZONA_MUERTA) return;
++    golpear(-a * 6); // el empujón va hacia el lado contrario a la aceleración
++  };
++
++  window.addEventListener("deviceorientation", onOrientacion);
++  window.addEventListener("devicemotion", onMovimiento);
++  return () => {
++    window.removeEventListener("deviceorientation", onOrientacion);
++    window.removeEventListener("devicemotion", onMovimiento);
++    inclinacion.objetivo = 0;
++  };
++}
++
++/** Activa las escuchas mientras haya al menos una cuerda montada. */
++export function useInclinacion() {
++  useEffect(() => {
++    if (typeof window === "undefined" || reducirMovimiento()) return;
++    if (!("DeviceOrientationEvent" in window) && !("DeviceMotionEvent" in window)) return;
++    // iPhone: sin permiso concedido los eventos no llegan; escuchar no cuesta nada y empiezan al conceder.
++    usos += 1;
++    if (usos === 1) quitar = escuchar();
++    return () => {
++      usos -= 1;
++      if (usos === 0) {
++        quitar?.();
++        quitar = null;
++      }
++    };
++  }, []);
++}
++
++/** Empuja la pieza tocada: hacia el lado contrario al punto del toque (más lejos del centro, más fuerte). */
++export function empujar(e: PointerEvent<HTMLElement>) {
++  if (reducirMovimiento()) return;
++  const r = e.currentTarget.getBoundingClientRect();
++  if (!r.width) return;
++  const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2); // -1 a 1
++  golpear(-Math.max(-1, Math.min(1, dx)) * 90 || 60); // toque justo al centro: empuje fijo
++}
++
++/** Toque sobre la cuerda: empuja y, en iPhone, pide el permiso de movimiento (debe ir dentro del toque). */
++export function alTocar(e: PointerEvent<HTMLElement>) {
++  if (reducirMovimiento()) return;
++  empujar(e);
++  if (permisoPedido || typeof window === "undefined") return;
++  const pedir = [
++    (window.DeviceOrientationEvent as unknown as ConPermiso | undefined)?.requestPermission,
++    (window.DeviceMotionEvent as unknown as ConPermiso | undefined)?.requestPermission,
++  ].filter((f): f is NonNullable<typeof f> => typeof f === "function");
++  if (!pedir.length) return;
++  permisoPedido = true;
++  void Promise.allSettled([
++    (window.DeviceOrientationEvent as unknown as ConPermiso).requestPermission?.(),
++    (window.DeviceMotionEvent as unknown as ConPermiso).requestPermission?.(),
++  ]);
++}
+diff --git a/src/lib/tendedero.ts b/src/lib/tendedero.ts
+new file mode 100644
+index 0000000..934efd3
+--- /dev/null
++++ b/src/lib/tendedero.ts
+@@ -0,0 +1,83 @@
++// src/lib/tendedero.ts
++// Lógica pura del tendedero de la portada (las piezas cuelgan de una cuerda con pinzas). Sin imports del proyecto
++// para poder probarla con `node scripts/test-tendedero.mjs`.
++
++export type Aspecto = "4/5" | "7/10" | "4/3";
++
++/** Lugar de una pieza sobre la cuerda: `x` y `w` son fracciones (0-1) del ancho de la cuerda. */
++export interface Hueco {
++  x: number;
++  w: number;
++  aspecto: Aspecto;
++}
++
++const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
++
++/** Cuánto baja la cuerda (px) en la posición `t` (0 a 1): parábola, 0 en los extremos y `sag` en el centro. */
++export function caida(t: number, sag: number): number {
++  return Math.round(sag * 4 * t * (1 - t));
++}
++
++/** PC: una cuerda con hasta 3 piezas, bien separadas para que no se tapen al balancearse (≥ 11 % de aire). */
++export function disposicionPC(n: number): Hueco[] {
++  if (n >= 3)
++    return [
++      { x: 0.02, w: 0.24, aspecto: "4/5" },
++      { x: 0.37, w: 0.26, aspecto: "7/10" },
++      { x: 0.74, w: 0.24, aspecto: "4/5" },
++    ];
++  if (n === 2)
++    return [
++      { x: 0.12, w: 0.3, aspecto: "4/5" },
++      { x: 0.56, w: 0.3, aspecto: "7/10" },
++    ];
++  if (n === 1) return [{ x: 0.36, w: 0.28, aspecto: "7/10" }];
++  return [];
++}
++
++/** Móvil: dos cuerdas cortas, una pieza en cada una. */
++export const DISPOSICION_MOVIL: readonly [Hueco, Hueco] = [
++  { x: 0.1, w: 0.68, aspecto: "4/3" },
++  { x: 0.14, w: 0.64, aspecto: "4/3" },
++];
++
++/**
++ * Ángulo objetivo (°) de lo que cuelga según la inclinación del celular (`gamma` de deviceorientation).
++ * Cuelga hacia el lado contrario a la inclinación. Solo en vertical (0° o 180°): en horizontal los ejes cambian.
++ */
++export function anguloInclinacion(gamma: number | null, pantalla: number, max = 18): number {
++  if (gamma == null || !Number.isFinite(gamma)) return 0;
++  const a = ((pantalla % 360) + 360) % 360;
++  const base = a === 0 ? -gamma * 0.5 : a === 180 ? gamma * 0.5 : 0;
++  return clamp(base, -max, max) + 0;
++}
++
++export interface ParamsPendulo {
++  k: number; // rigidez del resorte
++  c: number; // amortiguación
++  s: number; // sensibilidad a la inclinación
++  g: number; // ganancia de los empujones
++  lim: number; // ángulo máximo (°)
++  fase: number;
++  w: number; // frecuencia del vaivén de reposo (rad/s)
++}
++
++/** PC: las tres piezas casi iguales (se mueven al unísono y no se cruzan). Móvil: cada una a su ritmo. */
++export function paramsPendulo(i: number, pc: boolean): ParamsPendulo {
++  return pc
++    ? { k: 18 + (i % 3), c: 1.7, s: 1, g: 0.5, lim: 18, fase: i * 0.35, w: 0.8 }
++    : { k: 15 + (i % 3) * 5, c: 1.5 + (i % 2) * 0.5, s: 0.85 + (i % 4) * 0.1, g: 1, lim: 40, fase: i * 1.7, w: 0.7 + (i % 3) * 0.12 };
++}
++
++export interface EstadoPendulo {
++  a: number; // ángulo (°)
++  v: number; // velocidad (°/s)
++}
++
++/** Un paso del péndulo (resorte amortiguado hacia el objetivo + vaivén de reposo). `tSeg` = tiempo en segundos. */
++export function pasoPendulo(e: EstadoPendulo, p: ParamsPendulo, objetivo: number, tSeg: number, dt: number): void {
++  const reposo = Math.sin(tSeg * p.w + p.fase) * 1.3;
++  const meta = objetivo * p.s + reposo;
++  e.v += (-p.k * (e.a - meta) - p.c * e.v) * dt;
++  e.a = clamp(e.a + e.v * dt, -p.lim, p.lim);
++}
+diff --git a/src/styles.css b/src/styles.css
+index a2f2040..0be2eab 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -53,6 +53,8 @@
+   --color-gm-terracota: var(--gm-terracota);
+   --color-gm-arena: var(--gm-arena);
+   --color-gm-carbon: var(--gm-carbon);
++  --color-gm-madera: var(--gm-madera);
++  --color-gm-pita: var(--gm-pita);
+   --color-destructive: var(--destructive);
+   --color-destructive-foreground: var(--destructive-foreground);
+   --color-border: var(--border);
+@@ -117,6 +119,8 @@
+   --gm-terracota: oklch(0.559 0.137 40); /* #B5532F ofertas, insignia y pestaña activa */
+   --gm-arena: oklch(0.907 0.028 84); /* #E9DFCC franja de envíos y tarjetas */
+   --gm-carbon: oklch(0.285 0.006 92); /* #2B2A27 footer */
++  --gm-madera: oklch(0.746 0.066 72); /* #C9A57A pinzas del tendedero de la portada */
++  --gm-pita: oklch(0.836 0.05 85); /* #D9C7A3 cuerda del tendedero de la portada */
+   --wood-light: oklch(0.91 0.04 75);
+   --wood-dark: oklch(0.32 0.05 50);
+   --cream: oklch(0.97 0.015 80);

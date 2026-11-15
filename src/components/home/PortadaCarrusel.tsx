@@ -10,12 +10,13 @@
 // automático con «reducir movimiento», diapositivas inactivas con aria-hidden + inert.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ChevronLeft, ChevronRight, Sofa } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { CampanaTicker } from "@/components/CampanaTicker";
+import { TendederoPiezas } from "@/components/home/TendederoPiezas";
 import { useCampana } from "@/hooks/useCampana";
 import { useCatalogoHome } from "@/hooks/useCatalogoHome";
 import { cloudinaryUrl } from "@/lib/cloudinary";
-import { ofertaInfo } from "@/lib/pricing";
+import { fmtPEN, ofertaInfo } from "@/lib/pricing";
 import { fotosPortada } from "@/lib/portadaFotos";
 import {
   diapositivasActivas,
@@ -44,6 +45,7 @@ interface Pieza {
   src: string | null;
   nombre: string;
   id?: string;
+  precio: string | null; // precio final real (con oferta vigente si la hay)
 }
 
 interface Diapositiva {
@@ -72,7 +74,12 @@ function lineasFantasma(texto: string): string[] {
 const imagenDe = (p: Product, w: number, h: number) =>
   p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w, h }) : p.imagen_url;
 
-const aPieza = (p: Product): Pieza => ({ src: imagenDe(p, 720, 540), nombre: p.nombre, id: p.id });
+const aPieza = (p: Product): Pieza => ({
+  src: imagenDe(p, 720, 540),
+  nombre: p.nombre,
+  id: p.id,
+  precio: fmtPEN(ofertaInfo(p).precioFinal),
+});
 
 /** Foto propia (src/assets/portada) si existe; si no, la de la pieza. */
 function conFotos(piezas: Pieza[], propias: string[]): Pieza[] {
@@ -190,60 +197,6 @@ function useDiapositivas(): { lista: Diapositiva[]; hayCampana: boolean } {
   }, [campana, catalogo, ahora]);
 }
 
-/* ───────────────────────── Piezas del collage ───────────────────────── */
-
-// Tres tarjetas con las posiciones del boceto (en % del collage de 570×450). En móvil solo se ven la beige de
-// arriba y la salvia de abajo, con las medidas del boceto de 390 px.
-const POSICION = [
-  // A · beige, arriba al centro
-  "right-2 top-4 w-[42%] aspect-[163/114] md:right-auto md:left-[6.8%] md:top-[8.9%] md:w-[41.8%] md:h-[36%] md:aspect-auto",
-  // B · beige, alta, a la derecha (solo PC)
-  "hidden md:block md:left-[51%] md:top-[17.1%] md:w-[42.6%] md:h-[53.8%]",
-  // C · salvia, abajo a la izquierda
-  "right-2 top-[39%] w-[38%] aspect-[150/108] md:right-auto md:left-[0.5%] md:top-[52.9%] md:w-[41.8%] md:h-[33.8%] md:aspect-auto",
-] as const;
-const FONDO = ["bg-gm-arena", "bg-gm-arena", "bg-gm-salvia"] as const;
-
-function TarjetaPieza({ pieza, i }: { pieza: Pieza; i: number }) {
-  const contenido = (
-    <>
-      <span
-        className={`relative block h-full w-full overflow-hidden rounded-2xl md:rounded-[28px] lg:rounded-[34px] ${FONDO[i]}`}
-      >
-        {pieza.src ? (
-          <img
-            src={pieza.src}
-            alt={pieza.nombre}
-            width={720}
-            height={540}
-            loading={i === 0 ? "eager" : "lazy"}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span aria-hidden className="flex h-full w-full items-center justify-center text-gm-cafe/50">
-            <Sofa className="h-1/3 w-1/3" />
-          </span>
-        )}
-      </span>
-      <span className="absolute left-1 top-full mt-2 hidden max-w-full truncate border-l-2 border-white/70 pl-2 text-xs font-semibold text-white md:block lg:text-sm">
-        {pieza.nombre}
-      </span>
-    </>
-  );
-  const cls = `absolute ${POSICION[i]}`;
-  return pieza.id ? (
-    <Link
-      to="/product/$handle"
-      params={{ handle: pieza.id }}
-      className={`${cls} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque rounded-2xl md:rounded-[28px]`}
-    >
-      {contenido}
-    </Link>
-  ) : (
-    <div className={cls}>{contenido}</div>
-  );
-}
-
 function Boton({ d, texto }: { d: Destino; texto: string }) {
   const cls =
     "inline-flex min-h-[48px] items-center gap-2 rounded-full bg-white px-6 text-sm font-semibold uppercase tracking-wide text-gm-bosque shadow-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque md:min-h-[56px] md:px-8";
@@ -327,11 +280,12 @@ function Slide({ d, activa, indice, total }: { d: Diapositiva; activa: boolean; 
         {d.nota && <p className="mt-4 hidden text-xs text-background/75 lg:block lg:mt-8">{d.nota}</p>}
       </div>
 
-      {/* Collage */}
+      {/* Tendedero */}
       <div className="absolute inset-0 md:inset-auto md:right-[3%] md:top-1/2 md:w-[54%] lg:w-[58%] md:max-w-[760px] md:-translate-y-1/2 md:aspect-[570/450]">
-        {d.piezas.map((p, i) => (
-          <TarjetaPieza key={`${p.id ?? p.nombre}-${i}`} pieza={p} i={i} />
-        ))}
+        {/* PC: una cuerda con hasta 3 piezas. Móvil: dos cuerdas cortas, una pieza en cada una. */}
+        <TendederoPiezas variante="pc" piezas={d.piezas} className="hidden md:block inset-x-0 top-[14%]" />
+        <TendederoPiezas variante="movil" indice={0} piezas={d.piezas.slice(0, 1)} className="md:hidden right-1 top-3 w-[48%]" />
+        <TendederoPiezas variante="movil" indice={1} piezas={d.piezas.slice(1, 2)} className="md:hidden right-1 top-[40%] w-[48%]" />
         {d.insignia && (
           <div
             aria-hidden

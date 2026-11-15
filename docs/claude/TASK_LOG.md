@@ -1,5 +1,12 @@
 # TASK_LOG
 
+## 2026-11-15 — Portada v3: tendedero de piezas (reemplaza el collage de tarjetas) — implementado, falta revisar en navegador
+- **Decisión del dueño:** aprobó el boceto del tendedero (fotos con marco colgadas de una cuerda con pinzas); en PC las fotos van separadas y casi al unísono (no una por detrás de otra); el móvil queda como el boceto.
+- **Qué cambió:** `components/home/TendederoPiezas.tsx` (nuevo), `lib/tendedero.ts` + `scripts/test-tendedero.mjs` (7/7), `hooks/useInclinacion.ts` (nuevo: estado compartido, un solo par de escuchas), `components/home/PortadaCarrusel.tsx` (monta 1 cuerda en PC y 2 en móvil en lugar de `TarjetaPieza`; `Pieza` suma `precio` real), tokens `--gm-madera` y `--gm-pita` en `styles.css`, `RULES.md`. Archivos NUEVOS: `git add` explícito.
+- **Cómo se retomó:** el chat anterior se cortó a mitad de la implementación; en el zip faltaban `useInclinacion.ts`, la prueba, `RULES.md` y el montaje en la portada. Se completaron.
+- **Verificación:** `node scripts/test-tendedero.mjs` 7/7. **No se pudo comprobar tipos ni compilar** (sin `node_modules` ni red en este entorno; `tsc` solo muestra los errores de sintaxis de `types.ts`, que está en UTF-16, y no llega a revisar el resto). **No se probó en navegador.**
+- **Pendiente / riesgos:** (1) correr `tsc` y `vite build` en tu máquina; (2) revisar a 360/414/768/1280 px que las cuerdas móviles (48 % del ancho, a la derecha) no pisen el texto (el texto llega al 60 %); (3) `useInclinacion` se escribió de cero (el original se perdió con el chat): el sentido del empujón y la fuerza hay que sentirlos en un celular real; (4) `TarjetaPieza` se borró de `PortadaCarrusel.tsx`.
+
 ## 2026-11-04 — Parte 3/8: Confianza, legal y contenido
 - Estado: **Plan entregado, esperando autorización.** Sin código ni cambios en el repo.
 - Tareas: T1, D1, D2, H1, H2 (ver PROJECT.md).

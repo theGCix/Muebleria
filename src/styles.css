@@ -53,6 +53,8 @@
   --color-gm-terracota: var(--gm-terracota);
   --color-gm-arena: var(--gm-arena);
   --color-gm-carbon: var(--gm-carbon);
+  --color-gm-madera: var(--gm-madera);
+  --color-gm-pita: var(--gm-pita);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -117,6 +119,8 @@
   --gm-terracota: oklch(0.559 0.137 40); /* #B5532F ofertas, insignia y pestaña activa */
   --gm-arena: oklch(0.907 0.028 84); /* #E9DFCC franja de envíos y tarjetas */
   --gm-carbon: oklch(0.285 0.006 92); /* #2B2A27 footer */
+  --gm-madera: oklch(0.746 0.066 72); /* #C9A57A pinzas del tendedero de la portada */
+  --gm-pita: oklch(0.836 0.05 85); /* #D9C7A3 cuerda del tendedero de la portada */
   --wood-light: oklch(0.91 0.04 75);
   --wood-dark: oklch(0.32 0.05 50);
   --cream: oklch(0.97 0.015 80);
