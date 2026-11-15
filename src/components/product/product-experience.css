@@ -121,6 +121,7 @@
   box-shadow: inset 0 0 0 3px #fff;
 }
 .gmx-swatch:hover { transform: scale(1.08); }
+.gmx-swatch::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; } /* área táctil 44 px */
 .gmx-swatch[aria-checked="true"] { outline: 2px solid var(--gmx-accent); outline-offset: 3px; }
 
 /* ── Módulo firma ───────────────────────────────────────────────────────── */
@@ -137,6 +138,7 @@
   border: 1px solid var(--gm-border); background: var(--card); color: var(--gm-mid);
   transition: all .18s;
 }
+.gmx-chip { min-height: 44px; } /* área táctil 44 px */
 .gmx-chip:hover { border-color: var(--gmx-accent); }
 .gmx-chip[aria-pressed="true"] { background: var(--gm-walnut); border-color: var(--gm-walnut); color: #fff; }
 .gmx-viz { width: 100%; height: auto; display: block; border-radius: 8px; background: var(--gm-cream); }
@@ -204,7 +206,7 @@
 .gmx-share {
   display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
   background: transparent; color: var(--gm-muted); border: 1px solid var(--gm-border); border-radius: 2px;
-  padding: 10px; margin-top: 8px; font-size: 13px; letter-spacing: .03em; cursor: pointer;
+  padding: 10px; min-height: 44px; margin-top: 8px; font-size: 13px; letter-spacing: .03em; cursor: pointer;
   transition: color .2s, border-color .2s;
 }
 .gmx-share:hover { color: var(--gm-walnut); border-color: var(--gm-walnut); }
@@ -383,6 +385,8 @@
   background: color-mix(in oklab, var(--card) 82%, transparent); color: var(--gm-walnut); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px);
   transition: background .2s, transform .2s;
 }
+.gmg-expand { position: relative; }
+.gmg-expand::after { content: ""; position: absolute; inset: -8px -2px; } /* área táctil 44 px */
 .gmg-expand:hover { background: var(--card); transform: translateY(-1px); }
 
 /* Flechas (aparecen al pasar el cursor) */

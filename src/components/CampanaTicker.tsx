@@ -68,7 +68,7 @@ export function CampanaTicker({
     <Link
       to="/"
       hash="ofertas"
-      className="flex items-center gap-1.5 hover:underline underline-offset-2"
+      className="flex min-h-11 items-center gap-1.5 hover:underline underline-offset-2"
     >
       <Flame className="h-3.5 w-3.5 flex-shrink-0" />
       <span>

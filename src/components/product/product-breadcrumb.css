@@ -32,7 +32,7 @@
 .gmb-trail > li { display: flex; align-items: center; position: relative; min-width: 0; }
 
 .gmb-chip {
-  display: inline-flex; align-items: center; gap: 7px;
+  position: relative; display: inline-flex; align-items: center; gap: 7px;
   height: 36px; padding: 0 13px; border-radius: 9999px;
   color: var(--b-mid); text-decoration: none; font-weight: 500;
   transition: background-color .18s, color .18s;
@@ -52,7 +52,7 @@
 .gmb-chip-cat { padding-right: 6px; min-width: 0; }
 .gmb-caret {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; margin-right: 3px; flex: none;
+  position: relative; width: 30px; height: 30px; margin-right: 3px; flex: none;
   border: 0; border-radius: 9999px; background: none; color: var(--b-mid); cursor: pointer;
   transition: background-color .18s, color .18s;
 }
@@ -151,3 +151,9 @@
   .gmb-menu, .gmb-peek { animation: none !important; }
   .gmb-caret svg { transition: none; }
 }
+
+/* Área táctil mínima de 44 px sin cambiar el tamaño visible (ley de Fitts) */
+.gmb-chip::after, .gmb-step::after { content: ""; position: absolute; inset: -4px 0; }
+.gmb-chip[aria-label="Inicio"]::after, .gmb-step::after { inset: -4px; }
+.gmb-chip, .gmb-step, .gmb-caret { z-index: 1; }
+.gmb-caret::after { content: ""; position: absolute; inset: -7px; }

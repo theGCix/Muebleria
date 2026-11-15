@@ -26,7 +26,7 @@ interface Item {
 const PILDORA =
   "inline-flex min-h-11 items-center justify-center rounded-full bg-background px-7 text-sm font-semibold text-gm-bosque transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque";
 const FLECHA =
-  "absolute top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-background text-gm-bosque shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque";
+  "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-background text-gm-bosque shadow-md transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-gm-bosque";
 
 export function ColeccionDestacada() {
   const { data: catalogo = [] } = useCatalogoHome(60);
