@@ -1,5 +1,11 @@
 # TASK_LOG
 
+## 2026-11-15 — Home móvil: ofertas deslizables, taller en 2×2 y 4 recientes — implementado, falta revisar en navegador
+- **Decisión del dueño:** las secciones «Ofertas vigentes» y «Hecho en nuestro taller» se veían vacías en móvil y «Recién salidos» mostraba solo 2; aprobó el boceto (colores existentes: terracota, salvia, crema, bosque) y dejó «Juegos de sala desde…» como está. Estos cambios reemplazan lo que el boceto v3 decía para móvil.
+- **Qué cambió:** `OfertasVigentes.tsx` (móvil/tablet: fila deslizable de hasta 8 tarjetas con foto 400×300, `-N %`, precio final y original tachado; PC igual), `HechoEnTaller.tsx` (móvil: 4 pasos en tarjetas 2×2; subtítulo único), `RecienSalidos.tsx` (4 piezas también en móvil, 2×2), `RULES.md`. Sin dependencias ni colores nuevos; `lib/seccionesHome.ts` no cambia.
+- **Verificación:** solo comprobación de sintaxis y las pruebas existentes; sin build ni navegador (sin `node_modules` aquí).
+- **Pendiente / riesgos:** (1) `npx tsc --noEmit` y `npm run build`; (2) revisar a 360/390/768 px: el desliz de ofertas, que 4 tarjetas de `ProductCard` a 2 columnas no queden apretadas y que la página alargue ~450 px; (3) la sección del taller sigue sin foto/video real: al cargar `taller.jpg` o `TALLER_VIDEO` aparece sola.
+
 ## 2026-11-15 — Portada v3: tendedero de piezas (reemplaza el collage de tarjetas) — implementado, falta revisar en navegador
 - **Decisión del dueño:** aprobó el boceto del tendedero (fotos con marco colgadas de una cuerda con pinzas); en PC las fotos van separadas y casi al unísono (no una por detrás de otra); el móvil queda como el boceto.
 - **Qué cambió:** `components/home/TendederoPiezas.tsx` (nuevo), `lib/tendedero.ts` + `scripts/test-tendedero.mjs` (7/7), `hooks/useInclinacion.ts` (nuevo: estado compartido, un solo par de escuchas), `components/home/PortadaCarrusel.tsx` (monta 1 cuerda en PC y 2 en móvil en lugar de `TarjetaPieza`; `Pieza` suma `precio` real), tokens `--gm-madera` y `--gm-pita` en `styles.css`, `RULES.md`. Archivos NUEVOS: `git add` explícito.

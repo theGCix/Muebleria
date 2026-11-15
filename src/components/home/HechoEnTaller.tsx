@@ -1,5 +1,5 @@
 // src/components/home/HechoEnTaller.tsx
-// «Hecho en nuestro taller» (boceto v3): 4 pasos y foto o video del taller. Los textos salen de lib/taller.ts (los del dueño):
+// «Hecho en nuestro taller» (boceto v3): 4 pasos (en móvil, tarjetas 2×2) y foto o video del taller. Los textos salen de lib/taller.ts (los del dueño):
 // «Madera tornillo» ← corte, «Armado y lijado» ← lijado + armado, «Barniz y acabado» ← sellado y acabado, «Entrega a tu casa»
 // ← embalaje y despacho (lib/seccionesHome.ts). Sin foto ni video no se dibuja el recuadro (nunca una foto de ejemplo).
 // El video no carga ningún reproductor hasta que el cliente lo pide (regla 7.5).
@@ -29,9 +29,24 @@ export function HechoEnTaller() {
             Hecho en nuestro taller
           </h2>
           <p className="mt-1 text-sm text-foreground/80 md:text-base">
-            <span className="md:hidden">{pasos.map((p) => `${p.n} ${p.titulo.split(" ")[0]}`).join(" · ")}</span>
-            <span className="hidden md:inline">Mira cómo nace cada pieza, paso a paso.</span>
+            Mira cómo nace cada pieza, paso a paso.
           </p>
+
+          {/* Móvil: los 4 pasos como tarjetas 2×2 (antes, una sola línea de texto) */}
+          <ol className="mt-5 grid grid-cols-2 gap-2.5 md:hidden">
+            {pasos.map((p) => (
+              <li key={p.n} className="flex items-center gap-2.5 rounded-xl bg-card p-3">
+                <span
+                  aria-hidden
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gm-bosque text-sm font-semibold text-white"
+                >
+                  {p.n}
+                </span>
+                <span className="min-w-0 text-[0.8125rem] font-semibold leading-snug text-foreground">{p.titulo}</span>
+                <span className="sr-only">{p.descripcion}</span>
+              </li>
+            ))}
+          </ol>
 
           {/* PC: círculos numerados unidos por una línea punteada */}
           <ol className={`mt-8 hidden items-start md:flex ${hayMedia ? "" : "max-w-2xl"}`}>

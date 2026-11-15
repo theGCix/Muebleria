@@ -1,5 +1,5 @@
 // src/components/home/RecienSalidos.tsx
-// «Recién salidos del taller» (boceto v3): las piezas más recientes con foto (4 en PC, 2 en móvil) con la tarjeta de
+// «Recién salidos del taller» (boceto v3): las piezas más recientes con foto (4 en PC y 4 en móvil, 2×2) con la tarjeta de
 // producto de siempre (precio vigente, plazo y «Agregar»), y «Ver todo el catálogo (N piezas)». Reemplaza a ProductsSection
 // en el home y conserva id="catalogo" (Footer, Header y Hero.tsx apuntan a ese ancla).
 import { useMemo } from "react";
@@ -27,13 +27,13 @@ export function RecienSalidos() {
         {isLoading ? (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-4" aria-hidden>
             {Array.from({ length: PIEZAS }).map((_, i) => (
-              <div key={i} className={`h-72 animate-pulse rounded-2xl bg-muted ${i > 1 ? "hidden md:block" : ""}`} />
+              <div key={i} className="h-72 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
         ) : (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-4">
-            {recientes.map((p, i) => (
-              <div key={p.id} className={i > 1 ? "hidden md:block" : undefined}>
+            {recientes.map((p) => (
+              <div key={p.id}>
                 <ProductCard product={p} />
               </div>
             ))}
