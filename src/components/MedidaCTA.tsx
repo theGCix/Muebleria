@@ -32,7 +32,8 @@ const PASOS = [
   },
 ];
 
-export function MedidaCTA() {
+/** Tarjeta del formulario de cotización a medida (estado, validación y envío del lead). */
+export function FormularioMedida() {
   const [tipo, setTipo] = useState<string | null>(null);
   const [segmento, setSegmento] = useSegmento();
   const [nombre, setNombre] = useState("");
@@ -69,6 +70,123 @@ export function MedidaCTA() {
   });
 
   return (
+  <div className="rounded-2xl bg-background p-6 text-foreground shadow-xl md:p-8">
+    {enviado ? (
+      <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 text-center">
+        <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+        <h3 className="text-2xl font-semibold">¡Gracias, {enviado}!</h3>
+        <p className="max-w-xs text-sm text-muted-foreground">
+          Recibimos tu consulta. Un asesor te contactará muy pronto por WhatsApp o llamada.
+        </p>
+        <button
+          type="button"
+          onClick={() => setEnviado(null)}
+          className="mt-2 text-sm font-medium text-accent-strong hover:underline"
+        >
+          Enviar otra consulta
+        </button>
+      </div>
+    ) : (
+      <form
+        className="space-y-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valido) mutation.mutate();
+        }}
+      >
+        <div>
+          <h3 className="text-2xl font-semibold">Pide tu cotización</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Toma menos de un minuto. Sin compromiso.
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-muted-foreground">
+            ¿Qué necesitas?
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de mueble">
+            {TIPOS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={tipo === t}
+                onClick={() => setTipo(tipo === t ? null : t)}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                  tipo === t
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:bg-secondary"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <SelectorSegmento value={segmento} onChange={setSegmento} />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="medida-nombre">Tu nombre</Label>
+            <Input
+              id="medida-nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              autoComplete="name"
+              maxLength={255}
+              className="mt-1.5 h-11"
+            />
+          </div>
+          <div>
+            <Label htmlFor="medida-telefono">WhatsApp</Label>
+            <Input
+              id="medida-telefono"
+              type="tel"
+              inputMode="tel"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              placeholder="9XXXXXXXX"
+              autoComplete="tel"
+              maxLength={20}
+              className="mt-1.5 h-11"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="medida-detalle">Medidas o detalles (opcional)</Label>
+          <Input
+            id="medida-detalle"
+            value={detalle}
+            onChange={(e) => setDetalle(e.target.value)}
+            placeholder="Ej.: comedor para 6, madera clara, 2 m de largo"
+            maxLength={500}
+            className="mt-1.5 h-11"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={!valido || mutation.isPending}
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+        >
+          {mutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+          Quiero mi cotización
+        </button>
+      </form>
+    )}
+  </div>
+  );
+}
+
+/** Layout anterior del cierre del home (texto + formulario). Ya no se monta en el home; lo reemplaza `home/CotizarMedida`. */
+export function MedidaCTA() {
+  return (
     <section id="a-medida" className="scroll-mt-28 px-4 pb-20 pt-4 md:pb-24">
       <div
         data-reveal="panel"
@@ -100,117 +218,7 @@ export function MedidaCTA() {
           </ol>
         </div>
 
-        <div className="rounded-2xl bg-background p-6 text-foreground shadow-xl md:p-8">
-          {enviado ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-3 text-center">
-              <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-              <h3 className="text-2xl font-semibold">¡Gracias, {enviado}!</h3>
-              <p className="max-w-xs text-sm text-muted-foreground">
-                Recibimos tu consulta. Un asesor te contactará muy pronto por WhatsApp o llamada.
-              </p>
-              <button
-                type="button"
-                onClick={() => setEnviado(null)}
-                className="mt-2 text-sm font-medium text-accent-strong hover:underline"
-              >
-                Enviar otra consulta
-              </button>
-            </div>
-          ) : (
-            <form
-              className="space-y-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (valido) mutation.mutate();
-              }}
-            >
-              <div>
-                <h3 className="text-2xl font-semibold">Pide tu cotización</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Toma menos de un minuto. Sin compromiso.
-                </p>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  ¿Qué necesitas?
-                </p>
-                <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de mueble">
-                  {TIPOS.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      aria-pressed={tipo === t}
-                      onClick={() => setTipo(tipo === t ? null : t)}
-                      className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                        tipo === t
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card hover:bg-secondary"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <SelectorSegmento value={segmento} onChange={setSegmento} />
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="medida-nombre">Tu nombre</Label>
-                  <Input
-                    id="medida-nombre"
-                    value={nombre}
-                    onChange={(e) => setNombre(e.target.value)}
-                    autoComplete="name"
-                    maxLength={255}
-                    className="mt-1.5 h-11"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="medida-telefono">WhatsApp</Label>
-                  <Input
-                    id="medida-telefono"
-                    type="tel"
-                    inputMode="tel"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    placeholder="9XXXXXXXX"
-                    autoComplete="tel"
-                    maxLength={20}
-                    className="mt-1.5 h-11"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="medida-detalle">Medidas o detalles (opcional)</Label>
-                <Input
-                  id="medida-detalle"
-                  value={detalle}
-                  onChange={(e) => setDetalle(e.target.value)}
-                  placeholder="Ej.: comedor para 6, madera clara, 2 m de largo"
-                  maxLength={500}
-                  className="mt-1.5 h-11"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={!valido || mutation.isPending}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-              >
-                {mutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                Quiero mi cotización
-              </button>
-            </form>
-          )}
-        </div>
+        <FormularioMedida />
       </div>
     </section>
   );

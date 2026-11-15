@@ -7,13 +7,15 @@ import { ElegirAmbiente } from "@/components/home/ElegirAmbiente";
 import { ArmadorPresupuesto } from "@/components/home/ArmadorPresupuesto";
 
 
-import { OfertasSection } from "@/components/OfertasSection";
+import { OfertasVigentes } from "@/components/home/OfertasVigentes";
+import { HechoEnTaller } from "@/components/home/HechoEnTaller";
+import { RecienSalidos } from "@/components/home/RecienSalidos";
+import { PruebaloEnTuEspacio } from "@/components/home/PruebaloEnTuEspacio";
+import { CotizarMedida } from "@/components/home/CotizarMedida";
 import { CombosSection } from "@/components/CombosSection";
 import { PromoCategoriaBanner } from "@/components/PromoCategoriaBanner";
-import { ProductsSection } from "@/components/ProductsSection";
 import { Testimonials } from "@/components/Testimonials";
 import { ClientesSatisfechos } from "@/components/ClientesSatisfechos";
-import { MedidaCTA } from "@/components/MedidaCTA";
 import { Footer } from "@/components/Footer";
 
 import { trackEvent } from "@/hooks/useEventTracking"; // ajusta la ruta si es diferente
@@ -41,6 +43,9 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <ArmadorPresupuesto /> <OfertasSection /> <CombosSection /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
+     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <ArmadorPresupuesto /> <OfertasVigentes /> <HechoEnTaller /> <RecienSalidos />
+       {/* Fuera del boceto, se conservan por ahora (el menú apunta a #combos y el pie a #testimonios) */}
+       <CombosSection /> <PromoCategoriaBanner /> <Testimonials /> <ClientesSatisfechos />
+       <PruebaloEnTuEspacio /> <CotizarMedida />
      </main> 
      <Footer /> </div> ); }
