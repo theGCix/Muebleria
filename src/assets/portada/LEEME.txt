@@ -1,13 +1,14 @@
-Fotos del banner de la portada (BannerPortada.tsx)
+Fotos propias de la portada v3 (components/home/PortadaCarrusel.tsx, lib/portadaFotos.ts)
 
-Copia aquí la(s) foto(s) del banner (.jpg, .jpeg, .png, .webp o .avif). Se muestran en orden alfabético del nombre
-(01-sala.jpg, 02-comedor.jpg, …). Con una sola foto no hay carrusel; con varias, se muestran con flechas y puntos.
-Sin ninguna foto aquí, el banner usa el carrusel de piezas del catálogo.
+Copia aquí las fotos (.jpg, .jpeg, .png, .webp o .avif). El nombre decide dónde va:
+  01-locura-1, 01-locura-2, 01-locura-3   las 3 tarjetas de «Días de locura» (arriba, derecha, abajo)
+  02-salas-1 .. 02-salas-3                tarjetas de la diapositiva «Salas»
+  03-a-medida-1 .. 03-a-medida-3          tarjetas de «Hecho a tu medida»
+  04-pruebalo-1 .. 04-pruebalo-3          tarjetas de «Pruébalo en tu espacio»
+  taller.jpg                              sección «Hecho en nuestro taller» (fase 3)
+Sin foto propia, cada tarjeta usa la foto real de una pieza del catálogo (con su nombre y enlace a la ficha).
 
 Recomendado:
-  · Archivo ORIGINAL (no una captura de pantalla) y SIN texto: el título, la línea de apoyo y el botón son texto
-    real de la página (se lee en celular, lo ve Google y lo leen los lectores de pantalla).
-  · 2400 × 1000 px (proporción 12:5), JPG o WebP de calidad 80, de 150–350 KB.
-  · El tercio izquierdo de la foto lo cubre el texto: ahí conviene una zona tranquila (pared, luz), sin objetos
-    importantes. El mueble principal, hacia la derecha.
+  · Archivo ORIGINAL (no captura de pantalla) y SIN texto encima.
+  · Tarjetas: proporción 4:3 (720 × 540 px), JPG o WebP calidad 80, de 150–350 KB.
   · Solo imágenes tuyas o con licencia; una foto generada por IA debe poder usarse comercialmente.

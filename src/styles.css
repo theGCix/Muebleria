@@ -45,6 +45,14 @@
   --color-detail: var(--detail);
   --color-campana: var(--campana);
   --color-campana-soft: var(--campana-soft);
+  --color-gm-bosque: var(--gm-bosque);
+  --color-gm-bosque-2: var(--gm-bosque-2);
+  --color-gm-salvia: var(--gm-salvia);
+  --color-gm-durazno: var(--gm-durazno);
+  --color-gm-cafe: var(--gm-cafe);
+  --color-gm-terracota: var(--gm-terracota);
+  --color-gm-arena: var(--gm-arena);
+  --color-gm-carbon: var(--gm-carbon);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -100,6 +108,15 @@
   /* Campaña (Días de locura): superficie pastel durazno; el 10% de acento es la terracota de --accent */
   --campana: oklch(0.925 0.05 58);
   --campana-soft: oklch(0.955 0.03 62);
+  /* Paleta del boceto v3 de la portada (medida de las imágenes del dueño, 2026-11-15) */
+  --gm-bosque: oklch(0.382 0.043 158); /* #2F4A3A portada y A medida */
+  --gm-bosque-2: oklch(0.443 0.045 156); /* #3F5B49 palabra fantasma y tarjetas sobre el bosque */
+  --gm-salvia: oklch(0.892 0.021 138); /* #D5DFD2 tarjetas y taller */
+  --gm-durazno: oklch(0.913 0.042 57); /* #F9DCC8 presupuesto y cifra «30%» */
+  --gm-cafe: oklch(0.428 0.037 63); /* #5E4B3A «Pruébalo en tu espacio» */
+  --gm-terracota: oklch(0.559 0.137 40); /* #B5532F ofertas, insignia y pestaña activa */
+  --gm-arena: oklch(0.907 0.028 84); /* #E9DFCC franja de envíos y tarjetas */
+  --gm-carbon: oklch(0.285 0.006 92); /* #2B2A27 footer */
   --wood-light: oklch(0.91 0.04 75);
   --wood-dark: oklch(0.32 0.05 50);
   --cream: oklch(0.97 0.015 80);
