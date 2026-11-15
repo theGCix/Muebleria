@@ -7,10 +7,9 @@ import { CartDrawer } from "./CartDrawer";
 import { WishlistDrawer } from "./WishlistDrawer";
 import { LoginModal } from "./LoginModal";
 import { AuthButton } from "./AuthButton";
-import { CategoryMegaMenu } from "./CategoryMegaMenu";
 import { CategoryMobileAccordion } from "./CategoryMobileAccordion";
 import { useEffect, useState } from "react";
-import { Menu, X, User, Search, Truck, PackageCheck, Flame } from "lucide-react";
+import { ChevronDown, User, Search, Truck, PackageCheck, Flame } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchStore } from "@/stores/searchStore";
@@ -18,15 +17,23 @@ import { useCombos } from "@/hooks/useCombos";
 import { useOfertas } from "@/hooks/useProducts";
 
 // Enlaces del navbar: el activo se distingue con color pleno y una línea de acento debajo
-const navLinkCls = (activo: boolean, tono: "base" | "accent" = "base") =>
+const navLinkCls = (activo: boolean, tono: "base" | "accent" = "base", tactil = false) =>
   [
-    "relative flex items-center gap-1.5 py-2 text-sm font-medium transition-colors",
+    `relative flex items-center gap-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${tactil ? "min-h-11 py-2" : "py-2"}`,
     "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-left after:rounded-full after:bg-accent after:transition-transform after:duration-300",
     activo ? "after:scale-x-100" : "after:scale-x-0",
     activo
       ? tono === "accent" ? "text-accent-strong" : "text-foreground"
       : tono === "accent" ? "text-accent-strong hover:text-accent-strong/80" : "text-foreground/70 hover:text-foreground",
   ].join(" ");
+
+// Menú de secciones del boceto v3: categorías con el nombre del boceto («Muebles» = Salas). En móvil se ven las 3 primeras y «Más».
+const NAV_CATEGORIAS = [
+  { slug: "muebles", label: "Salas" },
+  { slug: "comedores", label: "Comedores" },
+  { slug: "recamaras", label: "Recámaras" },
+  { slug: "separadores", label: "Separadores" },
+] as const;
 
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -80,7 +87,8 @@ export function Header() {
 
   const combosActivo = location.pathname.startsWith("/combo/") || seccionActiva === "combos";
   const ofertasActivo = seccionActiva === "ofertas";
-  const categoriasActivo = location.pathname.startsWith("/categoria/");
+  const categoriaActual = location.pathname.startsWith("/categoria/") ? decodeURIComponent(location.pathname.split("/")[2] ?? "") : null;
+  const nosotrosActivo = location.pathname.startsWith("/nosotros");
 
   const isStaff = roles.includes("admin") || roles.includes("vendedor");
   const isCarpintero = roles.includes("carpintero") && !isStaff;
@@ -137,7 +145,7 @@ export function Header() {
       >
         {/* Barra superior de servicio */}
         <div
-          className="w-full bg-primary text-primary-foreground"
+          className="w-full bg-gm-bosque text-white"
           aria-hidden={barraOculta || undefined}
           {...(barraOculta ? ({ inert: "" } as Record<string, string>) : {})}
         >
@@ -155,53 +163,24 @@ export function Header() {
           </div>
         </div>
 
-        {/* Navbar principal */}
-        <div className="w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
-          <div className="container mx-auto flex h-20 items-center gap-2 md:gap-4 px-4 md:px-6">
+        {/* Navbar principal: logo, buscador y accesos */}
+        <div className="w-full bg-background/95 backdrop-blur-xl">
+          <div className="container mx-auto flex h-16 items-center gap-2 px-4 md:h-20 md:gap-4 md:px-6">
             {/* Logo */}
             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
               <span className="text-xs tracking-wide text-muted-foreground">Mueblería</span>
             </Link>
 
-            {/* Desktop nav */}
-            <nav className="hidden md:flex items-center gap-6 flex-shrink-0">
-              <CategoryMegaMenu activo={categoriasActivo} />
-              {hayCombos && (
-                <Link
-                  to="/"
-                  hash="combos"
-                  aria-current={combosActivo ? "true" : undefined}
-                  className={navLinkCls(combosActivo)}
-                >
-                  <PackageCheck className="h-4 w-4" />
-                  Combos
-                </Link>
-              )}
-              {hayOfertas && (
-                <Link
-                  to="/"
-                  hash="ofertas"
-                  aria-current={ofertasActivo ? "true" : undefined}
-                  className={navLinkCls(ofertasActivo, "accent")}
-                >
-                  <Flame className="h-4 w-4" />
-                  Ofertas
-                </Link>
-              )}
-            </nav>
-
             {/* Buscador (desktop, siempre visible) */}
-            <form
-              onSubmit={handleDesktopSearch}
-              className="hidden md:flex flex-1 max-w-md ml-2"
-            >
+            <form onSubmit={handleDesktopSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-auto">
               <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden />
                 <Input
                   name="q"
-                  placeholder="Buscar sofás, comedores, camas…"
-                  className="pl-9 rounded-full bg-secondary/40 border-border/50 focus-visible:ring-accent"
+                  aria-label="Buscar muebles"
+                  placeholder="¿Qué mueble estás buscando?"
+                  className="h-11 pl-10 rounded-full bg-card border-border/60 focus-visible:ring-accent"
                 />
               </div>
             </form>
@@ -218,48 +197,123 @@ export function Header() {
               <CartDrawer />
             </div>
 
-            {/* Mobile: buscar + wishlist + cart + hamburger */}
+            {/* Mobile: buscar + cuenta + favoritos + carrito (el menú vive en «Más») */}
             <div className="flex items-center gap-1 sm:gap-2 md:hidden ml-auto">
               <button
                 onClick={() => { setMobileSearchOpen((v) => !v); setMobileOpen(false); }}
-                className={`p-2 rounded-md transition-colors ${mobileSearchOpen ? "text-accent-strong bg-accent/10" : "text-foreground/70 hover:text-foreground hover:bg-accent/10"}`}
+                className={`flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${mobileSearchOpen ? "text-accent-strong bg-accent/10" : "text-foreground/70 hover:text-foreground hover:bg-accent/10"}`}
                 aria-label="Buscar"
+                aria-expanded={mobileSearchOpen}
               >
                 <Search className="h-5 w-5" />
               </button>
-              {/* Acceso siempre a la vista: foto de la cuenta o botón «Iniciar sesión» (antes solo estaba dentro del menú) */}
+              {/* Acceso siempre a la vista: foto de la cuenta o botón «Iniciar sesión» */}
               <AuthButton compact />
               <WishlistDrawer />
               <CartDrawer />
-              <button
-                onClick={() => { setMobileOpen((v) => !v); setMobileSearchOpen(false); }}
-                className="p-2 rounded-md text-foreground/70 hover:text-foreground hover:bg-accent/10"
-                aria-label="Menú"
-              >
-                {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
             </div>
           </div>
 
           {/* Barra de búsqueda mobile (toggle independiente del menú) */}
           {mobileSearchOpen && (
             <div className="md:hidden border-t border-border/40 bg-background px-4 py-3">
-              <form onSubmit={handleMobileSearch} className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <form onSubmit={handleMobileSearch} role="search" className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden />
                 <Input
                   autoFocus
+                  aria-label="Buscar muebles"
                   value={mobileSearch}
                   onChange={(e) => setMobileSearch(e.target.value)}
-                  placeholder="Buscar sofás, comedores, camas…"
-                  className="pl-9 rounded-full bg-secondary/40 border-border/50"
+                  placeholder="¿Qué mueble estás buscando?"
+                  className="h-11 pl-9 rounded-full bg-card border-border/60"
                 />
               </form>
             </div>
           )}
+        </div>
+
+        {/* Menú de secciones (boceto v3): PC con todas las secciones; móvil con 3 categorías y «Más» */}
+        <div className="w-full border-y border-border/50 bg-card">
+          <nav aria-label="Secciones de la tienda" className="container mx-auto px-4 md:px-6">
+            <ul className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center">
+              <li aria-hidden className="block" />
+              <li>
+                <ul className="flex items-center gap-8 lg:gap-10">
+                  {NAV_CATEGORIAS.map((c) => (
+                    <li key={c.slug}>
+                      <Link
+                        to="/categoria/$slug"
+                        params={{ slug: c.slug }}
+                        aria-current={categoriaActual === c.slug ? "page" : undefined}
+                        className={navLinkCls(categoriaActual === c.slug, "base", true)}
+                      >
+                        {c.label}
+                      </Link>
+                    </li>
+                  ))}
+                  {hayCombos && (
+                    <li>
+                      <Link to="/" hash="combos" aria-current={combosActivo ? "true" : undefined} className={navLinkCls(combosActivo, "base", true)}>
+                        Combos
+                      </Link>
+                    </li>
+                  )}
+                  <li>
+                    <Link to="/" hash="a-medida" className={navLinkCls(false, "base", true)}>
+                      A medida
+                    </Link>
+                  </li>
+                </ul>
+              </li>
+              <li>
+                <ul className="flex items-center justify-end gap-8">
+                  {hayOfertas && (
+                    <li>
+                      <Link to="/" hash="ofertas" aria-current={ofertasActivo ? "true" : undefined} className={`${navLinkCls(ofertasActivo, "accent", true)} font-bold`}>
+                        Ofertas
+                      </Link>
+                    </li>
+                  )}
+                  <li>
+                    <Link to="/nosotros" aria-current={nosotrosActivo ? "page" : undefined} className={navLinkCls(nosotrosActivo, "base", true)}>
+                      Nosotros
+                    </Link>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+
+            <ul className="flex items-center justify-between md:hidden">
+              {NAV_CATEGORIAS.slice(0, 3).map((c) => (
+                <li key={c.slug}>
+                  <Link
+                    to="/categoria/$slug"
+                    params={{ slug: c.slug }}
+                    aria-current={categoriaActual === c.slug ? "page" : undefined}
+                    className={navLinkCls(categoriaActual === c.slug, "base", true)}
+                  >
+                    {c.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <button
+                  type="button"
+                  aria-expanded={mobileOpen}
+                  aria-controls="menu-movil"
+                  onClick={() => { setMobileOpen((v) => !v); setMobileSearchOpen(false); }}
+                  className={navLinkCls(mobileOpen, "base", true)}
+                >
+                  Más
+                  <ChevronDown className={`h-4 w-4 transition-transform ${mobileOpen ? "rotate-180" : ""}`} aria-hidden />
+                </button>
+              </li>
+            </ul>
+          </nav>
 
           {/* Mobile dropdown */}
           {mobileOpen && (
-            <div className="md:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+            <div id="menu-movil" className="md:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
               {/* Catálogo completo */}
               <Link
                 to="/catalogo"
@@ -277,7 +331,15 @@ export function Header() {
                 <CategoryMobileAccordion onNavigate={() => setMobileOpen(false)} />
               </div>
 
-              {/* Combos y ofertas */}
+              {/* A medida, Nosotros, combos y ofertas */}
+              <div className="pt-1">
+                <Link to="/" hash="a-medida" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 text-sm font-medium py-2 border-b border-border/30 text-foreground/80 hover:text-foreground">
+                  A medida
+                </Link>
+                <Link to="/nosotros" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 text-sm font-medium py-2 border-b border-border/30 text-foreground/80 hover:text-foreground">
+                  Nosotros
+                </Link>
+              </div>
               {(hayCombos || hayOfertas) && (
                 <div className="pt-1">
                   {hayCombos && (
