@@ -1,0 +1,505 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index 0dff69e..e4a3174 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -123,3 +123,5 @@
+ - **Paleta del boceto (tokens `--gm-*` en `styles.css`):** bosque `#2F4A3A` (portada, «A medida»), bosque-2 `#3F5B49`, salvia `#D5DFD2`, durazno `#F9DCC8` (presupuesto y cifra de la campaña), café `#5E4B3A` («Pruébalo»), terracota `#B5532F` (ofertas, insignia, pestaña activa), arena `#E9DFCC`, carbón `#2B2A27` (footer). **Esto reemplaza** la regla 4 en lo que contradice (durazno solo en ofertas; marrón solo en líneas): en las secciones del boceto se usan los tokens `--gm-*`. Fuera de esas secciones siguen los tokens Japandi.
+ - **Portada:** `PortadaCarrusel` (`components/home/`) reemplaza a `BannerPortada`, `HeroCampanaHome` y `BeneficiosFranja` en el home (los componentes quedan sin montar). 4 diapositivas (campaña, salas, a medida, pruébalo); **sin campaña vigente no hay diapositiva ni pestaña de campaña** (quedan 3). Las pestañas (solo ≥ 768 px) saltan a cada diapositiva. Lógica pura en `lib/portadaCarrusel.ts` (prueba: `node scripts/test-portada-carrusel.mjs`).
+ - **Fotos de la portada:** `src/assets/portada/` por prefijo de nombre (ver `LEEME.txt`); sin foto propia se usa la foto real de la pieza. Las diapositivas 2-4 no están dibujadas en el boceto: usan el mismo diseño.
++- **Elige tu ambiente (fase 2):** `components/home/ElegirAmbiente.tsx` reemplaza a `Categories` en el home. En la vista pública «Muebles» se llama «Salas» y «Separadores de ambiente», «Separadores» (boceto); `lib/categories.ts` no cambia. En móvil se muestran 4 ambientes (sin Accesorios) y sin «Ver todas», como el boceto móvil.
++- **Tu presupuesto manda (fase 2):** `components/home/ArmadorPresupuesto.tsx` reemplaza a `PresupuestoHome` en el home. Límites del deslizador, conteo, «desde» y miniaturas salen de los precios finales reales (`lib/armadorPresupuesto.ts`, prueba `node scripts/test-armador-presupuesto.mjs`); el mínimo se redondea hacia arriba para que ningún tope quede sin piezas; abre en el tope del tramo del medio (`TRAMOS[1].max`); el botón lleva a `/catalogo?max=`. «¿Para qué es?» (4 chips en PC, 3 en móvil) es opcional y **no viene preseleccionado** (el boceto muestra «Primer hogar» marcado, pero guardaría un segmento que el visitante no eligió). Los segmentos «remodelación» y «diseñador/constructora» quedan en los formularios de cotización. La etiqueta «TU PRESUPUESTO MANDA» en mayúsculas es del boceto (excepción a «una etiqueta por página»).
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index ae9e432..6cffb61 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -357,3 +357,9 @@
+ - **Datos reales:** nombre de campaña, «TERMINA EN N DÍAS» (vencimiento más próximo), descuento máximo, «desde S/ X» (precio final mínimo de las ofertas), «Salas desde S/ X» (mínimo de la categoría `muebles`), tarjetas = piezas con foto (ofertas primero).
+ - **Verificación:** `tsc` sin errores nuevos, `vite build` OK, todas las suites `scripts/test-*.mjs` pasan. Chromium con productos simulados a 1440, 820 y 390 px, con y sin campaña: sin scroll horizontal; se compararon contra el boceto. **No se probó** con fotos reales ni con Playfair cargada (Google Fonts bloqueado en el entorno de prueba: salió Georgia), ni en iOS Safari.
+ - **Pendiente:** fases 2–5 (ambientes, armador de presupuesto, ofertas, taller, recién salidos, pruébalo, a medida, footer, header y menú del boceto); el enlace «Probar ahora» apunta a `#pruebalo` (la sección llega en la fase 3); el home aún muestra las secciones antiguas debajo de la portada.
++
++## 2026-11-15 — Portada v3 (fase 2): Elige tu ambiente + Tu presupuesto manda — implementado, falta revisar con fotos reales
++- **Qué cambió:** `components/home/ElegirAmbiente.tsx` y `ArmadorPresupuesto.tsx` (nuevos), `lib/armadorPresupuesto.ts` + `scripts/test-armador-presupuesto.mjs` (6/6), `routes/index.tsx` (monta ambos en lugar de `Categories` y `PresupuestoHome`, que quedan sin montar). Archivos NUEVOS: `git add` explícito.
++- **Datos reales:** conteo y foto de cada ambiente, límites del deslizador, «N piezas para ti», «desde S/», miniaturas (las 3 piezas de mayor precio con foto que entran) y enlace `/catalogo?max=`.
++- **Verificación:** `tsc` sin errores nuevos, `vite build` OK, todas las suites pasan. Chromium con productos simulados a 1440 y 390 px: sin scroll horizontal; el deslizador responde con teclado (Inicio/Fin) y el botón apunta a `/catalogo?max=…`. Comparado con el boceto. **No se probó** con fotos reales, Playfair, ni iOS Safari; el conteo sale de las 60 piezas que pide `useCatalogoHome`.
++- **Pendiente:** fases 3–5 (ofertas, taller, recién salidos, pruébalo, a medida, footer, header/menú). Decisión: «Primer hogar» no viene marcado (ver RULES).
+diff --git a/scripts/test-armador-presupuesto.mjs b/scripts/test-armador-presupuesto.mjs
+new file mode 100644
+index 0000000..18a753d
+--- /dev/null
++++ b/scripts/test-armador-presupuesto.mjs
+@@ -0,0 +1,57 @@
++// Pruebas de src/lib/armadorPresupuesto.ts. Ejecutar: node scripts/test-armador-presupuesto.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import {
++  limitesSlider,
++  valorInicial,
++  piezasQueAlcanzan,
++  textoPiezas,
++  textoOpciones,
++} from "../src/lib/armadorPresupuesto.ts";
++
++const PRECIOS = [250, 1000, 1100, 1485, 1504, 1700, 1700, 1800, 1900, 2100, 2200, 2250, 2280, 2300, 2300, 2425, 3200];
++
++test("límites: ambos hacia arriba al paso (en todo tope alcanza al menos la pieza más barata)", () => {
++  assert.deepEqual(limitesSlider(PRECIOS), { min: 300, max: 3200, paso: 100 });
++  assert.deepEqual(limitesSlider([1485, 1504]), { min: 1500, max: 1600, paso: 100 });
++});
++
++test("límites: ignora precios no válidos y devuelve null sin datos", () => {
++  assert.equal(limitesSlider([]), null);
++  assert.equal(limitesSlider([0, NaN, -3]), null);
++  assert.deepEqual(limitesSlider([0, 1200]), { min: 1200, max: 1300, paso: 100 });
++});
++
++test("valor inicial: el preferido dentro de los límites y ajustado al paso", () => {
++  const l = { min: 200, max: 3200, paso: 100 };
++  assert.equal(valorInicial(l, 2000), 2000);
++  assert.equal(valorInicial(l, 2049), 2000);
++  assert.equal(valorInicial(l, 9999), 3200);
++  assert.equal(valorInicial(l, 10), 200);
++  assert.equal(valorInicial(l, null), 1700);
++});
++
++test("piezas que alcanzan: conteo, «desde» y las 3 mejores con foto", () => {
++  const piezas = PRECIOS.map((n, i) => ({ id: i, precioFinal: n, foto: n === 1900 ? null : "f.jpg" }));
++  const a = piezasQueAlcanzan(piezas, 2000);
++  assert.equal(a.total, 9); // 250 · 1000 · 1100 · 1485 · 1504 · 1700 · 1700 · 1800 · 1900
++  assert.equal(a.desde, 250);
++  assert.deepEqual(a.vista.map((p) => p.precioFinal), [1800, 1700, 1700]); // 1900 no tiene foto
++});
++
++test("el tope es inclusivo y sin piezas no hay «desde»", () => {
++  const piezas = [{ precioFinal: 1500, foto: "f.jpg" }];
++  assert.equal(piezasQueAlcanzan(piezas, 1500).total, 1);
++  const nada = piezasQueAlcanzan(piezas, 1499);
++  assert.equal(nada.total, 0);
++  assert.equal(nada.desde, null);
++  assert.deepEqual(nada.vista, []);
++});
++
++test("textos", () => {
++  assert.equal(textoPiezas(1), "1 pieza");
++  assert.equal(textoPiezas(5), "5 piezas");
++  assert.equal(textoOpciones(5), "Ver mis 5 opciones");
++  assert.equal(textoOpciones(1), "Ver mi opción");
++  assert.equal(textoOpciones(0), null);
++});
+diff --git a/src/components/home/ArmadorPresupuesto.tsx b/src/components/home/ArmadorPresupuesto.tsx
+new file mode 100644
+index 0000000..1fb750d
+--- /dev/null
++++ b/src/components/home/ArmadorPresupuesto.tsx
+@@ -0,0 +1,212 @@
++// src/components/home/ArmadorPresupuesto.tsx
++// «Tu presupuesto manda» (boceto v3): «¿Para qué es?» + deslizador de presupuesto con las piezas que alcanzan al
++// instante. El botón lleva a /catalogo?max=… (filtro ya soportado). Reemplaza a PresupuestoHome en el home; los tramos
++// fijos (lib/presupuesto.ts) siguen siendo la fuente del catálogo y el valor inicial sale del tramo del medio.
++// Todo sale de los precios finales reales (con oferta vigente): límites, conteo, «desde» y miniaturas.
++// «¿Para qué es?» es opcional y NO viene preseleccionado (guarda un dato del visitante: no se asume).
++import { useMemo, useState } from "react";
++import { Link } from "@tanstack/react-router";
++import * as SliderPrimitive from "@radix-ui/react-slider";
++import { ArrowRight, Sofa } from "lucide-react";
++import { useCatalogoHome } from "@/hooks/useCatalogoHome";
++import { useSegmento } from "@/hooks/useSegmento";
++import { cloudinaryUrl } from "@/lib/cloudinary";
++import { ofertaInfo } from "@/lib/pricing";
++import { TRAMOS } from "@/lib/presupuesto";
++import { montoCorto } from "@/lib/portadaCarrusel";
++import {
++  limitesSlider,
++  piezasQueAlcanzan,
++  textoOpciones,
++  textoPiezas,
++  valorInicial,
++} from "@/lib/armadorPresupuesto";
++import { accionSugerida, type SegmentoId } from "@/lib/segmentos";
++import { trackSegmento } from "@/lib/analytics";
++
++// Chips del boceto: 4 en PC y 3 en móvil. Los otros dos segmentos siguen en los formularios de cotización.
++const CHIPS: { id: SegmentoId; texto: string; soloPc?: boolean }[] = [
++  { id: "primer-hogar", texto: "Primer hogar" },
++  { id: "familia", texto: "Familia" },
++  { id: "regalo", texto: "Regalo" },
++  { id: "negocio", texto: "Negocio", soloPc: true },
++];
++
++// Tope del tramo del medio (hoy S/ 2,000): con él abre el deslizador, como en el boceto.
++const PREFERIDO = TRAMOS[1]?.max ?? null;
++
++export function ArmadorPresupuesto() {
++  const { data, isLoading } = useCatalogoHome(60);
++  const [elegido, setElegido] = useState<number | null>(null);
++  const [segmento, setSegmento] = useSegmento();
++  const accion = accionSugerida(segmento);
++
++  const piezas = useMemo(
++    () =>
++      (data ?? []).map((p) => ({
++        id: p.id,
++        nombre: p.nombre,
++        precioFinal: ofertaInfo(p).precioFinal,
++        foto: p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w: 160, h: 160 }) : p.imagen_url,
++      })),
++    [data],
++  );
++  const limites = useMemo(() => limitesSlider(piezas.map((p) => p.precioFinal)), [piezas]);
++
++  // Catálogo cargado y sin piezas: no hay nada que armar
++  if (!isLoading && data && !limites) return null;
++
++  const valor = limites ? (elegido != null ? Math.min(limites.max, Math.max(limites.min, elegido)) : valorInicial(limites, PREFERIDO)) : 0;
++  const alcance = piezasQueAlcanzan(piezas, valor, 3);
++  const cta = textoOpciones(alcance.total);
++
++  return (
++    <section id="presupuesto" aria-labelledby="presupuesto-titulo" className="bg-gm-durazno">
++      <div className="container mx-auto grid max-w-6xl items-center gap-6 px-4 py-10 md:py-16 lg:grid-cols-[1fr_1.1fr] lg:gap-14">
++        <div>
++          <p className="text-xs font-semibold uppercase tracking-wide text-gm-terracota md:text-sm">Tu presupuesto manda</p>
++          <h2
++            id="presupuesto-titulo"
++            className="mt-2 font-display font-normal leading-[1.15] tracking-tight text-foreground md:mt-3"
++            style={{ fontSize: "clamp(1.625rem, 3.3vw, 3rem)" }}
++          >
++            Dinos cuánto quieres invertir y te mostramos lo que el taller tiene.
++          </h2>
++          <p className="t-texto mt-6 hidden max-w-sm text-foreground/80 lg:mt-10 lg:block">
++            Elige para qué es, mueve el deslizador y mira las piezas al instante.
++          </p>
++        </div>
++
++        <div className="rounded-3xl bg-card p-5 shadow-[var(--shadow-soft)] md:p-8">
++          {/* 1 · ¿Para qué es? */}
++          <p id="armador-paraque" className="flex items-center gap-2 text-sm font-semibold text-foreground">
++            <span aria-hidden className="hidden text-muted-foreground md:inline">1</span>
++            ¿Para qué es? <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
++          </p>
++          <div role="group" aria-labelledby="armador-paraque" className="mt-3 flex flex-wrap gap-2">
++            {CHIPS.map(({ id, texto, soloPc }) => {
++              const activo = segmento === id;
++              return (
++                <button
++                  key={id}
++                  type="button"
++                  aria-pressed={activo}
++                  onClick={() => {
++                    const nuevo = activo ? null : id;
++                    setSegmento(nuevo);
++                    if (nuevo) trackSegmento(nuevo);
++                  }}
++                  className={`min-h-[44px] rounded-full border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
++                    soloPc ? "hidden md:inline-flex md:items-center" : ""
++                  } ${
++                    activo
++                      ? "border-primary bg-primary text-primary-foreground"
++                      : "border-border bg-card text-foreground hover:border-primary"
++                  }`}
++                >
++                  {texto}
++                </button>
++              );
++            })}
++          </div>
++
++          {/* 2 · ¿Cuánto quieres invertir? */}
++          <div className="mt-6 flex items-baseline justify-between gap-3 md:mt-8">
++            <p id="armador-cuanto" className="hidden items-center gap-2 text-sm font-semibold text-foreground md:flex">
++              <span aria-hidden className="text-muted-foreground">2</span>
++              ¿Cuánto quieres invertir?
++            </p>
++            <p aria-hidden className="font-display text-xl text-primary md:text-2xl">
++              Hasta {montoCorto(valor)}
++            </p>
++          </div>
++
++          <SliderPrimitive.Root
++            className="relative mt-3 flex h-11 w-full touch-none select-none items-center"
++            min={limites?.min ?? 0}
++            max={limites?.max ?? 1}
++            step={limites?.paso ?? 1}
++            value={[valor]}
++            disabled={!limites}
++            onValueChange={([v]) => setElegido(v)}
++            aria-labelledby="armador-cuanto"
++          >
++            <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-gm-arena">
++              <SliderPrimitive.Range className="absolute h-full bg-primary" />
++            </SliderPrimitive.Track>
++            <SliderPrimitive.Thumb
++              aria-label="Presupuesto máximo"
++              aria-valuetext={`Hasta ${montoCorto(valor)}`}
++              className="block h-7 w-7 rounded-full border-[3px] border-primary bg-white shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
++            />
++          </SliderPrimitive.Root>
++
++          {/* Piezas que alcanzan */}
++          <div className="mt-4 flex items-center gap-4 md:mt-6" aria-live="polite">
++            <ul aria-hidden className="flex gap-2">
++              {[0, 1, 2].map((i) => {
++                const p = alcance.vista[i];
++                return (
++                  <li key={i} className="h-12 w-12 overflow-hidden rounded-xl bg-gm-arena md:h-[60px] md:w-[60px]">
++                    {p?.foto ? (
++                      <img src={p.foto} alt="" width={120} height={120} loading="lazy" className="h-full w-full object-cover" />
++                    ) : (
++                      <span className="flex h-full w-full items-center justify-center text-gm-cafe/30">
++                        <Sofa className="h-1/2 w-1/2" />
++                      </span>
++                    )}
++                  </li>
++                );
++              })}
++            </ul>
++            <p className="min-w-0">
++              {limites && alcance.total > 0 ? (
++                <>
++                  <span className="block text-sm font-semibold text-foreground md:text-base">{textoPiezas(alcance.total)} para ti</span>
++                  {alcance.desde != null && (
++                    <span className="block text-xs text-muted-foreground">desde {montoCorto(alcance.desde)}</span>
++                  )}
++                </>
++              ) : (
++                <span className="block text-sm text-muted-foreground">
++                  {limites ? "Aún no hay piezas con este presupuesto: súbelo un poco." : "Buscando piezas…"}
++                </span>
++              )}
++            </p>
++          </div>
++
++          {cta ? (
++            <Link
++              to="/catalogo"
++              search={{ max: valor }}
++              className="mt-5 inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:mt-6"
++            >
++              {cta} <ArrowRight className="h-4 w-4" aria-hidden />
++            </Link>
++          ) : (
++            <span
++              aria-disabled="true"
++              className="mt-5 inline-flex min-h-[52px] w-full cursor-not-allowed items-center justify-center rounded-full bg-primary/40 px-6 text-sm font-semibold text-primary-foreground md:mt-6"
++            >
++              Elige un presupuesto
++            </span>
++          )}
++
++          {accion && (
++            <p data-testid="accion-segmento" className="t-texto mt-4">
++              {accion.destino === "medida" ? (
++                <a href="#a-medida" className="font-semibold text-primary underline underline-offset-4">
++                  {accion.texto}
++                </a>
++              ) : (
++                <Link to="/envios" className="font-semibold text-primary underline underline-offset-4">
++                  {accion.texto}
++                </Link>
++              )}
++            </p>
++          )}
++        </div>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/home/ElegirAmbiente.tsx b/src/components/home/ElegirAmbiente.tsx
+new file mode 100644
+index 0000000..a439c16
+--- /dev/null
++++ b/src/components/home/ElegirAmbiente.tsx
+@@ -0,0 +1,94 @@
++// src/components/home/ElegirAmbiente.tsx
++// «Elige tu ambiente» (boceto v3): collage con Salas grande a la izquierda y 4 ambientes a la derecha (2×2); en móvil,
++// 2×2 con Salas, Comedores, Recámaras y Separadores (el boceto móvil no muestra Accesorios; sigue en «Ver todas»).
++// Las categorías salen de lib/categories.ts; el conteo y la foto, de las piezas reales (misma consulta y caché que el
++// resto del home). En la vista pública «Muebles» se llama «Salas» y «Separadores de ambiente», «Separadores» (boceto).
++import { useMemo } from "react";
++import { Link } from "@tanstack/react-router";
++import { ArrowRight } from "lucide-react";
++import { CATEGORIAS, getCategoria } from "@/lib/categories";
++import { useCatalogoHome } from "@/hooks/useCatalogoHome";
++import { cloudinaryUrl } from "@/lib/cloudinary";
++import { textoPiezas } from "@/lib/armadorPresupuesto";
++
++const ETIQUETA: Record<string, string> = { muebles: "Salas", separadores: "Separadores" };
++
++// Orden del DOM = orden móvil. En PC cada tarjeta ocupa su lugar del boceto con posiciones explícitas.
++const TARJETAS = [
++  { slug: "muebles", fondo: "bg-gm-arena", sitio: "md:col-start-1 md:row-start-1 md:row-span-2", movil: true },
++  { slug: "comedores", fondo: "bg-gm-salvia", sitio: "md:col-start-2 md:row-start-1", movil: true },
++  { slug: "recamaras", fondo: "bg-gm-salvia", sitio: "md:col-start-2 md:row-start-2", movil: true },
++  { slug: "separadores", fondo: "bg-gm-arena", sitio: "md:col-start-3 md:row-start-1", movil: true },
++  { slug: "accesorios", fondo: "bg-gm-arena", sitio: "md:col-start-3 md:row-start-2", movil: false },
++] as const;
++
++export function ElegirAmbiente() {
++  const { data = [] } = useCatalogoHome(60);
++
++  const porCategoria = useMemo(() => {
++    const out: Record<string, { n: number; foto: string | null }> = {};
++    for (const c of CATEGORIAS) {
++      const piezas = data.filter((p) => p.categoria === c.slug);
++      const conFoto = piezas.filter((p) => p.imagen_public_id || p.imagen_url);
++      const p = conFoto.find((x) => (x.stock ?? 1) > 0) ?? conFoto[0];
++      out[c.slug] = {
++        n: piezas.length,
++        foto: p ? (p.imagen_public_id ? cloudinaryUrl(p.imagen_public_id, { w: 900, h: 700 }) : p.imagen_url) : null,
++      };
++    }
++    return out;
++  }, [data]);
++
++  return (
++    <section id="categorias" aria-labelledby="ambientes-titulo" className="container mx-auto max-w-6xl px-4 py-10 md:py-14">
++      <div className="mb-5 flex items-end justify-between gap-4 md:mb-6">
++        <h2 id="ambientes-titulo" className="t-seccion text-foreground">
++          Elige tu ambiente
++        </h2>
++        <Link
++          to="/catalogo"
++          className="hidden min-h-[44px] items-center gap-1.5 text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:inline-flex"
++        >
++          Ver todas <ArrowRight className="h-4 w-4" aria-hidden />
++        </Link>
++      </div>
++
++      <ul className="grid grid-cols-2 gap-3 md:grid-cols-[1.5fr_1fr_1fr] md:grid-rows-2 md:gap-4 md:h-[420px] lg:h-[460px]">
++        {TARJETAS.map(({ slug, fondo, sitio, movil }) => {
++          const cat = getCategoria(slug);
++          if (!cat) return null;
++          const { n, foto } = porCategoria[slug] ?? { n: 0, foto: null };
++          const nombre = ETIQUETA[slug] ?? cat.nombre;
++          return (
++            <li key={slug} className={`${sitio} ${movil ? "" : "hidden md:block"} min-h-0`}>
++              <Link
++                to="/categoria/$slug"
++                params={{ slug }}
++                className={`group relative block aspect-[226/190] overflow-hidden rounded-2xl md:aspect-auto md:h-full md:rounded-[28px] ${fondo} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
++              >
++                {foto ? (
++                  <img
++                    src={foto}
++                    alt=""
++                    width={900}
++                    height={700}
++                    loading="lazy"
++                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
++                  />
++                ) : (
++                  <span aria-hidden className="flex h-full w-full items-center justify-center text-gm-cafe/40">
++                    <cat.icon className="h-1/4 w-1/4" />
++                  </span>
++                )}
++                <span className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-3 rounded-xl bg-card px-3 py-2.5 md:inset-x-3 md:bottom-3 md:px-4 md:py-3">
++                  <span className="truncate text-sm font-semibold text-foreground">{nombre}</span>
++                  <span className="hidden shrink-0 text-xs text-muted-foreground md:block">{textoPiezas(n)}</span>
++                </span>
++              </Link>
++            </li>
++          );
++        })}
++      </ul>
++    </section>
++  );
++}
+diff --git a/src/lib/armadorPresupuesto.ts b/src/lib/armadorPresupuesto.ts
+new file mode 100644
+index 0000000..e32aa05
+--- /dev/null
++++ b/src/lib/armadorPresupuesto.ts
+@@ -0,0 +1,68 @@
++// src/lib/armadorPresupuesto.ts
++// Lógica pura del armador «Tu presupuesto manda» del home (deslizador + piezas que alcanzan).
++// Sin imports del proyecto para probarla con `node scripts/test-armador-presupuesto.mjs`.
++// No inventa nada: límites, conteo y «desde» salen de los precios finales reales (con la oferta vigente).
++
++export const PASO = 100;
++
++export interface Limites {
++  min: number;
++  max: number;
++  paso: number;
++}
++
++/**
++ * Rango del deslizador: del precio final más bajo al más alto, redondeado hacia arriba al paso. Así, en toda
++ * posición del deslizador alcanza al menos la pieza más barata (nunca queda un tope sin piezas). Sin precios válidos devuelve null.
++ */
++export function limitesSlider(precios: readonly number[], paso = PASO): Limites | null {
++  const validos = precios.filter((n) => Number.isFinite(n) && n > 0);
++  if (validos.length === 0) return null;
++  const min = Math.max(paso, Math.ceil(Math.min(...validos) / paso) * paso);
++  const max = Math.max(min + paso, Math.ceil(Math.max(...validos) / paso) * paso);
++  return { min, max, paso };
++}
++
++/** Valor con el que abre el deslizador: el preferido (p. ej. el tope del tramo del medio) dentro de los límites. */
++export function valorInicial(l: Limites, preferido: number | null | undefined): number {
++  const base = preferido != null && Number.isFinite(preferido) ? preferido : (l.min + l.max) / 2;
++  const ajustado = Math.round(base / l.paso) * l.paso;
++  return Math.min(l.max, Math.max(l.min, ajustado));
++}
++
++export interface PiezaPresupuesto {
++  precioFinal: number;
++  /** URL de la foto; null/vacío = no se puede mostrar. */
++  foto: string | null;
++}
++
++export interface Alcance<T> {
++  /** Cuántas piezas cuestan ≤ tope. */
++  total: number;
++  /** Precio final más bajo entre las que alcanzan; null si ninguna. */
++  desde: number | null;
++  /** Hasta `cuantas` piezas con foto, las de mayor precio que alcanzan («lo mejor que entra en tu presupuesto»). */
++  vista: T[];
++}
++
++export function piezasQueAlcanzan<T extends PiezaPresupuesto>(
++  piezas: readonly T[],
++  tope: number,
++  cuantas = 3,
++): Alcance<T> {
++  const entran = piezas.filter((p) => Number.isFinite(p.precioFinal) && p.precioFinal > 0 && p.precioFinal <= tope);
++  const desde = entran.length ? Math.min(...entran.map((p) => p.precioFinal)) : null;
++  const vista = entran
++    .filter((p) => !!p.foto)
++    .sort((a, b) => b.precioFinal - a.precioFinal)
++    .slice(0, cuantas);
++  return { total: entran.length, desde, vista };
++}
++
++export const textoPiezas = (n: number) => `${n} ${n === 1 ? "pieza" : "piezas"}`;
++
++/** «Ver mis 5 opciones» / «Ver mi opción» / null si no hay ninguna. */
++export function textoOpciones(n: number): string | null {
++  if (n <= 0) return null;
++  return n === 1 ? "Ver mi opción" : `Ver mis ${n} opciones`;
++}
+diff --git a/src/routes/index.tsx b/src/routes/index.tsx
+index 9f46bc8..d46accc 100644
+--- a/src/routes/index.tsx
++++ b/src/routes/index.tsx
+@@ -3,9 +3,10 @@ import { useEffect, useRef } from "react";
+ import { Header } from "@/components/Header"; 
+ import { PortadaCarrusel } from "@/components/home/PortadaCarrusel";
+ 
+-import { PresupuestoHome } from "@/components/PresupuestoHome";
++import { ElegirAmbiente } from "@/components/home/ElegirAmbiente";
++import { ArmadorPresupuesto } from "@/components/home/ArmadorPresupuesto";
++
+ 
+-import { Categories } from "@/components/Categories";
+ import { OfertasSection } from "@/components/OfertasSection";
+ import { CombosSection } from "@/components/CombosSection";
+ import { PromoCategoriaBanner } from "@/components/PromoCategoriaBanner";
+@@ -40,6 +41,6 @@ function Index() {
+   return (
+      <div className="min-h-screen bg-background"> 
+      <Header /> 
+-     <main ref={mainRef}> <PortadaCarrusel /> <Categories /> <PresupuestoHome /> <OfertasSection /> <CombosSection /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
++     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <ArmadorPresupuesto /> <OfertasSection /> <CombosSection /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
+      </main> 
+      <Footer /> </div> ); }
+\ No newline at end of file

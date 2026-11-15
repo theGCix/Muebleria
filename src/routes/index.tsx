@@ -3,9 +3,10 @@ import { useEffect, useRef } from "react";
 import { Header } from "@/components/Header"; 
 import { PortadaCarrusel } from "@/components/home/PortadaCarrusel";
 
-import { PresupuestoHome } from "@/components/PresupuestoHome";
+import { ElegirAmbiente } from "@/components/home/ElegirAmbiente";
+import { ArmadorPresupuesto } from "@/components/home/ArmadorPresupuesto";
 
-import { Categories } from "@/components/Categories";
+
 import { OfertasSection } from "@/components/OfertasSection";
 import { CombosSection } from "@/components/CombosSection";
 import { PromoCategoriaBanner } from "@/components/PromoCategoriaBanner";
@@ -40,6 +41,6 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <PortadaCarrusel /> <Categories /> <PresupuestoHome /> <OfertasSection /> <CombosSection /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
+     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <ArmadorPresupuesto /> <OfertasSection /> <CombosSection /> <PromoCategoriaBanner /> <ProductsSection /> <Testimonials /> <ClientesSatisfechos /> <MedidaCTA />
      </main> 
      <Footer /> </div> ); }
