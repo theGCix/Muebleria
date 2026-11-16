@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import { trackAddToCart } from "@/lib/analytics";
 import { trackEvent } from "@/hooks/useEventTracking";
 import { esRutaStaff } from "@/lib/rutas";
-import { cupoRestante } from "@/lib/limiteCompra";
+import { cupoRestante, maxPorCompra } from "@/lib/limiteCompra";
 import { avisoLimiteCompra } from "@/lib/avisoLimiteCompra";
 
 /**
@@ -83,7 +83,7 @@ export const useCartStore = create<CartState>()(
         const item = conLineId(raw);
         // Tope por producto en cada compra (las piezas de un combo no cuentan)
         if (!item.comboId && cupoRestante(get().items, item.id) <= 0) {
-          avisoLimiteCompra();
+          avisoLimiteCompra(maxPorCompra(item.id));
           return;
         }
         trackAddToCart({ id: item.id, nombre: item.title, precio: item.price });
@@ -107,17 +107,18 @@ export const useCartStore = create<CartState>()(
         let acumulado: { id: string; qty: number; comboId?: string }[] = [...get().items];
         const newItems: typeof entrantes = [];
         let recortado = false;
+        let maxRecortado: number | undefined;
         for (const raw of entrantes) {
           let q = raw.qty ?? 1;
           if (!raw.comboId) {
             const cupo = cupoRestante(acumulado, raw.id);
-            if (q > cupo) { q = cupo; recortado = true; }
+            if (q > cupo) { q = cupo; recortado = true; maxRecortado = maxPorCompra(raw.id); }
           }
           if (q <= 0) continue;
           newItems.push({ ...raw, qty: q });
           acumulado = [...acumulado, { id: raw.id, qty: q, comboId: raw.comboId }];
         }
-        if (recortado) avisoLimiteCompra();
+        if (recortado) avisoLimiteCompra(maxRecortado);
         for (const it of newItems) {
           trackAddToCart({ id: it.id, nombre: it.title, precio: it.price, cantidad: it.qty ?? 1 });
         }
@@ -155,7 +156,7 @@ export const useCartStore = create<CartState>()(
           const tope = Math.max(1, cupoRestante(get().items, linea.id, lineId));
           if (qty > tope) {
             qty = tope;
-            avisoLimiteCompra();
+            avisoLimiteCompra(maxPorCompra(linea.id));
           }
         }
         set((state) => ({

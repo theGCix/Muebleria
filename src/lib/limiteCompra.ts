@@ -7,6 +7,17 @@
 
 export const CANTIDAD_MAX_POR_COMPRA = 5;
 
+/**
+ * Productos con tope ampliado (decisión del dueño, 2026-11-16): se pueden pedir hasta {CANTIDAD_MAX_AMPLIA} unidades y también
+ * por encima del stock (p. ej. 5 con 4 en stock): el checkout ya deja elegir entrega única (con más tiempo) o por partes.
+ * Mismos valores en `server/pagos.js` (una prueba lo verifica). Hoy: Juego de sala Lineal 3-2-1.
+ */
+export const CANTIDAD_MAX_AMPLIA = 99;
+export const PRODUCTOS_TOPE_AMPLIO: readonly string[] = ["0fad1859-f6e3-4e7f-a598-f14bb7143dcd"];
+export const permiteSobreStock = (productId: string): boolean => PRODUCTOS_TOPE_AMPLIO.includes(productId);
+/** Tope de unidades por compra de ese producto. */
+export const maxPorCompra = (productId: string): number => (permiteSobreStock(productId) ? CANTIDAD_MAX_AMPLIA : CANTIDAD_MAX_POR_COMPRA);
+
 export interface LineaLimite {
   id: string;
   qty: number;
@@ -23,5 +34,5 @@ export function unidadesDelProducto(items: LineaLimite[], id: string, exceptoLin
 
 /** Cuántas unidades más se pueden agregar de ese producto (nunca negativo). */
 export function cupoRestante(items: LineaLimite[], id: string, exceptoLineId?: string): number {
-  return Math.max(0, CANTIDAD_MAX_POR_COMPRA - unidadesDelProducto(items, id, exceptoLineId));
+  return Math.max(0, maxPorCompra(id) - unidadesDelProducto(items, id, exceptoLineId));
 }

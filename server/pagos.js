@@ -186,15 +186,25 @@ export const tituloConOpciones = (nombre, opciones) =>
  */
 export const CANTIDAD_MAX_POR_COMPRA = 5;
 
+/**
+ * Productos con tope ampliado (decisión del dueño, 2026-11-16): hasta CANTIDAD_MAX_AMPLIA unidades y también sobre el stock
+ * (el checkout deja elegir entrega única o por partes). Mismos valores que src/lib/limiteCompra.ts (una prueba lo verifica).
+ */
+export const CANTIDAD_MAX_AMPLIA = 99;
+export const PRODUCTOS_TOPE_AMPLIO = ["0fad1859-f6e3-4e7f-a598-f14bb7143dcd"];
+export const permiteSobreStock = (productId) => PRODUCTOS_TOPE_AMPLIO.includes(productId);
+export const maxPorCompra = (productId) => (permiteSobreStock(productId) ? CANTIDAD_MAX_AMPLIA : CANTIDAD_MAX_POR_COMPRA);
+
 export function verificarLimitePorProducto(items) {
   const porProducto = new Map();
   for (const it of items) {
     if (it.comboId) continue;
     porProducto.set(it.product_id, (porProducto.get(it.product_id) ?? 0) + it.qty);
   }
-  for (const total of porProducto.values()) {
-    if (total > CANTIDAD_MAX_POR_COMPRA) {
-      throw new PagoError(`Máximo ${CANTIDAD_MAX_POR_COMPRA} unidades por producto en cada compra. Para pedidos mayores escríbenos por WhatsApp.`);
+  for (const [id, total] of porProducto) {
+    const tope = maxPorCompra(id);
+    if (total > tope) {
+      throw new PagoError(`Máximo ${tope} unidades por producto en cada compra. Para pedidos mayores escríbenos por WhatsApp.`);
     }
   }
 }
@@ -336,7 +346,7 @@ export async function validarCarrito({ supabase, items, ahora = Date.now() }) {
 
     let estado = "ok";
     if (stock !== null && stock <= 0) estado = "sin_stock";
-    else if (stock !== null && it.qty > stock) estado = "stock_insuficiente";
+    else if (stock !== null && it.qty > stock && !permiteSobreStock(it.product_id)) estado = "stock_insuficiente";
     else if (!Number.isFinite(base.precio_cliente) || Math.abs(r.unit - base.precio_cliente) > 0.009) estado = "precio_cambio";
     return { ...base, estado, precio_actual: r.unit, stock };
   });

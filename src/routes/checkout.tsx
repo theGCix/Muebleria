@@ -87,7 +87,7 @@ import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
 import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
 import { PasosCheckout } from "@/components/checkout/PasosCheckout";
-import { CANTIDAD_MAX_POR_COMPRA, cupoRestante } from "@/lib/limiteCompra";
+import { maxPorCompra, cupoRestante } from "@/lib/limiteCompra";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 import { fmtFechaHora } from "@/lib/fechas";
 import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
@@ -1043,7 +1043,7 @@ useEffect(() => {
                           type="button"
                           onClick={() => updateQty(item.lineId, item.qty + 1)}
                           disabled={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId)}
-                          title={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId) ? `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra` : undefined}
+                          title={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId) ? `Máximo ${maxPorCompra(item.id)} por compra` : undefined}
                           className="group flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label="Sumar"
                         >

@@ -24,7 +24,7 @@ export function LiquidacionesHome() {
   if (grupos.length === 0) return null;
 
   return (
-    <section id="liquidacion" aria-label="Liquidación" className="container mx-auto max-w-6xl space-y-4 px-4 py-6 md:space-y-6 md:py-8">
+    <section id="ofertas" aria-label="Liquidación" className="container mx-auto max-w-6xl space-y-4 px-4 py-6 md:space-y-6 md:py-8">
       {grupos.map((g) => {
         const spans = spansBanners(g.items.length);
         return (

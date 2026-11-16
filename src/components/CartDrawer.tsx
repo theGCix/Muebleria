@@ -18,7 +18,7 @@ import { CarritoAvisos } from "./CarritoAvisos";
 import { precalentarServidor } from "@/lib/precalentar";
 import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
 import { itemsDeCarrito, trackViewCart } from "@/lib/analytics";
-import { CANTIDAD_MAX_POR_COMPRA, cupoRestante } from "@/lib/limiteCompra";
+import { maxPorCompra, cupoRestante } from "@/lib/limiteCompra";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -74,7 +74,7 @@ function ItemFila({
             size="icon"
             className="h-11 w-11"
             aria-label="Agregar una unidad"
-            title={puedeSumar ? undefined : `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra`}
+            title={puedeSumar ? undefined : `Máximo ${maxPorCompra(item.id)} por compra`}
             disabled={!puedeSumar}
             onClick={() => onQty(item.qty + 1)}
           >

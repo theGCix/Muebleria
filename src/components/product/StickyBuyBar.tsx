@@ -43,13 +43,15 @@ interface Props {
   cantidad?: number;
   /** true cuando ya hay en el carrito el máximo por compra: el botón no debe decir «Agotado». */
   limiteAlcanzado?: boolean;
+  /** Tope por compra de este producto (por defecto el general). */
+  maxCompra?: number;
   /** true tras agregar: la barra ofrece «Ir a pagar» (principal) y «Seguir comprando» (secundario). */
   postAdd?: boolean;
   categoria?: string | null;
   onAdd: () => void;
 }
 
-export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled, adding, qtyEnCarrito = 0, cantidad = 1, limiteAlcanzado = false, postAdd = false, categoria, onAdd }: Props) {
+export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled, adding, qtyEnCarrito = 0, cantidad = 1, limiteAlcanzado = false, maxCompra = CANTIDAD_MAX_POR_COMPRA, postAdd = false, categoria, onAdd }: Props) {
   return (
     <div className={`gmx-sticky${visible ? " show" : ""}`}>
       <div className="gmx-sticky-in">
@@ -77,7 +79,7 @@ export function StickyBuyBar({ visible, image, nombre, resumen, precio, disabled
               disabled={disabled}
             >
               <ShoppingBag size={16} />
-              {adding ? "¡Agregado!" : limiteAlcanzado ? `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra` : disabled ? "Agotado" : qtyEnCarrito > 0 ? `En carrito (${qtyEnCarrito}) · +${cantidad}` : cantidad > 1 ? `Agregar ${cantidad} al carrito` : "Agregar al carrito"}
+              {adding ? "¡Agregado!" : limiteAlcanzado ? `Máximo ${maxCompra} por compra` : disabled ? "Agotado" : qtyEnCarrito > 0 ? `En carrito (${qtyEnCarrito}) · +${cantidad}` : cantidad > 1 ? `Agregar ${cantidad} al carrito` : "Agregar al carrito"}
             </button>
           </>
         )}

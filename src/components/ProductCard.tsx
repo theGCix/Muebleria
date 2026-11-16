@@ -17,7 +17,7 @@ import { fmtPEN, ofertaInfo, textoCuentaRegresiva } from "@/lib/pricing";
 import { useProductRating } from "@/hooks/useProductRatings";
 import { rangoEntregaCorto } from "@/lib/entrega";
 import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
-import { CANTIDAD_MAX_POR_COMPRA } from "@/lib/limiteCompra";
+import { maxPorCompra, permiteSobreStock } from "@/lib/limiteCompra";
 import "./product-card.css";
 
 interface Props { product: Product; }
@@ -119,7 +119,7 @@ export function ProductCard({ product: p }: Props) {
   const qty = items.find((i) => i.id === p.id)?.qty ?? 0;
   const enCarrito = qty > 0;
   const agotado = (p.stock ?? 1) <= 0;
-  const maxQty = Math.min(p.stock ?? Infinity, CANTIDAD_MAX_POR_COMPRA); // sin dato de stock: solo el tope por compra
+  const maxQty = Math.min(permiteSobreStock(p.id) ? Infinity : (p.stock ?? Infinity), maxPorCompra(p.id)); // sin dato de stock: solo el tope por compra
   const llegoAlMaximo = qty >= maxQty;
   const wishlisted = isWishlisted(p.id);
 
@@ -410,7 +410,7 @@ export function ProductCard({ product: p }: Props) {
                     onClick={handleInc}
                     disabled={llegoAlMaximo || agotado}
                     aria-label="Agregar una unidad"
-                    title={llegoAlMaximo ? (qty >= (p.stock ?? Infinity) ? "Alcanzaste el stock disponible" : `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra`) : "Agregar una unidad"}
+                    title={llegoAlMaximo ? (qty >= (p.stock ?? Infinity) && !permiteSobreStock(p.id) ? "Alcanzaste el stock disponible" : `Máximo ${maxPorCompra(p.id)} por compra`) : "Agregar una unidad"}
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-90 disabled:cursor-not-allowed disabled:bg-primary/25 disabled:text-primary-foreground/80"
                   >
                     <Plus className="h-4 w-4" />

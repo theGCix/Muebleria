@@ -165,3 +165,7 @@
 - **Formato del banner fijo** (`BannerLiquidacion`): solo cambia la información. Azul y rosa de la referencia son excepción a la paleta Japandi, solo en esta pieza.
 - **Envío de la liquidación (decisión del dueño):** si el carrito tiene algún producto suelto con liquidación vigente con envío gratis, el envío base del pedido es 0; si no, se resta UNA vez el mayor descuento en soles (mínimo 0). Se aplica solo a domicilio en Lima; el cargo de entrega parcial (S/ 25) se conserva; las piezas de combo no cuentan. Fórmula única en `src/lib/envioPromo.ts` ↔ `server/envioPromo.js` (las verifica `server/envio-promo.test.js`); el cobro lo decide solo `calcularPedido`.
 - **Tamaño del texto del banner:** en % del ancho de la tarjeta (nombre 4.8, precio 4.2, rótulo 2.1, sellos ≈ 1.5), medido de las referencias; no volver a agrandarlos.
+
+## Tope por compra (actualizado 2026-11-16)
+- General: 5 unidades por producto. Excepción: el producto de `PRODUCTOS_TOPE_AMPLIO` (hoy Lineal) permite hasta 99 y también sobre el stock (entrega única o por partes, se elige en el checkout). La lista debe ser igual en `src/lib/limiteCompra.ts` y `server/pagos.js`.
+

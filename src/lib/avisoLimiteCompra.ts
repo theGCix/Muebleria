@@ -3,8 +3,8 @@
 import { toast } from "sonner";
 import { CANTIDAD_MAX_POR_COMPRA } from "./limiteCompra";
 
-export function avisoLimiteCompra() {
-  toast.info(`Máximo ${CANTIDAD_MAX_POR_COMPRA} unidades por producto en cada compra`, {
+export function avisoLimiteCompra(max: number = CANTIDAD_MAX_POR_COMPRA) {
+  toast.info(`Máximo ${max} unidades por producto en cada compra`, {
     description: "Para pedidos mayores escríbenos por WhatsApp o pregúntale al asistente.",
     id: "limite-compra",
   });

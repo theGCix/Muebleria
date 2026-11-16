@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError, CANTIDAD_MAX_POR_COMPRA } from "./pagos.js";
+import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError, CANTIDAD_MAX_POR_COMPRA, CANTIDAD_MAX_AMPLIA, PRODUCTOS_TOPE_AMPLIO } from "./pagos.js";
 
 // Supabase de mentira: devuelve tablas fijas
 function fakeSupabase({ products = [], combos = [], grupos = [], liquidaciones = [], liqError = false }) {
@@ -293,6 +293,23 @@ test("tope por producto en cada compra: 5 pasa, 6 no; se suman las líneas; el c
   // productos distintos: cada uno con su propio tope
   const dos = await calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 5 }, { product_id: "p2", qty: 5 }] });
   assert.equal(dos.subtotal, 5000 + 2250);
+});
+
+// ── Producto con tope ampliado (Lineal, 2026-11-16): hasta 99 y también sobre el stock; el resto sigue en 5 ──────────
+test("tope ampliado: 99 pasa y 100 no; con stock 4 se puede pedir 5 sin aviso de stock; otro producto sigue en 5", async () => {
+  const [lineal] = PRODUCTOS_TOPE_AMPLIO;
+  assert.equal(CANTIDAD_MAX_AMPLIA, 99);
+  const L = { ...P1, id: lineal, stock: 4 };
+  const normal = { ...P1, id: "p9", stock: 4 };
+  const sb = fakeSupabase({ products: [L, normal] });
+  const ok = await calcularPedido({ supabase: sb, order, items: [{ product_id: lineal, qty: 99 }] });
+  assert.equal(ok.subtotal, 99000); // la fórmula de precio no cambia
+  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: lineal, qty: 100 }] }), PagoError);
+  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "p9", qty: 6 }] }), PagoError);
+  // sobre el stock: la entrega única o por partes se elige en el checkout, así que no hay aviso de «stock insuficiente»
+  const v = await validarCarrito({ supabase: sb, items: [{ product_id: lineal, qty: 5, price: 1000 }, { product_id: "p9", qty: 5, price: 1000 }] });
+  assert.equal(v.lineas[0].estado, "ok");
+  assert.equal(v.lineas[1].estado, "stock_insuficiente");
 });
 
 // ── Envío de las liquidaciones (reglas A y C del dueño, 2026-11-16) ──────────────────────────────────────────────

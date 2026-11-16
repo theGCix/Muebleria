@@ -31,7 +31,7 @@ import { DeliveryPromise } from "@/components/product/DeliveryPromise";
 import { SignatureModule } from "@/components/product/SignatureModules";
 import { OpcionesProducto } from "@/components/product/OpcionesProducto";
 import { SelectorCantidad } from "@/components/product/SelectorCantidad";
-import { CANTIDAD_MAX_POR_COMPRA, cupoRestante } from "@/lib/limiteCompra";
+import { maxPorCompra, permiteSobreStock, cupoRestante } from "@/lib/limiteCompra";
 import { useOpcionesProducto, resolverSeleccion, type SeleccionOpciones, type OpcionGrupo, type OpcionValor } from "@/hooks/useOpcionesProducto";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBuyBar";
@@ -917,9 +917,11 @@ function ProductView({ product: base }: { product: ProductData }) {
   const qtyEnCarrito = itemsCarrito.find((i) => i.lineId === lineIdActual)?.qty ?? 0;
   // Unidades de este producto en el carrito (todas las selecciones), para el enlace "Ir a pagar"
   // Tope por compra: lo que ya hay en el carrito cuenta; el servidor aplica el mismo límite
+  // Producto con tope ampliado: se puede pedir sobre el stock (el checkout deja elegir entrega única o por partes)
+  const sobreStock = permiteSobreStock(product.id);
   const cupoFicha = Math.min(
     cupoRestante(itemsCarrito, product.id),
-    Math.max(0, (product.stock ?? Infinity) - itemsCarrito.filter((i) => i.id === product.id && !i.comboId).reduce((s, i) => s + i.qty, 0)),
+    sobreStock ? Infinity : Math.max(0, (product.stock ?? Infinity) - itemsCarrito.filter((i) => i.id === product.id && !i.comboId).reduce((s, i) => s + i.qty, 0)),
   );
   const limiteAlcanzado = !outOfStock && cupoFicha <= 0;
   const maxSeleccion = Math.max(1, cupoFicha);
@@ -1151,8 +1153,10 @@ function ProductView({ product: base }: { product: ProductData }) {
               disabled={outOfStock || cargandoOpciones || limiteAlcanzado}
               nota={
                 <>
-                  Máximo {CANTIDAD_MAX_POR_COMPRA} por compra.
-                  {waHref && <> ¿Necesitas más? <a href={waHref} target="_blank" rel="noopener noreferrer">Cotízalo por WhatsApp</a>.</>}
+                  {sobreStock
+                    ? <>Si pides más de las unidades en stock, al pagar eliges entrega todo junto (con más tiempo) o por partes.</>
+                    : <>Máximo {maxPorCompra(product.id)} por compra.
+                      {waHref && <> ¿Necesitas más? <a href={waHref} target="_blank" rel="noopener noreferrer">Cotízalo por WhatsApp</a>.</>}</>}
                 </>
               }
             />
@@ -1171,7 +1175,7 @@ function ProductView({ product: base }: { product: ProductData }) {
                   : outOfStock
                     ? "Agotado"
                     : limiteAlcanzado
-                      ? `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra`
+                      ? `Máximo ${maxPorCompra(product.id)} por compra`
                       : qtyEnCarrito > 0
                       ? `En tu carrito (${qtyEnCarrito}) · Agregar otro`
                       : "Agregar al carrito"}
@@ -1301,6 +1305,7 @@ function ProductView({ product: base }: { product: ProductData }) {
           qtyEnCarrito={qtyEnCarrito}
           cantidad={cantidadElegida}
           limiteAlcanzado={limiteAlcanzado}
+          maxCompra={maxPorCompra(product.id)}
           postAdd={postAdd && qtyProductoTotal > 0}
           categoria={product.categoria}
           onAdd={handleAdd}

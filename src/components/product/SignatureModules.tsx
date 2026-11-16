@@ -247,23 +247,18 @@ function Sleep({ setPref }: ModuleProps) {
   );
 }
 
-/* ═════════════ 4 · Sala: firmeza + patas ═════════════ */
+/* ═════════════ 4 · Sala: firmeza ═════════════ */
 const FIRMEZAS = [
   { k: "Suave", dent: 14, txt: "Te hundes un poco: sensación envolvente, ideal para tardes de película." },
   { k: "Equilibrado", dent: 8, txt: "El punto medio: cómodo para sentarte horas y fácil para levantarte." },
   { k: "Firme", dent: 3, txt: "Apoyo marcado: buena postura para la espalda y para recibir visitas." },
 ] as const;
-const PATAS = [
-  { k: "Dorado", hex: "#C9A96E" },
-  { k: "Negro", hex: "#2B2623" },
-] as const;
 
 function Comfort({ setPref }: ModuleProps) {
   const [f, setF] = useState<(typeof FIRMEZAS)[number]>(FIRMEZAS[1]);
-  const [p, setP] = useState<(typeof PATAS)[number]["k"]>("Dorado");
 
-  // En la sala, firmeza y patas son opciones del pedido: registramos el valor por defecto desde el inicio
-  useEffect(() => { setPref("Firmeza", FIRMEZAS[1].k); setPref("Patas", PATAS[0].k); }, [setPref]);
+  // En la sala la firmeza es una opción del pedido: registramos el valor por defecto desde el inicio
+  useEffect(() => { setPref("Firmeza", FIRMEZAS[1].k); }, [setPref]);
 
   const y0 = 62, mid = 160;
   return (
@@ -274,21 +269,10 @@ function Comfort({ setPref }: ModuleProps) {
         <rect x="40" y="76" width="240" height="26" rx="10" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
         <path d={`M40 ${y0} Q ${mid} ${y0 + f.dent * 2} 280 ${y0} L 280 86 L 40 86 Z`} fill="#fff" stroke="var(--gm-walnut-mid)" strokeWidth="1.5" />
         <circle cx={mid} cy={y0 + f.dent - 12} r="12" fill="var(--gmx-accent)" />
-        <rect x="52" y="102" width="6" height="12" fill={PATAS.find((x) => x.k === p)!.hex} />
-        <rect x="262" y="102" width="6" height="12" fill={PATAS.find((x) => x.k === p)!.hex} />
+        <rect x="52" y="102" width="6" height="12" fill="var(--gm-walnut-mid)" />
+        <rect x="262" y="102" width="6" height="12" fill="var(--gm-walnut-mid)" />
       </svg>
       <p className="gmx-readout">{f.txt}</p>
-
-      <div className="gm-color-label" style={{ marginTop: 14 }}>Patas de metal</div>
-      <div className="gmx-chips">
-        {PATAS.map((x) => (
-          <button key={x.k} type="button" className="gmx-chip" aria-pressed={p === x.k}
-            onClick={() => { setP(x.k); setPref("Patas", x.k); }}>
-            <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: x.hex, marginRight: 8, border: "1px solid rgba(0,0,0,.2)" }} />
-            {x.k}
-          </button>
-        ))}
-      </div>
     </Shell>
   );
 }

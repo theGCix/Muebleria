@@ -96,7 +96,7 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
       { icon: TreeDeciduous, label: "Estructura", value: MADERA },
       { icon: Layers, label: "Tapizado", value: "Velvet importado + antifluida" },
       { icon: Sparkles, label: "Relleno", value: "Espuma alta densidad + napa" },
-      { icon: Armchair, label: "Patas", value: "Metal dorado o negro" },
+      { icon: Armchair, label: "Patas", value: "Metal" },
     ],
     acabadoLabel: "Color del tapizado",
     acabados: [
