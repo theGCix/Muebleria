@@ -3,7 +3,7 @@
 // «Compra segura» arriba a la derecha, «GRATIS · juego de cojines» abajo a la izquierda, rótulo + nombre + detalle y
 // el precio azul con la etiqueta rosa del %, más «Precio regular» tachado. Solo cambia la información; el formato no.
 // Todo escala con el ancho de la tarjeta (unidades cqw): en móvil (una tarjeta por fila) el factor --k los agranda.
-// Etiqueta del %: muesca en flecha sobre el azul (como la referencia); cojines: par de almohadones SVG dentro del recuadro «GRATIS».
+// Etiqueta del %: muesca en flecha sobre el azul (como la referencia); cojines: foto del par de cojines beige (public/regalo-cojines.webp) junto al recuadro «GRATIS».
 // Los colores azul y rosa son los de la referencia: el dueño pidió no tocarlos (excepción a la paleta Japandi, solo aquí).
 import { Link } from "@tanstack/react-router";
 import { ShieldCheck, Truck } from "lucide-react";
@@ -34,36 +34,20 @@ export interface DatosBanner {
 const t = (cqw: number, min = 10) => `max(${min}px, calc(var(--k, 1) * ${cqw}cqw))`;
 const c = (cqw: number) => `calc(var(--k, 1) * ${cqw}cqw)`;
 
-/** Un almohadón: bordes algo abombados, esquinas pellizcadas, brillo arriba y costuras suaves (caja 100×100). */
-function Almohadon() {
-  return (
-    <g>
-      <path d="M7 11C34 4 66 4 93 11C97 38 97 62 93 89C66 96 34 96 7 89C3 62 3 38 7 11Z" fill="url(#cojin)" stroke="#D2BE98" strokeWidth="0.9" strokeLinejoin="round" />
-      <path d="M7 11C20 22 26 28 34 36M93 11C80 22 74 28 66 36M7 89C20 78 26 72 34 64M93 89C80 78 74 72 66 64" stroke="#C9B48C" strokeOpacity="0.45" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-      <path d="M12 15C36 9 64 9 88 15" stroke="#fff" strokeOpacity="0.7" strokeWidth="2" fill="none" strokeLinecap="round" />
-    </g>
-  );
-}
-
-/** Los dos almohadones del regalo; se colocan pegados al borde derecho del recuadro blanco (así nunca tapan el «GRATIS»). */
+/** Par de cojines beige del regalo (foto con fondo transparente); pegado al borde derecho del recuadro blanco, así nunca tapa el «GRATIS». */
 function Cojines() {
   return (
-    <svg
-      viewBox="0 0 120 140"
+    <img
+      src="/regalo-cojines.webp"
+      alt=""
       aria-hidden
-      className="absolute bottom-0 overflow-visible"
-      style={{ left: `calc(100% - ${c(1.4)})`, width: c(10.5), filter: "drop-shadow(0 2px 3px rgba(0,0,0,.35))" }}
-    >
-      <defs>
-        <radialGradient id="cojin" cx="0.4" cy="0.35" r="0.8">
-          <stop offset="0" stopColor="#FBF3E2" />
-          <stop offset="0.65" stopColor="#EFE0C3" />
-          <stop offset="1" stopColor="#D9C4A0" />
-        </radialGradient>
-      </defs>
-      <g transform="translate(4 2) rotate(-14 40 40) scale(.8)"><Almohadon /></g>
-      <g transform="translate(26 50) rotate(-7 40 40) scale(.9)"><Almohadon /></g>
-    </svg>
+      width={480}
+      height={419}
+      loading="lazy"
+      decoding="async"
+      className="pointer-events-none absolute bottom-0 h-auto max-w-none"
+      style={{ left: `calc(100% - ${c(1.4)})`, width: c(11), filter: "drop-shadow(0 2px 3px rgba(0,0,0,.35))" }}
+    />
   );
 }
 
