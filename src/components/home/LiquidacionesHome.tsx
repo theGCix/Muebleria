@@ -10,8 +10,9 @@ import { TarjetaLiquidacion } from "./BannerLiquidacion";
 
 // Clases literales (Tailwind no ve nombres armados con variables)
 const SPAN: Record<number, string> = { 2: "lg:col-span-2", 3: "lg:col-span-3", 6: "lg:col-span-6" };
-// Proporción del banner en PC (tarjeta angosta 4:3, ancha 2:1, única 3:1); en móvil siempre 4:3
-const ASPECTO: Record<number, string> = { 2: "lg:aspect-[4/3]", 3: "lg:aspect-[2/1]", 6: "lg:aspect-[3/1]" };
+// Proporción del banner en PC: angosta 4:3; ancha y única = la de la imagen de referencia (1696×814 ≈ 2.08:1), para que
+// el texto escalado no quede apretado (con 3:1 el nombre y el precio se veían enormes); en móvil siempre 4:3
+const ASPECTO: Record<number, string> = { 2: "lg:aspect-[4/3]", 3: "lg:aspect-[1696/814]", 6: "lg:aspect-[1696/814]" };
 
 export function LiquidacionesHome() {
   const { data = [] } = useLiquidacionesHome();
