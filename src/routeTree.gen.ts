@@ -45,6 +45,7 @@ import { Route as AuthenticatedProduccionRouteImport } from './routes/_authentic
 import { Route as AuthenticatedPosRouteImport } from './routes/_authenticated/pos'
 import { Route as AuthenticatedPedidosRouteImport } from './routes/_authenticated/pedidos'
 import { Route as AuthenticatedMiProduccionRouteImport } from './routes/_authenticated/mi-produccion'
+import { Route as AuthenticatedLiquidacionRouteImport } from './routes/_authenticated/liquidacion'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
 import { Route as AuthenticatedInsumosRouteImport } from './routes/_authenticated/insumos'
 import { Route as AuthenticatedGestionarProyectosRouteImport } from './routes/_authenticated/gestionar-proyectos'
@@ -244,6 +245,12 @@ const AuthenticatedMiProduccionRoute =
     path: '/mi-produccion',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedLiquidacionRoute =
+  AuthenticatedLiquidacionRouteImport.update({
+    id: '/liquidacion',
+    path: '/liquidacion',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -364,6 +371,7 @@ export interface FileRoutesByFullPath {
   '/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
   '/insumos': typeof AuthenticatedInsumosRoute
   '/leads': typeof AuthenticatedLeadsRoute
+  '/liquidacion': typeof AuthenticatedLiquidacionRoute
   '/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/pos': typeof AuthenticatedPosRoute
@@ -417,6 +425,7 @@ export interface FileRoutesByTo {
   '/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
   '/insumos': typeof AuthenticatedInsumosRoute
   '/leads': typeof AuthenticatedLeadsRoute
+  '/liquidacion': typeof AuthenticatedLiquidacionRoute
   '/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/pedidos': typeof AuthenticatedPedidosRoute
   '/pos': typeof AuthenticatedPosRoute
@@ -473,6 +482,7 @@ export interface FileRoutesById {
   '/_authenticated/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
   '/_authenticated/insumos': typeof AuthenticatedInsumosRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
+  '/_authenticated/liquidacion': typeof AuthenticatedLiquidacionRoute
   '/_authenticated/mi-produccion': typeof AuthenticatedMiProduccionRoute
   '/_authenticated/pedidos': typeof AuthenticatedPedidosRoute
   '/_authenticated/pos': typeof AuthenticatedPosRoute
@@ -529,6 +539,7 @@ export interface FileRouteTypes {
     | '/gestionar-proyectos'
     | '/insumos'
     | '/leads'
+    | '/liquidacion'
     | '/mi-produccion'
     | '/pedidos'
     | '/pos'
@@ -582,6 +593,7 @@ export interface FileRouteTypes {
     | '/gestionar-proyectos'
     | '/insumos'
     | '/leads'
+    | '/liquidacion'
     | '/mi-produccion'
     | '/pedidos'
     | '/pos'
@@ -637,6 +649,7 @@ export interface FileRouteTypes {
     | '/_authenticated/gestionar-proyectos'
     | '/_authenticated/insumos'
     | '/_authenticated/leads'
+    | '/_authenticated/liquidacion'
     | '/_authenticated/mi-produccion'
     | '/_authenticated/pedidos'
     | '/_authenticated/pos'
@@ -940,6 +953,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMiProduccionRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/liquidacion': {
+      id: '/_authenticated/liquidacion'
+      path: '/liquidacion'
+      fullPath: '/liquidacion'
+      preLoaderRoute: typeof AuthenticatedLiquidacionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/leads': {
       id: '/_authenticated/leads'
       path: '/leads'
@@ -1080,6 +1100,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedGestionarProyectosRoute: typeof AuthenticatedGestionarProyectosRoute
   AuthenticatedInsumosRoute: typeof AuthenticatedInsumosRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
+  AuthenticatedLiquidacionRoute: typeof AuthenticatedLiquidacionRoute
   AuthenticatedMiProduccionRoute: typeof AuthenticatedMiProduccionRoute
   AuthenticatedPedidosRoute: typeof AuthenticatedPedidosRoute
   AuthenticatedPosRoute: typeof AuthenticatedPosRoute
@@ -1109,6 +1130,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedGestionarProyectosRoute: AuthenticatedGestionarProyectosRoute,
   AuthenticatedInsumosRoute: AuthenticatedInsumosRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
+  AuthenticatedLiquidacionRoute: AuthenticatedLiquidacionRoute,
   AuthenticatedMiProduccionRoute: AuthenticatedMiProduccionRoute,
   AuthenticatedPedidosRoute: AuthenticatedPedidosRoute,
   AuthenticatedPosRoute: AuthenticatedPosRoute,

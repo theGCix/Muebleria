@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, ShoppingBasket, Receipt, Users, UserCog, Package,MailCheck,
-  LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2, PackageCheck, Tag, Navigation, Wallet, Undo2, Images, Sparkles, GalleryHorizontal,
+  LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2, PackageCheck, Tag, Navigation, Wallet, Undo2, Images, Sparkles, GalleryHorizontal, Tags,
   type LucideIcon,
 } from "lucide-react";
 import type { AppRole } from "@/hooks/useAuth";
@@ -65,6 +65,7 @@ export const groups: NavGroup[] = [
       { title: "Combos", url: "/combos", icon: PackageCheck, roles: ADMIN },
       { title: "Proyectos", url: "/gestionar-proyectos", icon: Sparkles, roles: ADMIN },
       { title: "Carrusel del home", url: "/carrusel", icon: GalleryHorizontal, roles: ADMIN },
+      { title: "Liquidación", url: "/liquidacion", icon: Tags, roles: ADMIN },
     ],
   },
   {

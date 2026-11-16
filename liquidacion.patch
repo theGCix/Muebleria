@@ -1,0 +1,1284 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index 6921f60..f434240 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -158,3 +158,9 @@
+ ## Reglas de negocio (límite por compra, 2026-11-15)
+ - **Máximo 5 unidades por producto en cada compra** (decisión del dueño). Se suman las líneas del mismo producto (distintas opciones); las piezas de un combo no cuentan. Navegador: `CANTIDAD_MAX_POR_COMPRA` en `src/lib/limiteCompra.ts`, aplicado en `cartStore` (`addItem`, `addItems`, `updateQty`) para que ficha, tarjeta, carrito, checkout y asistente respeten el mismo tope. Servidor: `CANTIDAD_MAX_POR_COMPRA` y `verificarLimitePorProducto` en `server/pagos.js`, llamado desde `calcularPedido` (una prueba verifica que ambos números coincidan). El límite NO es por usuario ni por historial; los pedidos mayores se cotizan por WhatsApp o con el asistente. No cambia la fórmula de precios.
+ - **Menú móvil (2026-11-16, decisión del dueño; sustituye a «Header y menú (fase 4)» en lo de la hamburguesa):** en móvil, ☰ a la izquierda del logo abre `#menu-movil`; el botón «Más» ya no existe. La franja muestra las 3 primeras categorías. Las categorías del home son `ElegirAmbiente` (2×2 en móvil, 5 en PC) con ilustraciones de `public/ambientes` en las cuatro principales; `Categories.tsx` no está montado: no editarlo esperando efecto.
++
++## Reglas de Liquidación (2026-11-16)
++- **Precio real = el del producto.** Una liquidación aplica `products.descuento_porcentaje` (entero) y reemplaza a la oferta; se escribe solo con `guardar_liquidacion` / `quitar_liquidacion` (nunca insert/update directo a `liquidaciones`). El banner del home muestra `ofertaInfo(producto)`, no un precio guardado aparte.
++- **Un producto, una liquidación.** En el home: 5 por categoría (los más recientes), sin títulos; 3 arriba y 2 abajo en PC, una columna en móvil (`spansBanners`).
++- **Formato del banner fijo** (`BannerLiquidacion`): solo cambia la información. Azul y rosa de la referencia son excepción a la paleta Japandi, solo en esta pieza.
++- **Envío de la liquidación:** hoy solo visual; no anunciar como cobrado hasta aplicarlo en `server/pagos.js`.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 624cd77..bf3069e 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -491,3 +491,9 @@
+ - **Qué cambió:** `components/home/OfertaFoto.tsx` (nuevo): la imagen `public/oferta-lineal.webp` (nueva, ~250 KB, recortada de la imagen del dueño «Juego de sala LINEAL 3-2-1») enlaza a la ficha `/product/0fad1859-f6e3-4e7f-a598-f14bb7143dcd` (misma página que la URL de producción, navegación interna). `routes/index.tsx`: se monta `<OfertaFoto />` en lugar de `<OfertasVigentes />`. Conserva `id="ofertas"` (portada, header y ticker apuntan a ese ancla).
+ - **Sin cambios:** `OfertasVigentes.tsx`, `TarjetaOferta.tsx` y `lib/ofertaBanner.ts` quedan intactos (no se borra nada): para volver, cambiar `<OfertaFoto />` por `<OfertasVigentes />` en `routes/index.tsx`. Sin cambios en `server/`, precios ni carrito.
+ - **Riesgos:** (1) precio, 35 % y sellos están dentro de la imagen: si cambia el precio del producto o la oferta vence, la foto queda desactualizada; (2) el sello «Delivery gratis» sigue siendo solo visual (el checkout cobra envío por distrito); (3) sin `tsc`, `vite build` ni navegador en esta sesión. Archivos NUEVOS: `git add src/components/home/OfertaFoto.tsx public/oferta-lineal.webp`.
++
++## 2026-11-16 — Liquidación: panel admin + banners por categoría en el home
++- **Qué cambió:** (1) `supabase/migrations/20261118_liquidaciones.sql` (**sin ejecutar**): tabla `liquidaciones` (categoría, producto, foto de fondo, rótulo/nombre/detalle, `descuento_aplicado`, envío gratis o con descuento, regalo de cojines), lectura pública y escritura solo por `guardar_liquidacion(jsonb)` / `quitar_liquidacion(uuid)` (solo admin). (2) Admin: `routes/_authenticated/liquidacion.tsx` + `lib/liquidaciones.functions.ts`, entrada «Liquidación» en Catálogo (`nav-config.ts`, `routeTree.gen.ts`); formulario con vista previa, descuento por % o por precio, aviso si el producto está en oferta. (3) Home: `components/home/BannerLiquidacion.tsx` (formato de referencia, escala con el ancho de la tarjeta), `LiquidacionesHome.tsx` (sin títulos, 5 más recientes por categoría, 3 arriba + 2 abajo en PC, una columna en móvil), `hooks/useLiquidacionesHome.ts`, montado en `routes/index.tsx` después de `OfertaFoto` (se dejan ambas por ahora). (4) `lib/liquidacion.ts` (reglas puras) y `scripts/test-liquidacion.mjs` (6/6).
++- **Precio (decisión del dueño):** la liquidación REEMPLAZA a la oferta. Guardarla aplica el descuento real al producto (`descuento_porcentaje`, entero; `oferta_vence_el = NULL`) en la misma transacción, con aviso previo si el producto estaba en oferta. El banner lee el precio del producto (`ofertaInfo`), nunca queda desactualizado y se oculta si el producto ya no tiene descuento vigente. Quitarla retira el descuento solo si sigue siendo el que ella aplicó. `server/pagos.js` no se tocó: cobra con la misma fórmula de siempre.
++- **Pendiente (fase 2, requiere fórmula aprobada):** el sello «Delivery gratis» / «Descuento en envío» es solo visual; falta aplicarlo en `server/pagos.js` (`calcularPedido`), `checkout.tsx` y `pagos.test.js`.
++- **Riesgos:** (1) ejecutar la migración ANTES de desplegar; (2) las posiciones y tamaños del banner son una réplica de la imagen de referencia: revisar en navegador a 360 px y en PC; los textos más chicos tienen piso de 9–10 px; (3) los cojines son un dibujo SVG (no la foto de la referencia) y la tipografía es la de la tienda, no Montserrat; (4) colores azul y rosa de la referencia: excepción a la paleta Japandi solo en este banner (pedido del dueño); (5) `tsc` sin errores nuevos y `vite build` OK; sin navegador. Archivos NUEVOS: `git add` de los 8 de la lista del patch.
+diff --git a/scripts/test-liquidacion.mjs b/scripts/test-liquidacion.mjs
+new file mode 100644
+index 0000000..06983cd
+--- /dev/null
++++ b/scripts/test-liquidacion.mjs
+@@ -0,0 +1,64 @@
++// Pruebas de src/lib/liquidacion.ts. Ejecutar: node --test scripts/test-liquidacion.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import {
++  precioConDescuento, descuentoDesdePrecio, spansBanners, agruparPorCategoria, selloEnvio, numeroBanner,
++} from "../src/lib/liquidacion.ts";
++
++test("precio con descuento: igual que el servidor (referencias del banner)", () => {
++  assert.equal(precioConDescuento(2340, 38), 1450.8);
++  assert.equal(precioConDescuento(2499, 24), 1899.24);
++  assert.equal(precioConDescuento(1000, 10), 900);
++});
++
++test("descuento entero desde un precio objetivo", () => {
++  assert.equal(descuentoDesdePrecio(2340, 1459), 38);
++  assert.equal(descuentoDesdePrecio(3170, 2049), 35);
++  assert.equal(descuentoDesdePrecio(1000, 1000), null);
++  assert.equal(descuentoDesdePrecio(1000, 1200), null);
++  assert.equal(descuentoDesdePrecio(1000, 0), null);
++  assert.equal(descuentoDesdePrecio(1000, 50), null); // 95 % > 90 %
++  assert.equal(descuentoDesdePrecio(1000, 999), null); // 0 %
++});
++
++test("columnas sin huecos para 0 a 5 banners (y tope en 5)", () => {
++  assert.deepEqual(spansBanners(0), []);
++  assert.deepEqual(spansBanners(1), [6]);
++  assert.deepEqual(spansBanners(2), [3, 3]);
++  assert.deepEqual(spansBanners(3), [2, 2, 2]);
++  assert.deepEqual(spansBanners(4), [3, 3, 3, 3]);
++  assert.deepEqual(spansBanners(5), [2, 2, 2, 3, 3]);
++  assert.deepEqual(spansBanners(9), [2, 2, 2, 3, 3]);
++  for (let n = 1; n <= 5; n++) {
++    const s = spansBanners(n);
++    assert.equal(s.length, n);
++    // cada fila suma 6
++    let fila = 0;
++    for (const c of s) { fila += c; if (fila === 6) fila = 0; assert.ok(fila < 6); }
++    assert.equal(fila, 0);
++  }
++});
++
++test("los 5 más recientes por categoría", () => {
++  const mk = (id, categoria, dia) => ({ id, categoria, created_at: `2026-11-${String(dia).padStart(2, "0")}T10:00:00Z` });
++  const items = [1, 2, 3, 4, 5, 6, 7].map((d) => mk(`m${d}`, "muebles", d)).concat([mk("c1", "comedores", 3)]);
++  const g = agruparPorCategoria(items);
++  assert.deepEqual(g.muebles.map((x) => x.id), ["m7", "m6", "m5", "m4", "m3"]);
++  assert.deepEqual(g.comedores.map((x) => x.id), ["c1"]);
++  assert.equal(g.recamaras, undefined);
++});
++
++test("sello de envío", () => {
++  assert.deepEqual(selloEnvio("gratis"), { titulo: "DELIVERY GRATIS", detalle: "A TODA LIMA METROPOLITANA" });
++  assert.equal(selloEnvio("ninguno"), null);
++  assert.equal(selloEnvio("descuento", null), null);
++  assert.equal(selloEnvio("descuento", 20).detalle, "S/ 20 MENOS EN TU DELIVERY");
++  assert.equal(selloEnvio("descuento", 12.5).detalle, "S/ 12.50 MENOS EN TU DELIVERY");
++});
++
++test("número del precio", () => {
++  assert.equal(numeroBanner(1899), "1,899");
++  assert.equal(numeroBanner(2049), "2,049");
++  assert.equal(numeroBanner(999), "999");
++  assert.equal(numeroBanner(1450.8), "1,450.80");
++});
+diff --git a/src/components/home/BannerLiquidacion.tsx b/src/components/home/BannerLiquidacion.tsx
+new file mode 100644
+index 0000000..8fc747d
+--- /dev/null
++++ b/src/components/home/BannerLiquidacion.tsx
+@@ -0,0 +1,153 @@
++// src/components/home/BannerLiquidacion.tsx
++// Banner de liquidación (formato de referencia del dueño, 2026-11-16): foto de fondo, sellos «Delivery gratis» y
++// «Compra segura» arriba a la derecha, «GRATIS · juego de cojines» abajo a la izquierda, rótulo + nombre + detalle y
++// el precio azul con la etiqueta rosa del %, más «Precio regular» tachado. Solo cambia la información; el formato no.
++// Todo escala con el ancho de la tarjeta (unidades cqw): en móvil (una tarjeta por fila) el factor --k los agranda.
++// Los colores azul y rosa son los de la referencia: el dueño pidió no tocarlos (excepción a la paleta Japandi, solo aquí).
++import { Link } from "@tanstack/react-router";
++import { ShieldCheck, Truck } from "lucide-react";
++import { selloEnvio, numeroBanner, type EnvioTipo } from "@/lib/liquidacion";
++import { slideImg } from "@/hooks/useCarruselHome";
++
++const AZUL = "#1677FF";
++const ROSA = "#F0198C";
++
++export interface DatosBanner {
++  imagen: string;
++  kicker: string | null;
++  nombre: string;
++  detalle: string | null;
++  precioRegular: number;
++  precioFinal: number;
++  descuento: number;
++  envioTipo: EnvioTipo;
++  envioDescuento: number | null;
++  regaloCojines: boolean;
++}
++
++/** Tamaño que escala con la tarjeta; --k lo agranda en móvil. Mínimo 10 px para que nada sea ilegible. */
++const t = (cqw: number, min = 10) => `max(${min}px, calc(var(--k, 1) * ${cqw}cqw))`;
++const c = (cqw: number) => `calc(var(--k, 1) * ${cqw}cqw)`;
++
++function Cojines() {
++  return (
++    <svg viewBox="0 0 110 120" aria-hidden className="absolute" style={{ left: c(24), bottom: c(0.5), width: c(23) }}>
++      <defs>
++        <linearGradient id="cojin" x1="0" y1="0" x2="1" y2="1">
++          <stop offset="0" stopColor="#F4E8D2" />
++          <stop offset="1" stopColor="#DCC7A4" />
++        </linearGradient>
++      </defs>
++      <path d="M6 22 Q38 4 66 16 Q74 44 64 74 Q34 88 4 72 Q12 46 6 22Z" fill="url(#cojin)" stroke="#CDB68F" strokeWidth="0.8" />
++      <path d="M40 64 Q70 46 100 62 Q106 90 94 112 Q64 122 38 108 Q46 86 40 64Z" fill="url(#cojin)" stroke="#CDB68F" strokeWidth="0.8" />
++    </svg>
++  );
++}
++
++/** Banner sin enlace (también lo usa la vista previa del admin). `ancho`: nombre y precio en una fila (tarjetas anchas de PC). */
++export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: DatosBanner; ancho?: boolean; className?: string }) {
++  const sello = selloEnvio(d.envioTipo, d.envioDescuento);
++  return (
++    <div
++      className={`relative overflow-hidden rounded-[22px] bg-muted text-white shadow-sm [--k:1.3] lg:[--k:1] ${className}`}
++      style={{ containerType: "inline-size" }}
++    >
++      <img
++        src={slideImg(d.imagen, 1000)}
++        alt=""
++        width={1000}
++        height={750}
++        loading="lazy"
++        className="absolute inset-0 h-full w-full object-cover"
++      />
++      {/* Degradado inferior para que el texto se lea sobre cualquier foto */}
++      <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
++
++      {/* Sellos arriba a la derecha */}
++      <div className="absolute flex items-start" style={{ top: c(2.2), right: c(2.2), gap: c(1.2) }}>
++        {sello && (
++          <div className="flex items-center text-white" style={{ background: ROSA, borderRadius: c(2.2), padding: `${c(1.1)} ${c(2)}`, gap: c(1.4) }}>
++            <Truck aria-hidden style={{ width: c(6.5), height: c(6.5) }} className="shrink-0" />
++            <div className="leading-tight">
++              <p className="font-extrabold" style={{ fontSize: t(3) }}>{sello.titulo}</p>
++              <p className="font-bold" style={{ fontSize: t(1.9, 9) }}>{sello.detalle}</p>
++            </div>
++          </div>
++        )}
++        <div className="flex items-center bg-white text-neutral-600" style={{ borderRadius: c(2.2), padding: `${c(1.1)} ${c(2)}`, gap: c(1.2) }}>
++          <ShieldCheck aria-hidden style={{ width: c(5.5), height: c(5.5) }} className="shrink-0" />
++          <p className="font-bold leading-tight" style={{ fontSize: t(2.4, 9) }}>COMPRA<br />SEGURA</p>
++        </div>
++      </div>
++
++      {/* Regalo abajo a la izquierda */}
++      {d.regaloCojines && (
++        <>
++          <div
++            className="absolute bottom-0 left-0 bg-white"
++            style={{ borderTopRightRadius: c(9), paddingLeft: c(3), paddingRight: c(8), paddingTop: c(2.2), paddingBottom: c(2.4) }}
++          >
++            <p className="font-extrabold leading-none" style={{ fontSize: t(6.4, 14), color: ROSA }}>GRATIS</p>
++            <p className="mt-0.5 font-bold leading-tight text-neutral-600" style={{ fontSize: t(2.5, 9) }}>
++              JUEGO<br />DE COJINES
++            </p>
++          </div>
++          <Cojines />
++        </>
++      )}
++
++      {/* Nombre y precio abajo a la derecha */}
++      <div
++        className={`absolute flex ${ancho ? "items-end" : "flex-col items-start"}`}
++        style={{ right: c(2.6), bottom: c(3), gap: c(2.4) }}
++      >
++        <div className="border-l-2 border-white/80" style={{ paddingLeft: c(1.8) }}>
++          {d.kicker && <p className="font-medium leading-tight" style={{ fontSize: t(3.1, 11) }}>{d.kicker}</p>}
++          <p className="flex items-baseline" style={{ gap: c(1.2) }}>
++            <span className="font-extrabold uppercase leading-none" style={{ fontSize: t(7.2, 16) }}>{d.nombre}</span>
++            {d.detalle && <span className="font-medium leading-none" style={{ fontSize: t(3.1, 11) }}>{d.detalle}</span>}
++          </p>
++        </div>
++        <div className="flex flex-col" style={{ gap: c(0.8) }}>
++          <div className="flex items-stretch">
++            <span
++              className="flex items-baseline font-extrabold leading-none"
++              style={{ background: AZUL, borderTopLeftRadius: c(2.2), borderBottomLeftRadius: c(2.2), padding: `${c(1.3)} ${c(5)} ${c(1.3)} ${c(2.4)}`, gap: c(0.6) }}
++            >
++              <span style={{ fontSize: t(3.8, 11) }}>s/</span>
++              <span style={{ fontSize: t(8.2, 18) }}>{numeroBanner(d.precioFinal)}</span>
++            </span>
++            <span
++              className="flex items-center font-extrabold leading-none"
++              style={{ background: ROSA, marginLeft: c(-2.8), borderRadius: c(2.2), padding: `0 ${c(2.4)}`, fontSize: t(5, 13) }}
++            >
++              {d.descuento}%
++            </span>
++          </div>
++          <p className="font-medium" style={{ fontSize: t(2.5, 10) }}>
++            Precio regular: <span className="line-through">S/ {numeroBanner(d.precioRegular)}</span>
++          </p>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/** Banner clicable: lleva a la ficha del producto liquidado. */
++export function TarjetaLiquidacion({ productId, d, ancho, className = "" }: { productId: string; d: DatosBanner; ancho?: boolean; className?: string }) {
++  const etiqueta =
++    `${d.kicker ? d.kicker + " " : ""}${d.nombre}${d.detalle ? " " + d.detalle : ""}, S/ ${numeroBanner(d.precioFinal)}, ` +
++    `${d.descuento}% de descuento, precio regular S/ ${numeroBanner(d.precioRegular)}` +
++    `${d.envioTipo === "gratis" ? ", delivery gratis a toda Lima Metropolitana" : ""}` +
++    `${d.regaloCojines ? ", regalo: juego de cojines" : ""}`;
++  return (
++    <Link
++      to="/product/$handle"
++      params={{ handle: productId }}
++      aria-label={etiqueta}
++      className="group block rounded-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
++    >
++      <BannerLiquidacion d={d} ancho={ancho} className={className} />
++    </Link>
++  );
++}
+diff --git a/src/components/home/LiquidacionesHome.tsx b/src/components/home/LiquidacionesHome.tsx
+new file mode 100644
+index 0000000..864b093
+--- /dev/null
++++ b/src/components/home/LiquidacionesHome.tsx
+@@ -0,0 +1,50 @@
++// src/components/home/LiquidacionesHome.tsx
++// Banners de liquidación del home, por categoría y SIN títulos (decisión del dueño, 2026-11-16): de frente las imágenes.
++// Por cada categoría con liquidaciones: sus 5 más recientes; en PC 3 arriba y 2 abajo (cuadrícula de 6 columnas), en móvil
++// una debajo de otra. Con menos de 5 se reparten sin huecos (lib/liquidacion.ts → spansBanners). Sin liquidaciones, nada.
++import { useMemo } from "react";
++import { CATEGORIAS } from "@/lib/categories";
++import { agruparPorCategoria, spansBanners } from "@/lib/liquidacion";
++import { useLiquidacionesHome } from "@/hooks/useLiquidacionesHome";
++import { TarjetaLiquidacion } from "./BannerLiquidacion";
++
++// Clases literales (Tailwind no ve nombres armados con variables)
++const SPAN: Record<number, string> = { 2: "lg:col-span-2", 3: "lg:col-span-3", 6: "lg:col-span-6" };
++// Proporción del banner en PC (tarjeta angosta 4:3, ancha 2:1, única 3:1); en móvil siempre 4:3
++const ASPECTO: Record<number, string> = { 2: "lg:aspect-[4/3]", 3: "lg:aspect-[2/1]", 6: "lg:aspect-[3/1]" };
++
++export function LiquidacionesHome() {
++  const { data = [] } = useLiquidacionesHome();
++  const grupos = useMemo(() => {
++    const porCat = agruparPorCategoria(data);
++    return CATEGORIAS.map((c) => ({ slug: c.slug, items: porCat[c.slug] ?? [] })).filter((g) => g.items.length > 0);
++  }, [data]);
++
++  if (grupos.length === 0) return null;
++
++  return (
++    <section id="liquidacion" aria-label="Liquidación" className="container mx-auto max-w-6xl space-y-4 px-4 py-6 md:space-y-6 md:py-8">
++      {grupos.map((g) => {
++        const spans = spansBanners(g.items.length);
++        return (
++          <ul key={g.slug} className="grid grid-cols-1 gap-4 lg:grid-cols-6">
++            {g.items.map((l, i) => (
++              <li key={l.id} className={`${SPAN[spans[i]]} min-w-0`}>
++                <TarjetaLiquidacion
++                  productId={l.product_id}
++                  ancho={spans[i] >= 3}
++                  className={`aspect-[4/3] w-full ${ASPECTO[spans[i]]}`}
++                  d={{
++                    imagen: l.imagen, kicker: l.kicker, nombre: l.nombre, detalle: l.detalle,
++                    precioRegular: l.precioRegular, precioFinal: l.precioFinal, descuento: l.descuento,
++                    envioTipo: l.envioTipo, envioDescuento: l.envioDescuento, regaloCojines: l.regaloCojines,
++                  }}
++                />
++              </li>
++            ))}
++          </ul>
++        );
++      })}
++    </section>
++  );
++}
+diff --git a/src/components/nav-config.ts b/src/components/nav-config.ts
+index 40ac654..4200ed7 100644
+--- a/src/components/nav-config.ts
++++ b/src/components/nav-config.ts
+@@ -1,6 +1,6 @@
+ import {
+   LayoutDashboard, ShoppingCart, ShoppingBag, ShoppingBasket, Receipt, Users, UserCog, Package,MailCheck,
+-  LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2, PackageCheck, Tag, Navigation, Wallet, Undo2, Images, Sparkles, GalleryHorizontal,
++  LayoutGrid, UserPlus, Star, Boxes, Hammer, Wrench, Truck, BarChart2, PackageCheck, Tag, Navigation, Wallet, Undo2, Images, Sparkles, GalleryHorizontal, Tags,
+   type LucideIcon,
+ } from "lucide-react";
+ import type { AppRole } from "@/hooks/useAuth";
+@@ -65,6 +65,7 @@ export const groups: NavGroup[] = [
+       { title: "Combos", url: "/combos", icon: PackageCheck, roles: ADMIN },
+       { title: "Proyectos", url: "/gestionar-proyectos", icon: Sparkles, roles: ADMIN },
+       { title: "Carrusel del home", url: "/carrusel", icon: GalleryHorizontal, roles: ADMIN },
++      { title: "Liquidación", url: "/liquidacion", icon: Tags, roles: ADMIN },
+     ],
+   },
+   {
+diff --git a/src/hooks/useLiquidacionesHome.ts b/src/hooks/useLiquidacionesHome.ts
+new file mode 100644
+index 0000000..353e1ee
+--- /dev/null
++++ b/src/hooks/useLiquidacionesHome.ts
+@@ -0,0 +1,65 @@
++// src/hooks/useLiquidacionesHome.ts
++// Liquidaciones del home (tabla liquidaciones + precio real del producto). Solo cuentan las que tienen un descuento
++// vigente en el producto: el precio sale de ofertaInfo (misma regla que el cobro), así el banner nunca queda desactualizado.
++import { useQuery } from "@tanstack/react-query";
++import { supabase } from "@/integrations/supabase/client";
++import { ofertaInfo } from "@/lib/pricing";
++import type { EnvioTipo } from "@/lib/liquidacion";
++
++export interface LiquidacionHome {
++  id: string;
++  product_id: string;
++  categoria: string;
++  created_at: string;
++  imagen: string;
++  kicker: string | null;
++  nombre: string;
++  detalle: string | null;
++  envioTipo: EnvioTipo;
++  envioDescuento: number | null;
++  regaloCojines: boolean;
++  precioRegular: number;
++  precioFinal: number;
++  descuento: number;
++}
++
++async function fetchLiquidaciones(): Promise<LiquidacionHome[]> {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const { data, error } = await (supabase as any)
++    .from("liquidaciones")
++    .select(
++      "id, product_id, categoria, imagen_url, kicker, nombre, detalle, envio_tipo, envio_descuento, regalo_cojines, created_at, " +
++        "products(precio, descuento_porcentaje, oferta_vence_el, activo)",
++    )
++    .order("created_at", { ascending: false })
++    .limit(200);
++  if (error) return []; // sin la tabla o sin red: el home sigue sin esta sección
++  const out: LiquidacionHome[] = [];
++  for (const r of data ?? []) {
++    const p = Array.isArray(r.products) ? r.products[0] : r.products;
++    if (!p || p.activo === false) continue;
++    const info = ofertaInfo({ precio: Number(p.precio), descuento_porcentaje: p.descuento_porcentaje, oferta_vence_el: p.oferta_vence_el });
++    if (!info.activa) continue;
++    out.push({
++      id: r.id,
++      product_id: r.product_id,
++      categoria: r.categoria,
++      created_at: r.created_at,
++      imagen: r.imagen_url,
++      kicker: r.kicker,
++      nombre: r.nombre,
++      detalle: r.detalle,
++      envioTipo: r.envio_tipo,
++      envioDescuento: r.envio_descuento != null ? Number(r.envio_descuento) : null,
++      regaloCojines: !!r.regalo_cojines,
++      precioRegular: Number(p.precio),
++      precioFinal: info.precioFinal,
++      descuento: Math.round(Number(p.descuento_porcentaje)),
++    });
++  }
++  return out;
++}
++
++export function useLiquidacionesHome() {
++  return useQuery({ queryKey: ["liquidaciones-home"], queryFn: fetchLiquidaciones, staleTime: 60_000 });
++}
+diff --git a/src/lib/liquidacion.ts b/src/lib/liquidacion.ts
+new file mode 100644
+index 0000000..da15789
+--- /dev/null
++++ b/src/lib/liquidacion.ts
+@@ -0,0 +1,68 @@
++// src/lib/liquidacion.ts
++// Reglas puras de «Liquidación» (banners del home por categoría). Sin React ni Supabase: se prueban con
++// scripts/test-liquidacion.mjs. El precio es SIEMPRE el del producto (descuento_porcentaje entero): aquí solo se calcula.
++
++export const DESCUENTO_MIN = 1;
++export const DESCUENTO_MAX = 90;
++/** Banners visibles por categoría (los más recientes). */
++export const MAX_BANNERS_POR_CATEGORIA = 5;
++
++export type EnvioTipo = "ninguno" | "gratis" | "descuento";
++
++const r2 = (n: number) => Math.round(n * 100) / 100;
++
++/** Misma fórmula que precioConOferta() de server/pagos.js y ofertaInfo() de lib/pricing.ts. */
++export const precioConDescuento = (precio: number, pct: number) => r2(precio - (precio * pct) / 100);
++
++/**
++ * Descuento ENTERO (la columna del producto es entera) más cercano a un precio objetivo.
++ * null si el precio no es válido (≤ 0, ≥ precio de lista) o el % queda fuera de 1–90.
++ */
++export function descuentoDesdePrecio(precioLista: number, precioObjetivo: number): number | null {
++  if (!(precioLista > 0) || !(precioObjetivo > 0) || precioObjetivo >= precioLista) return null;
++  const pct = Math.round((1 - precioObjetivo / precioLista) * 100);
++  return pct >= DESCUENTO_MIN && pct <= DESCUENTO_MAX ? pct : null;
++}
++
++/** Columnas (de 6) que ocupa cada banner en PC, sin dejar huecos: 1→6 · 2→3+3 · 3→2+2+2 · 4→3×4 · 5→2+2+2+3+3. */
++export function spansBanners(n: number): number[] {
++  switch (Math.min(Math.max(Math.floor(n), 0), MAX_BANNERS_POR_CATEGORIA)) {
++    case 1: return [6];
++    case 2: return [3, 3];
++    case 3: return [2, 2, 2];
++    case 4: return [3, 3, 3, 3];
++    case 5: return [2, 2, 2, 3, 3];
++    default: return [];
++  }
++}
++
++/** Agrupa por categoría y deja los `max` más recientes de cada una (created_at descendente). */
++export function agruparPorCategoria<T extends { categoria: string; created_at: string }>(
++  items: T[],
++  max = MAX_BANNERS_POR_CATEGORIA,
++): Record<string, T[]> {
++  const out: Record<string, T[]> = {};
++  const orden = [...items].sort((a, b) => b.created_at.localeCompare(a.created_at));
++  for (const it of orden) {
++    const g = (out[it.categoria] ??= []);
++    if (g.length < max) g.push(it);
++  }
++  return out;
++}
++
++/** Texto del sello de envío del banner; null si no lleva sello. */
++export function selloEnvio(tipo: EnvioTipo, descuento?: number | null): { titulo: string; detalle: string } | null {
++  if (tipo === "gratis") return { titulo: "DELIVERY GRATIS", detalle: "A TODA LIMA METROPOLITANA" };
++  if (tipo === "descuento" && descuento && descuento > 0) {
++    const monto = Number.isInteger(descuento) ? String(descuento) : descuento.toFixed(2);
++    return { titulo: "DESCUENTO EN ENVÍO", detalle: `S/ ${monto} MENOS EN TU DELIVERY` };
++  }
++  return null;
++}
++
++/** «S/ 1,459» sin el prefijo: solo el número del precio, como en el banner de referencia. */
++export function numeroBanner(n: number): string {
++  const entero = Number.isInteger(n);
++  const [e, d] = (entero ? String(n) : n.toFixed(2)).split(".");
++  return `${e.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${d ? "." + d : ""}`;
++}
+diff --git a/src/lib/liquidaciones.functions.ts b/src/lib/liquidaciones.functions.ts
+new file mode 100644
+index 0000000..b7ed2ef
+--- /dev/null
++++ b/src/lib/liquidaciones.functions.ts
+@@ -0,0 +1,108 @@
++// src/lib/liquidaciones.functions.ts
++// Liquidación (panel admin): lectura de la tabla `liquidaciones` y escritura SOLO por las funciones SQL
++// guardar_liquidacion / quitar_liquidacion (admin; aplican/retiran el descuento real del producto en una transacción).
++import { z } from "zod";
++import type { SupabaseClient } from "@supabase/supabase-js";
++import { getAuthenticatedClient } from "@/integrations/supabase/auth-middleware";
++import { DESCUENTO_MAX, DESCUENTO_MIN, type EnvioTipo } from "@/lib/liquidacion";
++
++// eslint-disable-next-line @typescript-eslint/no-explicit-any
++type Db = SupabaseClient<any>;
++async function db(): Promise<Db> {
++  const { supabase } = await getAuthenticatedClient();
++  return supabase as unknown as Db;
++}
++
++export interface ProductoLiquidable {
++  id: string;
++  nombre: string;
++  precio: number;
++  categoria: string;
++  descuento_porcentaje: number | null;
++  oferta_vence_el: string | null;
++}
++
++export interface LiquidacionAdmin {
++  id: string;
++  categoria: string;
++  product_id: string;
++  imagen_url: string;
++  kicker: string | null;
++  nombre: string;
++  detalle: string | null;
++  descuento_aplicado: number;
++  envio_tipo: EnvioTipo;
++  envio_descuento: number | null;
++  regalo_cojines: boolean;
++  created_at: string;
++  producto: ProductoLiquidable | null;
++}
++
++const opt = (max: number) => z.string().trim().max(max).nullable().optional();
++
++const Schema = z
++  .object({
++    id: z.string().uuid().optional(),
++    categoria: z.string().trim().min(1, "Elige una categoría"),
++    product_id: z.string().uuid("Elige un producto"),
++    imagen_url: z.string().regex(/^https:\/\//i, "Sube la imagen de fondo"),
++    kicker: opt(40),
++    nombre: z.string().trim().min(1, "Escribe el nombre del banner").max(40),
++    detalle: opt(40),
++    descuento: z.number().int().min(DESCUENTO_MIN, `Mínimo ${DESCUENTO_MIN} %`).max(DESCUENTO_MAX, `Máximo ${DESCUENTO_MAX} %`),
++    envio_tipo: z.enum(["ninguno", "gratis", "descuento"]),
++    envio_descuento: z.number().positive("Indica el descuento del envío en soles").max(1000).nullable().optional(),
++    regalo_cojines: z.boolean(),
++  })
++  .refine((v) => v.envio_tipo !== "descuento" || !!v.envio_descuento, {
++    message: "Indica cuántos soles se descuentan del envío",
++    path: ["envio_descuento"],
++  });
++export type GuardarLiquidacionInput = z.input<typeof Schema>;
++
++export async function listLiquidacionesAdmin(): Promise<LiquidacionAdmin[]> {
++  const c = await db();
++  const { data, error } = await c
++    .from("liquidaciones")
++    .select("*, products(id, nombre, precio, categoria, descuento_porcentaje, oferta_vence_el)")
++    .order("created_at", { ascending: false })
++    .limit(200);
++  if (error) throw new Error(error.message);
++  return (data ?? []).map((r: Record<string, unknown>) => {
++    const { products, ...fila } = r as { products?: ProductoLiquidable | ProductoLiquidable[] | null } & Record<string, unknown>;
++    const p = Array.isArray(products) ? products[0] : products;
++    return { ...fila, producto: p ?? null } as unknown as LiquidacionAdmin;
++  });
++}
++
++/** Productos de una categoría para elegir cuál se liquida. */
++export async function listProductosLiquidables(categoria: string): Promise<ProductoLiquidable[]> {
++  const c = await db();
++  const { data, error } = await c
++    .from("products")
++    .select("id, nombre, precio, categoria, descuento_porcentaje, oferta_vence_el")
++    .eq("categoria", categoria)
++    .eq("activo", true)
++    .order("nombre", { ascending: true })
++    .limit(300);
++  if (error) throw new Error(error.message);
++  return (data ?? []) as ProductoLiquidable[];
++}
++
++export async function guardarLiquidacion(input: GuardarLiquidacionInput): Promise<string> {
++  const v = Schema.parse(input);
++  const c = await db();
++  const { data, error } = await c.rpc("guardar_liquidacion", {
++    _datos: { ...v, envio_descuento: v.envio_tipo === "descuento" ? v.envio_descuento : null },
++  });
++  if (error) throw new Error(error.message);
++  return data as string;
++}
++
++/** Devuelve true si también se retiró el descuento del producto. */
++export async function quitarLiquidacion(id: string): Promise<boolean> {
++  const c = await db();
++  const { data, error } = await c.rpc("quitar_liquidacion", { _id: id });
++  if (error) throw new Error(error.message);
++  return !!data;
++}
+diff --git a/src/routeTree.gen.ts b/src/routeTree.gen.ts
+index 6fe6622..4ea39c3 100644
+--- a/src/routeTree.gen.ts
++++ b/src/routeTree.gen.ts
+@@ -45,6 +45,7 @@ import { Route as AuthenticatedProduccionRouteImport } from './routes/_authentic
+ import { Route as AuthenticatedPosRouteImport } from './routes/_authenticated/pos'
+ import { Route as AuthenticatedPedidosRouteImport } from './routes/_authenticated/pedidos'
+ import { Route as AuthenticatedMiProduccionRouteImport } from './routes/_authenticated/mi-produccion'
++import { Route as AuthenticatedLiquidacionRouteImport } from './routes/_authenticated/liquidacion'
+ import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
+ import { Route as AuthenticatedInsumosRouteImport } from './routes/_authenticated/insumos'
+ import { Route as AuthenticatedGestionarProyectosRouteImport } from './routes/_authenticated/gestionar-proyectos'
+@@ -244,6 +245,12 @@ const AuthenticatedMiProduccionRoute =
+     path: '/mi-produccion',
+     getParentRoute: () => AuthenticatedRoute,
+   } as any)
++const AuthenticatedLiquidacionRoute =
++  AuthenticatedLiquidacionRouteImport.update({
++    id: '/liquidacion',
++    path: '/liquidacion',
++    getParentRoute: () => AuthenticatedRoute,
++  } as any)
+ const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
+   id: '/leads',
+   path: '/leads',
+@@ -364,6 +371,7 @@ export interface FileRoutesByFullPath {
+   '/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
+   '/insumos': typeof AuthenticatedInsumosRoute
+   '/leads': typeof AuthenticatedLeadsRoute
++  '/liquidacion': typeof AuthenticatedLiquidacionRoute
+   '/mi-produccion': typeof AuthenticatedMiProduccionRoute
+   '/pedidos': typeof AuthenticatedPedidosRoute
+   '/pos': typeof AuthenticatedPosRoute
+@@ -417,6 +425,7 @@ export interface FileRoutesByTo {
+   '/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
+   '/insumos': typeof AuthenticatedInsumosRoute
+   '/leads': typeof AuthenticatedLeadsRoute
++  '/liquidacion': typeof AuthenticatedLiquidacionRoute
+   '/mi-produccion': typeof AuthenticatedMiProduccionRoute
+   '/pedidos': typeof AuthenticatedPedidosRoute
+   '/pos': typeof AuthenticatedPosRoute
+@@ -473,6 +482,7 @@ export interface FileRoutesById {
+   '/_authenticated/gestionar-proyectos': typeof AuthenticatedGestionarProyectosRoute
+   '/_authenticated/insumos': typeof AuthenticatedInsumosRoute
+   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
++  '/_authenticated/liquidacion': typeof AuthenticatedLiquidacionRoute
+   '/_authenticated/mi-produccion': typeof AuthenticatedMiProduccionRoute
+   '/_authenticated/pedidos': typeof AuthenticatedPedidosRoute
+   '/_authenticated/pos': typeof AuthenticatedPosRoute
+@@ -529,6 +539,7 @@ export interface FileRouteTypes {
+     | '/gestionar-proyectos'
+     | '/insumos'
+     | '/leads'
++    | '/liquidacion'
+     | '/mi-produccion'
+     | '/pedidos'
+     | '/pos'
+@@ -582,6 +593,7 @@ export interface FileRouteTypes {
+     | '/gestionar-proyectos'
+     | '/insumos'
+     | '/leads'
++    | '/liquidacion'
+     | '/mi-produccion'
+     | '/pedidos'
+     | '/pos'
+@@ -637,6 +649,7 @@ export interface FileRouteTypes {
+     | '/_authenticated/gestionar-proyectos'
+     | '/_authenticated/insumos'
+     | '/_authenticated/leads'
++    | '/_authenticated/liquidacion'
+     | '/_authenticated/mi-produccion'
+     | '/_authenticated/pedidos'
+     | '/_authenticated/pos'
+@@ -940,6 +953,13 @@ declare module '@tanstack/react-router' {
+       preLoaderRoute: typeof AuthenticatedMiProduccionRouteImport
+       parentRoute: typeof AuthenticatedRoute
+     }
++    '/_authenticated/liquidacion': {
++      id: '/_authenticated/liquidacion'
++      path: '/liquidacion'
++      fullPath: '/liquidacion'
++      preLoaderRoute: typeof AuthenticatedLiquidacionRouteImport
++      parentRoute: typeof AuthenticatedRoute
++    }
+     '/_authenticated/leads': {
+       id: '/_authenticated/leads'
+       path: '/leads'
+@@ -1080,6 +1100,7 @@ interface AuthenticatedRouteChildren {
+   AuthenticatedGestionarProyectosRoute: typeof AuthenticatedGestionarProyectosRoute
+   AuthenticatedInsumosRoute: typeof AuthenticatedInsumosRoute
+   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
++  AuthenticatedLiquidacionRoute: typeof AuthenticatedLiquidacionRoute
+   AuthenticatedMiProduccionRoute: typeof AuthenticatedMiProduccionRoute
+   AuthenticatedPedidosRoute: typeof AuthenticatedPedidosRoute
+   AuthenticatedPosRoute: typeof AuthenticatedPosRoute
+@@ -1109,6 +1130,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+   AuthenticatedGestionarProyectosRoute: AuthenticatedGestionarProyectosRoute,
+   AuthenticatedInsumosRoute: AuthenticatedInsumosRoute,
+   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
++  AuthenticatedLiquidacionRoute: AuthenticatedLiquidacionRoute,
+   AuthenticatedMiProduccionRoute: AuthenticatedMiProduccionRoute,
+   AuthenticatedPedidosRoute: AuthenticatedPedidosRoute,
+   AuthenticatedPosRoute: AuthenticatedPosRoute,
+diff --git a/src/routes/_authenticated/liquidacion.tsx b/src/routes/_authenticated/liquidacion.tsx
+new file mode 100644
+index 0000000..c8bd741
+--- /dev/null
++++ b/src/routes/_authenticated/liquidacion.tsx
+@@ -0,0 +1,414 @@
++// src/routes/_authenticated/liquidacion.tsx
++// Panel «Liquidación» (Catálogo): banners del home por categoría. Cada uno enlaza un producto, lleva la foto de fondo que
++// subes, un descuento REAL (se aplica al producto; reemplaza a su oferta, con aviso), envío gratis o con descuento y,
++// opcional, el regalo de cojines. En el home salen los 5 más recientes de cada categoría.
++import { useRef, useState } from "react";
++import { createFileRoute } from "@tanstack/react-router";
++import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
++import { ImagePlus, Loader2, Pencil, Plus, Tags, Trash2 } from "lucide-react";
++import { toast } from "sonner";
++import { Button } from "@/components/ui/button";
++import { Input } from "@/components/ui/input";
++import { Label } from "@/components/ui/label";
++import { Switch } from "@/components/ui/switch";
++import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
++import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
++import { EmptyState, ListSkeleton } from "@/components/states";
++import { BannerLiquidacion } from "@/components/home/BannerLiquidacion";
++import { uploadImage } from "@/lib/cloudinary";
++import { slideImg } from "@/hooks/useCarruselHome";
++import { CATEGORIAS } from "@/lib/categories";
++import { fmtPEN, ofertaInfo } from "@/lib/pricing";
++import { partirNombre } from "@/lib/ofertaBanner";
++import {
++  DESCUENTO_MAX, DESCUENTO_MIN, MAX_BANNERS_POR_CATEGORIA, descuentoDesdePrecio, precioConDescuento, type EnvioTipo,
++} from "@/lib/liquidacion";
++import {
++  guardarLiquidacion, listLiquidacionesAdmin, listProductosLiquidables, quitarLiquidacion,
++  type LiquidacionAdmin, type ProductoLiquidable,
++} from "@/lib/liquidaciones.functions";
++
++export const Route = createFileRoute("/_authenticated/liquidacion")({
++  head: () => ({ meta: [{ title: "Liquidación — G&M" }] }),
++  component: LiquidacionAdminPage,
++});
++
++interface Form {
++  id?: string;
++  categoria: string;
++  product_id: string;
++  imagen_url: string;
++  kicker: string;
++  nombre: string;
++  detalle: string;
++  modo: "pct" | "precio";
++  pct: string;
++  precio: string;
++  envio_tipo: EnvioTipo;
++  envio_descuento: string;
++  regalo_cojines: boolean;
++}
++const VACIO: Form = {
++  categoria: "", product_id: "", imagen_url: "", kicker: "", nombre: "", detalle: "",
++  modo: "pct", pct: "", precio: "", envio_tipo: "ninguno", envio_descuento: "", regalo_cojines: false,
++};
++const nombreCategoria = (slug: string) => CATEGORIAS.find((c) => c.slug === slug)?.nombre ?? slug;
++
++function LiquidacionAdminPage() {
++  const qc = useQueryClient();
++  const [form, setForm] = useState<Form | null>(null);
++  const [subiendo, setSubiendo] = useState(false);
++  const inputRef = useRef<HTMLInputElement>(null);
++
++  const lista = useQuery({ queryKey: ["liquidaciones-admin"], queryFn: listLiquidacionesAdmin });
++  const items = lista.data ?? [];
++  const original = form?.id ? items.find((i) => i.id === form.id) : undefined;
++
++  const productos = useQuery({
++    queryKey: ["liquidables", form?.categoria],
++    queryFn: () => listProductosLiquidables(form!.categoria),
++    enabled: !!form?.categoria,
++  });
++  const producto: ProductoLiquidable | undefined = productos.data?.find((p) => p.id === form?.product_id);
++
++  // Descuento efectivo: directo (%), o el entero más cercano al precio que escribas (la columna del producto es entera)
++  const descuento = !form
++    ? null
++    : form.modo === "pct"
++      ? (Number.isInteger(Number(form.pct)) && Number(form.pct) >= DESCUENTO_MIN && Number(form.pct) <= DESCUENTO_MAX ? Number(form.pct) : null)
++      : producto ? descuentoDesdePrecio(producto.precio, Number(form.precio)) : null;
++  const precioFinal = producto && descuento ? precioConDescuento(producto.precio, descuento) : null;
++
++  const refrescar = () => {
++    qc.invalidateQueries({ queryKey: ["liquidaciones-admin"] });
++    qc.invalidateQueries({ queryKey: ["liquidaciones-home"] });
++    qc.invalidateQueries({ queryKey: ["liquidables"] });
++  };
++
++  const guardar = useMutation({
++    mutationFn: (f: Form) =>
++      guardarLiquidacion({
++        id: f.id,
++        categoria: f.categoria,
++        product_id: f.product_id,
++        imagen_url: f.imagen_url,
++        kicker: f.kicker || null,
++        nombre: f.nombre,
++        detalle: f.detalle || null,
++        descuento: descuento ?? 0,
++        envio_tipo: f.envio_tipo,
++        envio_descuento: f.envio_tipo === "descuento" ? Number(f.envio_descuento) || null : null,
++        regalo_cojines: f.regalo_cojines,
++      }),
++    onSuccess: () => {
++      toast.success("Liquidación guardada");
++      setForm(null);
++      refrescar();
++    },
++    onError: (e: Error) => toast.error(e.message),
++  });
++
++  const quitar = useMutation({
++    mutationFn: (id: string) => quitarLiquidacion(id),
++    onSuccess: (restaurado) => {
++      toast.success(restaurado ? "Liquidación quitada: el producto volvió a su precio normal" : "Liquidación quitada");
++      refrescar();
++    },
++    onError: (e: Error) => toast.error(e.message),
++  });
++
++  const subirFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    e.target.value = "";
++    if (!form || !file) return;
++    setSubiendo(true);
++    try {
++      const r = await uploadImage(file, "muebleria/liquidacion");
++      setForm((cur) => (cur ? { ...cur, imagen_url: r.secure_url } : cur));
++    } catch (err) {
++      toast.error(err instanceof Error ? err.message : "No se pudo subir la imagen");
++    } finally {
++      setSubiendo(false);
++    }
++  };
++
++  const elegirProducto = (id: string) => {
++    if (!form) return;
++    const p = productos.data?.find((x) => x.id === id);
++    const sugerido = p ? partirNombre(p.nombre) : null;
++    setForm({
++      ...form,
++      product_id: id,
++      // solo sugiere los textos si aún están vacíos; se pueden editar
++      kicker: form.kicker || (sugerido?.kicker ?? ""),
++      nombre: form.nombre || (sugerido?.principal.toUpperCase() ?? ""),
++    });
++  };
++
++  const editar = (l: LiquidacionAdmin) =>
++    setForm({
++      id: l.id, categoria: l.categoria, product_id: l.product_id, imagen_url: l.imagen_url,
++      kicker: l.kicker ?? "", nombre: l.nombre, detalle: l.detalle ?? "",
++      modo: "pct", pct: String(l.descuento_aplicado), precio: "",
++      envio_tipo: l.envio_tipo, envio_descuento: l.envio_descuento != null ? String(l.envio_descuento) : "",
++      regalo_cojines: l.regalo_cojines,
++    });
++
++  const intentarGuardar = () => {
++    if (!form) return;
++    if (!form.categoria) return toast.error("Elige una categoría");
++    if (!producto) return toast.error("Elige el producto en liquidación");
++    if (!form.imagen_url) return toast.error("Sube la imagen de fondo");
++    if (!form.nombre.trim()) return toast.error("Escribe el nombre que irá en el banner");
++    if (!descuento || precioFinal === null) {
++      return toast.error(form.modo === "pct" ? `El descuento debe ser un entero entre ${DESCUENTO_MIN} y ${DESCUENTO_MAX} %` : "Ese precio no es válido: debe ser menor al precio regular");
++    }
++    if (form.envio_tipo === "descuento" && !(Number(form.envio_descuento) > 0)) return toast.error("Indica cuántos soles se descuentan del envío");
++
++    const actual = ofertaInfo(producto);
++    const mismoDescuento = !!original && original.product_id === producto.id && producto.descuento_porcentaje === original.descuento_aplicado;
++    const vence = producto.oferta_vence_el ? `, vence el ${new Date(producto.oferta_vence_el).toLocaleDateString("es-PE")}` : "";
++    const linea = `El precio real en la tienda pasará de ${fmtPEN(actual.precioFinal)} a ${fmtPEN(precioFinal)} (${descuento} % sobre ${fmtPEN(producto.precio)}).`;
++    const msg =
++      actual.activa && !mismoDescuento
++        ? `«${producto.nombre}» está en OFERTA (${producto.descuento_porcentaje} %${vence}).\n\nAl pasarlo a liquidación la oferta deja de existir y la reemplaza la liquidación.\n\n${linea}\n\n¿Estás de acuerdo?`
++        : `${linea}\n\n¿Guardar la liquidación?`;
++    if (window.confirm(msg)) guardar.mutate(form);
++  };
++
++  const enCategoria = (slug: string) => items.filter((i) => i.categoria === slug);
++
++  return (
++    <div className="mx-auto max-w-4xl space-y-6">
++      <div className="flex flex-wrap items-center justify-between gap-3">
++        <div>
++          <h1 className="font-display text-3xl font-semibold">Liquidación</h1>
++          <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">
++            Banners del home por categoría. En la tienda salen los {MAX_BANNERS_POR_CATEGORIA} más recientes de cada una. El
++            descuento se aplica de verdad al producto y reemplaza a su oferta. Foto de fondo recomendada: 1600 × 1200 px, sin
++            texto, con el mueble al centro.
++          </p>
++        </div>
++        <Button className="h-11 sm:h-9" onClick={() => setForm({ ...VACIO })}>
++          <Plus className="mr-1.5 h-4 w-4" /> Agregar liquidación
++        </Button>
++      </div>
++
++      {lista.isLoading ? (
++        <ListSkeleton />
++      ) : lista.isError ? (
++        <EmptyState title="No se pudo cargar" description="Si es la primera vez, ejecuta la migración 20261118_liquidaciones.sql en Supabase." />
++      ) : items.length === 0 ? (
++        <EmptyState icon={Tags} title="Aún no hay liquidaciones" description="Agrega la primera: elige la categoría, el producto y la foto de fondo." />
++      ) : (
++        CATEGORIAS.map((c) => {
++          const lis = enCategoria(c.slug);
++          if (lis.length === 0) return null;
++          return (
++            <section key={c.slug} className="space-y-2">
++              <h2 className="text-sm font-semibold">
++                {c.nombre} <span className="font-normal text-muted-foreground">· {lis.length} {lis.length === 1 ? "liquidación" : "liquidaciones"}
++                {lis.length > MAX_BANNERS_POR_CATEGORIA ? ` (en el home salen las ${MAX_BANNERS_POR_CATEGORIA} más recientes)` : ""}</span>
++              </h2>
++              <ul className="space-y-3">
++                {lis.map((l, i) => {
++                  const p = l.producto;
++                  const info = p ? ofertaInfo({ precio: Number(p.precio), descuento_porcentaje: p.descuento_porcentaje, oferta_vence_el: p.oferta_vence_el }) : null;
++                  const desfasada = !!p && (!info?.activa || p.descuento_porcentaje !== l.descuento_aplicado);
++                  return (
++                    <li key={l.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
++                      <img src={slideImg(l.imagen_url, 400)} alt="" loading="lazy" className="h-16 w-24 shrink-0 rounded-lg bg-muted object-cover" />
++                      <div className="min-w-0 flex-1">
++                        <p className="truncate text-sm font-medium">
++                          {l.kicker ? `${l.kicker} ` : ""}{l.nombre}{l.detalle ? ` ${l.detalle}` : ""}
++                          {i < MAX_BANNERS_POR_CATEGORIA && <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs font-normal">En el home</span>}
++                        </p>
++                        <p className="truncate text-xs text-muted-foreground">
++                          {p ? `${p.nombre} · ` : ""}
++                          {info ? `${fmtPEN(info.precioFinal)} (regular ${fmtPEN(Number(p!.precio))})` : "producto no encontrado"}
++                          {l.envio_tipo === "gratis" ? " · Delivery gratis" : l.envio_tipo === "descuento" ? ` · Envío −S/ ${l.envio_descuento}` : ""}
++                          {l.regalo_cojines ? " · Cojines" : ""}
++                        </p>
++                        {desfasada && (
++                          <p className="text-xs font-medium text-destructive">
++                            El descuento del producto ya no coincide con la liquidación (cambió en Productos o venció): este banner no se muestra hasta que lo guardes de nuevo.
++                          </p>
++                        )}
++                      </div>
++                      <div className="flex">
++                        <Button size="icon" variant="ghost" className="h-11 w-11 sm:h-8 sm:w-8" aria-label="Editar" onClick={() => editar(l)}>
++                          <Pencil className="h-4 w-4" />
++                        </Button>
++                        <Button size="icon" variant="ghost" className="h-11 w-11 text-destructive sm:h-8 sm:w-8" aria-label="Quitar liquidación"
++                          onClick={() => {
++                            if (window.confirm("¿Quitar esta liquidación?\n\nSe retira el descuento de liquidación del producto y vuelve a su precio normal (si ya lo habías cambiado desde Productos, no se toca).")) quitar.mutate(l.id);
++                          }}>
++                          <Trash2 className="h-4 w-4" />
++                        </Button>
++                      </div>
++                    </li>
++                  );
++                })}
++              </ul>
++            </section>
++          );
++        })
++      )}
++
++      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
++        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
++          {form && (
++            <>
++              <DialogHeader>
++                <DialogTitle>{form.id ? "Editar liquidación" : "Nueva liquidación"}</DialogTitle>
++              </DialogHeader>
++
++              <div className="space-y-4">
++                <div className="grid gap-3 sm:grid-cols-2">
++                  <div className="space-y-1.5">
++                    <Label>Categoría</Label>
++                    <Select value={form.categoria} onValueChange={(v) => setForm({ ...form, categoria: v, product_id: "" })}>
++                      <SelectTrigger><SelectValue placeholder="Elige una categoría" /></SelectTrigger>
++                      <SelectContent>
++                        {CATEGORIAS.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.nombre}</SelectItem>)}
++                      </SelectContent>
++                    </Select>
++                  </div>
++                  <div className="space-y-1.5">
++                    <Label>Producto en liquidación</Label>
++                    <Select value={form.product_id} onValueChange={elegirProducto} disabled={!form.categoria || productos.isLoading}>
++                      <SelectTrigger><SelectValue placeholder={form.categoria ? (productos.isLoading ? "Cargando…" : "Elige el producto") : "Primero la categoría"} /></SelectTrigger>
++                      <SelectContent>
++                        {(productos.data ?? []).map((p) => (
++                          <SelectItem key={p.id} value={p.id}>{p.nombre} · {fmtPEN(Number(p.precio))}</SelectItem>
++                        ))}
++                      </SelectContent>
++                    </Select>
++                    <p className="text-xs text-muted-foreground">Al hacer clic en el banner, el cliente va a la ficha de este producto.</p>
++                  </div>
++                </div>
++
++                <div className="space-y-2">
++                  <Label>Imagen de fondo</Label>
++                  <button
++                    type="button"
++                    disabled={subiendo}
++                    onClick={() => inputRef.current?.click()}
++                    className="relative flex aspect-[4/3] w-full max-w-xs items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
++                  >
++                    {form.imagen_url ? (
++                      <img src={slideImg(form.imagen_url, 600)} alt="" className="h-full w-full object-cover" />
++                    ) : (
++                      <span className="flex flex-col items-center text-xs"><ImagePlus className="mb-1 h-5 w-5" /> Subir imagen</span>
++                    )}
++                    {subiendo && <span className="absolute inset-0 grid place-items-center bg-background/70"><Loader2 className="h-5 w-5 animate-spin" /></span>}
++                  </button>
++                  <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={subirFoto} />
++                </div>
++
++                <div className="grid gap-3 sm:grid-cols-3">
++                  <div className="space-y-1.5">
++                    <Label htmlFor="l-kicker">Rótulo</Label>
++                    <Input id="l-kicker" maxLength={40} placeholder="Juego de sala" value={form.kicker} onChange={(e) => setForm({ ...form, kicker: e.target.value })} />
++                  </div>
++                  <div className="space-y-1.5">
++                    <Label htmlFor="l-nombre">Nombre</Label>
++                    <Input id="l-nombre" maxLength={40} placeholder="ONIX" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
++                  </div>
++                  <div className="space-y-1.5">
++                    <Label htmlFor="l-detalle">Detalle</Label>
++                    <Input id="l-detalle" maxLength={40} placeholder="3-2-1 + Banqueta" value={form.detalle} onChange={(e) => setForm({ ...form, detalle: e.target.value })} />
++                  </div>
++                </div>
++
++                <div className="space-y-2 rounded-lg border border-border p-3">
++                  <div className="flex flex-wrap items-center justify-between gap-2">
++                    <Label>Descuento</Label>
++                    <div className="inline-flex rounded-lg border border-border p-0.5 text-xs">
++                      {(["pct", "precio"] as const).map((m) => (
++                        <button key={m} type="button" onClick={() => setForm({ ...form, modo: m })}
++                          className={`h-9 rounded-md px-3 sm:h-7 ${form.modo === m ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
++                          {m === "pct" ? "Por porcentaje" : "Por precio"}
++                        </button>
++                      ))}
++                    </div>
++                  </div>
++                  {form.modo === "pct" ? (
++                    <Input type="number" inputMode="numeric" min={DESCUENTO_MIN} max={DESCUENTO_MAX} step={1} placeholder="Ej. 35" value={form.pct}
++                      onChange={(e) => setForm({ ...form, pct: e.target.value })} aria-label="Descuento en porcentaje" />
++                  ) : (
++                    <Input type="number" inputMode="decimal" min={1} step="0.01" placeholder="Precio de liquidación en S/" value={form.precio}
++                      onChange={(e) => setForm({ ...form, precio: e.target.value })} aria-label="Precio de liquidación" />
++                  )}
++                  <p className="text-xs text-muted-foreground">
++                    {!producto
++                      ? "Elige el producto para ver el precio."
++                      : precioFinal !== null && descuento
++                        ? `Precio regular ${fmtPEN(Number(producto.precio))} → precio final ${fmtPEN(precioFinal)} (${descuento} %). ${form.modo === "precio" ? "El descuento es un porcentaje entero, por eso el precio final puede variar unos céntimos del que escribiste." : ""}`
++                        : "Escribe un descuento válido."}
++                    {producto && ofertaInfo(producto).activa && !(original && original.product_id === producto.id && producto.descuento_porcentaje === original.descuento_aplicado) &&
++                      ` Este producto está en oferta (${producto.descuento_porcentaje} %): al guardar, la liquidación la reemplaza.`}
++                  </p>
++                </div>
++
++                <div className="grid gap-3 sm:grid-cols-2">
++                  <div className="space-y-1.5">
++                    <Label>Envío</Label>
++                    <Select value={form.envio_tipo} onValueChange={(v) => setForm({ ...form, envio_tipo: v as EnvioTipo })}>
++                      <SelectTrigger><SelectValue /></SelectTrigger>
++                      <SelectContent>
++                        <SelectItem value="ninguno">Sin sello de envío</SelectItem>
++                        <SelectItem value="gratis">Delivery gratis</SelectItem>
++                        <SelectItem value="descuento">Descuento en el envío</SelectItem>
++                      </SelectContent>
++                    </Select>
++                  </div>
++                  {form.envio_tipo === "descuento" && (
++                    <div className="space-y-1.5">
++                      <Label htmlFor="l-envio">Descuento del envío (S/)</Label>
++                      <Input id="l-envio" type="number" inputMode="decimal" min={1} step="0.5" placeholder="Ej. 20" value={form.envio_descuento}
++                        onChange={(e) => setForm({ ...form, envio_descuento: e.target.value })} />
++                    </div>
++                  )}
++                </div>
++                {form.envio_tipo !== "ninguno" && (
++                  <p className="text-xs text-muted-foreground">
++                    Por ahora el sello es solo visual: el checkout todavía cobra el envío por distrito. Pendiente de aplicarlo en el cobro.
++                  </p>
++                )}
++
++                <label className="flex items-center gap-2 text-sm">
++                  <Switch checked={form.regalo_cojines} onCheckedChange={(v) => setForm({ ...form, regalo_cojines: v })} />
++                  Incluye «GRATIS · juego de cojines»
++                </label>
++
++                <div className="space-y-1.5">
++                  <Label>Vista previa</Label>
++                  {producto && descuento && precioFinal !== null && form.imagen_url ? (
++                    <BannerLiquidacion
++                      className="aspect-[4/3] w-full max-w-sm"
++                      d={{
++                        imagen: form.imagen_url, kicker: form.kicker || null, nombre: form.nombre || "NOMBRE", detalle: form.detalle || null,
++                        precioRegular: Number(producto.precio), precioFinal, descuento,
++                        envioTipo: form.envio_tipo, envioDescuento: Number(form.envio_descuento) || null, regaloCojines: form.regalo_cojines,
++                      }}
++                    />
++                  ) : (
++                    <p className="text-xs text-muted-foreground">Elige el producto, el descuento y la imagen para ver cómo queda.</p>
++                  )}
++                </div>
++              </div>
++
++              <DialogFooter>
++                <Button variant="outline" onClick={() => setForm(null)}>Cancelar</Button>
++                <Button disabled={guardar.isPending || subiendo} onClick={intentarGuardar}>
++                  {guardar.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Guardar
++                </Button>
++              </DialogFooter>
++            </>
++          )}
++        </DialogContent>
++      </Dialog>
++    </div>
++  );
++}
+diff --git a/src/routes/index.tsx b/src/routes/index.tsx
+index 213340b..13ef5d4 100644
+--- a/src/routes/index.tsx
++++ b/src/routes/index.tsx
+@@ -10,6 +10,7 @@ import { ArmadorPresupuesto } from "@/components/home/ArmadorPresupuesto";
+ 
+ 
+ import { OfertaFoto } from "@/components/home/OfertaFoto";
++import { LiquidacionesHome } from "@/components/home/LiquidacionesHome";
+ import { HechoEnTaller } from "@/components/home/HechoEnTaller";
+ import { RecienSalidos } from "@/components/home/RecienSalidos";
+ import { PruebaloEnTuEspacio } from "@/components/home/PruebaloEnTuEspacio";
+@@ -45,7 +46,7 @@ function Index() {
+   return (
+      <div className="min-h-screen bg-background"> 
+      <Header /> 
+-     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <RecienSalidos /> <ColeccionDestacada /> <ArmadorPresupuesto /> <OfertaFoto /> <HechoEnTaller />
++     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <RecienSalidos /> <ColeccionDestacada /> <ArmadorPresupuesto /> <OfertaFoto /> <LiquidacionesHome /> <HechoEnTaller />
+        {/* Fuera del boceto, se conservan por ahora (el menú apunta a #combos y el pie a #testimonios) */}
+        <CombosSection /> <PromoCategoriaBanner /> <Testimonials /> <ClientesSatisfechos />
+        <PruebaloEnTuEspacio /> <CotizarMedida /> <BeneficiosFranja />
+diff --git a/supabase/migrations/20261118_liquidaciones.sql b/supabase/migrations/20261118_liquidaciones.sql
+new file mode 100644
+index 0000000..98612f0
+--- /dev/null
++++ b/supabase/migrations/20261118_liquidaciones.sql
+@@ -0,0 +1,142 @@
++-- ════════════════════════════════════════════════════════════════
++-- Liquidación — banners del home por categoría (admin: Catálogo → Liquidación)
++--
++--  · Cada fila enlaza un producto con un banner (foto de fondo, textos, envío, regalo de cojines).
++--  · El PRECIO REAL sigue siendo el de products (descuento_porcentaje): al guardar una liquidación el descuento
++--    se aplica al producto en la misma transacción y REEMPLAZA a la oferta que tuviera (oferta_vence_el = NULL).
++--    El banner lee el precio del producto, así que nunca queda desactualizado.
++--  · Al quitar la liquidación se retira el descuento del producto, pero solo si sigue siendo el que ella aplicó
++--    (si alguien lo cambió luego desde Productos, no se toca).
++--  · Las escrituras van SOLO por las funciones guardar_liquidacion / quitar_liquidacion (solo admin).
++--  · envio_tipo / envio_descuento: hoy solo se muestran en el banner; el cobro del envío NO cambia (server/pagos.js).
++-- No ejecutar sin confirmación del dueño (regla 10).
++-- ════════════════════════════════════════════════════════════════
++
++CREATE TABLE IF NOT EXISTS public.liquidaciones (
++  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  categoria          text NOT NULL,
++  product_id         uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
++  imagen_url         text NOT NULL,
++  kicker             text,
++  nombre             text NOT NULL,
++  detalle            text,
++  descuento_aplicado integer NOT NULL CHECK (descuento_aplicado BETWEEN 1 AND 90),
++  envio_tipo         text NOT NULL DEFAULT 'ninguno' CHECK (envio_tipo IN ('ninguno', 'gratis', 'descuento')),
++  envio_descuento    numeric(10,2) CHECK (envio_descuento IS NULL OR envio_descuento > 0),
++  regalo_cojines     boolean NOT NULL DEFAULT false,
++  created_at         timestamptz NOT NULL DEFAULT now(),
++  updated_at         timestamptz NOT NULL DEFAULT now(),
++  CONSTRAINT liquidaciones_envio_descuento_chk CHECK (envio_tipo <> 'descuento' OR envio_descuento IS NOT NULL)
++);
++
++-- Un producto solo puede estar una vez en liquidación
++CREATE UNIQUE INDEX IF NOT EXISTS liquidaciones_product_uk ON public.liquidaciones (product_id);
++CREATE INDEX IF NOT EXISTS liquidaciones_categoria_idx ON public.liquidaciones (categoria, created_at DESC);
++
++ALTER TABLE public.liquidaciones ENABLE ROW LEVEL SECURITY;
++
++-- Lectura pública (el home); sin políticas de INSERT/UPDATE/DELETE: se escribe solo con las funciones de abajo.
++DROP POLICY IF EXISTS "liquidaciones_select_publico" ON public.liquidaciones;
++CREATE POLICY "liquidaciones_select_publico" ON public.liquidaciones
++  FOR SELECT TO anon, authenticated USING (true);
++
++-- ── Guardar (crear o editar) ─────────────────────────────────────────────────────
++CREATE OR REPLACE FUNCTION public.guardar_liquidacion(_datos jsonb)
++RETURNS uuid
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = public
++AS $$
++DECLARE
++  _id    uuid    := NULLIF(_datos->>'id', '')::uuid;
++  _pid   uuid    := NULLIF(_datos->>'product_id', '')::uuid;
++  _desc  integer := NULLIF(_datos->>'descuento', '')::integer;
++  _tipo  text    := COALESCE(NULLIF(_datos->>'envio_tipo', ''), 'ninguno');
++  _envio numeric := NULLIF(_datos->>'envio_descuento', '')::numeric;
++  _cat   text    := btrim(COALESCE(_datos->>'categoria', ''));
++  _img   text    := btrim(COALESCE(_datos->>'imagen_url', ''));
++  _nom   text    := btrim(COALESCE(_datos->>'nombre', ''));
++  _viejo public.liquidaciones%ROWTYPE;
++BEGIN
++  IF NOT public.has_role(auth.uid(), 'admin'::public.app_role) THEN
++    RAISE EXCEPTION 'Solo un administrador puede gestionar liquidaciones' USING ERRCODE = '42501';
++  END IF;
++  IF _pid IS NULL THEN RAISE EXCEPTION 'Elige un producto'; END IF;
++  IF _cat = '' THEN RAISE EXCEPTION 'Elige una categoría'; END IF;
++  IF _img !~* '^https://' THEN RAISE EXCEPTION 'Sube la imagen de fondo'; END IF;
++  IF _nom = '' THEN RAISE EXCEPTION 'Escribe el nombre que irá en el banner'; END IF;
++  IF _desc IS NULL OR _desc < 1 OR _desc > 90 THEN RAISE EXCEPTION 'El descuento debe estar entre 1 y 90 %%'; END IF;
++  IF _tipo NOT IN ('ninguno', 'gratis', 'descuento') THEN RAISE EXCEPTION 'Tipo de envío no válido'; END IF;
++  IF _tipo = 'descuento' AND (_envio IS NULL OR _envio <= 0) THEN RAISE EXCEPTION 'Indica cuántos soles se descuentan del envío'; END IF;
++  IF _tipo <> 'descuento' THEN _envio := NULL; END IF;
++
++  -- Bloquea el producto mientras se cambia su precio
++  PERFORM 1 FROM public.products WHERE id = _pid FOR UPDATE;
++  IF NOT FOUND THEN RAISE EXCEPTION 'El producto no existe'; END IF;
++
++  IF EXISTS (SELECT 1 FROM public.liquidaciones WHERE product_id = _pid AND id IS DISTINCT FROM _id) THEN
++    RAISE EXCEPTION 'Ese producto ya está en liquidación';
++  END IF;
++
++  IF _id IS NULL THEN
++    INSERT INTO public.liquidaciones
++      (categoria, product_id, imagen_url, kicker, nombre, detalle, descuento_aplicado, envio_tipo, envio_descuento, regalo_cojines)
++    VALUES
++      (_cat, _pid, _img, NULLIF(btrim(COALESCE(_datos->>'kicker', '')), ''), _nom,
++       NULLIF(btrim(COALESCE(_datos->>'detalle', '')), ''), _desc, _tipo, _envio,
++       COALESCE((_datos->>'regalo_cojines')::boolean, false))
++    RETURNING id INTO _id;
++  ELSE
++    SELECT * INTO _viejo FROM public.liquidaciones WHERE id = _id FOR UPDATE;
++    IF NOT FOUND THEN RAISE EXCEPTION 'La liquidación no existe'; END IF;
++    -- Si cambió de producto, el anterior vuelve a su precio normal (solo si conserva el descuento que puso esta liquidación)
++    IF _viejo.product_id <> _pid THEN
++      UPDATE public.products SET descuento_porcentaje = NULL, oferta_vence_el = NULL
++       WHERE id = _viejo.product_id AND descuento_porcentaje = _viejo.descuento_aplicado;
++    END IF;
++    UPDATE public.liquidaciones SET
++      categoria = _cat, product_id = _pid, imagen_url = _img,
++      kicker = NULLIF(btrim(COALESCE(_datos->>'kicker', '')), ''), nombre = _nom,
++      detalle = NULLIF(btrim(COALESCE(_datos->>'detalle', '')), ''),
++      descuento_aplicado = _desc, envio_tipo = _tipo, envio_descuento = _envio,
++      regalo_cojines = COALESCE((_datos->>'regalo_cojines')::boolean, false), updated_at = now()
++    WHERE id = _id;
++  END IF;
++
++  -- La liquidación reemplaza a la oferta: mismo mecanismo de precio que ya cobra el servidor
++  UPDATE public.products SET descuento_porcentaje = _desc, oferta_vence_el = NULL WHERE id = _pid;
++  RETURN _id;
++END;
++$$;
++
++-- ── Quitar ───────────────────────────────────────────────────────────────────────
++-- Devuelve true si también se retiró el descuento del producto.
++CREATE OR REPLACE FUNCTION public.quitar_liquidacion(_id uuid)
++RETURNS boolean
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = public
++AS $$
++DECLARE
++  _liq public.liquidaciones%ROWTYPE;
++  _n   integer;
++BEGIN
++  IF NOT public.has_role(auth.uid(), 'admin'::public.app_role) THEN
++    RAISE EXCEPTION 'Solo un administrador puede gestionar liquidaciones' USING ERRCODE = '42501';
++  END IF;
++  SELECT * INTO _liq FROM public.liquidaciones WHERE id = _id FOR UPDATE;
++  IF NOT FOUND THEN RAISE EXCEPTION 'La liquidación no existe'; END IF;
++
++  UPDATE public.products SET descuento_porcentaje = NULL, oferta_vence_el = NULL
++   WHERE id = _liq.product_id AND descuento_porcentaje = _liq.descuento_aplicado;
++  GET DIAGNOSTICS _n = ROW_COUNT;
++
++  DELETE FROM public.liquidaciones WHERE id = _id;
++  RETURN _n > 0;
++END;
++$$;
++
++REVOKE ALL ON FUNCTION public.guardar_liquidacion(jsonb) FROM PUBLIC, anon;
++REVOKE ALL ON FUNCTION public.quitar_liquidacion(uuid)   FROM PUBLIC, anon;
++GRANT EXECUTE ON FUNCTION public.guardar_liquidacion(jsonb) TO authenticated;
++GRANT EXECUTE ON FUNCTION public.quitar_liquidacion(uuid)   TO authenticated;
