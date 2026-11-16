@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { ShoppingBag, ShoppingCart, Minus, Plus, Trash2, PackageCheck } from "lucide-react";
+import { ShoppingBag, ShoppingCart, Minus, Plus, Trash2, PackageCheck, X, ArrowRight } from "lucide-react";
 import { useCartStore, type CartItem } from "@/stores/cartStore";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginModal } from "./LoginModal";
@@ -18,6 +18,7 @@ import { CarritoAvisos } from "./CarritoAvisos";
 import { precalentarServidor } from "@/lib/precalentar";
 import { useDistritoEnvio } from "@/hooks/useDistritoEnvio";
 import { itemsDeCarrito, trackViewCart } from "@/lib/analytics";
+import { CANTIDAD_MAX_POR_COMPRA, cupoRestante } from "@/lib/limiteCompra";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n);
@@ -33,10 +34,13 @@ function ItemFila({
   item,
   onRemove,
   onQty,
+  puedeSumar,
 }: {
   item: CartItem;
   onRemove: () => void;
   onQty: (qty: number) => void;
+  /** false cuando ya se alcanzó el máximo por compra de ese producto. */
+  puedeSumar: boolean;
 }) {
   return (
     <div className="p-3 rounded-lg bg-card border border-border/50">
@@ -53,8 +57,11 @@ function ItemFila({
         <div className="flex-1 min-w-0">
           {/* Nombre completo (con sus opciones): se parte en varias líneas en vez de cortarse */}
           <h4 className="font-medium text-foreground break-words">{item.title}</h4>
-          <p className="font-semibold mt-1 text-foreground">{fmt(item.price)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{fmt(item.price)}{item.qty > 1 ? " c/u" : ""}</p>
         </div>
+        <Button variant="ghost" size="icon" className="-mr-1 -mt-1 h-11 w-11 flex-shrink-0 text-muted-foreground" aria-label={`Quitar ${item.title} del carrito`} onClick={onRemove}>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-1" role="group" aria-label="Cantidad">
@@ -62,13 +69,19 @@ function ItemFila({
             <Minus className="h-4 w-4" />
           </Button>
           <span className="w-10 text-center text-sm" aria-live="polite">{item.qty}</span>
-          <Button variant="outline" size="icon" className="h-11 w-11" aria-label="Agregar una unidad" onClick={() => onQty(item.qty + 1)}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11"
+            aria-label="Agregar una unidad"
+            title={puedeSumar ? undefined : `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra`}
+            disabled={!puedeSumar}
+            onClick={() => onQty(item.qty + 1)}
+          >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-        <Button variant="ghost" className="h-11 px-3 text-muted-foreground" onClick={onRemove}>
-          <Trash2 className="mr-1.5 h-4 w-4" /> Quitar
-        </Button>
+        <span className="text-base font-semibold text-foreground">{fmt(item.price * item.qty)}</span>
       </div>
     </div>
   );
@@ -224,25 +237,39 @@ export const CartDrawer = () => {
                           item={g.item}
                           onRemove={() => removeItem(g.item.lineId)}
                           onQty={(q) => updateQty(g.item.lineId, q)}
+                          puedeSumar={g.item.qty < cupoRestante(items, g.item.id, g.item.lineId)}
                         />
                       ),
                     )}
                   </div>
                 </div>
                 <div className="flex-shrink-0 space-y-3 pt-4 border-t border-border bg-background">
+                  {/* El subtotal no incluye el envío: se llama Subtotal y el envío nunca se asume (sin «S/ 0») */}
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-medium">Total</span>
+                    <span className="text-lg font-medium">Subtotal</span>
                     <span className="text-2xl font-display font-semibold">{fmt(total())}</span>
                   </div>
-                  {/* Envío estimado: nunca se asume un distrito */}
+                  <div className="flex justify-between items-baseline text-sm">
+                    <span className="text-muted-foreground">Envío</span>
+                    <span className="font-medium text-foreground">
+                      {distrito && envio != null ? fmt(envio) : "Se calcula al pagar"}
+                    </span>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     {distrito && envio != null
-                      ? <>Envío estimado a {distrito}: <b className="text-foreground">{fmt(envio)}</b>. Se suma al pagar.</>
-                      : <>Envío desde <b className="text-foreground">{fmt(desde)}</b> según tu distrito. Se calcula al pagar.</>}
+                      ? <>Estimado a {distrito}. Se suma al pagar.</>
+                      : <>Desde <b className="text-foreground">{fmt(desde)}</b> según tu distrito.</>}
                   </p>
                   <Button className="h-12 w-full" onClick={handleCheckout}>
-                    Comprar ahora
+                    Continuar con la compra <ArrowRight aria-hidden className="ml-2 h-4 w-4" />
                   </Button>
+                  <button
+                    type="button"
+                    className="mx-auto block min-h-[44px] px-3 text-sm font-medium text-foreground underline underline-offset-2"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Seguir comprando
+                  </button>
                   {/* «Vaciar carrito» discreto y con confirmación, para que no se toque por error */}
                   {confirmarVaciar ? (
                     <div className="flex items-center justify-center gap-1 text-sm">
