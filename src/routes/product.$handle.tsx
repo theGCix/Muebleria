@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useWishlist } from "@/context/WishlistContext";
 import { LoginModal } from "@/components/LoginModal";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useProduct, useProducts } from "@/hooks/useProducts";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
@@ -30,6 +30,7 @@ import { LivePrice } from "@/components/product/LivePrice";
 import { DeliveryPromise } from "@/components/product/DeliveryPromise";
 import { SignatureModule } from "@/components/product/SignatureModules";
 import { OpcionesProducto } from "@/components/product/OpcionesProducto";
+import { SelectorCantidad } from "@/components/product/SelectorCantidad";
 import { useOpcionesProducto, resolverSeleccion, type SeleccionOpciones, type OpcionGrupo, type OpcionValor } from "@/hooks/useOpcionesProducto";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBuyBar";
@@ -659,7 +660,9 @@ function ProductPage() {
 /* ─── vista de producto (adaptativa por categoría) ── */
 function ProductView({ product: base }: { product: ProductData }) {
   const product = base as ProductData & ProductExtra;
-  const addItem = useCartStore((s) => s.addItem);
+  const addItems = useCartStore((s) => s.addItems);
+  const navigate = useNavigate();
+  const [cantidad, setCantidad] = useState(1);
   const itemsCarrito = useCartStore((s) => s.items);
   const { toggleWishlist, addToWishlist, removeFromWishlist, isWishlisted } = useWishlist();
   const [wishPending, setWishPending] = useState(false);
@@ -894,10 +897,12 @@ function ProductView({ product: base }: { product: ProductData }) {
   const prefsLista = Object.entries(prefs);
   const prefsTexto = prefsLista.map(([k, v]) => `${k}: ${v}`).join(" · ");
 
-  const handleAdd = () => {
+  // Un solo punto de alta al carrito (add_to_cart sale del store, una vez por acción).
+  const agregar = (irAPagar: boolean) => {
+    const qty = Math.max(1, cantidad);
     setAdding(true);
     setPostAdd(true);
-    addItem({
+    addItems([{
       id: product.id,
       title: `${product.nombre} (${Object.values(prefs).join(", ")})`,
       price: precioMostrado,
@@ -908,11 +913,18 @@ function ProductView({ product: base }: { product: ProductData }) {
       sku: product.sku ?? undefined,
       // Solo los ids: el servidor valida, suma el ajuste y arma el título. Sin opciones en BD → formato antiguo.
       opciones: hayOpcionesBD ? idsOpciones : undefined,
-    });
-    avisoCarrito("Agregado al carrito", `${product.nombre} · ${Object.values(prefs).join(" · ")}`);
+      qty,
+    }]);
+    if (irAPagar) {
+      navigate({ to: "/checkout" });
+      return;
+    }
+    avisoCarrito("Agregado al carrito", `${qty > 1 ? `${qty} × ` : ""}${product.nombre} · ${Object.values(prefs).join(" · ")}`);
     // Solo el destello verde es temporal; después el botón queda en "En tu carrito" (qtyEnCarrito)
     setTimeout(() => setAdding(false), 1600);
   };
+  const handleAdd = () => agregar(false);
+  const handleComprarAhora = () => agregar(true);
 
   // Compartir con vista previa (imagen + precio) vía /share/product/:id de la API
   const compartir = async () => {
@@ -1095,6 +1107,8 @@ function ProductView({ product: base }: { product: ProductData }) {
             {/* resumen de lo elegido */}
             <p className="gmx-prefs">Tu selección: <b>{prefsLista.map(([k, v]) => `${k} ${v}`).join(" · ")}</b></p>
 
+            <SelectorCantidad value={cantidad} onChange={setCantidad} disabled={outOfStock || cargandoOpciones} />
+
             {/* CTA */}
             <div className="gm-cta-row" ref={ctaRef}>
               <button
@@ -1132,6 +1146,14 @@ function ProductView({ product: base }: { product: ProductData }) {
                 <Heart size={18} fill={isWishlisted(product.id) ? "var(--gm-gold)" : "none"} />
               </button>
             </div>
+            <button
+              type="button"
+              className="gmx-comprar-ahora"
+              onClick={handleComprarAhora}
+              disabled={outOfStock || cargandoOpciones}
+            >
+              Comprar ahora
+            </button>
             {postAdd && qtyProductoTotal > 0 && (
               <div className="gmx-postadd" role="status">
                 <p className="gmx-postadd-msg">

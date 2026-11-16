@@ -440,3 +440,16 @@
   .gmg-img, .gmg-lb, .gmg-lb-stage img { animation: none; }
   .gmg-aura { transition: none; }
 }
+/* Selector de cantidad y «Comprar ahora» (ficha, rediseño marino) */
+.gmx-cant { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
+.gmx-cant-label { font-size: 14px; font-weight: 600; color: var(--foreground); }
+.gmx-cant-ctl { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.gmx-cant-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; color: var(--foreground); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.gmx-cant-btn:hover:not(:disabled) { background: var(--secondary); }
+.gmx-cant-btn:disabled { opacity: .4; cursor: not-allowed; }
+.gmx-cant-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.gmx-cant-num { min-width: 40px; text-align: center; font-size: 15px; font-weight: 600; color: var(--foreground); }
+.gmx-comprar-ahora { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 10px; border-radius: 8px; border: 1.5px solid var(--primary); background: transparent; color: var(--primary); font-size: 14px; font-weight: 600; cursor: pointer; }
+.gmx-comprar-ahora:hover:not(:disabled) { background: var(--primary); color: var(--primary-foreground); }
+.gmx-comprar-ahora:disabled { opacity: .5; cursor: not-allowed; }
+.gmx-comprar-ahora:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

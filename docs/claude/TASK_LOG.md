@@ -437,3 +437,9 @@
 - **Sin cambios de negocio:** precios, carrito, checkout, pagos y RLS intactos; la tarjeta de producto no cambia.
 - **Verificación:** `vite build` OK, 10 suites sin fallos, `tsc` con los mismos 10 errores de `types.ts`. **No se probó** en navegador.
 - **Pendiente / riesgos:** (1) la columna usa `sticky top-28` bajo el header sticky: confirmar a ojo que no lo tape; (2) el tope de 60 piezas (`LIMITE_CATALOGO`); (3) el banner con foto por categoría del mockup no se hizo (no hay fotos de categoría); (4) fase 4: ficha, carrito y checkout; fase 5: móvil.
+
+## 2026-11-15 — Ficha (rediseño marino, fase 4a): cantidad y «Comprar ahora»
+- **Qué cambió:** `components/product/SelectorCantidad.tsx` (nuevo, − / número / +, botones de 44 px, máximo 99 solo como tope de interfaz, no regla de negocio); `product.$handle.tsx` (estado `cantidad`, `agregar(irAPagar)` con `addItems` y `qty`; `handleAdd` y `handleComprarAhora` envuelven a `agregar` para que `onClick` no pase el evento); `product-experience.css` (clases `gmx-cant*` y `gmx-comprar-ahora`, solo tokens).
+- **Comprar ahora:** agrega la cantidad elegida y navega a `/checkout`. `add_to_cart` sigue saliendo solo del store (una vez por acción). Sin cambios en precios, `server/pagos.js`, RLS ni dependencias.
+- **Verificación:** solo comprobación de sintaxis con `ts.transpileModule`. **No se corrió `tsc` ni `vite build`** (sin `node_modules` ni red en esta sesión): correr ambos antes de subir (regla 13).
+- **Pendiente:** pestañas como el mockup (Descripción, Características, Dimensiones, Envío; hoy son Especificaciones, Reseñas, Entrega y pagos y la descripción está en la columna), `StickyBuyBar` con cantidad, migrar tokens `--gm-*` de la ficha, tira de confianza (el mockup dice «Soporte 24/7»: no se muestra sin confirmación del dueño, regla de beneficios), y tope de cantidad por stock (decisión abierta).
