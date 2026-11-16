@@ -9,7 +9,7 @@ import { LoginModal } from "./LoginModal";
 import { AuthButton } from "./AuthButton";
 import { CategoryMobileAccordion } from "./CategoryMobileAccordion";
 import { useEffect, useState } from "react";
-import { ChevronDown, User, Search, Truck, PackageCheck, Flame } from "lucide-react";
+import { Menu, X, User, Search, Truck, PackageCheck, Flame } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchStore } from "@/stores/searchStore";
@@ -27,7 +27,7 @@ const navLinkCls = (activo: boolean, tono: "base" | "accent" = "base", tactil = 
       : tono === "accent" ? "text-accent-strong hover:text-accent-strong/80" : "text-foreground/70 hover:text-foreground",
   ].join(" ");
 
-// Menú de secciones del boceto v3: categorías con el nombre del boceto («Muebles» = Salas). En móvil se ven las 3 primeras y «Más».
+// Menú de secciones del boceto v3: categorías con el nombre del boceto («Muebles» = Salas). En móvil se ven las 3 primeras; el resto, en el menú ☰.
 const NAV_CATEGORIAS = [
   { slug: "muebles", label: "Salas" },
   { slug: "comedores", label: "Comedores" },
@@ -166,6 +166,18 @@ export function Header() {
         {/* Navbar principal: logo, buscador y accesos */}
         <div className="w-full bg-background/95 backdrop-blur-xl">
           <div className="container mx-auto flex h-16 items-center gap-2 px-4 md:h-20 md:gap-4 md:px-6">
+            {/* Móvil: ☰ abre el menú completo (#menu-movil). Reemplaza al antiguo «Más» (decisión del dueño, 2026-11-16) */}
+            <button
+              type="button"
+              onClick={() => { setMobileOpen((v) => !v); setMobileSearchOpen(false); }}
+              className="-ml-2 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+              aria-label={mobileOpen ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={mobileOpen}
+              aria-controls="menu-movil"
+            >
+              {mobileOpen ? <X aria-hidden className="h-5 w-5" /> : <Menu aria-hidden className="h-5 w-5" />}
+            </button>
+
             {/* Logo */}
             <Link to="/" className="flex flex-col leading-none flex-shrink-0">
               <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">G&amp;M</span>
@@ -197,7 +209,7 @@ export function Header() {
               <CartDrawer />
             </div>
 
-            {/* Mobile: buscar + cuenta + favoritos + carrito (el menú vive en «Más») */}
+            {/* Mobile: buscar + cuenta + favoritos + carrito (el menú vive en ☰, a la izquierda del logo) */}
             <div className="flex items-center gap-1 sm:gap-2 md:hidden ml-auto">
               <button
                 onClick={() => { setMobileSearchOpen((v) => !v); setMobileOpen(false); }}
@@ -232,7 +244,7 @@ export function Header() {
           )}
         </div>
 
-        {/* Menú de secciones (boceto v3): PC con todas las secciones; móvil con 3 categorías y «Más» */}
+        {/* Menú de secciones (boceto v3): PC con todas las secciones; móvil con 3 categorías (el resto, en ☰) */}
         <div className="w-full border-y border-border/50 bg-card">
           <nav aria-label="Secciones de la tienda" className="container mx-auto px-4 md:px-6">
             <ul className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center">
@@ -296,18 +308,6 @@ export function Header() {
                   </Link>
                 </li>
               ))}
-              <li>
-                <button
-                  type="button"
-                  aria-expanded={mobileOpen}
-                  aria-controls="menu-movil"
-                  onClick={() => { setMobileOpen((v) => !v); setMobileSearchOpen(false); }}
-                  className={navLinkCls(mobileOpen, "base", true)}
-                >
-                  Más
-                  <ChevronDown className={`h-4 w-4 transition-transform ${mobileOpen ? "rotate-180" : ""}`} aria-hidden />
-                </button>
-              </li>
             </ul>
           </nav>
 
