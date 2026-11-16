@@ -9,7 +9,7 @@ import { ColeccionDestacada } from "@/components/home/ColeccionDestacada";
 import { ArmadorPresupuesto } from "@/components/home/ArmadorPresupuesto";
 
 
-import { OfertasVigentes } from "@/components/home/OfertasVigentes";
+import { OfertaFoto } from "@/components/home/OfertaFoto";
 import { HechoEnTaller } from "@/components/home/HechoEnTaller";
 import { RecienSalidos } from "@/components/home/RecienSalidos";
 import { PruebaloEnTuEspacio } from "@/components/home/PruebaloEnTuEspacio";
@@ -45,7 +45,7 @@ function Index() {
   return (
      <div className="min-h-screen bg-background"> 
      <Header /> 
-     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <RecienSalidos /> <ColeccionDestacada /> <ArmadorPresupuesto /> <OfertasVigentes /> <HechoEnTaller />
+     <main ref={mainRef}> <PortadaCarrusel /> <ElegirAmbiente /> <RecienSalidos /> <ColeccionDestacada /> <ArmadorPresupuesto /> <OfertaFoto /> <HechoEnTaller />
        {/* Fuera del boceto, se conservan por ahora (el menú apunta a #combos y el pie a #testimonios) */}
        <CombosSection /> <PromoCategoriaBanner /> <Testimonials /> <ClientesSatisfechos />
        <PruebaloEnTuEspacio /> <CotizarMedida /> <BeneficiosFranja />
