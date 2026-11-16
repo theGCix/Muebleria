@@ -34,7 +34,7 @@ export interface DatosBanner {
 const t = (cqw: number, min = 10) => `max(${min}px, calc(var(--k, 1) * ${cqw}cqw))`;
 const c = (cqw: number) => `calc(var(--k, 1) * ${cqw}cqw)`;
 
-/** Par de cojines beige del regalo (foto con fondo transparente); pegado al borde derecho del recuadro blanco, así nunca tapa el «GRATIS». */
+/** Par de cojines beige del regalo (foto con fondo transparente); solapa ~2.6 % el borde derecho del recuadro blanco (como la referencia) sin llegar al «GRATIS». */
 function Cojines() {
   return (
     <img
@@ -45,8 +45,8 @@ function Cojines() {
       height={419}
       loading="lazy"
       decoding="async"
-      className="pointer-events-none absolute bottom-0 h-auto max-w-none"
-      style={{ left: `calc(100% - ${c(1.4)})`, width: c(11), filter: "drop-shadow(0 2px 3px rgba(0,0,0,.35))" }}
+      className="pointer-events-none absolute h-auto max-w-none"
+      style={{ left: `calc(100% - ${c(2.6)})`, bottom: c(-0.2), width: c(13), filter: "drop-shadow(0 2px 3px rgba(0,0,0,.3))" }}
     />
   );
 }
@@ -56,7 +56,7 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
   const sello = selloEnvio(d.envioTipo, d.envioDescuento);
   return (
     <div
-      className={`relative overflow-hidden rounded-[22px] bg-muted text-white shadow-sm [--k:1.3] sm:[--k:1] ${className}`}
+      className={`relative overflow-hidden rounded-[22px] bg-muted text-white shadow-sm ${className}`}
       style={{ containerType: "inline-size" }}
     >
       <img
@@ -70,6 +70,8 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
       {/* Degradado inferior para que el texto se lea sobre cualquier foto */}
       <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
+      {/* Capa de contenido: --k = 1 (referencia del dueño); solo en tarjetas angostas (< 360 px, móvil de una por fila) se agranda a 1.3 */}
+      <div className="absolute inset-0 [--k:1] @max-[360px]:[--k:1.3]">
       {/* Sellos arriba a la derecha */}
       <div className="absolute flex items-start" style={{ top: c(1.4), right: c(1.4), gap: c(0.8) }}>
         {sello && (
@@ -92,10 +94,10 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
         <div className="absolute bottom-0 left-0">
           <div
             className="relative bg-white"
-            style={{ borderTopRightRadius: c(4), padding: `${c(1.3)} ${c(3.4)} ${c(1.5)} ${c(2.2)}` }}
+            style={{ borderTopRightRadius: c(4), padding: `${c(1.4)} ${c(2.6)} ${c(1.6)} ${c(1.9)}` }}
           >
-            <p className="font-extrabold leading-none tracking-tight" style={{ fontSize: t(2.7, 13), color: ROSA }}>GRATIS</p>
-            <p className="font-bold leading-tight text-neutral-600" style={{ fontSize: t(1.3, 9), marginTop: c(0.4) }}>
+            <p className="font-extrabold leading-none tracking-tight" style={{ fontSize: t(2.7, 11), color: ROSA }}>GRATIS</p>
+            <p className="font-bold leading-tight text-neutral-600" style={{ fontSize: t(1.3, 7), marginTop: c(0.4) }}>
               JUEGO<br />DE COJINES
             </p>
             <Cojines />
@@ -142,6 +144,7 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
             Precio regular: <span className="line-through">S/ {numeroBanner(d.precioRegular)}</span>
           </p>
         </div>
+      </div>
       </div>
     </div>
   );
