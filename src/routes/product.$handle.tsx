@@ -722,8 +722,6 @@ function ProductView({ product: base }: { product: ProductData }) {
     () => resolverSeleccion(gruposBD, selOpciones),
     [gruposBD, selOpciones],
   );
-  // Firmeza/patas de BD reemplazan a las fichas fijas del módulo "comfort"
-  const comfortEnBD = gruposBD.some((g) => ["firmeza", "patas"].includes(g.tipo.toLowerCase()));
 
   useEffect(() => {
     trackEvent({
@@ -1085,7 +1083,6 @@ function ProductView({ product: base }: { product: ProductData }) {
             </ul>
 
             {/* herramienta firma de la categoría */}
-            {!(hayOpcionesBD && comfortEnBD && profile.module === "comfort") && (
             <SignatureModule
               profile={profile}
               nombre={product.nombre}
@@ -1094,7 +1091,6 @@ function ProductView({ product: base }: { product: ProductData }) {
               ambient={ambient}
               setAmbient={setAmbient}
             />
-            )}
 
             {/* materiales (por categoría) */}
             <div className="gm-specs-label">Materiales y construcción</div>

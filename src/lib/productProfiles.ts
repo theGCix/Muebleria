@@ -17,7 +17,7 @@ export type ProfileKey =
   | "tv" | "sala" | "comedor" | "recamara" | "separador" | "accesorio" | "generico";
 
 export type SignatureModuleKey =
-  | "tv-fit" | "seating" | "sleep" | "comfort" | "custom-space" | "none";
+  | "tv-fit" | "seating" | "sleep" | "custom-space" | "none";
 
 export interface Acabado { name: string; hex: string }
 export interface SpecCard { icon: LucideIcon; label: string; value: string }
@@ -106,14 +106,14 @@ const PROFILES: Record<ProfileKey, ProductProfile> = {
       { name: "Crema marfil", hex: "#D4C5A9" },
       { name: "Mocha", hex: "#B8A898" },
     ],
-    module: "comfort",
+    module: "none",
     bundleTitle: "Completa tu sala",
     bundleSub: "Mesas, puffs y detalles que cierran el ambiente",
     faqs: [
       { q: "Cuidado y mantenimiento", a: "Limpia con paño húmedo sin químicos agresivos y evita el sol directo. Para el velvet, usa un cepillo suave en dirección del pelo. La estructura de madera puede aceitarse una vez al año." },
       FAQ_DEVOLUCION,
     ],
-    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal dorado o negro a elección", "Garantía de 2 años en estructura"],
+    features: ["Fabricado artesanalmente en Perú", `Estructura de ${MADERA.toLowerCase()}`, "Tapizado en velvet importado + tela antifluida", "Relleno en espuma de alta densidad", "Patas de metal", "Garantía de 2 años en estructura"],
   },
 
   comedor: {

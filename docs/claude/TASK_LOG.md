@@ -509,3 +509,8 @@
 - **Dónde se nota:** ficha (cantidad sin tope de stock y con otro texto de ayuda), tarjeta del catálogo, carrito, checkout, aviso de tope, `verificarLimitePorProducto` y `validarCarrito` (para ese producto ya no avisa «stock insuficiente» al pedir más que el stock).
 - **Sin cambios:** si el stock de Lineal es 0 sigue saliendo «Agotado»; precios, envío y la migración de liquidaciones no se tocaron. Las opciones «patas» que se configuren por producto en la BD (admin) no se tocaron: solo se quitó el módulo fijo de la sala.
 - **Riesgos:** el producto con tope ampliado está fijo en el código (para otro mueble hay que agregar su id en las dos listas); sin navegador (`tsc` sin errores nuevos, `vite build` OK, pruebas 49/49). Archivos NUEVOS: ninguno; BORRADOS: `OfertaFoto.tsx` y `oferta-lineal.webp`.
+
+## 2026-11-16 — Salas: se quita el módulo «Hazlo tuyo · ¿Cómo te gusta sentarte?» (firmeza)
+- **Qué cambió:** el perfil `sala` pasa a `module: "none"`; se elimina el componente `Comfort` y sus firmezas de `SignatureModules.tsx`, el valor `"comfort"` del tipo de módulo y la lógica `comfortEnBD` de `product.$handle.tsx`. La ficha de la sala dice «Patas de metal» (sin «dorado o negro a elección»). Motivo (dueño): ofrecer firmeza obliga a rehacer un mueble ya preparado.
+- **Sin cambios:** comedor, separador de ambiente y recámara conservan sus módulos. Si algún producto tiene opciones «firmeza» configuradas en la BD (admin), esas siguen apareciendo: hay que quitarlas desde el admin.
+- **Riesgos:** sin navegador (`tsc` sin errores nuevos, `vite build` OK, pruebas OK). Archivos nuevos: ninguno.

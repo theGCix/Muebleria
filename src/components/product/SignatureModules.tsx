@@ -247,36 +247,6 @@ function Sleep({ setPref }: ModuleProps) {
   );
 }
 
-/* ═════════════ 4 · Sala: firmeza ═════════════ */
-const FIRMEZAS = [
-  { k: "Suave", dent: 14, txt: "Te hundes un poco: sensación envolvente, ideal para tardes de película." },
-  { k: "Equilibrado", dent: 8, txt: "El punto medio: cómodo para sentarte horas y fácil para levantarte." },
-  { k: "Firme", dent: 3, txt: "Apoyo marcado: buena postura para la espalda y para recibir visitas." },
-] as const;
-
-function Comfort({ setPref }: ModuleProps) {
-  const [f, setF] = useState<(typeof FIRMEZAS)[number]>(FIRMEZAS[1]);
-
-  // En la sala la firmeza es una opción del pedido: registramos el valor por defecto desde el inicio
-  useEffect(() => { setPref("Firmeza", FIRMEZAS[1].k); }, [setPref]);
-
-  const y0 = 62, mid = 160;
-  return (
-    <Shell kicker="Hazlo tuyo" title="¿Cómo te gusta sentarte?">
-      <Chips options={FIRMEZAS.map((x) => x.k)} value={f.k} onPick={(v) => { const n = FIRMEZAS.find((x) => x.k === v)!; setF(n); setPref("Firmeza", v); }} render={(v) => v} />
-
-      <svg className="gmx-viz" viewBox="0 0 320 120" role="img" aria-label={`Cojín con firmeza ${f.k}`}>
-        <rect x="40" y="76" width="240" height="26" rx="10" fill="var(--gmx-accent-soft)" stroke="var(--gm-border)" />
-        <path d={`M40 ${y0} Q ${mid} ${y0 + f.dent * 2} 280 ${y0} L 280 86 L 40 86 Z`} fill="#fff" stroke="var(--gm-walnut-mid)" strokeWidth="1.5" />
-        <circle cx={mid} cy={y0 + f.dent - 12} r="12" fill="var(--gmx-accent)" />
-        <rect x="52" y="102" width="6" height="12" fill="var(--gm-walnut-mid)" />
-        <rect x="262" y="102" width="6" height="12" fill="var(--gm-walnut-mid)" />
-      </svg>
-      <p className="gmx-readout">{f.txt}</p>
-    </Shell>
-  );
-}
-
 /* ═════════════ 5 · Separador: medidas de tu espacio ═════════════ */
 const num = (s: string) => parseFloat(s.replace(",", "."));
 
@@ -331,7 +301,6 @@ export function SignatureModule(props: ModuleProps) {
     case "tv-fit": return <TvFit {...props} />;
     case "seating": return <Seating {...props} />;
     case "sleep": return <Sleep {...props} />;
-    case "comfort": return <Comfort {...props} />;
     case "custom-space": return <CustomSpace {...props} />;
     default: return null;
   }
