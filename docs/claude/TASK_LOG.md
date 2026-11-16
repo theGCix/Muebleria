@@ -468,3 +468,9 @@
 - **Qué cambió:** `Header.tsx` (botón ☰/✕ con `aria-expanded` y `aria-controls`, 44 px; se elimina el botón «Más» y su `ChevronDown`); `Categories.tsx` (en móvil, fila horizontal con `snap-x`, tarjetas de 42 % de ancho —se ven unas 2,5— y barra de desplazamiento oculta; desde `md`, cuadrícula de 5 como antes; se elimina el `col-span-2` de la última tarjeta). El enlace «Ver todas las categorías» ya existía en la cabecera de la sección.
 - **Sin cambios:** botón de WhatsApp (sigue retirado), `cartStore`, precios, `server/`.
 - **Riesgos:** (1) a 360 px la cabecera suma ☰ + logo + 4 íconos de 44 px: si el ícono de cuenta mostrara texto, desbordaría; revisar en 360 y 390 px con y sin sesión; (2) las tarjetas usan `data-reveal`: comprobar que la animación de entrada no oculte las que quedan fuera de la vista al deslizar; (3) sin `tsc` ni `vite build` ni navegador en esta sesión.
+
+## 2026-11-16 — Móvil (fase 5b): auditoría estática y corrección de zonas táctiles
+- **Alcance:** revisión de código (sin navegador) de `checkout.tsx`, `CartDrawer.tsx`, `product.$handle.tsx`, `StickyBuyBar`, `SelectorCantidad`, `ProductGallery`, `Header`, `Categories` y `PasosCheckout`. Se buscó: textos de menos de 12 px, botones de menos de 44 px, anchos fijos que desborden a 360 px y `100vh`.
+- **Hallazgo corregido:** en el resumen del checkout, «−», «+» y «×» medían 24 px (y la × ni tamaño tenía). Ahora cada uno tiene zona táctil de 44 px y el círculo se ve igual (24 px). Archivo: `routes/checkout.tsx`.
+- **Sin hallazgos:** textos menores de 12 px (ninguno); anchos fijos (los `min-width` de 200–220 px caben en 320 px o tienen `flex-wrap`); `100vh` (el visor de la galería usa `vw`/`vh` con tope; revisar en un iPhone real por la barra del navegador).
+- **No verificable aquí:** desbordes reales, solapes de la barra de pago fija y el comportamiento táctil: requieren pantalla. Sin `tsc` ni `vite build` en esta sesión.

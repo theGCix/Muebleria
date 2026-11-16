@@ -1019,14 +1019,15 @@ useEffect(() => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.title}</p>
                       {item.sku && <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>}
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="-mb-1 flex items-center">
+                        {/* Zona táctil de 44 px; el círculo de 24 px se ve igual que antes */}
                         <button
                           type="button"
                           onClick={() => updateQty(item.lineId, item.qty - 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+                          className="group -ml-2.5 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                           aria-label="Restar"
                         >
-                          <Minus className="h-3 w-3" />
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 group-hover:border-foreground/40"><Minus className="h-3 w-3" /></span>
                         </button>
                         <span className="text-xs font-medium w-5 text-center">{item.qty}</span>
                         <button
@@ -1034,15 +1035,15 @@ useEffect(() => {
                           onClick={() => updateQty(item.lineId, item.qty + 1)}
                           disabled={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId)}
                           title={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId) ? `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra` : undefined}
-                          className="disabled:cursor-not-allowed disabled:opacity-40 w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+                          className="group flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label="Sumar"
                         >
-                          <Plus className="h-3 w-3" />
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 group-hover:border-foreground/40"><Plus className="h-3 w-3" /></span>
                         </button>
                         <button
                           type="button"
                           onClick={() => removeItem(item.lineId)}
-                          className="ml-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                          className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
                           aria-label="Quitar producto"
                         >
                           <X className="h-3.5 w-3.5" />
