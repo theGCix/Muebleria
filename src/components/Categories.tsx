@@ -39,12 +39,13 @@ export function Categories() {
         </Link>
       </div>
 
-      {/* Móvil: fila deslizable con ajuste al borde (la tercera tarjeta asoma para indicar que hay más). md+: cuadrícula de 5 */}
-      <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:snap-none md:grid-cols-5 md:gap-4 md:overflow-visible md:px-0 md:pb-0">
-        {CATEGORIAS.map((cat) => {
+      <ul className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
+        {CATEGORIAS.map((cat, i) => {
           const foto = fotos[cat.slug];
+          // Con 5 categorías en 2 columnas, la última ocupa todo el ancho (sin hueco)
+          const ultimaSola = i === CATEGORIAS.length - 1 && CATEGORIAS.length % 2 === 1;
           return (
-            <li key={cat.slug} data-reveal className="w-[42%] flex-none snap-start md:w-auto">
+            <li key={cat.slug} data-reveal className={ultimaSola ? "col-span-2 md:col-span-1" : undefined}>
               <Link
                 to="/categoria/$slug"
                 params={{ slug: cat.slug }}

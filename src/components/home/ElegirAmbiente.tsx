@@ -1,8 +1,9 @@
 // src/components/home/ElegirAmbiente.tsx
-// «Elige tu ambiente» (mockup azul marino): 5 fichas iguales en una fila con foto y nombre; en móvil,
-// 2×2 con Salas, Comedores, Recámaras y Separadores (el boceto móvil no muestra Accesorios; sigue en «Ver todas»).
-// Las categorías salen de lib/categories.ts; el conteo y la foto, de las piezas reales (misma consulta y caché que el
-// resto del home). En la vista pública «Muebles» se llama «Salas» y «Separadores de ambiente», «Separadores» (boceto).
+// «Elige tu ambiente» (mockup azul marino): tarjetas blancas con una ilustración y el nombre debajo; 5 en una fila en
+// PC y 2×2 en móvil con Salas, Comedores, Recámaras y Separadores (Accesorios solo en PC, sin ilustración: usa la foto
+// de su pieza más reciente). Las ilustraciones son de public/ambientes (decisión del dueño, 2026-11-16: «ilustración
+// siempre»). Las categorías salen de lib/categories.ts; el conteo, de las piezas reales (misma consulta y caché que el
+// resto del home). «Muebles» se muestra como «Salas» y «Separadores de ambiente» como «Separadores» (boceto).
 import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
@@ -13,13 +14,21 @@ import { textoPiezas } from "@/lib/armadorPresupuesto";
 
 const ETIQUETA: Record<string, string> = { muebles: "Salas", separadores: "Separadores" };
 
-// Orden del DOM = orden móvil. En PC cada tarjeta ocupa su lugar del boceto con posiciones explícitas.
+// Ilustración por categoría (public/ambientes). Sin entrada: se usa la foto de la pieza o el ícono.
+const ILUSTRACION: Record<string, string> = {
+  muebles: "/ambientes/salas.webp",
+  comedores: "/ambientes/comedores.webp",
+  recamaras: "/ambientes/recamaras.webp",
+  separadores: "/ambientes/separadores.webp",
+};
+
+// Orden del DOM = orden móvil.
 const TARJETAS = [
-  { slug: "muebles", fondo: "bg-gm-arena", sitio: "", movil: true },
-  { slug: "comedores", fondo: "bg-gm-salvia", sitio: "", movil: true },
-  { slug: "recamaras", fondo: "bg-gm-salvia", sitio: "", movil: true },
-  { slug: "separadores", fondo: "bg-gm-arena", sitio: "", movil: true },
-  { slug: "accesorios", fondo: "bg-gm-arena", sitio: "", movil: false },
+  { slug: "muebles", movil: true },
+  { slug: "comedores", movil: true },
+  { slug: "recamaras", movil: true },
+  { slug: "separadores", movil: true },
+  { slug: "accesorios", movil: false },
 ] as const;
 
 export function ElegirAmbiente() {
@@ -57,34 +66,46 @@ export function ElegirAmbiente() {
       </div>
 
       <ul className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
-        {TARJETAS.map(({ slug, fondo, sitio, movil }) => {
+        {TARJETAS.map(({ slug, movil }) => {
           const cat = getCategoria(slug);
           if (!cat) return null;
           const { n, foto } = porCategoria[slug] ?? { n: 0, foto: null };
           const nombre = ETIQUETA[slug] ?? cat.nombre;
+          const ilustracion = ILUSTRACION[slug];
           return (
-            <li key={slug} className={`${sitio} ${movil ? "" : "hidden md:block"} min-h-0`}>
+            <li key={slug} className={`${movil ? "" : "hidden md:block"} min-h-0`}>
               <Link
                 to="/categoria/$slug"
                 params={{ slug }}
-                className={`group relative block aspect-[226/190] overflow-hidden rounded-2xl md:aspect-[3/4] md:rounded-[24px] ${fondo} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+                className="group flex h-full flex-col rounded-[20px] border border-border/40 bg-card p-3 transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:rounded-[24px] md:p-4"
               >
-                {foto ? (
-                  <img
-                    src={foto}
-                    alt=""
-                    width={900}
-                    height={700}
-                    loading="lazy"
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-                  />
-                ) : (
-                  <span aria-hidden className="flex h-full w-full items-center justify-center text-gm-cafe/40">
-                    <cat.icon className="h-1/4 w-1/4" />
-                  </span>
-                )}
-                <span className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-3 rounded-xl bg-card px-3 py-2.5 md:inset-x-3 md:bottom-3 md:px-4 md:py-3">
-                  <span className="truncate text-sm font-semibold text-foreground">{nombre}</span>
+                <span className="relative block aspect-[4/3] w-full overflow-hidden rounded-xl">
+                  {ilustracion ? (
+                    <img
+                      src={ilustracion}
+                      alt=""
+                      width={540}
+                      height={405}
+                      loading="lazy"
+                      className="h-full w-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    />
+                  ) : foto ? (
+                    <img
+                      src={foto}
+                      alt=""
+                      width={900}
+                      height={700}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    />
+                  ) : (
+                    <span aria-hidden className="flex h-full w-full items-center justify-center bg-gm-arena text-gm-cafe/40">
+                      <cat.icon className="h-1/4 w-1/4" />
+                    </span>
+                  )}
+                </span>
+                <span className="mt-2 flex items-baseline justify-between gap-3 px-1 md:mt-3">
+                  <span className="truncate text-base font-bold text-foreground md:text-lg">{nombre}</span>
                   <span className="hidden shrink-0 text-xs text-muted-foreground md:block">{textoPiezas(n)}</span>
                 </span>
               </Link>
