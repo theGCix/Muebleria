@@ -104,10 +104,19 @@ function AccordionItem({ title, children }: { title: string; children: React.Rea
 }
 
 /* ─── tab panel ───────────────────────────────────── */
-const TABS = ["Especificaciones", "Reseñas", "Entrega y pagos"] as const;
+// Pestañas como el mockup: Descripción, Características, Dimensiones, Reseñas, Envío y pagos.
+// «Descripción» y «Dimensiones» solo aparecen si el producto tiene ese dato.
+type ClaveTab = "descripcion" | "caracteristicas" | "dimensiones" | "resenas" | "envio";
+const ETIQUETA_TAB: Record<ClaveTab, string> = {
+  descripcion: "Descripción",
+  caracteristicas: "Características",
+  dimensiones: "Dimensiones",
+  resenas: "Reseñas",
+  envio: "Envío y pagos",
+};
 
 /* M1b: lista de pestañas con indicador (degradado + flecha) cuando hay más pestañas fuera de pantalla */
-function TabList({ active, onChange }: { active: number; onChange: (i: number) => void }) {
+function TabList({ tabs, active, onChange }: { tabs: ClaveTab[]; active: number; onChange: (i: number) => void }) {
   const listRef = useRef<HTMLDivElement>(null);
   const primera = useRef(true);
   const [hay, setHay] = useState({ izq: false, der: false });
@@ -140,7 +149,7 @@ function TabList({ active, onChange }: { active: number; onChange: (i: number) =
   return (
     <div className="gm-tab-wrap">
       <div className="gm-tab-list" role="tablist" aria-label="Información del producto" ref={listRef} onScroll={medir}>
-        {TABS.map((t, i) => (
+        {tabs.map((t, i) => (
           <button
             key={t}
             type="button"
@@ -151,7 +160,7 @@ function TabList({ active, onChange }: { active: number; onChange: (i: number) =
             className={`gm-tab-btn${active === i ? " active" : ""}`}
             onClick={() => onChange(i)}
           >
-            {t}
+            {ETIQUETA_TAB[t]}
           </button>
         ))}
       </div>
@@ -176,6 +185,16 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
 
   // D7: piezas con medidas/plazas y esquema (columnas opcionales de products)
   const medidas = useMemo(() => piezasDeProducto(product), [product]);
+
+  const tabs = useMemo<ClaveTab[]>(() => [
+    ...(product?.descripcion ? ["descripcion" as const] : []),
+    "caracteristicas" as const,
+    ...(medidas.piezas.length > 0 || medidas.esquemaUrl ? ["dimensiones" as const] : []),
+    "resenas" as const,
+    "envio" as const,
+  ], [product?.descripcion, medidas]);
+  const activo = Math.min(active, tabs.length - 1);
+  const clave = tabs[activo];
 
   const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
     queryKey: ["resenas-producto", product?.id],
@@ -204,10 +223,16 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
   return (
     <div className="gm-tabs-section">
       <div className="gm-container">
-        <TabList active={active} onChange={setActive} />
+        <TabList tabs={tabs} active={activo} onChange={setActive} />
 
-        <div id="gm-tabpanel" role="tabpanel" aria-labelledby={`gm-tab-${active}`}>
-        {active === 0 && (
+        <div id="gm-tabpanel" role="tabpanel" aria-labelledby={`gm-tab-${activo}`}>
+        {clave === "descripcion" && (
+          <p style={{ maxWidth: 760, fontSize: 15, color: "var(--gm-mid)", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+            {product?.descripcion}
+          </p>
+        )}
+
+        {clave === "caracteristicas" && (
           <div className="gm-details-grid">
             <div>
               <h3 className="gm-section-h3">Ficha técnica</h3>
@@ -233,12 +258,17 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
                 ))}
               </ul>
             </div>
-            <MedidasPiezas piezas={medidas.piezas} esquemaUrl={medidas.esquemaUrl} producto={product?.nombre ?? ""} />
             <OrigenProducto producto={product} />
           </div>
         )}
 
-        {active === 1 && (
+        {clave === "dimensiones" && (
+          <div className="gm-details-grid">
+            <MedidasPiezas piezas={medidas.piezas} esquemaUrl={medidas.esquemaUrl} producto={product?.nombre ?? ""} />
+          </div>
+        )}
+
+        {clave === "resenas" && (
           <div>
             {rating && rating.total_resenas > 0 && (
               <div className="gm-rating-summary">
@@ -305,7 +335,7 @@ function Tabs({ product, profile }: { product: ReturnType<typeof useProduct>["da
           </div>
         )}
 
-        {active === 2 && (
+        {clave === "envio" && (
           <div className="gm-details-grid">
             <div>
               <h3 className="gm-section-h3">Métodos de pago</h3>
@@ -1102,14 +1132,11 @@ function ProductView({ product: base }: { product: ProductData }) {
               )
             )}
 
-            {/* descripción */}
+            {/* resumen (el texto completo está en la pestaña «Descripción») */}
             {product.descripcion && (
-              <>
-                <div className="gm-specs-label" style={{ marginBottom: 8 }}>Descripción</div>
-                <p style={{ fontSize: 13, color: "var(--gm-mid)", lineHeight: 1.75, marginBottom: 20, whiteSpace: "pre-line" }}>
-                  {product.descripcion}
-                </p>
-              </>
+              <p style={{ fontSize: 13, color: "var(--gm-mid)", lineHeight: 1.75, marginBottom: 20, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {product.descripcion}
+              </p>
             )}
 
             <DeliveryPromise />
@@ -1272,6 +1299,8 @@ function ProductView({ product: base }: { product: ProductData }) {
           disabled={outOfStock || cargandoOpciones || limiteAlcanzado}
           adding={adding}
           qtyEnCarrito={qtyEnCarrito}
+          cantidad={cantidadElegida}
+          limiteAlcanzado={limiteAlcanzado}
           postAdd={postAdd && qtyProductoTotal > 0}
           categoria={product.categoria}
           onAdd={handleAdd}
