@@ -26,6 +26,8 @@ import { getStoredUtm } from "@/hooks/useUtm";
 import { supabase } from "@/integrations/supabase/client";
 import { DistritoCombobox } from "@/components/DistritoCombobox";
 import { getPrecioEnvio, ORIGEN_ENVIO, ciudadDeDistrito, precioEnvioDesde } from "@/lib/envios";
+import { envioConPromo, promoEnvio } from "@/lib/envioPromo";
+import { useEnvioPromo } from "@/hooks/useEnvioPromo";
 import { guardarDistrito, leerDistritoGuardado } from "@/lib/entrega";
 import {
   DEPARTAMENTOS_PROVINCIA, provinciasDe, estimarEnvioProvincia, nombreZona,
@@ -137,6 +139,13 @@ async function fetchNiubizSession(payload: {
 
 function CheckoutPage() {
   const { items, total, clearCart, updateQty, removeItem, actualizarPrecios } = useCartStore();
+  // Envío promocional de las liquidaciones del carrito (el servidor recalcula el cobro con la misma regla)
+  const { data: liqEnvio = [] } = useEnvioPromo(items);
+  const promoEnv = promoEnvio(items.map((i) => ({ product_id: i.id, comboId: i.comboId })), liqEnvio);
+  const tarifaEnvio = (distrito: string): number | null => {
+    const base = getPrecioEnvio(distrito);
+    return base == null ? base : envioConPromo(base, promoEnv);
+  };
   // Revisión contra el servidor al entrar: si algo cambió se corrige y Pagar espera a que el cliente lo confirme
   const { avisos: avisosCarrito, pendiente: avisoPendiente, entendido: avisoEntendido } = useValidarCarrito(true);
   const [loading, setLoading] = useState(false);
@@ -299,7 +308,7 @@ function CheckoutPage() {
     ? estimarEnvioProvincia(form.departamento, form.provincia, volumenTotal, faltaVolumen)
     : null;
   // En provincias el flete NO entra al total cobrado (es estimado y se confirma después).
-  const envioBase        = (metodoEntrega === "recojo_tienda" || esProvincia) ? 0 : getPrecioEnvio(form.distrito);
+  const envioBase        = (metodoEntrega === "recojo_tienda" || esProvincia) ? 0 : tarifaEnvio(form.distrito);
   const envio            = (envioBase ?? 0) + cargoParcial;
   const descuentoCupon   = cuponAplicado?.descuento ?? 0;
   const totalFinal       = subtotal + envio - descuentoCupon;
@@ -824,8 +833,8 @@ useEffect(() => {
                 valor={opcionEntrega}
                 onElegir={elegirOpcionEntrega}
                 precioLima={
-                  form.distrito && getPrecioEnvio(form.distrito) != null
-                    ? fmt(getPrecioEnvio(form.distrito) as number)
+                  form.distrito && tarifaEnvio(form.distrito) != null
+                    ? fmt(tarifaEnvio(form.distrito) as number)
                     : `Desde ${fmt(precioEnvioDesde())}`
                 }
               />
@@ -839,7 +848,7 @@ useEffect(() => {
                         <div className="sm:col-span-2">
                           <DireccionSeleccionada
                             direccion={dirSeleccionada}
-                            envio={getPrecioEnvio(form.distrito)}
+                            envio={tarifaEnvio(form.distrito)}
                             fmt={fmt}
                             onCambiar={() => setCambiandoDir(true)}
                           />
@@ -851,7 +860,7 @@ useEffect(() => {
                             direcciones={guardadasUsables}
                             direccionActual={form.direccion}
                             distritoActual={form.distrito}
-                            envioDe={getPrecioEnvio}
+                            envioDe={tarifaEnvio}
                             fmt={fmt}
                             onElegir={elegirGuardada}
                             onUsarOtra={usarOtraDireccion}
@@ -882,7 +891,7 @@ useEffect(() => {
                             />
                             <p className="text-xs text-muted-foreground">
                               {form.distrito
-                                ? <>Envío a {form.distrito}: <b className="text-foreground">{fmt(getPrecioEnvio(form.distrito) ?? 0)}</b>{form.distrito === distritoFicha ? " · el distrito que elegiste en el producto" : ""}</>
+                                ? <>Envío a {form.distrito}: <b className="text-foreground">{fmt(tarifaEnvio(form.distrito) ?? 0)}</b>{form.distrito === distritoFicha ? " · el distrito que elegiste en el producto" : ""}</>
                                 : <>Envío desde {fmt(precioEnvioDesde())} según tu distrito.</>}
                             </p>
                           </div>
@@ -1153,6 +1162,11 @@ useEffect(() => {
                         : (form.distrito ? fmt(envio) : "—")}
                   </span>
                 </div>
+                {promoEnv && metodoEntrega === "domicilio" && !esProvincia && form.distrito && (
+                  <p className="-mt-1 text-xs text-primary">
+                    {promoEnv.tipo === "gratis" ? "Envío gratis por llevar un producto en liquidación." : `Descuento de ${fmt(promoEnv.monto)} en el envío por llevar un producto en liquidación.`}
+                  </p>
+                )}
                 {descuentoCupon > 0 && (
                   <div className="flex justify-between text-accent-strong">
                     <span>Descuento ({cuponAplicado?.codigo})</span>

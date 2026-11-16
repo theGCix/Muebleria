@@ -6,6 +6,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { promoEnvio, envioConPromo } from "./envioPromo.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Copia de src/lib/envios.ts (hay una prueba que verifica que estén sincronizados)
@@ -199,6 +200,26 @@ export function verificarLimitePorProducto(items) {
 }
 
 /**
+ * Liquidaciones VIGENTES (el producto sigue con descuento activo) con envío promocional, para los productos sueltos del carrito.
+ * Si la tabla no existe todavía o falla la consulta, no hay promoción: el envío se cobra como siempre.
+ */
+async function leerLiquidacionesEnvio(supabase, items, porId, ahora) {
+  const ids = [...new Set(items.filter((i) => !i.comboId).map((i) => i.product_id))];
+  if (ids.length === 0) return [];
+  try {
+    const { data, error } = await supabase.from("liquidaciones").select("product_id, envio_tipo, envio_descuento").in("product_id", ids);
+    if (error) return [];
+    return (data ?? []).filter((l) => {
+      const p = porId.get(l.product_id);
+      const vence = p?.oferta_vence_el ? new Date(p.oferta_vence_el).getTime() : null;
+      return !!p && Number(p.descuento_porcentaje) > 0 && (vence === null || vence > ahora);
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Recalcula el pedido completo desde la BD.
  * items: [{ product_id, qty, comboId?, ...lo demás se ignora }]
  * order: { metodo_entrega, modo_entrega, destino, distrito }
@@ -257,7 +278,9 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
   if (domicilio && !provincia) {
     const base = precioEnvioLima(order.distrito);
     if (base === null) throw new PagoError("Ese distrito no tiene cobertura de envío registrada.");
-    envio = base;
+    // Liquidación con envío gratis / con descuento (fórmula en src/lib/envioPromo.ts); el cargo parcial se suma después
+    const promo = promoEnvio(items, await leerLiquidacionesEnvio(supabase, items, porId, ahora));
+    envio = envioConPromo(base, promo);
   }
   if (domicilio && order.modo_entrega === "parcial") envio += CARGO_ENVIO_PARCIAL;
 

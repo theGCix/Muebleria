@@ -25,13 +25,17 @@ export interface DatosBanner {
   regaloCojines: boolean;
 }
 
-/** Tamaño que escala con la tarjeta; --k lo agranda en móvil. Mínimo 10 px para que nada sea ilegible. */
+/**
+ * Tamaños en % del ancho de la tarjeta (cqw), medidos de las referencias del dueño (tarjetas de 368, 558 y 840 px de ancho:
+ * nombre ≈ 4.8 %, número del precio ≈ 4.2 %, rótulo ≈ 2.1 %, sellos ≈ 1.5 %). --k los agranda un poco en móvil (una tarjeta
+ * por fila, ~330 px). Pisos en px para que nada sea ilegible.
+ */
 const t = (cqw: number, min = 10) => `max(${min}px, calc(var(--k, 1) * ${cqw}cqw))`;
 const c = (cqw: number) => `calc(var(--k, 1) * ${cqw}cqw)`;
 
 function Cojines() {
   return (
-    <svg viewBox="0 0 110 120" aria-hidden className="absolute" style={{ left: c(24), bottom: c(0.5), width: c(23) }}>
+    <svg viewBox="0 0 110 120" aria-hidden className="absolute" style={{ left: c(10.5), bottom: c(0.3), width: c(12) }}>
       <defs>
         <linearGradient id="cojin" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#F4E8D2" />
@@ -49,7 +53,7 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
   const sello = selloEnvio(d.envioTipo, d.envioDescuento);
   return (
     <div
-      className={`relative overflow-hidden rounded-[22px] bg-muted text-white shadow-sm [--k:1.3] lg:[--k:1] ${className}`}
+      className={`relative overflow-hidden rounded-[22px] bg-muted text-white shadow-sm [--k:1.3] sm:[--k:1] ${className}`}
       style={{ containerType: "inline-size" }}
     >
       <img
@@ -64,19 +68,19 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
       <span aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
 
       {/* Sellos arriba a la derecha */}
-      <div className="absolute flex items-start" style={{ top: c(2.2), right: c(2.2), gap: c(1.2) }}>
+      <div className="absolute flex items-start" style={{ top: c(1.4), right: c(1.4), gap: c(0.8) }}>
         {sello && (
-          <div className="flex items-center text-white" style={{ background: ROSA, borderRadius: c(2.2), padding: `${c(1.1)} ${c(2)}`, gap: c(1.4) }}>
-            <Truck aria-hidden style={{ width: c(6.5), height: c(6.5) }} className="shrink-0" />
+          <div className="flex items-center text-white" style={{ background: ROSA, borderRadius: c(1.3), padding: `${c(0.7)} ${c(1.2)}`, gap: c(0.9) }}>
+            <Truck aria-hidden style={{ width: c(3.4), height: c(3.4) }} className="shrink-0" />
             <div className="leading-tight">
-              <p className="font-extrabold" style={{ fontSize: t(3) }}>{sello.titulo}</p>
-              <p className="font-bold" style={{ fontSize: t(1.9, 9) }}>{sello.detalle}</p>
+              <p className="whitespace-nowrap font-extrabold" style={{ fontSize: t(1.55, 10) }}>{sello.titulo}</p>
+              <p className="whitespace-nowrap font-bold" style={{ fontSize: t(0.95, 8) }}>{sello.detalle}</p>
             </div>
           </div>
         )}
-        <div className="flex items-center bg-white text-neutral-600" style={{ borderRadius: c(2.2), padding: `${c(1.1)} ${c(2)}`, gap: c(1.2) }}>
-          <ShieldCheck aria-hidden style={{ width: c(5.5), height: c(5.5) }} className="shrink-0" />
-          <p className="font-bold leading-tight" style={{ fontSize: t(2.4, 9) }}>COMPRA<br />SEGURA</p>
+        <div className="flex items-center bg-white text-neutral-600" style={{ borderRadius: c(1.3), padding: `${c(0.7)} ${c(1.2)}`, gap: c(0.8) }}>
+          <ShieldCheck aria-hidden style={{ width: c(3.6), height: c(3.6) }} className="shrink-0" />
+          <p className="font-bold leading-tight" style={{ fontSize: t(1.4, 9) }}>COMPRA<br />SEGURA</p>
         </div>
       </div>
 
@@ -85,10 +89,10 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
         <>
           <div
             className="absolute bottom-0 left-0 bg-white"
-            style={{ borderTopRightRadius: c(9), paddingLeft: c(3), paddingRight: c(8), paddingTop: c(2.2), paddingBottom: c(2.4) }}
+            style={{ borderTopRightRadius: c(5), paddingLeft: c(2.4), paddingRight: c(9), paddingTop: c(1.4), paddingBottom: c(1.6) }}
           >
-            <p className="font-extrabold leading-none" style={{ fontSize: t(6.4, 14), color: ROSA }}>GRATIS</p>
-            <p className="mt-0.5 font-bold leading-tight text-neutral-600" style={{ fontSize: t(2.5, 9) }}>
+            <p className="font-extrabold leading-none" style={{ fontSize: t(2.9, 14), color: ROSA }}>GRATIS</p>
+            <p className="mt-0.5 font-bold leading-tight text-neutral-600" style={{ fontSize: t(1.35, 9) }}>
               JUEGO<br />DE COJINES
             </p>
           </div>
@@ -99,32 +103,32 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
       {/* Nombre y precio abajo a la derecha */}
       <div
         className={`absolute flex ${ancho ? "items-end" : "flex-col items-start"}`}
-        style={{ right: c(2.6), bottom: c(3), gap: c(2.4) }}
+        style={{ right: c(1.8), bottom: c(2.2), gap: c(1.6) }}
       >
-        <div className="border-l-2 border-white/80" style={{ paddingLeft: c(1.8) }}>
-          {d.kicker && <p className="font-medium leading-tight" style={{ fontSize: t(3.1, 11) }}>{d.kicker}</p>}
-          <p className="flex items-baseline" style={{ gap: c(1.2) }}>
-            <span className="font-extrabold uppercase leading-none" style={{ fontSize: t(7.2, 16) }}>{d.nombre}</span>
-            {d.detalle && <span className="font-medium leading-none" style={{ fontSize: t(3.1, 11) }}>{d.detalle}</span>}
+        <div className="shrink-0 border-l-2 border-white/80" style={{ paddingLeft: c(1.1) }}>
+          {d.kicker && <p className="whitespace-nowrap font-medium leading-tight" style={{ fontSize: t(2.1, 11) }}>{d.kicker}</p>}
+          <p className="flex items-baseline whitespace-nowrap" style={{ gap: c(0.8) }}>
+            <span className="font-extrabold uppercase leading-none" style={{ fontSize: t(4.8, 17) }}>{d.nombre}</span>
+            {d.detalle && <span className="font-medium leading-none" style={{ fontSize: t(2, 11) }}>{d.detalle}</span>}
           </p>
         </div>
-        <div className="flex flex-col" style={{ gap: c(0.8) }}>
+        <div className="flex shrink-0 flex-col" style={{ gap: c(0.6) }}>
           <div className="flex items-stretch">
             <span
-              className="flex items-baseline font-extrabold leading-none"
-              style={{ background: AZUL, borderTopLeftRadius: c(2.2), borderBottomLeftRadius: c(2.2), padding: `${c(1.3)} ${c(5)} ${c(1.3)} ${c(2.4)}`, gap: c(0.6) }}
+              className="flex items-baseline whitespace-nowrap font-extrabold leading-none"
+              style={{ background: AZUL, borderTopLeftRadius: c(1.4), borderBottomLeftRadius: c(1.4), padding: `${c(0.9)} ${c(2.6)} ${c(0.9)} ${c(1.5)}`, gap: c(0.4) }}
             >
-              <span style={{ fontSize: t(3.8, 11) }}>s/</span>
-              <span style={{ fontSize: t(8.2, 18) }}>{numeroBanner(d.precioFinal)}</span>
+              <span style={{ fontSize: t(2.2, 11) }}>s/</span>
+              <span style={{ fontSize: t(4.2, 18) }}>{numeroBanner(d.precioFinal)}</span>
             </span>
             <span
               className="flex items-center font-extrabold leading-none"
-              style={{ background: ROSA, marginLeft: c(-2.8), borderRadius: c(2.2), padding: `0 ${c(2.4)}`, fontSize: t(5, 13) }}
+              style={{ background: ROSA, marginLeft: c(-1.6), borderRadius: c(1.4), padding: `0 ${c(1.5)}`, fontSize: t(3, 13) }}
             >
               {d.descuento}%
             </span>
           </div>
-          <p className="font-medium" style={{ fontSize: t(2.5, 10) }}>
+          <p className="whitespace-nowrap font-medium" style={{ fontSize: t(1.8, 10) }}>
             Precio regular: <span className="line-through">S/ {numeroBanner(d.precioRegular)}</span>
           </p>
         </div>

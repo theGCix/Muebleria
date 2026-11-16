@@ -373,7 +373,7 @@ function LiquidacionAdminPage() {
                 </div>
                 {form.envio_tipo !== "ninguno" && (
                   <p className="text-xs text-muted-foreground">
-                    Por ahora el sello es solo visual: el checkout todavía cobra el envío por distrito. Pendiente de aplicarlo en el cobro.
+                    Se aplica en el cobro (delivery a Lima): si el carrito lleva este producto, el envío del pedido es gratis o se le resta este monto una sola vez.
                   </p>
                 )}
 

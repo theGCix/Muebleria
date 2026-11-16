@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError, CANTIDAD_MAX_POR_COMPRA } from "./pagos.js";
 
 // Supabase de mentira: devuelve tablas fijas
-function fakeSupabase({ products = [], combos = [], grupos = [] }) {
+function fakeSupabase({ products = [], combos = [], grupos = [], liquidaciones = [], liqError = false }) {
   const tabla = (rows, clave = "id") => ({ select: () => ({ in: async (_c, ids) => ({ data: rows.filter((r) => ids.includes(r[clave])), error: null }) }) });
-  return { from: (t) => (t === "products" ? tabla(products) : t === "producto_opcion_grupos" ? tabla(grupos, "product_id") : tabla(combos)) };
+  const liq = { select: () => ({ in: async (_c, ids) => (liqError ? { data: null, error: { message: "no existe la tabla" } } : { data: liquidaciones.filter((r) => ids.includes(r.product_id)), error: null }) }) };
+  return { from: (t) => (t === "products" ? tabla(products) : t === "producto_opcion_grupos" ? tabla(grupos, "product_id") : t === "liquidaciones" ? liq : tabla(combos)) };
 }
 const P1 = { id: "p1", precio: 1000, descuento_porcentaje: null, oferta_vence_el: null };
 const P2 = { id: "p2", precio: 500, descuento_porcentaje: 10, oferta_vence_el: null };
@@ -292,4 +293,50 @@ test("tope por producto en cada compra: 5 pasa, 6 no; se suman las líneas; el c
   // productos distintos: cada uno con su propio tope
   const dos = await calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 5 }, { product_id: "p2", qty: 5 }] });
   assert.equal(dos.subtotal, 5000 + 2250);
+});
+
+// ── Envío de las liquidaciones (reglas A y C del dueño, 2026-11-16) ──────────────────────────────────────────────
+// Los productos de liquidación tienen un descuento activo (descuento_porcentaje > 0): es lo que las mantiene vigentes.
+const L1 = { id: "l1", precio: 1000, descuento_porcentaje: 20, oferta_vence_el: null };
+const L2 = { id: "l2", precio: 500, descuento_porcentaje: 10, oferta_vence_el: null };
+const gratis = { product_id: "l1", envio_tipo: "gratis", envio_descuento: null };
+const menos20 = { product_id: "l1", envio_tipo: "descuento", envio_descuento: 20 };
+const menos30 = { product_id: "l2", envio_tipo: "descuento", envio_descuento: 30 };
+const un = (id, extra = {}) => ({ product_id: id, qty: 1, ...extra });
+
+test("liquidación con envío gratis: el envío del pedido es 0 (también con otros productos en el carrito)", async () => {
+  const sb = fakeSupabase({ products: [L1, P1], liquidaciones: [gratis] });
+  assert.equal((await calcularPedido({ supabase: sb, order, items: [un("l1")] })).envio, 0);
+  assert.equal((await calcularPedido({ supabase: sb, order, items: [un("l1"), un("p1")] })).envio, 0); // regla A
+  assert.equal((await calcularPedido({ supabase: sb, order, items: [un("p1")] })).envio, 60); // sin el producto: tarifa normal
+});
+
+test("liquidación con descuento de envío: se resta UNA vez, el mayor; nunca baja de 0", async () => {
+  const sb = fakeSupabase({ products: [L1, L2], liquidaciones: [menos20, menos30] });
+  assert.equal((await calcularPedido({ supabase: sb, order, items: [un("l1")] })).envio, 40); // 60 − 20
+  assert.equal((await calcularPedido({ supabase: sb, order, items: [un("l1"), un("l2")] })).envio, 30); // regla C: 60 − 30, no 60 − 50
+  const grande = fakeSupabase({ products: [L1], liquidaciones: [{ ...menos20, envio_descuento: 500 }] });
+  assert.equal((await calcularPedido({ supabase: grande, order, items: [un("l1")] })).envio, 0);
+});
+
+test("gratis gana sobre descuento; el cargo de entrega parcial (25) se conserva", async () => {
+  const sb = fakeSupabase({ products: [L1, L2], liquidaciones: [gratis, menos30] });
+  const r = await calcularPedido({ supabase: sb, order: { ...order, modo_entrega: "parcial" }, items: [un("l1"), un("l2")] });
+  assert.equal(r.envio, 25);
+  assert.equal(r.total, r.subtotal + 25);
+});
+
+test("sin efecto: liquidación vencida, pieza de combo, provincia, recojo y tabla con error", async () => {
+  const vencida = { ...L1, descuento_porcentaje: null }; // ya no tiene descuento vigente
+  assert.equal((await calcularPedido({ supabase: fakeSupabase({ products: [vencida], liquidaciones: [gratis] }), order, items: [un("l1")] })).envio, 60);
+  const caduca = { ...L1, oferta_vence_el: "2000-01-01" };
+  assert.equal((await calcularPedido({ supabase: fakeSupabase({ products: [caduca], liquidaciones: [gratis] }), order, items: [un("l1")] })).envio, 60);
+  const combo = { id: "c1", precio_combo: 900, activo: true, vence_el: null, combo_items: [{ cantidad: 1, product_id: "l1", products: { precio: 1000 } }] };
+  const sbCombo = fakeSupabase({ products: [L1], combos: [combo], liquidaciones: [gratis] });
+  assert.equal((await calcularPedido({ supabase: sbCombo, order, items: [un("l1", { comboId: "c1" })] })).envio, 60);
+  const sb = fakeSupabase({ products: [L1], liquidaciones: [gratis] });
+  assert.equal((await calcularPedido({ supabase: sb, order: { metodo_entrega: "domicilio", destino: "provincia" }, items: [un("l1")] })).envio, 0);
+  assert.equal((await calcularPedido({ supabase: sb, order: { metodo_entrega: "recojo_tienda" }, items: [un("l1")] })).envio, 0);
+  const roto = fakeSupabase({ products: [L1], liquidaciones: [gratis], liqError: true });
+  assert.equal((await calcularPedido({ supabase: roto, order, items: [un("l1")] })).envio, 60); // sin la migración: tarifa normal
 });
