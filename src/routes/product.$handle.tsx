@@ -31,6 +31,7 @@ import { DeliveryPromise } from "@/components/product/DeliveryPromise";
 import { SignatureModule } from "@/components/product/SignatureModules";
 import { OpcionesProducto } from "@/components/product/OpcionesProducto";
 import { SelectorCantidad } from "@/components/product/SelectorCantidad";
+import { CANTIDAD_MAX_POR_COMPRA, cupoRestante } from "@/lib/limiteCompra";
 import { useOpcionesProducto, resolverSeleccion, type SeleccionOpciones, type OpcionGrupo, type OpcionValor } from "@/hooks/useOpcionesProducto";
 import { BundleBuilder } from "@/components/product/BundleBuilder";
 import { StickyBuyBar, SeguirComprandoLink } from "@/components/product/StickyBuyBar";
@@ -885,6 +886,14 @@ function ProductView({ product: base }: { product: ProductData }) {
   // Cantidad real de ESTA selección en el carrito: el botón refleja el estado del carrito, no un temporizador
   const qtyEnCarrito = itemsCarrito.find((i) => i.lineId === lineIdActual)?.qty ?? 0;
   // Unidades de este producto en el carrito (todas las selecciones), para el enlace "Ir a pagar"
+  // Tope por compra: lo que ya hay en el carrito cuenta; el servidor aplica el mismo límite
+  const cupoFicha = Math.min(
+    cupoRestante(itemsCarrito, product.id),
+    Math.max(0, (product.stock ?? Infinity) - itemsCarrito.filter((i) => i.id === product.id && !i.comboId).reduce((s, i) => s + i.qty, 0)),
+  );
+  const limiteAlcanzado = !outOfStock && cupoFicha <= 0;
+  const maxSeleccion = Math.max(1, cupoFicha);
+  const cantidadElegida = Math.min(Math.max(1, cantidad), maxSeleccion);
   const qtyProductoTotal = itemsCarrito.filter((i) => i.id === product.id && !i.comboId).reduce((s, i) => s + i.qty, 0);
 
   // Foto del color elegido (de BD): la del color por foto o, si no hay, la del propio valor
@@ -899,7 +908,8 @@ function ProductView({ product: base }: { product: ProductData }) {
 
   // Un solo punto de alta al carrito (add_to_cart sale del store, una vez por acción).
   const agregar = (irAPagar: boolean) => {
-    const qty = Math.max(1, cantidad);
+    if (limiteAlcanzado) return;
+    const qty = cantidadElegida;
     setAdding(true);
     setPostAdd(true);
     addItems([{
@@ -1107,7 +1117,18 @@ function ProductView({ product: base }: { product: ProductData }) {
             {/* resumen de lo elegido */}
             <p className="gmx-prefs">Tu selección: <b>{prefsLista.map(([k, v]) => `${k} ${v}`).join(" · ")}</b></p>
 
-            <SelectorCantidad value={cantidad} onChange={setCantidad} disabled={outOfStock || cargandoOpciones} />
+            <SelectorCantidad
+              value={cantidadElegida}
+              onChange={setCantidad}
+              max={maxSeleccion}
+              disabled={outOfStock || cargandoOpciones || limiteAlcanzado}
+              nota={
+                <>
+                  Máximo {CANTIDAD_MAX_POR_COMPRA} por compra.
+                  {waHref && <> ¿Necesitas más? <a href={waHref} target="_blank" rel="noopener noreferrer">Cotízalo por WhatsApp</a>.</>}
+                </>
+              }
+            />
 
             {/* CTA */}
             <div className="gm-cta-row" ref={ctaRef}>
@@ -1115,14 +1136,16 @@ function ProductView({ product: base }: { product: ProductData }) {
                 className={`gm-btn-primary${adding ? " adding" : ""}${!adding && qtyEnCarrito > 0 ? " in-cart" : ""}${!adding && !outOfStock && qtyEnCarrito === 0 ? " gmx-btn-pulse" : ""}`}
                 style={{ flex: 1 }}
                 onClick={handleAdd}
-                disabled={outOfStock || cargandoOpciones}
+                disabled={outOfStock || cargandoOpciones || limiteAlcanzado}
               >
                 {adding || qtyEnCarrito > 0 ? <Check size={16} /> : <ShoppingBag size={16} />}
                 {adding
                   ? "¡Agregado!"
                   : outOfStock
                     ? "Agotado"
-                    : qtyEnCarrito > 0
+                    : limiteAlcanzado
+                      ? `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra`
+                      : qtyEnCarrito > 0
                       ? `En tu carrito (${qtyEnCarrito}) · Agregar otro`
                       : "Agregar al carrito"}
               </button>
@@ -1150,7 +1173,7 @@ function ProductView({ product: base }: { product: ProductData }) {
               type="button"
               className="gmx-comprar-ahora"
               onClick={handleComprarAhora}
-              disabled={outOfStock || cargandoOpciones}
+              disabled={outOfStock || cargandoOpciones || limiteAlcanzado}
             >
               Comprar ahora
             </button>
@@ -1246,7 +1269,7 @@ function ProductView({ product: base }: { product: ProductData }) {
           nombre={product.nombre}
           resumen={Object.values(prefs).join(" · ")}
           precio={precioMostrado}
-          disabled={outOfStock || cargandoOpciones}
+          disabled={outOfStock || cargandoOpciones || limiteAlcanzado}
           adding={adding}
           qtyEnCarrito={qtyEnCarrito}
           postAdd={postAdd && qtyProductoTotal > 0}

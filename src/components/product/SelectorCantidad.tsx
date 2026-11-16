@@ -1,20 +1,22 @@
 // src/components/product/SelectorCantidad.tsx
 // Selector de cantidad de la ficha (− / número / +). Botones táctiles de 44 px.
+import type { ReactNode } from "react";
 import { Minus, Plus } from "lucide-react";
 import "./product-experience.css";
-
-export const CANTIDAD_MAX = 99;
 
 interface Props {
   value: number;
   onChange: (n: number) => void;
   disabled?: boolean;
-  max?: number;
+  max: number;
+  /** Texto de apoyo bajo el control (p. ej. el tope por compra y el enlace a WhatsApp). */
+  nota?: ReactNode;
 }
 
-export function SelectorCantidad({ value, onChange, disabled = false, max = CANTIDAD_MAX }: Props) {
+export function SelectorCantidad({ value, onChange, disabled = false, max, nota }: Props) {
   const poner = (n: number) => onChange(Math.min(max, Math.max(1, Math.round(n) || 1)));
   return (
+    <>
     <div className="gmx-cant">
       <span className="gmx-cant-label" id="gmx-cant-label">Cantidad:</span>
       <div className="gmx-cant-ctl" role="group" aria-labelledby="gmx-cant-label">
@@ -39,5 +41,7 @@ export function SelectorCantidad({ value, onChange, disabled = false, max = CANT
         </button>
       </div>
     </div>
+    {nota && <p className="gmx-cant-nota">{nota}</p>}
+    </>
   );
 }

@@ -178,6 +178,27 @@ export const tituloConOpciones = (nombre, opciones) =>
   opciones.length ? `${nombre} (${opciones.map((o) => o.valor).join(", ")})` : nombre;
 
 /**
+ * Tope de unidades por producto en cada compra (decisión del dueño, 2026-11-15). Mismo número que
+ * `CANTIDAD_MAX_POR_COMPRA` de src/lib/limiteCompra.ts (una prueba lo verifica). Se suman las líneas
+ * del mismo producto (p. ej. con distintas opciones); las piezas de un combo no cuentan.
+ * Pedidos mayores se cotizan por WhatsApp.
+ */
+export const CANTIDAD_MAX_POR_COMPRA = 5;
+
+export function verificarLimitePorProducto(items) {
+  const porProducto = new Map();
+  for (const it of items) {
+    if (it.comboId) continue;
+    porProducto.set(it.product_id, (porProducto.get(it.product_id) ?? 0) + it.qty);
+  }
+  for (const total of porProducto.values()) {
+    if (total > CANTIDAD_MAX_POR_COMPRA) {
+      throw new PagoError(`Máximo ${CANTIDAD_MAX_POR_COMPRA} unidades por producto en cada compra. Para pedidos mayores escríbenos por WhatsApp.`);
+    }
+  }
+}
+
+/**
  * Recalcula el pedido completo desde la BD.
  * items: [{ product_id, qty, comboId?, ...lo demás se ignora }]
  * order: { metodo_entrega, modo_entrega, destino, distrito }
@@ -194,6 +215,7 @@ export async function calcularPedido({ supabase, order, items, descuento = 0, ah
     }
     if (it.opciones !== undefined && !Array.isArray(it.opciones)) throw new PagoError("Opciones inválidas en el pedido.");
   }
+  verificarLimitePorProducto(items);
 
   const productIds = [...new Set(items.map((i) => i.product_id))];
   const { data: prods, error: pErr } = await supabase
