@@ -54,7 +54,7 @@ function Cojines() {
   );
 }
 
-/** Banner sin enlace (también lo usa la vista previa del admin). `ancho`: nombre y precio en una fila (tarjetas anchas de PC). */
+/** Banner sin enlace (también lo usa la vista previa del admin). `ancho`: nombre y precio en una fila, solo si la tarjeta mide ≥ 640 px; en tarjetas angostas (móvil) siempre apilados para no chocar con el regalo. */
 export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: DatosBanner; ancho?: boolean; className?: string }) {
   const sello = selloEnvio(d.envioTipo, d.envioDescuento);
   return (
@@ -110,7 +110,7 @@ export function BannerLiquidacion({ d, ancho = false, className = "" }: { d: Dat
 
       {/* Nombre y precio abajo a la derecha */}
       <div
-        className={`absolute flex ${ancho ? "items-end" : "flex-col items-start"}`}
+        className={`absolute flex ${ancho ? "flex-col items-start @min-[640px]:flex-row @min-[640px]:items-end" : "flex-col items-start"}`}
         style={{ right: c(1.8), bottom: c(2.2), gap: c(1.6) }}
       >
         <div className="shrink-0 border-l-2 border-white/80" style={{ paddingLeft: c(1.1) }}>
