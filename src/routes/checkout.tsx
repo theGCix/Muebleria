@@ -84,6 +84,8 @@ import { ConfirmandoPagoOverlay } from "@/components/ConfirmandoPagoOverlay";
 import { syncCartSnapshot, markCartRecovered } from "@/lib/carrito.functions";
 import { leerCuponSalida } from "@/lib/cupon-salida";
 import { TerminosCheckout } from "@/components/checkout/TerminosCheckout";
+import { PasosCheckout } from "@/components/checkout/PasosCheckout";
+import { CANTIDAD_MAX_POR_COMPRA, cupoRestante } from "@/lib/limiteCompra";
 import { PagoExitoso, type PagoExitosoDatos } from "@/components/checkout/PagoExitoso";
 import { fmtFechaHora } from "@/lib/fechas";
 import { PagoRechazado, type PagoRechazadoDatos } from "@/components/checkout/PagoRechazado";
@@ -764,6 +766,18 @@ useEffect(() => {
     );
   }
 
+  // Progreso del indicador de pasos: solo orientación, no bloquea nada (handlePagar valida igual que antes)
+  const contactoCompleto =
+    form.nombre.trim() !== "" && form.email.trim() !== "" && form.telefono.trim() !== "" && /^\d{8}(\d{3})?$/.test(form.dni.trim());
+  const entregaCompleta =
+    metodoEntrega === "recojo_tienda" ||
+    (form.direccion.trim() !== "" && (esProvincia ? !provinciaIncompleta : form.distrito !== "" && !distritoSinCobertura));
+  const pasosCheckout = [
+    { id: "paso-datos", label: "Datos", hecho: contactoCompleto },
+    { id: "paso-envio", label: "Envío", hecho: entregaCompleta },
+    { id: "paso-pago", label: "Pago", hecho: false },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <CheckoutHeader />
@@ -773,14 +787,15 @@ useEffect(() => {
           <ArrowLeft className="h-4 w-4" /> Seguir comprando
         </Link>
 
-        <h1 className="font-display text-4xl font-semibold mb-10">Finalizar compra</h1>
+        <h1 className="font-display text-4xl font-semibold mb-6">Finalizar compra</h1>
+        <PasosCheckout pasos={pasosCheckout} className="mb-8" />
 
         <div className="grid lg:grid-cols-[1fr_420px] gap-10 min-w-0">
           {/* ── Formulario ── */}
           <form id="form-checkout" onSubmit={handlePagar} className="space-y-8 min-w-0">
             <CarritoAvisos avisos={avisosCarrito} onEntendido={avisoEntendido} />
 
-            <section className="bg-card border border-border/50 rounded-xl p-6 space-y-4">
+            <section id="paso-datos" className="bg-card border border-border/50 rounded-xl p-6 space-y-4 scroll-mt-4">
               <h2 className="font-display text-xl font-semibold">Datos de contacto</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -802,7 +817,7 @@ useEffect(() => {
               </div>
             </section>
 
-            <section className="bg-card border border-border/50 rounded-xl p-6 space-y-4">
+            <section id="paso-envio" className="bg-card border border-border/50 rounded-xl p-6 space-y-4 scroll-mt-4">
               <h2 className="font-display text-xl font-semibold">Entrega</h2>
 
               <OpcionesEntrega
@@ -947,7 +962,7 @@ useEffect(() => {
               )}
             </section>
 
-            <section className="bg-card border border-border/50 rounded-xl p-6 space-y-3">
+            <section id="paso-pago" className="bg-card border border-border/50 rounded-xl p-6 space-y-3 scroll-mt-4">
               <h2 className="font-display text-xl font-semibold">Método de pago</h2>
               <MetodosPago
                 valor={metodoPagoReal}
@@ -1017,7 +1032,9 @@ useEffect(() => {
                         <button
                           type="button"
                           onClick={() => updateQty(item.lineId, item.qty + 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+                          disabled={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId)}
+                          title={!item.comboId && item.qty >= cupoRestante(items, item.id, item.lineId) ? `Máximo ${CANTIDAD_MAX_POR_COMPRA} por compra` : undefined}
+                          className="disabled:cursor-not-allowed disabled:opacity-40 w-6 h-6 flex items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                           aria-label="Sumar"
                         >
                           <Plus className="h-3 w-3" />
