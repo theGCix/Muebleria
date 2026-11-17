@@ -1,0 +1,695 @@
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 1178ef3..3af91d6 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -520,3 +520,9 @@
+ - **Qué cambió:** `supabase/migrations/20261119_modelos_3d.sql` (**sin ejecutar**): bucket público `modelos-3d` (5 MB, solo `.glb`), escritura solo admin (`has_role`). `src/lib/modelos3d.ts` (reglas puras) y `scripts/test-modelos3d.mjs` (4/4). `productos.tsx`: campo «Modelo 3D (.glb)» (subir / reemplazar / quitar); la URL se publica al guardar y el archivo anterior se borra del bucket solo después de guardar. `ModelViewer3D.tsx`: el visor nunca salía del estado «cargando» (React 18 no enlaza `onLoad` en elementos personalizados: ahora `addEventListener`); botón de AR siempre declarado (antes dependía de `"xr" in navigator`, que falla en iPhone), `ar-scale="fixed"` para que no se redimensione, mensaje si el modelo no carga, controles ≥ 44 px.
+ - **Escala:** el `.glb` original mide 1 m de ancho. Se multiplicó ×2.77 en el nodo raíz (`sala-asiatico-escala-real.glb`): fondo 209 cm (≈ sofá izquierdo, 210) y alto 82 cm (= 82), ambos independientes. Ancho total del conjunto: 277 cm.
+ - **Riesgos:** (1) la escala se infiere de dos ejes; verificar con una cinta el ancho total del conjunto armado (277 cm); (2) el modelo está generado por IA a partir de una foto: puede no ser idéntico al mueble; incluye mesa de centro y cojines; (3) ejecutar la migración ANTES de subir el modelo; (4) AR solo en celular (Android/iPhone); (5) el visor carga `model-viewer` y el decodificador Draco desde CDN de Google; (6) sin navegador ni dispositivo real. `tsc` sin errores nuevos, `vite build` OK. Archivos NUEVOS: `src/lib/modelos3d.ts`, `scripts/test-modelos3d.mjs`, `supabase/migrations/20261119_modelos_3d.sql`.
++
++## 2026-11-17 — «Pruébalo en tu espacio» con el modelo 3D sobre la foto del cliente — implementado, falta probar en celular
++- **Decisión del dueño:** «Ver en tu espacio» del visor 3D se conserva pero hace lo mismo que «Pruébalo en tu espacio» (foto con cámara o galería y el 3D encima); se deja la realidad aumentada en vivo. El conjunto va completo (no se separan mesa ni cojines).
++- **Qué cambió:** `ProbarEnTuEspacio.tsx`: paso 1 con «Tomar foto» (`capture="environment"`, solo en pantallas táctiles) y «Elegir de la galería» (en PC, «Subir una foto»). Si el producto tiene `modelo_3d_url` (prop `modelo3dUrl`), lo que se coloca es un render del modelo con fondo transparente, con «Giro» (0–355°) y «Ángulo de cámara» (de frente / un poco desde arriba / desde arriba); arrastrar, tamaño, voltear, sombra, descargar y compartir siguen igual. Sin modelo 3D, o si el 3D falla al cargar, funciona la foto 2D de siempre. `lib/modelViewer.ts` (nuevo): carga única de `<model-viewer>` y `crearRender3D` (elemento invisible, cámara fija, `toBlob`). `lib/escenaEspacio.ts`: `limitesOpacos`, `pxPorCmRender`, `anchoProyectadoCm` (puras; `scripts/test-render3d.mjs`, 4/4). `ModelViewer3D.tsx`: botón «Ver en tu espacio» → prop `onProbar` (abre el probador); se quitó la AR en vivo. `product.$handle.tsx`: pasa `modelo3dUrl` y `onProbar`.
++- **Escala:** la cámara del render es fija (campo de visión 14°, 18 m), así que los píxeles por cm son los mismos al girar. Se calibra con un render de frente que mide el ancho real del modelo (`getDimensions()`, 277 cm con la escala del archivo). Al girar, el ancho en cm se recalcula; con la foto calibrada el conjunto sale a su tamaño real (aprox.: ±5 % por perspectiva).
++- **Riesgos:** (1) **no se probó en navegador ni celular**: `toBlob`, `jumpCameraToGoal` y `getDimensions` de `<model-viewer>` 3.4.0 son lo primero que hay que revisar (si el render sale vacío, el probador cae a la foto 2D); (2) iPhone/Android: confirmar que «Tomar foto» abre la cámara; (3) el render carga el `.glb` y el decodificador Draco desde CDN de Google; (4) no ajusta perspectiva ni iluminación de la foto; (5) quita la AR en vivo (Scene Viewer / Quick Look). `tsc` sin errores nuevos, `vite build` OK, todas las pruebas `scripts/test-*.mjs` en verde. Archivos NUEVOS: `src/lib/modelViewer.ts`, `scripts/test-render3d.mjs` (`git add` explícito).
+diff --git a/scripts/test-render3d.mjs b/scripts/test-render3d.mjs
+new file mode 100644
+index 0000000..138d168
+--- /dev/null
++++ b/scripts/test-render3d.mjs
+@@ -0,0 +1,39 @@
++// Pruebas de las funciones del render 3D en src/lib/escenaEspacio.ts. Ejecutar: node --test scripts/test-render3d.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import { limitesOpacos, pxPorCmRender, anchoProyectadoCm, anchoFraccion } from "../src/lib/escenaEspacio.ts";
++
++function render(w, h, rect) {
++  const d = new Uint8ClampedArray(w * h * 4); // todo transparente
++  for (let y = rect.y; y < rect.y + rect.h; y++)
++    for (let x = rect.x; x < rect.x + rect.w; x++) d[(y * w + x) * 4 + 3] = 255;
++  return d;
++}
++
++test("límites de lo visible en un render transparente", () => {
++  const d = render(100, 80, { x: 20, y: 30, w: 50, h: 40 });
++  assert.deepEqual(limitesOpacos(d, 100, 80), { x: 20, y: 30, w: 50, h: 40 });
++});
++
++test("render vacío → null; el borde casi transparente se ignora", () => {
++  assert.equal(limitesOpacos(new Uint8ClampedArray(10 * 10 * 4), 10, 10), null);
++  const d = render(20, 20, { x: 5, y: 5, w: 4, h: 4 });
++  d[(0 * 20 + 0) * 4 + 3] = 5; // ruido bajo el umbral
++  assert.deepEqual(limitesOpacos(d, 20, 20), { x: 5, y: 5, w: 4, h: 4 });
++});
++
++test("escala: de frente mide el ancho real; girado, el ancho proyectado cambia", () => {
++  const pxCm = pxPorCmRender(554, 277); // 2 px por cm
++  assert.equal(pxCm, 2);
++  assert.equal(anchoProyectadoCm(554, pxCm), 277);
++  assert.equal(anchoProyectadoCm(418, pxCm), 209); // de lado: ≈ el fondo del conjunto
++  assert.equal(pxPorCmRender(0, 277), null);
++  assert.equal(pxPorCmRender(500, 0), null);
++  assert.equal(anchoProyectadoCm(500, null), null);
++});
++
++test("con la foto calibrada, el conjunto ocupa su ancho real (277 cm)", () => {
++  // foto de 1600 px donde 1 cm = 3 px → 277 cm = 831 px = 51.9 % del ancho
++  const f = anchoFraccion(277, 3, 1600);
++  assert.ok(Math.abs(f - 831 / 1600) < 1e-9);
++});
+diff --git a/src/components/ModelViewer3D.tsx b/src/components/ModelViewer3D.tsx
+index 51d9e47..ce4a1ab 100644
+--- a/src/components/ModelViewer3D.tsx
++++ b/src/components/ModelViewer3D.tsx
+@@ -1,6 +1,7 @@
+ // src/components/ModelViewer3D.tsx
+ import { useEffect, useRef, useState } from "react";
+-import { Loader2, RotateCcw } from "lucide-react";
++import { Camera, Loader2, RotateCcw } from "lucide-react";
++import { cargarModelViewer } from "@/lib/modelViewer";
+ 
+ // Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
+ declare global {
+@@ -11,30 +12,23 @@ declare global {
+   }
+ }
+ 
+-const MODEL_VIEWER_SRC = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js";
+-
+ export function ModelViewer3D({
+   src,
+   alt,
+   poster,  // imagen de preview mientras carga el modelo
++  onProbar, // «Ver en tu espacio»: abre el probador con foto (cámara o galería) de «Pruébalo en tu espacio»
+ }: {
+   src: string;
+   alt: string;
+   poster?: string;
++  onProbar?: () => void;
+ }) {
+   const viewerRef = useRef<any>(null);
+   const [loaded, setLoaded] = useState(false);
+   const [failed, setFailed] = useState(false);
+ 
+   useEffect(() => {
+-    // Cargar el web component de Google si no está ya
+-    if (!customElements.get("model-viewer") && !document.querySelector(`script[src="${MODEL_VIEWER_SRC}"]`)) {
+-      const script = document.createElement("script");
+-      script.type = "module";
+-      script.src = MODEL_VIEWER_SRC;
+-      script.onerror = () => setFailed(true);
+-      document.head.appendChild(script);
+-    }
++    cargarModelViewer().catch(() => setFailed(true));
+   }, []);
+ 
+   // React 18 no enlaza eventos de elementos personalizados con onLoad/onError: se escuchan a mano
+@@ -75,21 +69,21 @@ export function ModelViewer3D({
+         auto-rotate-delay="1000"
+         rotation-per-second="30deg"
+         shadow-intensity="1"
+-        ar
+-        ar-modes="scene-viewer webxr quick-look"
+-        ar-scale="fixed"
+-        ar-placement="floor"
+         style={{ width: "100%", height: "100%", opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
+-      >
+-        {/* Botón de AR: model-viewer solo lo muestra si el dispositivo la admite (celulares; en PC no aparece) */}
++      />
++
++      {/* «Ver en tu espacio»: mismo probador que «Pruébalo en tu espacio» (foto con cámara o galería) */}
++      {loaded && onProbar && (
+         <button
+-          slot="ar-button"
+-          className="absolute bottom-4 right-4 min-h-11 px-4 rounded-lg text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
++          type="button"
++          onClick={onProbar}
++          className="absolute bottom-4 right-4 min-h-11 px-4 rounded-lg text-xs font-medium inline-flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+           style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+         >
++          <Camera className="h-4 w-4" aria-hidden />
+           Ver en tu espacio
+         </button>
+-      </model-viewer>
++      )}
+ 
+       {/* Controles flotantes */}
+       {loaded && (
+diff --git a/src/components/product/ProbarEnTuEspacio.tsx b/src/components/product/ProbarEnTuEspacio.tsx
+index fa5dad0..223617b 100644
+--- a/src/components/product/ProbarEnTuEspacio.tsx
++++ b/src/components/product/ProbarEnTuEspacio.tsx
+@@ -5,6 +5,8 @@
+ //     se dibuja con su ancho real. Se puede omitir y ajustar a ojo.
+ //  3. Colocar: arrastrar, cambiar tamaño, voltear, sombra, probar acabados y descargar la imagen.
+ // Es una simulación 2D (sin perspectiva ni luz): la pantalla lo avisa.
++// Si el producto tiene modelo 3D (.glb), lo que se coloca es un render del modelo (se gira y se cambia el
++// ángulo de cámara para igualar la foto); sin modelo 3D, la foto 2D del acabado como siempre.
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import { Camera, Check, Download, FlipHorizontal2, ImagePlus, Loader2, RotateCcw, Ruler, Share2, Sparkles } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+@@ -23,6 +25,7 @@ import {
+   type Punto,
+ } from "@/lib/escenaEspacio";
+ import { cargarImagen, prepararRecorte, type RecorteListo } from "@/lib/recorteImagen";
++import { crearRender3D, type Render3D, type VistaRender } from "@/lib/modelViewer";
+ 
+ export interface AcabadoEspacio {
+   id: string;
+@@ -40,6 +43,8 @@ interface Props {
+   acabados: AcabadoEspacio[];
+   /** Índice del acabado que el cliente ya tenía elegido en la ficha. */
+   acabadoInicial?: number;
++  /** URL del modelo 3D (.glb) del producto; si existe, el probador coloca el modelo 3D en vez de la foto 2D. */
++  modelo3dUrl?: string | null;
+ }
+ 
+ interface FotoCliente {
+@@ -51,6 +56,14 @@ interface FotoCliente {
+ 
+ const MAX_LADO = 1600;
+ 
++/** Ángulos de cámara del modelo 3D (phi: 90° = a la altura del mueble, menos = desde más arriba). */
++const ANGULOS = [
++  { id: "frente", nombre: "De frente", phi: 90 },
++  { id: "poco", nombre: "Un poco desde arriba", phi: 75 },
++  { id: "arriba", nombre: "Desde arriba", phi: 60 },
++] as const;
++type AnguloId = (typeof ANGULOS)[number]["id"];
++
+ /** Foto del cliente → imagen reducida a MAX_LADO (las fotos de celular pesan 10+ MB). */
+ async function prepararFoto(file: File): Promise<FotoCliente> {
+   const origen = URL.createObjectURL(file);
+@@ -72,8 +85,13 @@ async function prepararFoto(file: File): Promise<FotoCliente> {
+ 
+ type Paso = "foto" | "escala" | "colocar";
+ 
+-export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados, acabadoInicial = 0 }: Props) {
++const ETIQUETA_FOTO =
++  "flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-8 text-center transition-colors hover:border-primary focus-within:ring-2 focus-within:ring-ring";
++
++export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados, acabadoInicial = 0, modelo3dUrl = null }: Props) {
+   const [paso, setPaso] = useState<Paso>("foto");
++  // En celular se ofrece «Tomar foto» (abre la cámara); en PC solo subir un archivo
++  const esTactil = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+   const [foto, setFoto] = useState<FotoCliente | null>(null);
+   const [cargandoFoto, setCargandoFoto] = useState(false);
+   const [errorFoto, setErrorFoto] = useState<string | null>(null);
+@@ -92,8 +110,19 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+   const [acabadoIdx, setAcabadoIdx] = useState(acabadoInicial);
+   const [piezaIdx, setPiezaIdx] = useState(0);
+ 
+-  const [recorte, setRecorte] = useState<RecorteListo | null>(null);
++  const [recorte2d, setRecorte] = useState<RecorteListo | null>(null);
+   const [cargandoRecorte, setCargandoRecorte] = useState(false);
++
++  // Modelo 3D (si el producto lo tiene y carga bien; si falla, se usa la foto 2D)
++  const [render3d, setRender3d] = useState<Render3D | null>(null);
++  const [fallo3d, setFallo3d] = useState(false);
++  const [recorte3d, setRecorte3d] = useState<VistaRender | null>(null);
++  const [renderizando, setRenderizando] = useState(false);
++  const [giro, setGiro] = useState(0);
++  const [angulo, setAngulo] = useState<AnguloId>("frente");
++  const modo3d = !!modelo3dUrl && !fallo3d;
++  const recorte: RecorteListo | null = modo3d ? recorte3d : recorte2d;
++  const cargandoEscena = modo3d ? renderizando && !recorte3d : cargandoRecorte;
+   const cache = useRef(new Map<string, RecorteListo>());
+   const escenaRef = useRef<HTMLDivElement>(null);
+   const arrastre = useRef<{ dx: number; dy: number } | null>(null);
+@@ -113,7 +142,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+ 
+   // Recorte del acabado elegido (con caché por URL)
+   useEffect(() => {
+-    if (!open || !acabado) return;
++    if (!open || !acabado || modo3d) return;
+     const hit = cache.current.get(acabado.img);
+     if (hit) {
+       setRecorte(hit);
+@@ -131,7 +160,51 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+     return () => {
+       vivo = false;
+     };
+-  }, [open, acabado?.img]);
++  }, [open, acabado?.img, modo3d]);
++
++  // Modelo 3D: se prepara al abrir (mientras el cliente elige su foto) y se libera al cerrar
++  useEffect(() => {
++    if (!open || !modelo3dUrl) return;
++    let vivo = true;
++    let r: Render3D | null = null;
++    setFallo3d(false);
++    setRenderizando(true);
++    crearRender3D(modelo3dUrl)
++      .then((x) => {
++        if (!vivo) return x.destruir();
++        r = x;
++        setRender3d(x);
++      })
++      .catch(() => {
++        if (!vivo) return;
++        setFallo3d(true);
++        setRenderizando(false);
++      });
++    return () => {
++      vivo = false;
++      r?.destruir();
++      setRender3d(null);
++      setRecorte3d(null);
++    };
++  }, [open, modelo3dUrl]);
++
++  // Cada vez que el cliente gira el conjunto o cambia el ángulo, se vuelve a dibujar (con una pausa corta al arrastrar)
++  useEffect(() => {
++    if (!render3d) return;
++    let vivo = true;
++    setRenderizando(true);
++    const t = setTimeout(() => {
++      render3d
++        .vista(giro, ANGULOS.find((a) => a.id === angulo)?.phi ?? 90)
++        .then((v) => vivo && setRecorte3d(v))
++        .catch(() => vivo && setFallo3d(true))
++        .finally(() => vivo && setRenderizando(false));
++    }, 200);
++    return () => {
++      vivo = false;
++      clearTimeout(t);
++    };
++  }, [render3d, giro, angulo]);
+ 
+   const reiniciar = useCallback(() => {
+     setPaso("foto");
+@@ -175,10 +248,11 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+   };
+ 
+   /* ── Colocar ── */
+-  const anchoCm = pieza?.ancho_cm ?? null;
++  // En 3D el ancho que se ve cambia al girar el modelo: lo calcula el render (en cm reales)
++  const anchoCm = modo3d ? (recorte3d?.anchoCm ?? null) : (pieza?.ancho_cm ?? null);
+   const calibrada = escala !== null && anchoCm !== null;
+   const wFrac = foto ? anchoFraccion(anchoCm, escala, foto.w) * ajuste : 0;
+-  const razon = recorte?.fondoQuitado ? razonProporcion(recorte.w, recorte.h, anchoCm, pieza?.alto_cm ?? null) : null;
++  const razon = !modo3d && recorte?.fondoQuitado ? razonProporcion(recorte.w, recorte.h, anchoCm, pieza?.alto_cm ?? null) : null;
+   const enAngulo = razon !== null && (razon < 0.75 || razon > 1.3);
+ 
+   const iniciarArrastre = (e: React.PointerEvent<HTMLImageElement>) => {
+@@ -268,7 +342,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+         <div className="border-b border-border/60 px-5 py-4 pr-12">
+           <DialogTitle className="font-display text-xl font-normal tracking-normal">Pruébalo en tu espacio</DialogTitle>
+           <DialogDescription className="mt-1 text-sm">
+-            {paso === "foto" && "Sube una foto de tu sala o dormitorio y mira cómo quedaría."}
++            {paso === "foto" && "Toma una foto de tu sala o dormitorio, o elige una de tu galería, y mira cómo quedaría."}
+             {paso === "escala" && "Marca dos puntos sobre algo que mida lo que ya sabes, para dibujar el mueble a su tamaño real."}
+             {paso === "colocar" && "Arrastra el mueble hasta donde lo quieres. Tu foto se queda en tu dispositivo."}
+           </DialogDescription>
+@@ -277,27 +351,53 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+         {/* ───── Paso 1: foto ───── */}
+         {paso === "foto" && (
+           <div className="grid gap-4 p-5 sm:p-8">
+-            <label className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center transition-colors hover:border-primary focus-within:ring-2 focus-within:ring-ring">
+-              {cargandoFoto ? (
+-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+-              ) : (
+-                <ImagePlus className="h-8 w-8 text-primary" aria-hidden />
++            <div className={`grid gap-3 ${esTactil ? "sm:grid-cols-2" : ""}`}>
++              {esTactil && (
++                <label className={`${ETIQUETA_FOTO} border-primary bg-primary/5`}>
++                  {cargandoFoto ? (
++                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
++                  ) : (
++                    <Camera className="h-8 w-8 text-primary" aria-hidden />
++                  )}
++                  <span className="t-producto">{cargandoFoto ? "Preparando tu foto…" : "Tomar foto"}</span>
++                  <span className="t-apoyo max-w-sm text-muted-foreground">Abre la cámara de tu celular.</span>
++                  <input
++                    type="file"
++                    accept="image/*"
++                    capture="environment"
++                    className="sr-only"
++                    data-testid="tomar-foto"
++                    onChange={(e) => {
++                      void alElegirFoto(e.target.files?.[0]);
++                      e.target.value = "";
++                    }}
++                  />
++                </label>
+               )}
+-              <span className="t-producto">{cargandoFoto ? "Preparando tu foto…" : "Subir o tomar una foto"}</span>
+-              <span className="t-apoyo max-w-sm text-muted-foreground">
+-                Mejor de frente a la pared donde irá el mueble, con el piso a la vista.
+-              </span>
+-              <input
+-                type="file"
+-                accept="image/*"
+-                className="sr-only"
+-                data-testid="subir-foto"
+-                onChange={(e) => {
+-                  void alElegirFoto(e.target.files?.[0]);
+-                  e.target.value = "";
+-                }}
+-              />
+-            </label>
++              <label className={ETIQUETA_FOTO}>
++                {cargandoFoto && !esTactil ? (
++                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
++                ) : (
++                  <ImagePlus className="h-8 w-8 text-primary" aria-hidden />
++                )}
++                <span className="t-producto">
++                  {cargandoFoto && !esTactil ? "Preparando tu foto…" : esTactil ? "Elegir de la galería" : "Subir una foto"}
++                </span>
++                <span className="t-apoyo max-w-sm text-muted-foreground">
++                  Mejor de frente a la pared donde irá el mueble, con el piso a la vista.
++                </span>
++                <input
++                  type="file"
++                  accept="image/*"
++                  className="sr-only"
++                  data-testid="subir-foto"
++                  onChange={(e) => {
++                    void alElegirFoto(e.target.files?.[0]);
++                    e.target.value = "";
++                  }}
++                />
++              </label>
++            </div>
+             {errorFoto && (
+               <p role="alert" className="text-sm text-destructive">
+                 {errorFoto}
+@@ -414,7 +514,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+               {recorte && (
+                 <img
+                   src={recorte.url}
+-                  alt={`${nombre}${acabado ? `, acabado ${acabado.nombre}` : ""}, colocado en tu foto. Arrástralo o usa las flechas del teclado para moverlo.`}
++                  alt={`${nombre}${acabado && !modo3d ? `, acabado ${acabado.nombre}` : ""}, colocado en tu foto. Arrástralo o usa las flechas del teclado para moverlo.`}
+                   tabIndex={0}
+                   draggable={false}
+                   data-testid="mueble"
+@@ -434,7 +534,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+                   }}
+                 />
+               )}
+-              {(cargandoRecorte || !recorte) && (
++              {(cargandoEscena || !recorte) && (
+                 <div className="absolute inset-0 grid place-items-center bg-background/40" aria-live="polite">
+                   <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" aria-label="Preparando el mueble" />
+                 </div>
+@@ -442,7 +542,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+             </div>
+ 
+             <div className="space-y-4">
+-              {acabados.length > 1 && (
++              {!modo3d && acabados.length > 1 && (
+                 <fieldset>
+                   <legend className="t-producto mb-2">Acabado: <span className="font-normal text-muted-foreground">{acabado?.nombre}</span></legend>
+                   <div className="flex flex-wrap gap-2.5">
+@@ -464,7 +564,44 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+                 </fieldset>
+               )}
+ 
+-              {conMedidas.length > 1 && (
++              {modo3d && (
++                <>
++                  <label className="block">
++                    <span className="t-producto mb-1.5 flex items-center justify-between">
++                      Giro <span className="t-apoyo font-normal text-muted-foreground">{giro}°</span>
++                    </span>
++                    <input
++                      type="range"
++                      min={0}
++                      max={355}
++                      step={5}
++                      value={giro}
++                      onChange={(e) => setGiro(Number(e.target.value))}
++                      className="h-11 w-full accent-[var(--primary)]"
++                      aria-label="Girar el conjunto"
++                    />
++                  </label>
++                  <fieldset>
++                    <legend className="t-producto mb-2">Ángulo de cámara</legend>
++                    <div className="flex flex-wrap gap-2">
++                      {ANGULOS.map((a) => (
++                        <Button
++                          key={a.id}
++                          type="button"
++                          variant={angulo === a.id ? "default" : "outline"}
++                          className="h-11 rounded-full"
++                          aria-pressed={angulo === a.id}
++                          onClick={() => setAngulo(a.id)}
++                        >
++                          {a.nombre}
++                        </Button>
++                      ))}
++                    </div>
++                  </fieldset>
++                </>
++              )}
++
++              {!modo3d && conMedidas.length > 1 && (
+                 <label className="block text-sm">
+                   <span className="t-producto mb-1.5 block">Pieza</span>
+                   <select
+@@ -519,7 +656,14 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
+                 )}
+                 {recorte && !recorte.fondoQuitado && <p>Esta foto del producto tiene fondo, por eso se ve con un recuadro. Prueba otro acabado o pídenos una foto sobre fondo liso.</p>}
+                 {enAngulo && <p>La foto del producto está en ángulo: la medida es aproximada.</p>}
+-                <p>Simulación referencial en 2D: no incluye perspectiva ni iluminación.</p>
++                {modo3d ? (
++                  <>
++                    <p>Gira el conjunto y cambia el ángulo hasta que coincida con tu foto. Incluye los 2 sofás, el sillón y la mesa de centro.</p>
++                    <p>Imagen 3D sobre tu foto: no ajusta la perspectiva ni la iluminación de tu espacio.</p>
++                  </>
++                ) : (
++                  <p>Simulación referencial en 2D: no incluye perspectiva ni iluminación.</p>
++                )}
+               </div>
+ 
+               <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+diff --git a/src/lib/escenaEspacio.ts b/src/lib/escenaEspacio.ts
+index d9dc8ff..91676e2 100644
+--- a/src/lib/escenaEspacio.ts
++++ b/src/lib/escenaEspacio.ts
+@@ -203,3 +203,45 @@ export function etiquetaMedida(anchoCm: number | null, ajuste: number): string |
+   if (!anchoCm) return null;
+   return `≈ ${Math.round(anchoCm * ajuste)} cm de ancho`;
+ }
++
++/* ───────────────────── Modelo 3D renderizado (probador con foto) ───────────────────── */
++
++/**
++ * Caja que encierra los píxeles visibles (alfa > umbral) de un render con fondo transparente.
++ * Devuelve null si la imagen está vacía.
++ */
++export function limitesOpacos(
++  rgba: Uint8ClampedArray,
++  w: number,
++  h: number,
++  umbral = 8,
++): { x: number; y: number; w: number; h: number } | null {
++  let x0 = w, y0 = h, x1 = -1, y1 = -1;
++  for (let y = 0; y < h; y++) {
++    for (let x = 0; x < w; x++) {
++      if (rgba[(y * w + x) * 4 + 3] > umbral) {
++        if (x < x0) x0 = x;
++        if (x > x1) x1 = x;
++        if (y < y0) y0 = y;
++        if (y > y1) y1 = y;
++      }
++    }
++  }
++  if (x1 < 0) return null;
++  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
++}
++
++/**
++ * Píxeles del render que equivalen a 1 cm: el render de frente mide `anchoFrentePx` y el modelo mide
++ * `anchoRealCm` (de `getDimensions()` del visor, que ya incluye la escala del archivo).
++ */
++export function pxPorCmRender(anchoFrentePx: number, anchoRealCm: number): number | null {
++  if (!(anchoFrentePx > 0) || !(anchoRealCm > 0)) return null;
++  return anchoFrentePx / anchoRealCm;
++}
++
++/** Ancho en cm que muestra un render (al girar el modelo cambia): ancho en píxeles ÷ píxeles por cm. */
++export function anchoProyectadoCm(anchoPx: number, pxCm: number | null): number | null {
++  if (!pxCm || !(anchoPx > 0)) return null;
++  return anchoPx / pxCm;
++}
+diff --git a/src/lib/modelViewer.ts b/src/lib/modelViewer.ts
+new file mode 100644
+index 0000000..9e41e81
+--- /dev/null
++++ b/src/lib/modelViewer.ts
+@@ -0,0 +1,144 @@
++// src/lib/modelViewer.ts
++// <model-viewer> (Google, desde CDN, sin dependencia nueva): carga del componente y render del modelo 3D
++// a una imagen con fondo transparente, para colocarlo sobre la foto del cliente en «Pruébalo en tu espacio».
++// Lógica pura (cajas, escala) en lib/escenaEspacio.ts.
++import { limitesOpacos, pxPorCmRender } from "./escenaEspacio";
++import { cargarImagen, type RecorteListo } from "./recorteImagen";
++
++export const MODEL_VIEWER_SRC = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js";
++
++let cargandoVisor: Promise<void> | null = null;
++
++/** Carga el componente <model-viewer> una sola vez (la ficha y el probador comparten la misma carga). */
++export function cargarModelViewer(): Promise<void> {
++  if (customElements.get("model-viewer")) return Promise.resolve();
++  if (!cargandoVisor) {
++    cargandoVisor = new Promise<void>((resolve, reject) => {
++      const existente = document.querySelector<HTMLScriptElement>(`script[src="${MODEL_VIEWER_SRC}"]`);
++      const script = existente ?? Object.assign(document.createElement("script"), { type: "module", src: MODEL_VIEWER_SRC });
++      script.addEventListener("error", () => {
++        cargandoVisor = null;
++        reject(new Error("No se pudo cargar el visor 3D"));
++      });
++      if (!existente) document.head.appendChild(script);
++      void customElements.whenDefined("model-viewer").then(() => resolve());
++    });
++  }
++  return cargandoVisor;
++}
++
++// Cámara fija en todos los renders: así los píxeles por cm son los mismos al girar el modelo.
++// Campo de visión corto y cámara lejos = casi sin deformación de perspectiva (aspecto de «foto con zoom»).
++const FOV_GRADOS = 14;
++const RADIO_M = 18;
++const LADO_CSS = 700;
++const LADO_MAX_SALIDA = 1000;
++
++const dosCuadros = () => new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())));
++const orbita = (giroGrados: number, phiGrados: number) => `${giroGrados}deg ${phiGrados}deg ${RADIO_M}m`;
++
++export type VistaRender = RecorteListo & {
++  /** Ancho que muestra este render en cm reales (cambia al girar el modelo). */
++  anchoCm: number;
++};
++
++export interface Render3D {
++  /** Ancho real del modelo visto de frente, en cm (sale del propio archivo .glb). */
++  anchoRealCm: number;
++  /** Modelo girado `giro`° y visto con la cámara a `phi`° (90 = a la altura del mueble, menos = desde arriba). */
++  vista(giro: number, phi: number): Promise<VistaRender | null>;
++  destruir(): void;
++}
++
++/** Monta un <model-viewer> invisible con el modelo, lo calibra de frente y devuelve el generador de vistas. */
++export async function crearRender3D(url: string): Promise<Render3D> {
++  await cargarModelViewer();
++  const el: any = document.createElement("model-viewer");
++  const attrs: Record<string, string> = {
++    src: url,
++    alt: "",
++    "aria-hidden": "true",
++    tabindex: "-1",
++    "interaction-prompt": "none",
++    "disable-zoom": "",
++    "disable-pan": "",
++    "shadow-intensity": "0",
++    "camera-orbit": orbita(0, 90),
++    "field-of-view": `${FOV_GRADOS}deg`,
++    "min-camera-orbit": "auto auto 1m",
++    "max-camera-orbit": "auto auto 60m",
++    "min-field-of-view": "5deg",
++    "max-field-of-view": "45deg",
++  };
++  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
++  // Dentro de la pantalla (si no, el visor no renderiza) pero invisible y sin recibir toques
++  el.style.cssText = `position:fixed;left:0;top:0;width:${LADO_CSS}px;height:${LADO_CSS}px;opacity:0;pointer-events:none;z-index:-1;`;
++  document.body.appendChild(el);
++
++  try {
++    await new Promise<void>((resolve, reject) => {
++      if (el.loaded) return resolve();
++      el.addEventListener("load", () => resolve(), { once: true });
++      el.addEventListener("error", () => reject(new Error("No se pudo cargar el modelo 3D")), { once: true });
++    });
++
++    // Un render a la vez (el mismo elemento): las llamadas se encolan
++    let cola: Promise<unknown> = Promise.resolve();
++
++    async function capturar(giro: number, phi: number) {
++      el.cameraOrbit = orbita(giro, phi);
++      el.fieldOfView = `${FOV_GRADOS}deg`;
++      el.jumpCameraToGoal?.();
++      await el.updateComplete;
++      await dosCuadros();
++      const blob: Blob = await el.toBlob({ mimeType: "image/png", idealAspect: false });
++      const u = URL.createObjectURL(blob);
++      try {
++        const im = await cargarImagen(u);
++        const c = document.createElement("canvas");
++        c.width = im.naturalWidth;
++        c.height = im.naturalHeight;
++        const ctx = c.getContext("2d", { willReadFrequently: true })!;
++        ctx.drawImage(im, 0, 0);
++        const caja = limitesOpacos(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height);
++        return caja ? { canvas: c, caja } : null;
++      } finally {
++        URL.revokeObjectURL(u);
++      }
++    }
++
++    // Calibración: de frente y a la altura del mueble, el render mide exactamente el ancho real del modelo
++    const dims = el.getDimensions?.();
++    const anchoRealCm = dims ? Math.round(dims.x * 1000) / 10 : 0;
++    const frente = await capturar(0, 90);
++    const pxCm = frente ? pxPorCmRender(frente.caja.w, anchoRealCm) : null;
++    if (!pxCm) throw new Error("No se pudo calibrar el modelo 3D");
++
++    return {
++      anchoRealCm,
++      vista(giro, phi) {
++        const tarea = cola.then(async (): Promise<VistaRender | null> => {
++          const r = await capturar(giro, phi);
++          if (!r) return null;
++          const { caja } = r;
++          const k = Math.min(1, LADO_MAX_SALIDA / Math.max(caja.w, caja.h));
++          const w = Math.max(1, Math.round(caja.w * k));
++          const h = Math.max(1, Math.round(caja.h * k));
++          const out = document.createElement("canvas");
++          out.width = w;
++          out.height = h;
++          out.getContext("2d")!.drawImage(r.canvas, caja.x, caja.y, caja.w, caja.h, 0, 0, w, h);
++          return { url: out.toDataURL("image/png"), canvas: out, w, h, fondoQuitado: true, anchoCm: caja.w / pxCm };
++        });
++        cola = tarea.catch(() => undefined);
++        return tarea;
++      },
++      destruir() {
++        el.remove();
++      },
++    };
++  } catch (e) {
++    el.remove();
++    throw e;
++  }
++}
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 2fcec3d..086ac05 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -1016,7 +1016,15 @@ function ProductView({ product: base }: { product: ProductData }) {
+ 
+               {vista === "3d" && has3D ? (
+                 <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
+-                  <ModelViewer3D src={product.modelo_3d_url ?? ""} alt={product.nombre} poster={displayImg ?? undefined} />
++                  <ModelViewer3D
++                    src={product.modelo_3d_url ?? ""}
++                    alt={product.nombre}
++                    poster={displayImg ?? undefined}
++                    onProbar={() => {
++                      setEspacioMontado(true);
++                      setEspacioOpen(true);
++                    }}
++                  />
+                 </div>
+               ) : (
+                 <ProductGallery
+@@ -1282,6 +1290,7 @@ function ProductView({ product: base }: { product: ProductData }) {
+               piezas={piezasProducto}
+               acabados={acabadosEspacio}
+               acabadoInicial={hayColoresFoto ? Math.min(fotoColor, Math.max(0, acabadosEspacio.length - 1)) : 0}
++              modelo3dUrl={product.modelo_3d_url ?? null}
+             />
+           </Suspense>
+         )}

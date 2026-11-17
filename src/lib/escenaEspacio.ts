@@ -203,3 +203,45 @@ export function etiquetaMedida(anchoCm: number | null, ajuste: number): string |
   if (!anchoCm) return null;
   return `≈ ${Math.round(anchoCm * ajuste)} cm de ancho`;
 }
+
+/* ───────────────────── Modelo 3D renderizado (probador con foto) ───────────────────── */
+
+/**
+ * Caja que encierra los píxeles visibles (alfa > umbral) de un render con fondo transparente.
+ * Devuelve null si la imagen está vacía.
+ */
+export function limitesOpacos(
+  rgba: Uint8ClampedArray,
+  w: number,
+  h: number,
+  umbral = 8,
+): { x: number; y: number; w: number; h: number } | null {
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (rgba[(y * w + x) * 4 + 3] > umbral) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 < 0) return null;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/**
+ * Píxeles del render que equivalen a 1 cm: el render de frente mide `anchoFrentePx` y el modelo mide
+ * `anchoRealCm` (de `getDimensions()` del visor, que ya incluye la escala del archivo).
+ */
+export function pxPorCmRender(anchoFrentePx: number, anchoRealCm: number): number | null {
+  if (!(anchoFrentePx > 0) || !(anchoRealCm > 0)) return null;
+  return anchoFrentePx / anchoRealCm;
+}
+
+/** Ancho en cm que muestra un render (al girar el modelo cambia): ancho en píxeles ÷ píxeles por cm. */
+export function anchoProyectadoCm(anchoPx: number, pxCm: number | null): number | null {
+  if (!pxCm || !(anchoPx > 0)) return null;
+  return anchoPx / pxCm;
+}

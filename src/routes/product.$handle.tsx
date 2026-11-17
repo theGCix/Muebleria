@@ -1016,7 +1016,15 @@ function ProductView({ product: base }: { product: ProductData }) {
 
               {vista === "3d" && has3D ? (
                 <div style={{ borderRadius: 6, overflow: "hidden", aspectRatio: "1/1", background: "var(--gm-cream)" }}>
-                  <ModelViewer3D src={product.modelo_3d_url ?? ""} alt={product.nombre} poster={displayImg ?? undefined} />
+                  <ModelViewer3D
+                    src={product.modelo_3d_url ?? ""}
+                    alt={product.nombre}
+                    poster={displayImg ?? undefined}
+                    onProbar={() => {
+                      setEspacioMontado(true);
+                      setEspacioOpen(true);
+                    }}
+                  />
                 </div>
               ) : (
                 <ProductGallery
@@ -1282,6 +1290,7 @@ function ProductView({ product: base }: { product: ProductData }) {
               piezas={piezasProducto}
               acabados={acabadosEspacio}
               acabadoInicial={hayColoresFoto ? Math.min(fotoColor, Math.max(0, acabadosEspacio.length - 1)) : 0}
+              modelo3dUrl={product.modelo_3d_url ?? null}
             />
           </Suspense>
         )}

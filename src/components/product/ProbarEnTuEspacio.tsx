@@ -5,6 +5,8 @@
 //     se dibuja con su ancho real. Se puede omitir y ajustar a ojo.
 //  3. Colocar: arrastrar, cambiar tamaño, voltear, sombra, probar acabados y descargar la imagen.
 // Es una simulación 2D (sin perspectiva ni luz): la pantalla lo avisa.
+// Si el producto tiene modelo 3D (.glb), lo que se coloca es un render del modelo (se gira y se cambia el
+// ángulo de cámara para igualar la foto); sin modelo 3D, la foto 2D del acabado como siempre.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Check, Download, FlipHorizontal2, ImagePlus, Loader2, RotateCcw, Ruler, Share2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,7 @@ import {
   type Punto,
 } from "@/lib/escenaEspacio";
 import { cargarImagen, prepararRecorte, type RecorteListo } from "@/lib/recorteImagen";
+import { crearRender3D, type Render3D, type VistaRender } from "@/lib/modelViewer";
 
 export interface AcabadoEspacio {
   id: string;
@@ -40,6 +43,8 @@ interface Props {
   acabados: AcabadoEspacio[];
   /** Índice del acabado que el cliente ya tenía elegido en la ficha. */
   acabadoInicial?: number;
+  /** URL del modelo 3D (.glb) del producto; si existe, el probador coloca el modelo 3D en vez de la foto 2D. */
+  modelo3dUrl?: string | null;
 }
 
 interface FotoCliente {
@@ -50,6 +55,14 @@ interface FotoCliente {
 }
 
 const MAX_LADO = 1600;
+
+/** Ángulos de cámara del modelo 3D (phi: 90° = a la altura del mueble, menos = desde más arriba). */
+const ANGULOS = [
+  { id: "frente", nombre: "De frente", phi: 90 },
+  { id: "poco", nombre: "Un poco desde arriba", phi: 75 },
+  { id: "arriba", nombre: "Desde arriba", phi: 60 },
+] as const;
+type AnguloId = (typeof ANGULOS)[number]["id"];
 
 /** Foto del cliente → imagen reducida a MAX_LADO (las fotos de celular pesan 10+ MB). */
 async function prepararFoto(file: File): Promise<FotoCliente> {
@@ -72,8 +85,13 @@ async function prepararFoto(file: File): Promise<FotoCliente> {
 
 type Paso = "foto" | "escala" | "colocar";
 
-export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados, acabadoInicial = 0 }: Props) {
+const ETIQUETA_FOTO =
+  "flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-8 text-center transition-colors hover:border-primary focus-within:ring-2 focus-within:ring-ring";
+
+export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados, acabadoInicial = 0, modelo3dUrl = null }: Props) {
   const [paso, setPaso] = useState<Paso>("foto");
+  // En celular se ofrece «Tomar foto» (abre la cámara); en PC solo subir un archivo
+  const esTactil = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
   const [foto, setFoto] = useState<FotoCliente | null>(null);
   const [cargandoFoto, setCargandoFoto] = useState(false);
   const [errorFoto, setErrorFoto] = useState<string | null>(null);
@@ -92,8 +110,19 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
   const [acabadoIdx, setAcabadoIdx] = useState(acabadoInicial);
   const [piezaIdx, setPiezaIdx] = useState(0);
 
-  const [recorte, setRecorte] = useState<RecorteListo | null>(null);
+  const [recorte2d, setRecorte] = useState<RecorteListo | null>(null);
   const [cargandoRecorte, setCargandoRecorte] = useState(false);
+
+  // Modelo 3D (si el producto lo tiene y carga bien; si falla, se usa la foto 2D)
+  const [render3d, setRender3d] = useState<Render3D | null>(null);
+  const [fallo3d, setFallo3d] = useState(false);
+  const [recorte3d, setRecorte3d] = useState<VistaRender | null>(null);
+  const [renderizando, setRenderizando] = useState(false);
+  const [giro, setGiro] = useState(0);
+  const [angulo, setAngulo] = useState<AnguloId>("frente");
+  const modo3d = !!modelo3dUrl && !fallo3d;
+  const recorte: RecorteListo | null = modo3d ? recorte3d : recorte2d;
+  const cargandoEscena = modo3d ? renderizando && !recorte3d : cargandoRecorte;
   const cache = useRef(new Map<string, RecorteListo>());
   const escenaRef = useRef<HTMLDivElement>(null);
   const arrastre = useRef<{ dx: number; dy: number } | null>(null);
@@ -113,7 +142,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
 
   // Recorte del acabado elegido (con caché por URL)
   useEffect(() => {
-    if (!open || !acabado) return;
+    if (!open || !acabado || modo3d) return;
     const hit = cache.current.get(acabado.img);
     if (hit) {
       setRecorte(hit);
@@ -131,7 +160,51 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
     return () => {
       vivo = false;
     };
-  }, [open, acabado?.img]);
+  }, [open, acabado?.img, modo3d]);
+
+  // Modelo 3D: se prepara al abrir (mientras el cliente elige su foto) y se libera al cerrar
+  useEffect(() => {
+    if (!open || !modelo3dUrl) return;
+    let vivo = true;
+    let r: Render3D | null = null;
+    setFallo3d(false);
+    setRenderizando(true);
+    crearRender3D(modelo3dUrl)
+      .then((x) => {
+        if (!vivo) return x.destruir();
+        r = x;
+        setRender3d(x);
+      })
+      .catch(() => {
+        if (!vivo) return;
+        setFallo3d(true);
+        setRenderizando(false);
+      });
+    return () => {
+      vivo = false;
+      r?.destruir();
+      setRender3d(null);
+      setRecorte3d(null);
+    };
+  }, [open, modelo3dUrl]);
+
+  // Cada vez que el cliente gira el conjunto o cambia el ángulo, se vuelve a dibujar (con una pausa corta al arrastrar)
+  useEffect(() => {
+    if (!render3d) return;
+    let vivo = true;
+    setRenderizando(true);
+    const t = setTimeout(() => {
+      render3d
+        .vista(giro, ANGULOS.find((a) => a.id === angulo)?.phi ?? 90)
+        .then((v) => vivo && setRecorte3d(v))
+        .catch(() => vivo && setFallo3d(true))
+        .finally(() => vivo && setRenderizando(false));
+    }, 200);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [render3d, giro, angulo]);
 
   const reiniciar = useCallback(() => {
     setPaso("foto");
@@ -175,10 +248,11 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
   };
 
   /* ── Colocar ── */
-  const anchoCm = pieza?.ancho_cm ?? null;
+  // En 3D el ancho que se ve cambia al girar el modelo: lo calcula el render (en cm reales)
+  const anchoCm = modo3d ? (recorte3d?.anchoCm ?? null) : (pieza?.ancho_cm ?? null);
   const calibrada = escala !== null && anchoCm !== null;
   const wFrac = foto ? anchoFraccion(anchoCm, escala, foto.w) * ajuste : 0;
-  const razon = recorte?.fondoQuitado ? razonProporcion(recorte.w, recorte.h, anchoCm, pieza?.alto_cm ?? null) : null;
+  const razon = !modo3d && recorte?.fondoQuitado ? razonProporcion(recorte.w, recorte.h, anchoCm, pieza?.alto_cm ?? null) : null;
   const enAngulo = razon !== null && (razon < 0.75 || razon > 1.3);
 
   const iniciarArrastre = (e: React.PointerEvent<HTMLImageElement>) => {
@@ -268,7 +342,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
         <div className="border-b border-border/60 px-5 py-4 pr-12">
           <DialogTitle className="font-display text-xl font-normal tracking-normal">Pruébalo en tu espacio</DialogTitle>
           <DialogDescription className="mt-1 text-sm">
-            {paso === "foto" && "Sube una foto de tu sala o dormitorio y mira cómo quedaría."}
+            {paso === "foto" && "Toma una foto de tu sala o dormitorio, o elige una de tu galería, y mira cómo quedaría."}
             {paso === "escala" && "Marca dos puntos sobre algo que mida lo que ya sabes, para dibujar el mueble a su tamaño real."}
             {paso === "colocar" && "Arrastra el mueble hasta donde lo quieres. Tu foto se queda en tu dispositivo."}
           </DialogDescription>
@@ -277,27 +351,53 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
         {/* ───── Paso 1: foto ───── */}
         {paso === "foto" && (
           <div className="grid gap-4 p-5 sm:p-8">
-            <label className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/50 px-6 py-10 text-center transition-colors hover:border-primary focus-within:ring-2 focus-within:ring-ring">
-              {cargandoFoto ? (
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
-              ) : (
-                <ImagePlus className="h-8 w-8 text-primary" aria-hidden />
+            <div className={`grid gap-3 ${esTactil ? "sm:grid-cols-2" : ""}`}>
+              {esTactil && (
+                <label className={`${ETIQUETA_FOTO} border-primary bg-primary/5`}>
+                  {cargandoFoto ? (
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+                  ) : (
+                    <Camera className="h-8 w-8 text-primary" aria-hidden />
+                  )}
+                  <span className="t-producto">{cargandoFoto ? "Preparando tu foto…" : "Tomar foto"}</span>
+                  <span className="t-apoyo max-w-sm text-muted-foreground">Abre la cámara de tu celular.</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="sr-only"
+                    data-testid="tomar-foto"
+                    onChange={(e) => {
+                      void alElegirFoto(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
               )}
-              <span className="t-producto">{cargandoFoto ? "Preparando tu foto…" : "Subir o tomar una foto"}</span>
-              <span className="t-apoyo max-w-sm text-muted-foreground">
-                Mejor de frente a la pared donde irá el mueble, con el piso a la vista.
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                data-testid="subir-foto"
-                onChange={(e) => {
-                  void alElegirFoto(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+              <label className={ETIQUETA_FOTO}>
+                {cargandoFoto && !esTactil ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+                ) : (
+                  <ImagePlus className="h-8 w-8 text-primary" aria-hidden />
+                )}
+                <span className="t-producto">
+                  {cargandoFoto && !esTactil ? "Preparando tu foto…" : esTactil ? "Elegir de la galería" : "Subir una foto"}
+                </span>
+                <span className="t-apoyo max-w-sm text-muted-foreground">
+                  Mejor de frente a la pared donde irá el mueble, con el piso a la vista.
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  data-testid="subir-foto"
+                  onChange={(e) => {
+                    void alElegirFoto(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
             {errorFoto && (
               <p role="alert" className="text-sm text-destructive">
                 {errorFoto}
@@ -414,7 +514,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
               {recorte && (
                 <img
                   src={recorte.url}
-                  alt={`${nombre}${acabado ? `, acabado ${acabado.nombre}` : ""}, colocado en tu foto. Arrástralo o usa las flechas del teclado para moverlo.`}
+                  alt={`${nombre}${acabado && !modo3d ? `, acabado ${acabado.nombre}` : ""}, colocado en tu foto. Arrástralo o usa las flechas del teclado para moverlo.`}
                   tabIndex={0}
                   draggable={false}
                   data-testid="mueble"
@@ -434,7 +534,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
                   }}
                 />
               )}
-              {(cargandoRecorte || !recorte) && (
+              {(cargandoEscena || !recorte) && (
                 <div className="absolute inset-0 grid place-items-center bg-background/40" aria-live="polite">
                   <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" aria-label="Preparando el mueble" />
                 </div>
@@ -442,7 +542,7 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
             </div>
 
             <div className="space-y-4">
-              {acabados.length > 1 && (
+              {!modo3d && acabados.length > 1 && (
                 <fieldset>
                   <legend className="t-producto mb-2">Acabado: <span className="font-normal text-muted-foreground">{acabado?.nombre}</span></legend>
                   <div className="flex flex-wrap gap-2.5">
@@ -464,7 +564,44 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
                 </fieldset>
               )}
 
-              {conMedidas.length > 1 && (
+              {modo3d && (
+                <>
+                  <label className="block">
+                    <span className="t-producto mb-1.5 flex items-center justify-between">
+                      Giro <span className="t-apoyo font-normal text-muted-foreground">{giro}°</span>
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={355}
+                      step={5}
+                      value={giro}
+                      onChange={(e) => setGiro(Number(e.target.value))}
+                      className="h-11 w-full accent-[var(--primary)]"
+                      aria-label="Girar el conjunto"
+                    />
+                  </label>
+                  <fieldset>
+                    <legend className="t-producto mb-2">Ángulo de cámara</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {ANGULOS.map((a) => (
+                        <Button
+                          key={a.id}
+                          type="button"
+                          variant={angulo === a.id ? "default" : "outline"}
+                          className="h-11 rounded-full"
+                          aria-pressed={angulo === a.id}
+                          onClick={() => setAngulo(a.id)}
+                        >
+                          {a.nombre}
+                        </Button>
+                      ))}
+                    </div>
+                  </fieldset>
+                </>
+              )}
+
+              {!modo3d && conMedidas.length > 1 && (
                 <label className="block text-sm">
                   <span className="t-producto mb-1.5 block">Pieza</span>
                   <select
@@ -519,7 +656,14 @@ export function ProbarEnTuEspacio({ open, onOpenChange, nombre, piezas, acabados
                 )}
                 {recorte && !recorte.fondoQuitado && <p>Esta foto del producto tiene fondo, por eso se ve con un recuadro. Prueba otro acabado o pídenos una foto sobre fondo liso.</p>}
                 {enAngulo && <p>La foto del producto está en ángulo: la medida es aproximada.</p>}
-                <p>Simulación referencial en 2D: no incluye perspectiva ni iluminación.</p>
+                {modo3d ? (
+                  <>
+                    <p>Gira el conjunto y cambia el ángulo hasta que coincida con tu foto. Incluye los 2 sofás, el sillón y la mesa de centro.</p>
+                    <p>Imagen 3D sobre tu foto: no ajusta la perspectiva ni la iluminación de tu espacio.</p>
+                  </>
+                ) : (
+                  <p>Simulación referencial en 2D: no incluye perspectiva ni iluminación.</p>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">

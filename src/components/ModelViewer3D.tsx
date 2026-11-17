@@ -1,6 +1,7 @@
 // src/components/ModelViewer3D.tsx
 import { useEffect, useRef, useState } from "react";
-import { Loader2, RotateCcw } from "lucide-react";
+import { Camera, Loader2, RotateCcw } from "lucide-react";
+import { cargarModelViewer } from "@/lib/modelViewer";
 
 // Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
 declare global {
@@ -11,30 +12,23 @@ declare global {
   }
 }
 
-const MODEL_VIEWER_SRC = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js";
-
 export function ModelViewer3D({
   src,
   alt,
   poster,  // imagen de preview mientras carga el modelo
+  onProbar, // «Ver en tu espacio»: abre el probador con foto (cámara o galería) de «Pruébalo en tu espacio»
 }: {
   src: string;
   alt: string;
   poster?: string;
+  onProbar?: () => void;
 }) {
   const viewerRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    // Cargar el web component de Google si no está ya
-    if (!customElements.get("model-viewer") && !document.querySelector(`script[src="${MODEL_VIEWER_SRC}"]`)) {
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = MODEL_VIEWER_SRC;
-      script.onerror = () => setFailed(true);
-      document.head.appendChild(script);
-    }
+    cargarModelViewer().catch(() => setFailed(true));
   }, []);
 
   // React 18 no enlaza eventos de elementos personalizados con onLoad/onError: se escuchan a mano
@@ -75,21 +69,21 @@ export function ModelViewer3D({
         auto-rotate-delay="1000"
         rotation-per-second="30deg"
         shadow-intensity="1"
-        ar
-        ar-modes="scene-viewer webxr quick-look"
-        ar-scale="fixed"
-        ar-placement="floor"
         style={{ width: "100%", height: "100%", opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
-      >
-        {/* Botón de AR: model-viewer solo lo muestra si el dispositivo la admite (celulares; en PC no aparece) */}
+      />
+
+      {/* «Ver en tu espacio»: mismo probador que «Pruébalo en tu espacio» (foto con cámara o galería) */}
+      {loaded && onProbar && (
         <button
-          slot="ar-button"
-          className="absolute bottom-4 right-4 min-h-11 px-4 rounded-lg text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          type="button"
+          onClick={onProbar}
+          className="absolute bottom-4 right-4 min-h-11 px-4 rounded-lg text-xs font-medium inline-flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
         >
+          <Camera className="h-4 w-4" aria-hidden />
           Ver en tu espacio
         </button>
-      </model-viewer>
+      )}
 
       {/* Controles flotantes */}
       {loaded && (
