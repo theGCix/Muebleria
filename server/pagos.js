@@ -179,21 +179,19 @@ export const tituloConOpciones = (nombre, opciones) =>
   opciones.length ? `${nombre} (${opciones.map((o) => o.valor).join(", ")})` : nombre;
 
 /**
- * Tope de unidades por producto en cada compra (decisión del dueño, 2026-11-15). Mismo número que
- * `CANTIDAD_MAX_POR_COMPRA` de src/lib/limiteCompra.ts (una prueba lo verifica). Se suman las líneas
- * del mismo producto (p. ej. con distintas opciones); las piezas de un combo no cuentan.
+ * Tope de unidades por producto en cada compra: 99 para TODOS los productos (decisión del dueño, 2026-11-17; antes 5, y 99 solo
+ * en el Juego de sala Lineal 3-2-1). Mismo número que `CANTIDAD_MAX_POR_COMPRA` de src/lib/limiteCompra.ts (una prueba lo
+ * verifica). Se suman las líneas del mismo producto (p. ej. con distintas opciones); las piezas de un combo no cuentan.
  * Pedidos mayores se cotizan por WhatsApp.
  */
-export const CANTIDAD_MAX_POR_COMPRA = 5;
+export const CANTIDAD_MAX_POR_COMPRA = 99;
 
 /**
- * Productos con tope ampliado (decisión del dueño, 2026-11-16): hasta CANTIDAD_MAX_AMPLIA unidades y también sobre el stock
- * (el checkout deja elegir entrega única o por partes). Mismos valores que src/lib/limiteCompra.ts (una prueba lo verifica).
+ * Todos los productos se pueden pedir por encima del stock (p. ej. 5 con 4 en stock): el checkout deja elegir entrega única
+ * (con más tiempo) o por partes. Con stock 0 sigue siendo «sin_stock». Mismo criterio que src/lib/limiteCompra.ts.
  */
-export const CANTIDAD_MAX_AMPLIA = 99;
-export const PRODUCTOS_TOPE_AMPLIO = ["0fad1859-f6e3-4e7f-a598-f14bb7143dcd"];
-export const permiteSobreStock = (productId) => PRODUCTOS_TOPE_AMPLIO.includes(productId);
-export const maxPorCompra = (productId) => (permiteSobreStock(productId) ? CANTIDAD_MAX_AMPLIA : CANTIDAD_MAX_POR_COMPRA);
+export const permiteSobreStock = (_productId) => true;
+export const maxPorCompra = (_productId) => CANTIDAD_MAX_POR_COMPRA;
 
 export function verificarLimitePorProducto(items) {
   const porProducto = new Map();

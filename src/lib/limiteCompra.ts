@@ -3,20 +3,19 @@
 // checkout y asistente pasan por cartStore). El servidor aplica el mismo número en `server/pagos.js`
 // (CANTIDAD_MAX_POR_COMPRA): si lo cambias aquí, cámbialo allá (una prueba lo verifica).
 // Las piezas que entran como parte de un combo no cuentan: el combo se vende como un conjunto.
-// Para pedidos mayores el cliente cotiza por WhatsApp o con el asistente.
+// Para pedidos mayores a 99 el cliente cotiza por WhatsApp o con el asistente.
 
-export const CANTIDAD_MAX_POR_COMPRA = 5;
+export const CANTIDAD_MAX_POR_COMPRA = 99;
 
 /**
- * Productos con tope ampliado (decisión del dueño, 2026-11-16): se pueden pedir hasta {CANTIDAD_MAX_AMPLIA} unidades y también
- * por encima del stock (p. ej. 5 con 4 en stock): el checkout ya deja elegir entrega única (con más tiempo) o por partes.
- * Mismos valores en `server/pagos.js` (una prueba lo verifica). Hoy: Juego de sala Lineal 3-2-1.
+ * Decisión del dueño (2026-11-17): TODOS los productos se pueden pedir hasta {CANTIDAD_MAX_POR_COMPRA} unidades y también por
+ * encima del stock (p. ej. 5 con 4 en stock): el checkout deja elegir entrega única (con más tiempo) o por partes.
+ * Con stock 0 el producto sigue «Agotado» (eso no cambia). Antes: tope de 5, y 99 solo en el Juego de sala Lineal 3-2-1.
+ * Las funciones conservan el parámetro `productId` por si algún día vuelve a haber excepciones por producto.
  */
-export const CANTIDAD_MAX_AMPLIA = 99;
-export const PRODUCTOS_TOPE_AMPLIO: readonly string[] = ["0fad1859-f6e3-4e7f-a598-f14bb7143dcd"];
-export const permiteSobreStock = (productId: string): boolean => PRODUCTOS_TOPE_AMPLIO.includes(productId);
+export const permiteSobreStock = (_productId?: string): boolean => true;
 /** Tope de unidades por compra de ese producto. */
-export const maxPorCompra = (productId: string): number => (permiteSobreStock(productId) ? CANTIDAD_MAX_AMPLIA : CANTIDAD_MAX_POR_COMPRA);
+export const maxPorCompra = (_productId?: string): number => CANTIDAD_MAX_POR_COMPRA;
 
 export interface LineaLimite {
   id: string;

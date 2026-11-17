@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError, CANTIDAD_MAX_POR_COMPRA, CANTIDAD_MAX_AMPLIA, PRODUCTOS_TOPE_AMPLIO } from "./pagos.js";
+import { calcularPedido, validarCarrito, autorizarNiubiz, precioConOferta, PagoError, CANTIDAD_MAX_POR_COMPRA } from "./pagos.js";
 
 // Supabase de mentira: devuelve tablas fijas
 function fakeSupabase({ products = [], combos = [], grupos = [], liquidaciones = [], liqError = false }) {
@@ -109,7 +109,7 @@ test("validarCarrito: precio viejo del navegador => precio_cambio con el precio 
   assert.equal(r.cambios, 1);
 });
 
-test("validarCarrito: producto inexistente/inactivo, sin stock y stock insuficiente", async () => {
+test("validarCarrito: producto inexistente/inactivo, sin stock; pedir más que el stock (3 con 2) es válido", async () => {
   const sb = fakeSupabase({ products: [
     V({ ...P1, id: "inactivo", activo: false }),
     V({ ...P1, id: "agotado", stock: 0 }),
@@ -121,7 +121,7 @@ test("validarCarrito: producto inexistente/inactivo, sin stock y stock insuficie
     { product_id: "agotado", qty: 1, price: 1000 },
     { product_id: "poco", qty: 3, price: 1000 },
   ] });
-  assert.deepEqual(r.lineas.map((l) => l.estado), ["no_disponible", "no_disponible", "sin_stock", "stock_insuficiente"]);
+  assert.deepEqual(r.lineas.map((l) => l.estado), ["no_disponible", "no_disponible", "sin_stock", "ok"]);
 });
 
 test("validarCarrito: combo vencido => combo_no_disponible; combo vigente usa el reparto del combo", async () => {
@@ -282,34 +282,30 @@ test("base del cupón: el subtotal del servidor usa el precio con oferta, no el 
   assert.equal(Math.round(r.subtotal * 0.02 * 100) / 100, 9);
 });
 
-test("tope por producto en cada compra: 5 pasa, 6 no; se suman las líneas; el combo no cuenta", async () => {
+test("tope por producto en cada compra: 99 pasa, 100 no; se suman las líneas; el combo no cuenta", async () => {
   const sb = fakeSupabase({ products: [P1, P2] });
-  assert.equal(CANTIDAD_MAX_POR_COMPRA, 5);
-  const ok = await calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 5 }] });
-  assert.equal(ok.subtotal, 5000); // la fórmula de precio no cambia
-  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 6 }] }), PagoError);
-  // mismo producto en dos líneas (p. ej. otra opción): 3 + 3 = 6
-  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 3, opciones: [] }, { product_id: "p1", qty: 3, opciones: ["x"] }] }), PagoError);
+  assert.equal(CANTIDAD_MAX_POR_COMPRA, 99);
+  const ok = await calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 99 }] });
+  assert.equal(ok.subtotal, 99000); // la fórmula de precio no cambia
+  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 100 }] }), PagoError);
+  // mismo producto en dos líneas (p. ej. otra opción): 50 + 50 = 100
+  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 50, opciones: [] }, { product_id: "p1", qty: 50, opciones: ["x"] }] }), PagoError);
   // productos distintos: cada uno con su propio tope
-  const dos = await calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 5 }, { product_id: "p2", qty: 5 }] });
-  assert.equal(dos.subtotal, 5000 + 2250);
+  const dos = await calcularPedido({ supabase: sb, order, items: [{ product_id: "p1", qty: 99 }, { product_id: "p2", qty: 99 }] });
+  assert.equal(dos.subtotal, 99000 + 44550);
 });
 
-// ── Producto con tope ampliado (Lineal, 2026-11-16): hasta 99 y también sobre el stock; el resto sigue en 5 ──────────
-test("tope ampliado: 99 pasa y 100 no; con stock 4 se puede pedir 5 sin aviso de stock; otro producto sigue en 5", async () => {
-  const [lineal] = PRODUCTOS_TOPE_AMPLIO;
-  assert.equal(CANTIDAD_MAX_AMPLIA, 99);
-  const L = { ...P1, id: lineal, stock: 4 };
-  const normal = { ...P1, id: "p9", stock: 4 };
-  const sb = fakeSupabase({ products: [L, normal] });
-  const ok = await calcularPedido({ supabase: sb, order, items: [{ product_id: lineal, qty: 99 }] });
-  assert.equal(ok.subtotal, 99000); // la fórmula de precio no cambia
-  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: lineal, qty: 100 }] }), PagoError);
-  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "p9", qty: 6 }] }), PagoError);
-  // sobre el stock: la entrega única o por partes se elige en el checkout, así que no hay aviso de «stock insuficiente»
-  const v = await validarCarrito({ supabase: sb, items: [{ product_id: lineal, qty: 5, price: 1000 }, { product_id: "p9", qty: 5, price: 1000 }] });
+// ── Todos los productos se pueden pedir sobre el stock (2026-11-17); con stock 0 sigue agotado ──────────────────────
+test("sobre el stock: con stock 4 se puede pedir 5 sin aviso de stock en cualquier producto; con stock 0 sigue sin stock", async () => {
+  const A = { ...P1, id: "pa", stock: 4 };
+  const B = { ...P1, id: "pb", stock: 4 };
+  const Z = { ...P1, id: "pz", stock: 0 };
+  const sb = fakeSupabase({ products: [A, B, Z] });
+  const v = await validarCarrito({ supabase: sb, items: [{ product_id: "pa", qty: 5, price: 1000 }, { product_id: "pb", qty: 99, price: 1000 }, { product_id: "pz", qty: 1, price: 1000 }] });
   assert.equal(v.lineas[0].estado, "ok");
-  assert.equal(v.lineas[1].estado, "stock_insuficiente");
+  assert.equal(v.lineas[1].estado, "ok");
+  assert.equal(v.lineas[2].estado, "sin_stock");
+  await assert.rejects(calcularPedido({ supabase: sb, order, items: [{ product_id: "pa", qty: 100 }] }), PagoError);
 });
 
 // ── Envío de las liquidaciones (reglas A y C del dueño, 2026-11-16) ──────────────────────────────────────────────
