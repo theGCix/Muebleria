@@ -1,0 +1,465 @@
+diff --git a/docs/claude/RULES.md b/docs/claude/RULES.md
+index f0403f1..521773a 100644
+--- a/docs/claude/RULES.md
++++ b/docs/claude/RULES.md
+@@ -169,3 +169,6 @@
+ ## Tope por compra (actualizado 2026-11-16)
+ - General: 5 unidades por producto. Excepción: el producto de `PRODUCTOS_TOPE_AMPLIO` (hoy Lineal) permite hasta 99 y también sobre el stock (entrega única o por partes, se elige en el checkout). La lista debe ser igual en `src/lib/limiteCompra.ts` y `server/pagos.js`.
+ 
++
++## Reglas de modelos 3D (ficha)
++- **Archivos .glb:** a escala real (1 unidad = 1 m) y de máx. 5 MB; se suben desde Productos al bucket `modelos-3d` (Supabase Storage), nunca al repo. Las reglas viven en `lib/modelos3d.ts`. El visor usa `ar-scale="fixed"`: si el modelo no está a escala real, la realidad aumentada muestra un tamaño falso.
+diff --git a/docs/claude/TASK_LOG.md b/docs/claude/TASK_LOG.md
+index 258dc07..1178ef3 100644
+--- a/docs/claude/TASK_LOG.md
++++ b/docs/claude/TASK_LOG.md
+@@ -514,3 +514,9 @@
+ - **Qué cambió:** el perfil `sala` pasa a `module: "none"`; se elimina el componente `Comfort` y sus firmezas de `SignatureModules.tsx`, el valor `"comfort"` del tipo de módulo y la lógica `comfortEnBD` de `product.$handle.tsx`. La ficha de la sala dice «Patas de metal» (sin «dorado o negro a elección»). Motivo (dueño): ofrecer firmeza obliga a rehacer un mueble ya preparado.
+ - **Sin cambios:** comedor, separador de ambiente y recámara conservan sus módulos. Si algún producto tiene opciones «firmeza» configuradas en la BD (admin), esas siguen apareciendo: hay que quitarlas desde el admin.
+ - **Riesgos:** sin navegador (`tsc` sin errores nuevos, `vite build` OK, pruebas OK). Archivos nuevos: ninguno.
++
++## 2026-11-17 — Modelo 3D en la ficha: subida desde Productos (Supabase Storage) — implementado, falta ejecutar la migración y probar en celular
++- **Decisión del dueño:** Supabase Storage (no R2); el modelo es el «Juego de muebles modelo asiático» (conjunto completo, versión de 0.9 MB); lo prueba el cliente en su propio espacio (AR). Medidas reales: sofá izquierdo 210×90×82, sofá posterior 220×90×82, sillón 100×90×82, mesa de centro 100×60×45 cm.
++- **Qué cambió:** `supabase/migrations/20261119_modelos_3d.sql` (**sin ejecutar**): bucket público `modelos-3d` (5 MB, solo `.glb`), escritura solo admin (`has_role`). `src/lib/modelos3d.ts` (reglas puras) y `scripts/test-modelos3d.mjs` (4/4). `productos.tsx`: campo «Modelo 3D (.glb)» (subir / reemplazar / quitar); la URL se publica al guardar y el archivo anterior se borra del bucket solo después de guardar. `ModelViewer3D.tsx`: el visor nunca salía del estado «cargando» (React 18 no enlaza `onLoad` en elementos personalizados: ahora `addEventListener`); botón de AR siempre declarado (antes dependía de `"xr" in navigator`, que falla en iPhone), `ar-scale="fixed"` para que no se redimensione, mensaje si el modelo no carga, controles ≥ 44 px.
++- **Escala:** el `.glb` original mide 1 m de ancho. Se multiplicó ×2.77 en el nodo raíz (`sala-asiatico-escala-real.glb`): fondo 209 cm (≈ sofá izquierdo, 210) y alto 82 cm (= 82), ambos independientes. Ancho total del conjunto: 277 cm.
++- **Riesgos:** (1) la escala se infiere de dos ejes; verificar con una cinta el ancho total del conjunto armado (277 cm); (2) el modelo está generado por IA a partir de una foto: puede no ser idéntico al mueble; incluye mesa de centro y cojines; (3) ejecutar la migración ANTES de subir el modelo; (4) AR solo en celular (Android/iPhone); (5) el visor carga `model-viewer` y el decodificador Draco desde CDN de Google; (6) sin navegador ni dispositivo real. `tsc` sin errores nuevos, `vite build` OK. Archivos NUEVOS: `src/lib/modelos3d.ts`, `scripts/test-modelos3d.mjs`, `supabase/migrations/20261119_modelos_3d.sql`.
+diff --git a/scripts/test-modelos3d.mjs b/scripts/test-modelos3d.mjs
+new file mode 100644
+index 0000000..eb9b0e2
+--- /dev/null
++++ b/scripts/test-modelos3d.mjs
+@@ -0,0 +1,37 @@
++// Pruebas de src/lib/modelos3d.ts. Ejecutar: node --test scripts/test-modelos3d.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import {
++  validarModelo3d, tieneCabeceraGlb, rutaModelo3d, rutaDesdeUrl, MAX_MODELO_3D_BYTES,
++} from "../src/lib/modelos3d.ts";
++
++test("valida extensión, vacío y tamaño", () => {
++  assert.equal(validarModelo3d("sala.glb", 900_000), null);
++  assert.equal(validarModelo3d("SALA.GLB", 900_000), null);
++  assert.match(validarModelo3d("sala.gltf", 1000), /\.glb/);
++  assert.match(validarModelo3d("sala.glb", 0), /vacío/);
++  assert.match(validarModelo3d("sala.glb", MAX_MODELO_3D_BYTES + 1), /máximo es 5 MB/);
++  assert.equal(validarModelo3d("sala.glb", MAX_MODELO_3D_BYTES), null);
++});
++
++test("cabecera glTF", async () => {
++  assert.equal(await tieneCabeceraGlb(new Blob(["glTF\x02\x00\x00\x00"])), true);
++  assert.equal(await tieneCabeceraGlb(new Blob(["<html>"])), false);
++  assert.equal(await tieneCabeceraGlb(new Blob([])), false);
++});
++
++test("ruta única y segura", () => {
++  assert.equal(rutaModelo3d("Juego de muebles modelo asiático", 1700000000000), "juego-de-muebles-modelo-asiatico-1700000000000.glb");
++  assert.equal(rutaModelo3d("GM-0042", 5), "gm-0042-5.glb");
++  assert.equal(rutaModelo3d("¡¡!!", 5), "modelo-5.glb");
++  assert.equal(rutaModelo3d("a".repeat(100), 1).length, 40 + "-1.glb".length);
++});
++
++test("ruta desde la URL pública", () => {
++  const u = "https://abc.supabase.co/storage/v1/object/public/modelos-3d/gm-0042-5.glb";
++  assert.equal(rutaDesdeUrl(u), "gm-0042-5.glb");
++  assert.equal(rutaDesdeUrl(u + "?t=1"), "gm-0042-5.glb");
++  assert.equal(rutaDesdeUrl("https://otro.com/modelo.glb"), null);
++  assert.equal(rutaDesdeUrl(""), null);
++  assert.equal(rutaDesdeUrl(null), null);
++});
+diff --git a/src/components/ModelViewer3D.tsx b/src/components/ModelViewer3D.tsx
+index 56b6517..51d9e47 100644
+--- a/src/components/ModelViewer3D.tsx
++++ b/src/components/ModelViewer3D.tsx
+@@ -1,9 +1,8 @@
+ // src/components/ModelViewer3D.tsx
+ import { useEffect, useRef, useState } from "react";
+-import { Loader2, RotateCcw, ZoomIn } from "lucide-react";
+-import { Button } from "./ui/button";
++import { Loader2, RotateCcw } from "lucide-react";
+ 
+-// Usa @google/model-viewer — web component nativo, sin bundle pesado
++// Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
+ declare global {
+   namespace JSX {
+     interface IntrinsicElements {
+@@ -12,6 +11,8 @@ declare global {
+   }
+ }
+ 
++const MODEL_VIEWER_SRC = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js";
++
+ export function ModelViewer3D({
+   src,
+   alt,
+@@ -22,28 +23,48 @@ export function ModelViewer3D({
+   poster?: string;
+ }) {
+   const viewerRef = useRef<any>(null);
+-  const [loaded, setLoaded]   = useState(false);
+-  const [arEnabled, setArEnabled] = useState(false);
++  const [loaded, setLoaded] = useState(false);
++  const [failed, setFailed] = useState(false);
+ 
+   useEffect(() => {
+     // Cargar el web component de Google si no está ya
+-    if (!customElements.get("model-viewer")) {
++    if (!customElements.get("model-viewer") && !document.querySelector(`script[src="${MODEL_VIEWER_SRC}"]`)) {
+       const script = document.createElement("script");
+       script.type = "module";
+-      script.src = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js";
++      script.src = MODEL_VIEWER_SRC;
++      script.onerror = () => setFailed(true);
+       document.head.appendChild(script);
+     }
+-    // Detectar soporte de AR
+-    setArEnabled("xr" in navigator || "webxr" in navigator);
+   }, []);
+ 
++  // React 18 no enlaza eventos de elementos personalizados con onLoad/onError: se escuchan a mano
++  useEffect(() => {
++    const el = viewerRef.current as HTMLElement | null;
++    if (!el) return;
++    setLoaded(false);
++    setFailed(false);
++    const ok = () => setLoaded(true);
++    const ko = () => setFailed(true);
++    el.addEventListener("load", ok);
++    el.addEventListener("error", ko);
++    return () => {
++      el.removeEventListener("load", ok);
++      el.removeEventListener("error", ko);
++    };
++  }, [src]);
++
+   return (
+     <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-secondary/20 border border-border/40">
+-      {!loaded && (
++      {!loaded && !failed && (
+         <div className="absolute inset-0 flex items-center justify-center">
+           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+         </div>
+       )}
++      {failed && (
++        <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-muted-foreground">
++          No se pudo cargar el modelo 3D. Mira las fotos del producto.
++        </div>
++      )}
+       <model-viewer
+         ref={viewerRef}
+         src={src}
+@@ -54,21 +75,20 @@ export function ModelViewer3D({
+         auto-rotate-delay="1000"
+         rotation-per-second="30deg"
+         shadow-intensity="1"
+-        ar={arEnabled ? "" : undefined}
+-        ar-modes="webxr scene-viewer quick-look"
++        ar
++        ar-modes="scene-viewer webxr quick-look"
++        ar-scale="fixed"
++        ar-placement="floor"
+         style={{ width: "100%", height: "100%", opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
+-        onLoad={() => setLoaded(true)}
+       >
+-        {/* Botón de AR */}
+-        {arEnabled && (
+-          <button
+-            slot="ar-button"
+-            className="absolute bottom-4 right-4 px-3 py-2 rounded-lg text-xs font-medium"
+-            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+-          >
+-            Ver en mi sala
+-          </button>
+-        )}
++        {/* Botón de AR: model-viewer solo lo muestra si el dispositivo la admite (celulares; en PC no aparece) */}
++        <button
++          slot="ar-button"
++          className="absolute bottom-4 right-4 min-h-11 px-4 rounded-lg text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
++          style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
++        >
++          Ver en tu espacio
++        </button>
+       </model-viewer>
+ 
+       {/* Controles flotantes */}
+@@ -76,13 +96,14 @@ export function ModelViewer3D({
+         <div className="absolute top-3 right-3 flex flex-col gap-1.5">
+           <button
+             onClick={() => viewerRef.current?.resetTurntableRotation()}
+-            className="w-8 h-8 rounded-lg flex items-center justify-center bg-background/80 border border-border/60 hover:bg-background transition-colors"
++            className="w-11 h-11 rounded-lg flex items-center justify-center bg-background/80 border border-border/60 hover:bg-background transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+             title="Resetear vista"
++            aria-label="Resetear vista"
+           >
+-            <RotateCcw className="h-3.5 w-3.5 text-foreground" />
++            <RotateCcw className="h-4 w-4 text-foreground" />
+           </button>
+         </div>
+       )}
+     </div>
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/src/lib/modelos3d.ts b/src/lib/modelos3d.ts
+new file mode 100644
+index 0000000..9db756b
+--- /dev/null
++++ b/src/lib/modelos3d.ts
+@@ -0,0 +1,40 @@
++// Reglas puras de los modelos 3D (.glb) de la ficha. Sin imports: se prueba con scripts/test-modelos3d.mjs.
++// Subida y borrado: productos.tsx (bucket «modelos-3d» de Supabase Storage).
++
++export const BUCKET_MODELOS_3D = "modelos-3d";
++export const MAX_MODELO_3D_BYTES = 5 * 1024 * 1024; // = file_size_limit del bucket (migración 20261119)
++
++/** Mensaje de error si el archivo no sirve; null si es válido. */
++export function validarModelo3d(nombre: string, bytes: number): string | null {
++  if (!/\.glb$/i.test(nombre.trim())) return "El modelo debe ser un archivo .glb";
++  if (bytes <= 0) return "El archivo está vacío";
++  if (bytes > MAX_MODELO_3D_BYTES) {
++    return `El modelo pesa ${(bytes / 1048576).toFixed(1)} MB; el máximo es ${MAX_MODELO_3D_BYTES / 1048576} MB`;
++  }
++  return null;
++}
++
++/** Un .glb válido empieza con los 4 bytes «glTF». */
++export async function tieneCabeceraGlb(file: Blob): Promise<boolean> {
++  const buf = await file.slice(0, 4).arrayBuffer();
++  return new TextDecoder().decode(buf) === "glTF";
++}
++
++/** Ruta única dentro del bucket: «<slug>-<marca de tiempo>.glb» (nombre único → sin problemas de caché al reemplazar). */
++export function rutaModelo3d(base: string, ahora: number = Date.now()): string {
++  const slug = base
++    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
++    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
++    .slice(0, 40) || "modelo";
++  return `${slug}-${ahora}.glb`;
++}
++
++/** Ruta dentro del bucket a partir de la URL pública; null si la URL no es de nuestro bucket. */
++export function rutaDesdeUrl(url: string | null | undefined): string | null {
++  if (!url) return null;
++  const marca = `/object/public/${BUCKET_MODELOS_3D}/`;
++  const i = url.indexOf(marca);
++  if (i < 0) return null;
++  const ruta = decodeURIComponent(url.slice(i + marca.length).split("?")[0]);
++  return ruta || null;
++}
+diff --git a/src/routes/_authenticated/productos.tsx b/src/routes/_authenticated/productos.tsx
+index 7ab4815..fa59777 100644
+--- a/src/routes/_authenticated/productos.tsx
++++ b/src/routes/_authenticated/productos.tsx
+@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
+ import { Label } from "@/components/ui/label";
+ import { Textarea } from "@/components/ui/textarea";
+ import { Badge } from "@/components/ui/badge";
+-import { Loader2, Plus, Pencil, Trash2, Image, Package, Search } from "lucide-react";
++import { Loader2, Plus, Pencil, Trash2, Image, Package, Search, Box } from "lucide-react";
+ import {
+   Dialog, DialogContent, DialogHeader, DialogTitle,
+ } from "@/components/ui/dialog";
+@@ -17,6 +17,9 @@ import {
+ import { useState, useRef, useEffect } from "react";
+ import { toast } from "sonner";
+ import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
++import {
++  BUCKET_MODELOS_3D, MAX_MODELO_3D_BYTES, validarModelo3d, tieneCabeceraGlb, rutaModelo3d, rutaDesdeUrl,
++} from "@/lib/modelos3d";
+ import { CATEGORIAS, getCategoria } from "@/lib/categories";
+ import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
+ import { ofertaInfo } from "@/lib/pricing";
+@@ -78,6 +81,8 @@ type ProductForm = {
+   imagen_public_id: string;
+   // Galería completa
+   imagenes: ProductImage[];
++  // Modelo 3D (.glb) en Supabase Storage, bucket «modelos-3d» ("" = sin modelo)
++  modelo_3d_url: string;
+ };
+ 
+ const emptyForm = (): ProductForm => ({
+@@ -89,6 +94,7 @@ const emptyForm = (): ProductForm => ({
+   proveedor_id: "",
+   imagen_url: "", imagen_public_id: "",
+   imagenes: [],
++  modelo_3d_url: "",
+ });
+ 
+ // ─── Helpers Supabase ─────────────────────────────────────────────────────────
+@@ -128,6 +134,13 @@ async function siguienteSku(): Promise<string> {
+   return `${SKU_PREFIJO}${String(max + 1).padStart(4, "0")}`;
+ }
+ 
++// Borra un modelo 3D del bucket (si la URL es de nuestro bucket). Nunca lanza: un huérfano no debe romper el guardado.
++async function borrarModelo3d(url: string | null | undefined) {
++  const ruta = rutaDesdeUrl(url);
++  if (!ruta) return;
++  try { await supabase.storage.from(BUCKET_MODELOS_3D).remove([ruta]); } catch { /* best-effort */ }
++}
++
+ async function deleteProduct(id: string) {
+   const { error } = await supabase.from("products").delete().eq("id", id);
+   if (error) throw new Error(error.message);
+@@ -144,6 +157,10 @@ function ProductFormModal({
+   const qc = useQueryClient();
+   const [form, setForm] = useState<ProductForm>(initial ?? emptyForm());
+   const [uploading, setUploading] = useState(false);
++  const [uploading3d, setUploading3d] = useState(false);
++  const input3dRef = useRef<HTMLInputElement>(null);
++  // Modelo que tenía el producto al abrir el formulario: se borra del bucket solo DESPUÉS de guardar con otro (o sin modelo)
++  const modelo3dGuardado = useRef(initial?.modelo_3d_url ?? "");
+   // true mientras el SKU sea el sugerido automáticamente (si el admin lo edita, se respeta)
+   const skuAuto = useRef(false);
+ 
+@@ -208,6 +225,33 @@ function ProductFormModal({
+ 
+   const MAX_IMAGES = 7;
+ 
++  // Sube el .glb al bucket «modelos-3d»; la URL queda en el formulario y se publica al guardar el producto
++  const handleModelo3d = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    e.target.value = "";
++    if (!file) return;
++    const err = validarModelo3d(file.name, file.size);
++    if (err) { toast.error(err); return; }
++    setUploading3d(true);
++    try {
++      if (!(await tieneCabeceraGlb(file))) throw new Error("El archivo no es un .glb válido");
++      const ruta = rutaModelo3d(form.sku || form.nombre);
++      const { error } = await supabase.storage
++        .from(BUCKET_MODELOS_3D)
++        .upload(ruta, file, { contentType: "model/gltf-binary", cacheControl: "31536000" });
++      if (error) throw new Error(error.message);
++      const { data } = supabase.storage.from(BUCKET_MODELOS_3D).getPublicUrl(ruta);
++      // Si ya había subido otro en esta misma sesión del formulario (aún sin guardar), ese queda huérfano: se borra
++      if (form.modelo_3d_url && form.modelo_3d_url !== modelo3dGuardado.current) void borrarModelo3d(form.modelo_3d_url);
++      setForm((f) => ({ ...f, modelo_3d_url: data.publicUrl }));
++      toast.success("Modelo 3D subido. Guarda el producto para publicarlo.");
++    } catch (e: any) {
++      toast.error(e?.message ?? "No se pudo subir el modelo 3D");
++    } finally {
++      setUploading3d(false);
++    }
++  };
++
+   // Sube una o varias imágenes secuencialmente
+   const handleMultiUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+     const files = Array.from(e.target.files ?? []);
+@@ -317,6 +361,7 @@ function ProductFormModal({
+         origen: origenParaGuardar(form.origen),
+         proveedor_id: form.tipo_gestion === "retail" ? (form.proveedor_id || null) : null,
+         imagenes: form.imagenes,
++        modelo_3d_url: form.modelo_3d_url || null,
+         ...(form.id ? { id: form.id } : {}),
+       });
+ 
+@@ -331,8 +376,12 @@ function ProductFormModal({
+ 
+       return savedProduct;
+     },
+-    onSuccess: () => {
++    onSuccess: (saved: any) => {
+       qc.invalidateQueries({ queryKey: ["products"] });
++      // El modelo anterior ya no lo usa ningún producto: se libera del bucket
++      if (modelo3dGuardado.current && modelo3dGuardado.current !== (saved?.modelo_3d_url ?? "")) {
++        void borrarModelo3d(modelo3dGuardado.current);
++      }
+       toast.success(form.id ? "Producto actualizado" : "Producto creado");
+       onClose();
+     },
+@@ -417,6 +466,48 @@ function ProductFormModal({
+           </p>
+         </div>
+ 
++        {/* ── Modelo 3D (.glb) ── */}
++        <div>
++          <Label>Modelo 3D (.glb)</Label>
++          <div className="mt-2 flex items-center gap-2 flex-wrap">
++            <Button
++              type="button"
++              variant="outline"
++              className="h-11 sm:h-9"
++              disabled={uploading3d}
++              onClick={() => input3dRef.current?.click()}
++            >
++              {uploading3d ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Box className="h-4 w-4 mr-1" />}
++              {uploading3d ? "Subiendo…" : form.modelo_3d_url ? "Reemplazar modelo" : "Subir modelo 3D"}
++            </Button>
++            {form.modelo_3d_url && !uploading3d && (
++              <>
++                <span className="text-xs text-muted-foreground truncate max-w-[12rem]" title={form.modelo_3d_url}>
++                  {rutaDesdeUrl(form.modelo_3d_url) ?? "Modelo cargado"}
++                </span>
++                <Button
++                  type="button"
++                  variant="ghost"
++                  className="h-11 sm:h-9 text-destructive"
++                  onClick={() => setForm((f) => ({ ...f, modelo_3d_url: "" }))}
++                >
++                  Quitar
++                </Button>
++              </>
++            )}
++            <input
++              ref={input3dRef}
++              type="file"
++              accept=".glb,model/gltf-binary"
++              className="hidden"
++              onChange={handleModelo3d}
++            />
++          </div>
++          <p className="text-xs text-muted-foreground mt-1">
++            Solo .glb · Máx. {MAX_MODELO_3D_BYTES / 1048576} MB · Debe estar a escala real (1 unidad = 1 m) para que la realidad aumentada muestre el tamaño correcto · Se publica al guardar el producto
++          </p>
++        </div>
++
+         {/* ── Campos del producto ── */}
+         <div>
+           <Label>¿Cómo se gestiona este producto? *</Label>
+@@ -766,6 +857,7 @@ function ProductosPage() {
+       imagen_url: p.imagen_url ?? "",
+       imagen_public_id: p.imagen_public_id ?? "",
+       imagenes: parseImagenes(p),
++      modelo_3d_url: p.modelo_3d_url ?? "",
+     });
+ 
+   return (
+diff --git a/supabase/migrations/20261119_modelos_3d.sql b/supabase/migrations/20261119_modelos_3d.sql
+new file mode 100644
+index 0000000..ef54b74
+--- /dev/null
++++ b/supabase/migrations/20261119_modelos_3d.sql
+@@ -0,0 +1,33 @@
++-- ════════════════════════════════════════════════════════════════
++-- Modelos 3D (.glb) en la ficha del producto — Supabase Storage
++--
++--  · Bucket PÚBLICO «modelos-3d» (el navegador del cliente descarga el .glb directo, sin pasar por el servidor).
++--  · Escritura (subir, reemplazar, borrar) SOLO admin. Límite 5 MB por archivo.
++--  · products.modelo_3d_url ya existe en producción; el IF NOT EXISTS lo deja idempotente.
++-- No ejecutar sin confirmación del dueño (regla 10).
++-- ════════════════════════════════════════════════════════════════
++
++ALTER TABLE public.products ADD COLUMN IF NOT EXISTS modelo_3d_url text;
++
++INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
++VALUES ('modelos-3d', 'modelos-3d', true, 5242880, ARRAY['model/gltf-binary', 'application/octet-stream'])
++ON CONFLICT (id) DO UPDATE
++  SET public = true,
++      file_size_limit = EXCLUDED.file_size_limit,
++      allowed_mime_types = EXCLUDED.allowed_mime_types;
++
++DROP POLICY IF EXISTS "modelos3d_insert_admin" ON storage.objects;
++CREATE POLICY "modelos3d_insert_admin" ON storage.objects
++  FOR INSERT TO authenticated
++  WITH CHECK (bucket_id = 'modelos-3d' AND public.has_role(auth.uid(), 'admin'::public.app_role));
++
++DROP POLICY IF EXISTS "modelos3d_update_admin" ON storage.objects;
++CREATE POLICY "modelos3d_update_admin" ON storage.objects
++  FOR UPDATE TO authenticated
++  USING (bucket_id = 'modelos-3d' AND public.has_role(auth.uid(), 'admin'::public.app_role))
++  WITH CHECK (bucket_id = 'modelos-3d' AND public.has_role(auth.uid(), 'admin'::public.app_role));
++
++DROP POLICY IF EXISTS "modelos3d_delete_admin" ON storage.objects;
++CREATE POLICY "modelos3d_delete_admin" ON storage.objects
++  FOR DELETE TO authenticated
++  USING (bucket_id = 'modelos-3d' AND public.has_role(auth.uid(), 'admin'::public.app_role));

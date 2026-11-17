@@ -169,3 +169,6 @@
 ## Tope por compra (actualizado 2026-11-16)
 - General: 5 unidades por producto. Excepción: el producto de `PRODUCTOS_TOPE_AMPLIO` (hoy Lineal) permite hasta 99 y también sobre el stock (entrega única o por partes, se elige en el checkout). La lista debe ser igual en `src/lib/limiteCompra.ts` y `server/pagos.js`.
 
+
+## Reglas de modelos 3D (ficha)
+- **Archivos .glb:** a escala real (1 unidad = 1 m) y de máx. 5 MB; se suben desde Productos al bucket `modelos-3d` (Supabase Storage), nunca al repo. Las reglas viven en `lib/modelos3d.ts`. El visor usa `ar-scale="fixed"`: si el modelo no está a escala real, la realidad aumentada muestra un tamaño falso.

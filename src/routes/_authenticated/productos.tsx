@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Pencil, Trash2, Image, Package, Search } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Image, Package, Search, Box } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -17,6 +17,9 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { uploadImage, cloudinaryUrl } from "@/lib/cloudinary";
+import {
+  BUCKET_MODELOS_3D, MAX_MODELO_3D_BYTES, validarModelo3d, tieneCabeceraGlb, rutaModelo3d, rutaDesdeUrl,
+} from "@/lib/modelos3d";
 import { CATEGORIAS, getCategoria } from "@/lib/categories";
 import { listProveedores, listUbicaciones } from "@/lib/pos.functions";
 import { ofertaInfo } from "@/lib/pricing";
@@ -78,6 +81,8 @@ type ProductForm = {
   imagen_public_id: string;
   // Galería completa
   imagenes: ProductImage[];
+  // Modelo 3D (.glb) en Supabase Storage, bucket «modelos-3d» ("" = sin modelo)
+  modelo_3d_url: string;
 };
 
 const emptyForm = (): ProductForm => ({
@@ -89,6 +94,7 @@ const emptyForm = (): ProductForm => ({
   proveedor_id: "",
   imagen_url: "", imagen_public_id: "",
   imagenes: [],
+  modelo_3d_url: "",
 });
 
 // ─── Helpers Supabase ─────────────────────────────────────────────────────────
@@ -128,6 +134,13 @@ async function siguienteSku(): Promise<string> {
   return `${SKU_PREFIJO}${String(max + 1).padStart(4, "0")}`;
 }
 
+// Borra un modelo 3D del bucket (si la URL es de nuestro bucket). Nunca lanza: un huérfano no debe romper el guardado.
+async function borrarModelo3d(url: string | null | undefined) {
+  const ruta = rutaDesdeUrl(url);
+  if (!ruta) return;
+  try { await supabase.storage.from(BUCKET_MODELOS_3D).remove([ruta]); } catch { /* best-effort */ }
+}
+
 async function deleteProduct(id: string) {
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -144,6 +157,10 @@ function ProductFormModal({
   const qc = useQueryClient();
   const [form, setForm] = useState<ProductForm>(initial ?? emptyForm());
   const [uploading, setUploading] = useState(false);
+  const [uploading3d, setUploading3d] = useState(false);
+  const input3dRef = useRef<HTMLInputElement>(null);
+  // Modelo que tenía el producto al abrir el formulario: se borra del bucket solo DESPUÉS de guardar con otro (o sin modelo)
+  const modelo3dGuardado = useRef(initial?.modelo_3d_url ?? "");
   // true mientras el SKU sea el sugerido automáticamente (si el admin lo edita, se respeta)
   const skuAuto = useRef(false);
 
@@ -207,6 +224,33 @@ function ProductFormModal({
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const MAX_IMAGES = 7;
+
+  // Sube el .glb al bucket «modelos-3d»; la URL queda en el formulario y se publica al guardar el producto
+  const handleModelo3d = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const err = validarModelo3d(file.name, file.size);
+    if (err) { toast.error(err); return; }
+    setUploading3d(true);
+    try {
+      if (!(await tieneCabeceraGlb(file))) throw new Error("El archivo no es un .glb válido");
+      const ruta = rutaModelo3d(form.sku || form.nombre);
+      const { error } = await supabase.storage
+        .from(BUCKET_MODELOS_3D)
+        .upload(ruta, file, { contentType: "model/gltf-binary", cacheControl: "31536000" });
+      if (error) throw new Error(error.message);
+      const { data } = supabase.storage.from(BUCKET_MODELOS_3D).getPublicUrl(ruta);
+      // Si ya había subido otro en esta misma sesión del formulario (aún sin guardar), ese queda huérfano: se borra
+      if (form.modelo_3d_url && form.modelo_3d_url !== modelo3dGuardado.current) void borrarModelo3d(form.modelo_3d_url);
+      setForm((f) => ({ ...f, modelo_3d_url: data.publicUrl }));
+      toast.success("Modelo 3D subido. Guarda el producto para publicarlo.");
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo subir el modelo 3D");
+    } finally {
+      setUploading3d(false);
+    }
+  };
 
   // Sube una o varias imágenes secuencialmente
   const handleMultiUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -317,6 +361,7 @@ function ProductFormModal({
         origen: origenParaGuardar(form.origen),
         proveedor_id: form.tipo_gestion === "retail" ? (form.proveedor_id || null) : null,
         imagenes: form.imagenes,
+        modelo_3d_url: form.modelo_3d_url || null,
         ...(form.id ? { id: form.id } : {}),
       });
 
@@ -331,8 +376,12 @@ function ProductFormModal({
 
       return savedProduct;
     },
-    onSuccess: () => {
+    onSuccess: (saved: any) => {
       qc.invalidateQueries({ queryKey: ["products"] });
+      // El modelo anterior ya no lo usa ningún producto: se libera del bucket
+      if (modelo3dGuardado.current && modelo3dGuardado.current !== (saved?.modelo_3d_url ?? "")) {
+        void borrarModelo3d(modelo3dGuardado.current);
+      }
       toast.success(form.id ? "Producto actualizado" : "Producto creado");
       onClose();
     },
@@ -414,6 +463,48 @@ function ProductFormModal({
             {form.imagenes.length >= MAX_IMAGES && (
               <span className="text-amber-600 font-medium"> · Límite alcanzado</span>
             )}
+          </p>
+        </div>
+
+        {/* ── Modelo 3D (.glb) ── */}
+        <div>
+          <Label>Modelo 3D (.glb)</Label>
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 sm:h-9"
+              disabled={uploading3d}
+              onClick={() => input3dRef.current?.click()}
+            >
+              {uploading3d ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Box className="h-4 w-4 mr-1" />}
+              {uploading3d ? "Subiendo…" : form.modelo_3d_url ? "Reemplazar modelo" : "Subir modelo 3D"}
+            </Button>
+            {form.modelo_3d_url && !uploading3d && (
+              <>
+                <span className="text-xs text-muted-foreground truncate max-w-[12rem]" title={form.modelo_3d_url}>
+                  {rutaDesdeUrl(form.modelo_3d_url) ?? "Modelo cargado"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11 sm:h-9 text-destructive"
+                  onClick={() => setForm((f) => ({ ...f, modelo_3d_url: "" }))}
+                >
+                  Quitar
+                </Button>
+              </>
+            )}
+            <input
+              ref={input3dRef}
+              type="file"
+              accept=".glb,model/gltf-binary"
+              className="hidden"
+              onChange={handleModelo3d}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Solo .glb · Máx. {MAX_MODELO_3D_BYTES / 1048576} MB · Debe estar a escala real (1 unidad = 1 m) para que la realidad aumentada muestre el tamaño correcto · Se publica al guardar el producto
           </p>
         </div>
 
@@ -766,6 +857,7 @@ function ProductosPage() {
       imagen_url: p.imagen_url ?? "",
       imagen_public_id: p.imagen_public_id ?? "",
       imagenes: parseImagenes(p),
+      modelo_3d_url: p.modelo_3d_url ?? "",
     });
 
   return (
