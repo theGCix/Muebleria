@@ -1,7 +1,7 @@
 // Pruebas de src/lib/tapizado3d.ts. Ejecutar: node --test scripts/test-tapizado3d.mjs  (Node ≥ 22.18)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hexARgb, rgbALab, labARgb, detectarColorBase, crearMascara, recolorear } from "../src/lib/tapizado3d.ts";
+import { extraerTexturaGlb, hexARgb, rgbALab, labARgb, detectarColorBase, crearMascara, recolorear } from "../src/lib/tapizado3d.ts";
 
 // Textura sintética: 80 % tapizado gris pardo con variación de luz, 10 % dorado, 10 % madera oscura
 function textura(n = 10000) {
@@ -61,4 +61,28 @@ test("recolorear cambia el tapizado, conserva las sombras y no toca lo demás", 
 
 test("sin píxeles de tapizado no hay color base", () => {
   assert.equal(detectarColorBase(new Uint8ClampedArray(400)), null);
+});
+
+test("extrae la textura embebida de un .glb", () => {
+  const img = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+  const json = new TextEncoder().encode(JSON.stringify({
+    materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }],
+    textures: [{ source: 0 }],
+    images: [{ mimeType: "image/jpeg", bufferView: 1 }],
+    bufferViews: [{ byteOffset: 0, byteLength: 4 }, { byteOffset: 4, byteLength: 8 }],
+  }));
+  const jsonPad = new Uint8Array(Math.ceil(json.length / 4) * 4).fill(0x20); jsonPad.set(json);
+  const bin = new Uint8Array(12); bin.set(img, 4);
+  const buf = new ArrayBuffer(12 + 8 + jsonPad.length + 8 + bin.length);
+  const dv = new DataView(buf);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, buf.byteLength, true);
+  dv.setUint32(12, jsonPad.length, true); dv.setUint32(16, 0x4e4f534a, true);
+  new Uint8Array(buf, 20).set(jsonPad);
+  const o = 20 + jsonPad.length;
+  dv.setUint32(o, bin.length, true); dv.setUint32(o + 4, 0x004e4942, true);
+  new Uint8Array(buf, o + 8).set(bin);
+  const r = extraerTexturaGlb(buf);
+  assert.equal(r.mime, "image/jpeg");
+  assert.deepEqual([...r.bytes], [...img]);
+  assert.equal(extraerTexturaGlb(new ArrayBuffer(40)), null);
 });

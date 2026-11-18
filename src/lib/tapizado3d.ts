@@ -122,19 +122,45 @@ interface Original { w: number; h: number; data: Uint8ClampedArray; base: Lab; m
 const originales = new WeakMap<object, Promise<Original | null>>();
 const ultimaPeticion = new WeakMap<object, number>(); // si el cliente cambia de color rápido, solo gana la última
 
+/**
+ * Saca del .glb la imagen de la textura base del material 0 (model-viewer no la expone: su `uri` es un
+ * nombre interno). Devuelve los bytes de la imagen y su tipo, o null si el modelo no la trae embebida.
+ */
+export function extraerTexturaGlb(glb: ArrayBuffer): { bytes: Uint8Array; mime: string } | null {
+  const dv = new DataView(glb);
+  if (glb.byteLength < 20 || dv.getUint32(0, true) !== 0x46546c67) return null; // «glTF»
+  const lenJson = dv.getUint32(12, true);
+  let json: any;
+  try {
+    json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, lenJson)));
+  } catch {
+    return null;
+  }
+  const binOff = 20 + lenJson;
+  if (binOff + 8 > glb.byteLength) return null;
+  const binLen = dv.getUint32(binOff, true);
+  const bin = new Uint8Array(glb, binOff + 8, Math.min(binLen, glb.byteLength - binOff - 8));
+  const idxTex = json.materials?.[0]?.pbrMetallicRoughness?.baseColorTexture?.index;
+  const idxImg = json.textures?.[idxTex]?.source;
+  const img = json.images?.[idxImg];
+  const bv = json.bufferViews?.[img?.bufferView];
+  if (!img || !bv) return null;
+  const ini = bv.byteOffset ?? 0;
+  return { bytes: bin.slice(ini, ini + bv.byteLength), mime: img.mimeType || "image/jpeg" };
+}
+
 async function leerOriginal(viewer: any): Promise<Original | null> {
-  const textura = viewer.model?.materials?.[0]?.pbrMetallicRoughness?.baseColorTexture?.texture;
-  const uri: string | undefined = textura?.source?.uri;
-  const el: HTMLImageElement | undefined = textura?.source?.element;
-  const src = uri ?? el?.src;
+  const src: string | undefined = viewer.src;
   if (!src) return null;
-  const im = new Image();
-  im.crossOrigin = "anonymous";
-  await new Promise<void>((ok, ko) => { im.onload = () => ok(); im.onerror = () => ko(new Error("textura")); im.src = src; });
+  const r = await fetch(src);
+  if (!r.ok) return null;
+  const tex = extraerTexturaGlb(await r.arrayBuffer());
+  if (!tex) return null;
+  const bmp = await createImageBitmap(new Blob([tex.bytes], { type: tex.mime }));
   const c = document.createElement("canvas");
-  c.width = im.naturalWidth; c.height = im.naturalHeight;
+  c.width = bmp.width; c.height = bmp.height;
   const ctx = c.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(im, 0, 0);
+  ctx.drawImage(bmp, 0, 0);
   const data = ctx.getImageData(0, 0, c.width, c.height).data;
   const base = detectarColorBase(data);
   if (!base) return null;
