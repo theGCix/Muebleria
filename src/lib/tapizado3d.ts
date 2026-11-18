@@ -65,6 +65,18 @@ export function detectarColorBase(data: Uint8ClampedArray | Uint8Array, paso = 7
   return [mejor.L / mejor.n, mejor.a / mejor.n, mejor.b / mejor.n];
 }
 
+/** Colores que ofrece el visor 3D para probar el tapizado (null = el color original del modelo). */
+export const PALETA_TAPIZADO: { nombre: string; hex: string | null }[] = [
+  { nombre: "Original", hex: null },
+  { nombre: "Crema", hex: "#e6dcc8" },
+  { nombre: "Gris", hex: "#8a8d90" },
+  { nombre: "Azul marino", hex: "#2f4a6b" },
+  { nombre: "Verde", hex: "#4f6b4a" },
+  { nombre: "Terracota", hex: "#a65d44" },
+  { nombre: "Vino", hex: "#6e2a3a" },
+  { nombre: "Negro", hex: "#232323" },
+];
+
 /** Tolerancia por defecto (distancia en Lab): deja fuera madera, dorado y estampados, y entra el tapizado con su sombra. */
 export const TOLERANCIA_TAPIZADO = 16;
 
