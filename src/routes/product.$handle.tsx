@@ -1020,6 +1020,7 @@ function ProductView({ product: base }: { product: ProductData }) {
                     src={product.modelo_3d_url ?? ""}
                     alt={product.nombre}
                     poster={displayImg ?? undefined}
+                    colorHex={hayColoresFoto ? acabado?.hex : null}
                     onProbar={() => {
                       setEspacioMontado(true);
                       setEspacioOpen(true);

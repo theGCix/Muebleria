@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Loader2, RotateCcw } from "lucide-react";
 import { cargarModelViewer } from "@/lib/modelViewer";
+import { aplicarTapizado } from "@/lib/tapizado3d";
 
 // Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
 declare global {
@@ -17,11 +18,13 @@ export function ModelViewer3D({
   alt,
   poster,  // imagen de preview mientras carga el modelo
   onProbar, // «Ver en tu espacio»: abre el probador con foto (cámara o galería) de «Pruébalo en tu espacio»
+  colorHex, // color del tapizado elegido en la ficha; sin valor → colores originales del modelo
 }: {
   src: string;
   alt: string;
   poster?: string;
   onProbar?: () => void;
+  colorHex?: string | null;
 }) {
   const viewerRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
@@ -46,6 +49,12 @@ export function ModelViewer3D({
       el.removeEventListener("error", ko);
     };
   }, [src]);
+
+  // Tapizado: se repinta al cargar el modelo y cada vez que cambia el color elegido
+  useEffect(() => {
+    if (!loaded || !viewerRef.current) return;
+    void aplicarTapizado(viewerRef.current, colorHex);
+  }, [loaded, colorHex, src]);
 
   return (
     <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-secondary/20 border border-border/40">

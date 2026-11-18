@@ -1,0 +1,287 @@
+diff --git a/scripts/test-tapizado3d.mjs b/scripts/test-tapizado3d.mjs
+new file mode 100644
+index 0000000..49aa91f
+--- /dev/null
++++ b/scripts/test-tapizado3d.mjs
+@@ -0,0 +1,64 @@
++// Pruebas de src/lib/tapizado3d.ts. Ejecutar: node --test scripts/test-tapizado3d.mjs  (Node ≥ 22.18)
++import test from "node:test";
++import assert from "node:assert/strict";
++import { hexARgb, rgbALab, labARgb, detectarColorBase, crearMascara, recolorear } from "../src/lib/tapizado3d.ts";
++
++// Textura sintética: 80 % tapizado gris pardo con variación de luz, 10 % dorado, 10 % madera oscura
++function textura(n = 10000) {
++  const d = new Uint8ClampedArray(n * 4);
++  for (let p = 0; p < n; p++) {
++    const t = p % 10;
++    const luz = (p % 7) * 3 - 9;
++    const px = t < 8 ? [150 + luz, 140 + luz, 130 + luz] : t === 8 ? [190, 150, 40] : [100, 60, 30];
++    d.set([...px, 255], p * 4);
++  }
++  return d;
++}
++
++test("hexARgb acepta #rgb, #rrggbb y rechaza basura", () => {
++  assert.deepEqual(hexARgb("#2f4a6b"), [47, 74, 107]);
++  assert.deepEqual(hexARgb("fff"), [255, 255, 255]);
++  assert.equal(hexARgb("azul"), null);
++  assert.equal(hexARgb(null), null);
++});
++
++test("RGB → Lab → RGB es reversible", () => {
++  for (const c of [[0, 0, 0], [255, 255, 255], [47, 74, 107], [190, 150, 40]]) {
++    const r = labARgb(...rgbALab(...c));
++    c.forEach((v, i) => assert.ok(Math.abs(v - r[i]) <= 1));
++  }
++});
++
++test("detecta el tapizado como color base (no el dorado ni la madera)", () => {
++  const base = detectarColorBase(textura());
++  assert.ok(base);
++  const [L, a, b] = base;
++  assert.ok(L > 50 && L < 65, `L=${L}`);
++  assert.ok(Math.hypot(a, b) < 15);
++});
++
++test("la máscara cubre el tapizado y deja fuera dorado y madera", () => {
++  const d = textura();
++  const m = crearMascara(d, detectarColorBase(d));
++  assert.equal(m[0] > 0.9, true);   // tapizado
++  assert.equal(m[8], 0);            // dorado
++  assert.equal(m[9], 0);            // madera
++});
++
++test("recolorear cambia el tapizado, conserva las sombras y no toca lo demás", () => {
++  const d = textura();
++  const base = detectarColorBase(d);
++  const out = recolorear(d, crearMascara(d, base), base, hexARgb("#2f4a6b"));
++  assert.ok(out[2] > out[0], "el tapizado debe quedar azulado");
++  assert.deepEqual([...out.slice(8 * 4, 8 * 4 + 4)], [190, 150, 40, 255]);
++  assert.deepEqual([...out.slice(9 * 4, 9 * 4 + 4)], [100, 60, 30, 255]);
++  // píxeles de distinta luz siguen siendo de distinta luz
++  const L = (i) => rgbALab(out[i * 4], out[i * 4 + 1], out[i * 4 + 2])[0];
++  assert.notEqual(Math.round(L(0)), Math.round(L(6)));
++  assert.notEqual(out, d);
++  assert.deepEqual([...d.slice(0, 3)], [141, 131, 121]); // la original no se modifica
++});
++
++test("sin píxeles de tapizado no hay color base", () => {
++  assert.equal(detectarColorBase(new Uint8ClampedArray(400)), null);
++});
+diff --git a/src/components/ModelViewer3D.tsx b/src/components/ModelViewer3D.tsx
+index ce4a1ab..0cff4a6 100644
+--- a/src/components/ModelViewer3D.tsx
++++ b/src/components/ModelViewer3D.tsx
+@@ -2,6 +2,7 @@
+ import { useEffect, useRef, useState } from "react";
+ import { Camera, Loader2, RotateCcw } from "lucide-react";
+ import { cargarModelViewer } from "@/lib/modelViewer";
++import { aplicarTapizado } from "@/lib/tapizado3d";
+ 
+ // Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
+ declare global {
+@@ -17,11 +18,13 @@ export function ModelViewer3D({
+   alt,
+   poster,  // imagen de preview mientras carga el modelo
+   onProbar, // «Ver en tu espacio»: abre el probador con foto (cámara o galería) de «Pruébalo en tu espacio»
++  colorHex, // color del tapizado elegido en la ficha; sin valor → colores originales del modelo
+ }: {
+   src: string;
+   alt: string;
+   poster?: string;
+   onProbar?: () => void;
++  colorHex?: string | null;
+ }) {
+   const viewerRef = useRef<any>(null);
+   const [loaded, setLoaded] = useState(false);
+@@ -47,6 +50,12 @@ export function ModelViewer3D({
+     };
+   }, [src]);
+ 
++  // Tapizado: se repinta al cargar el modelo y cada vez que cambia el color elegido
++  useEffect(() => {
++    if (!loaded || !viewerRef.current) return;
++    void aplicarTapizado(viewerRef.current, colorHex);
++  }, [loaded, colorHex, src]);
++
+   return (
+     <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-secondary/20 border border-border/40">
+       {!loaded && !failed && (
+diff --git a/src/lib/tapizado3d.ts b/src/lib/tapizado3d.ts
+new file mode 100644
+index 0000000..6525d2b
+--- /dev/null
++++ b/src/lib/tapizado3d.ts
+@@ -0,0 +1,160 @@
++// src/lib/tapizado3d.ts
++// Color del tapizado en la vista 3D de la ficha: el .glb trae UNA sola textura (atlas) con el tapizado
++// y los detalles (madera, dorado, estampados). Se detecta el color base del tapizado, se enmascaran los
++// píxeles cercanos a él y se recolorean conservando luz y sombra. Lo demás no se toca.
++// Lógica pura sobre píxeles RGBA (sin DOM): se prueba con scripts/test-tapizado3d.mjs.
++// El pegamento con <model-viewer> está al final (aplicarTapizado) y solo usa el DOM al ejecutarse.
++
++export type RGB = [number, number, number];
++export type Lab = [number, number, number];
++
++/** «#rgb» o «#rrggbb» → [r,g,b] 0-255; null si no es un hex válido. */
++export function hexARgb(hex: string | null | undefined): RGB | null {
++  if (!hex) return null;
++  let h = hex.trim().replace(/^#/, "");
++  if (/^[0-9a-f]{3}$/i.test(h)) h = h.split("").map((c) => c + c).join("");
++  if (!/^[0-9a-f]{6}$/i.test(h)) return null;
++  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
++}
++
++const lin = (c: number) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
++const gam = (v: number) => 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
++const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
++const fi = (t: number) => (t ** 3 > 216 / 24389 ? t ** 3 : (116 * t - 16) / (24389 / 27));
++const BLANCO = [0.95047, 1, 1.08883];
++
++export function rgbALab(r: number, g: number, b: number): Lab {
++  const R = lin(r), G = lin(g), B = lin(b);
++  const x = (0.4124564 * R + 0.3575761 * G + 0.1804375 * B) / BLANCO[0];
++  const y = 0.2126729 * R + 0.7151522 * G + 0.072175 * B;
++  const z = (0.0193339 * R + 0.119192 * G + 0.9503041 * B) / BLANCO[2];
++  const fx = f(x), fy = f(y), fz = f(z);
++  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
++}
++
++export function labARgb(L: number, a: number, b: number): RGB {
++  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
++  const x = fi(fx) * BLANCO[0], y = fi(fy), z = fi(fz) * BLANCO[2];
++  const R = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z;
++  const G = -0.969266 * x + 1.8760108 * y + 0.041556 * z;
++  const B = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z;
++  const c = (v: number) => Math.max(0, Math.min(255, Math.round(gam(Math.max(0, Math.min(1, v))))));
++  return [c(R), c(G), c(B)];
++}
++
++const dist = (a: Lab, b: Lab) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
++
++/**
++ * Color base del tapizado: el tono de croma bajo y luz media que más píxeles reúne (la textura es casi toda
++ * tapizado). Agrupa en celdas de 6 unidades en a/b y 8 en L, y promedia la celda ganadora.
++ */
++export function detectarColorBase(data: Uint8ClampedArray | Uint8Array, paso = 7): Lab | null {
++  const celdas = new Map<string, { n: number; L: number; a: number; b: number }>();
++  for (let i = 0; i < data.length; i += 4 * paso) {
++    if (data[i + 3] < 200) continue;
++    const [L, a, b] = rgbALab(data[i], data[i + 1], data[i + 2]);
++    if (L < 20 || L > 90 || Math.hypot(a, b) > 25) continue;
++    const k = `${Math.floor(L / 8)}|${Math.floor(a / 6)}|${Math.floor(b / 6)}`;
++    const c = celdas.get(k) ?? { n: 0, L: 0, a: 0, b: 0 };
++    c.n++; c.L += L; c.a += a; c.b += b;
++    celdas.set(k, c);
++  }
++  let mejor: { n: number; L: number; a: number; b: number } | null = null;
++  for (const c of celdas.values()) if (!mejor || c.n > mejor.n) mejor = c;
++  if (!mejor || mejor.n < 20) return null;
++  return [mejor.L / mejor.n, mejor.a / mejor.n, mejor.b / mejor.n];
++}
++
++/** Tolerancia por defecto (distancia en Lab): deja fuera madera, dorado y estampados, y entra el tapizado con su sombra. */
++export const TOLERANCIA_TAPIZADO = 16;
++
++/** Peso 0-1 por píxel: 1 dentro del 60 % de la tolerancia, baja suave hasta 0 en el borde. */
++export function crearMascara(data: Uint8ClampedArray | Uint8Array, base: Lab, tol = TOLERANCIA_TAPIZADO): Float32Array {
++  const n = data.length / 4;
++  const m = new Float32Array(n);
++  const duro = tol * 0.6;
++  for (let p = 0; p < n; p++) {
++    const i = p * 4;
++    if (data[i + 3] < 8) continue;
++    const d = dist(rgbALab(data[i], data[i + 1], data[i + 2]), base);
++    m[p] = d <= duro ? 1 : d >= tol ? 0 : 1 - (d - duro) / (tol - duro);
++  }
++  return m;
++}
++
++/**
++ * Devuelve una copia de `data` con el tapizado (según la máscara) llevado al color `destino`, manteniendo
++ * cada variación de luz, sombra y trama respecto al color base.
++ */
++export function recolorear(data: Uint8ClampedArray | Uint8Array, mascara: Float32Array, base: Lab, destino: RGB): Uint8ClampedArray {
++  const out = new Uint8ClampedArray(data);
++  const [Ld, ad, bd] = rgbALab(destino[0], destino[1], destino[2]);
++  // Luz: el contraste del tejido se escala con la luz del destino (un tapizado oscuro no pierde relieve ni uno claro se quema)
++  const k = Math.max(0.5, Math.min(1.5, Ld / Math.max(base[0], 1)));
++  for (let p = 0; p < mascara.length; p++) {
++    const w = mascara[p];
++    if (w <= 0) continue;
++    const i = p * 4;
++    const [L, a, b] = rgbALab(data[i], data[i + 1], data[i + 2]);
++    const [r, g, bl] = labARgb(Ld + (L - base[0]) * k, ad + (a - base[1]) * 0.5, bd + (b - base[2]) * 0.5);
++    out[i] = Math.round(data[i] + (r - data[i]) * w);
++    out[i + 1] = Math.round(data[i + 1] + (g - data[i + 1]) * w);
++    out[i + 2] = Math.round(data[i + 2] + (bl - data[i + 2]) * w);
++  }
++  return out;
++}
++
++// ───────────── Pegamento con <model-viewer> (solo navegador) ─────────────
++
++interface Original { w: number; h: number; data: Uint8ClampedArray; base: Lab; mascara: Float32Array }
++const originales = new WeakMap<object, Promise<Original | null>>();
++const ultimaPeticion = new WeakMap<object, number>(); // si el cliente cambia de color rápido, solo gana la última
++
++async function leerOriginal(viewer: any): Promise<Original | null> {
++  const textura = viewer.model?.materials?.[0]?.pbrMetallicRoughness?.baseColorTexture?.texture;
++  const uri: string | undefined = textura?.source?.uri;
++  const el: HTMLImageElement | undefined = textura?.source?.element;
++  const src = uri ?? el?.src;
++  if (!src) return null;
++  const im = new Image();
++  im.crossOrigin = "anonymous";
++  await new Promise<void>((ok, ko) => { im.onload = () => ok(); im.onerror = () => ko(new Error("textura")); im.src = src; });
++  const c = document.createElement("canvas");
++  c.width = im.naturalWidth; c.height = im.naturalHeight;
++  const ctx = c.getContext("2d", { willReadFrequently: true })!;
++  ctx.drawImage(im, 0, 0);
++  const data = ctx.getImageData(0, 0, c.width, c.height).data;
++  const base = detectarColorBase(data);
++  if (!base) return null;
++  return { w: c.width, h: c.height, data, base, mascara: crearMascara(data, base) };
++}
++
++/**
++ * Pinta el tapizado del modelo con `hex` (null/vacío → textura original). No lanza: si el modelo no
++ * trae textura legible, deja el modelo como está y devuelve false.
++ */
++export async function aplicarTapizado(viewer: any, hex: string | null | undefined): Promise<boolean> {
++  try {
++    const material = viewer?.model?.materials?.[0];
++    const slot = material?.pbrMetallicRoughness?.baseColorTexture;
++    if (!slot) return false;
++    const turno = (ultimaPeticion.get(viewer) ?? 0) + 1;
++    ultimaPeticion.set(viewer, turno);
++    if (!originales.has(viewer)) originales.set(viewer, leerOriginal(viewer));
++    const o = await originales.get(viewer)!;
++    if (!o || ultimaPeticion.get(viewer) !== turno) return false;
++
++    const destino = hexARgb(hex);
++    const c = document.createElement("canvas");
++    c.width = o.w; c.height = o.h;
++    const ctx = c.getContext("2d")!;
++    const px = destino ? recolorear(o.data, o.mascara, o.base, destino) : o.data;
++    ctx.putImageData(new ImageData(new Uint8ClampedArray(px), o.w, o.h), 0, 0);
++    const textura = await viewer.createTexture(c.toDataURL("image/png"));
++    if (ultimaPeticion.get(viewer) !== turno) return false;
++    slot.setTexture(textura);
++    return true;
++  } catch {
++    return false;
++  }
++}
+diff --git a/src/routes/product.$handle.tsx b/src/routes/product.$handle.tsx
+index 086ac05..c2367d7 100644
+--- a/src/routes/product.$handle.tsx
++++ b/src/routes/product.$handle.tsx
+@@ -1020,6 +1020,7 @@ function ProductView({ product: base }: { product: ProductData }) {
+                     src={product.modelo_3d_url ?? ""}
+                     alt={product.nombre}
+                     poster={displayImg ?? undefined}
++                    colorHex={hayColoresFoto ? acabado?.hex : null}
+                     onProbar={() => {
+                       setEspacioMontado(true);
+                       setEspacioOpen(true);
