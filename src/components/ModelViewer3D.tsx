@@ -1,6 +1,6 @@
 // src/components/ModelViewer3D.tsx
 import { useEffect, useRef, useState } from "react";
-import { Camera, Loader2, RotateCcw } from "lucide-react";
+import { Loader2, Maximize2, RotateCcw } from "lucide-react";
 import { cargarModelViewer } from "@/lib/modelViewer";
 import { aplicarTapizado, PALETA_TAPIZADO } from "@/lib/tapizado3d";
 
@@ -17,13 +17,13 @@ export function ModelViewer3D({
   src,
   alt,
   poster,  // imagen de preview mientras carga el modelo
-  onProbar, // «Ver en tu espacio»: abre el probador con foto (cámara o galería) de «Pruébalo en tu espacio»
+  onAbrirSala, // «Abrir sala virtual»: el 3D en un ambiente aparte (pantalla completa); desde ahí se llega a «Ver en tu espacio»
   colorHex, // color del tapizado elegido en la ficha; sin valor → colores originales del modelo
 }: {
   src: string;
   alt: string;
   poster?: string;
-  onProbar?: () => void;
+  onAbrirSala?: () => void;
   colorHex?: string | null;
 }) {
   const viewerRef = useRef<any>(null);
@@ -84,22 +84,22 @@ export function ModelViewer3D({
         style={{ width: "100%", height: "100%", opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
       />
 
-      {/* «Ver en tu espacio»: mismo probador que «Pruébalo en tu espacio» (foto con cámara o galería) */}
-      {loaded && onProbar && (
+      {/* «Abrir sala virtual»: ambiente aparte con luz, medidas y vistas; allí está «Ver en tu espacio» */}
+      {loaded && onAbrirSala && (
         <button
           type="button"
-          onClick={onProbar}
+          onClick={onAbrirSala}
           className="absolute bottom-4 right-4 min-h-11 px-4 rounded-lg text-xs font-medium inline-flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
         >
-          <Camera className="h-4 w-4" aria-hidden />
-          Ver en tu espacio
+          <Maximize2 className="h-4 w-4" aria-hidden />
+          Abrir sala virtual
         </button>
       )}
 
       {/* Color del tapizado: prueba visual sobre el modelo */}
       {loaded && (
-        <div className="absolute bottom-4 left-4 right-40 flex flex-col gap-1.5">
+        <div className="absolute bottom-4 left-4 right-44 flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-foreground/80">
             Prueba un color: {PALETA_TAPIZADO.find((c) => c.hex === elegido)?.nombre ?? "Personalizado"}
           </span>

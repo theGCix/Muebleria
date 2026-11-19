@@ -45,6 +45,10 @@ import type { AcabadoEspacio } from "@/components/product/ProbarEnTuEspacio";
 const ProbarEnTuEspacio = lazy(() =>
   import("@/components/product/ProbarEnTuEspacio").then((m) => ({ default: m.ProbarEnTuEspacio })),
 );
+// La «Sala virtual» (3D en pantalla completa) también se descarga solo cuando el cliente la abre
+const SalaVirtual3D = lazy(() =>
+  import("@/components/product/SalaVirtual3D").then((m) => ({ default: m.SalaVirtual3D })),
+);
 import { piezasDeProducto } from "@/lib/piezas";
 import "@/components/product/product-experience.css";
 import { fetchProductReviews, fetchProductRating } from "@/lib/resenas.functions";
@@ -703,6 +707,8 @@ function ProductView({ product: base }: { product: ProductData }) {
   const [leadOpen, setLeadOpen] = useState(false);
   const [espacioOpen, setEspacioOpen] = useState(false);
   const [espacioMontado, setEspacioMontado] = useState(false);
+  const [salaOpen, setSalaOpen] = useState(false);
+  const [salaMontada, setSalaMontada] = useState(false);
   const [ambient, setAmbient] = useState(false);
   const [finishIdx, setFinishIdx] = useState(0);
   const [fotoColor, setFotoColor] = useState(0);
@@ -1021,9 +1027,9 @@ function ProductView({ product: base }: { product: ProductData }) {
                     alt={product.nombre}
                     poster={displayImg ?? undefined}
                     colorHex={hayColoresFoto ? acabado?.hex : null}
-                    onProbar={() => {
-                      setEspacioMontado(true);
-                      setEspacioOpen(true);
+                    onAbrirSala={() => {
+                      setSalaMontada(true);
+                      setSalaOpen(true);
                     }}
                   />
                 </div>
@@ -1281,6 +1287,23 @@ function ProductView({ product: base }: { product: ProductData }) {
           profile={profile}
           base={{ id: product.id, nombre: product.nombre, precio: precioSinOpciones, image: mainImg, sku: product.sku, categoria: product.categoria }}
         />
+
+        {salaMontada && has3D && (
+          <Suspense fallback={null}>
+            <SalaVirtual3D
+              open={salaOpen}
+              onOpenChange={setSalaOpen}
+              src={product.modelo_3d_url ?? ""}
+              alt={product.nombre}
+              poster={displayImg ?? undefined}
+              colorHex={hayColoresFoto ? acabado?.hex : null}
+              onProbar={() => {
+                setEspacioMontado(true);
+                setEspacioOpen(true);
+              }}
+            />
+          </Suspense>
+        )}
 
         {espacioMontado && (
           <Suspense fallback={null}>
