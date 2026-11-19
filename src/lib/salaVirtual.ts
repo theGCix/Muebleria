@@ -85,3 +85,52 @@ export function puntosDeMedida(centro: Vec3, tam: Vec3): PuntoMedida[] {
     { id: "alto", etiqueta: `Alto ${metrosACm(tam.y)} cm`, posicion: pos(maxX, centro.y, maxZ) },
   ];
 }
+
+/* ───────── Modo «Mi espacio»: el sofá en vivo sobre la foto del cliente ─────────
+ * Todo en fracciones de la foto (0–1) para que la imagen final coincida con lo que se ve en pantalla.
+ * No hay medida real: el tamaño es solo visual (decisión del dueño, sin escala de dos puntos). */
+
+export const TAMANO_MIN = 0.2;
+export const TAMANO_MAX = 1.4;
+export const TAMANO_INICIAL = 0.55;
+export const BRILLO_MIN = 0.5;
+export const BRILLO_MAX = 1.5;
+
+const acotar = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+
+/** Tamaño del visor como fracción del ancho de la foto, siempre dentro de [TAMANO_MIN, TAMANO_MAX]. */
+export const limitarTamano = (n: number): number => (Number.isFinite(n) ? acotar(n, TAMANO_MIN, TAMANO_MAX) : TAMANO_INICIAL);
+
+export const limitarBrillo = (n: number): number => (Number.isFinite(n) ? acotar(n, BRILLO_MIN, BRILLO_MAX) : 1);
+
+/** Giro en grados dentro de [0, 360). */
+export const normalizarGiro = (g: number): number => (Number.isFinite(g) ? ((g % 360) + 360) % 360 : 0);
+
+/** Pellizco con dos dedos: el tamaño cambia en la misma proporción que la distancia entre los dedos. */
+export function tamanoPorPellizco(base: number, distInicial: number, distActual: number): number {
+  if (!(distInicial > 0) || !Number.isFinite(distActual)) return limitarTamano(base);
+  return limitarTamano(base * (distActual / distInicial));
+}
+
+export interface Centro { x: number; y: number }
+
+/** Mueve el centro del sofá `dx`/`dy` píxeles sobre un escenario de `ancho` × `alto`; el centro no sale de la foto. */
+export function moverCentro(c: Centro, dx: number, dy: number, ancho: number, alto: number): Centro {
+  if (!(ancho > 0) || !(alto > 0)) return c;
+  return { x: acotar(c.x + dx / ancho, 0, 1), y: acotar(c.y + dy / alto, 0, 1) };
+}
+
+export interface CajaPx { left: number; top: number; lado: number }
+
+/** Caja cuadrada del visor en píxeles del escenario (el modelo se ajusta dentro de ella). */
+export function cajaDelMueble(centro: Centro, tamano: number, ancho: number, alto: number): CajaPx {
+  const lado = limitarTamano(tamano) * ancho;
+  return { left: centro.x * ancho - lado / 2, top: centro.y * alto - lado / 2, lado };
+}
+
+/** Mayor tamaño que cabe dentro de `libreW` × `libreH` conservando la proporción de la foto. */
+export function ajustarAlEspacio(fotoW: number, fotoH: number, libreW: number, libreH: number): { w: number; h: number } {
+  if (!(fotoW > 0) || !(fotoH > 0) || !(libreW > 0) || !(libreH > 0)) return { w: 0, h: 0 };
+  const k = Math.min(libreW / fotoW, libreH / fotoH);
+  return { w: Math.floor(fotoW * k), h: Math.floor(fotoH * k) };
+}

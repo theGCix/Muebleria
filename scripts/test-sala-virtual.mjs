@@ -26,3 +26,48 @@ test("ambientes y vistas: ids únicos, exposición y sombra positivas, paleta si
   assert.equal(new Set(VISTAS_CAMARA.map((v) => v.id)).size, VISTAS_CAMARA.length);
   for (const a of AMBIENTES) { assert.ok(a.exposicion > 0 && a.sombra > 0); assert.match(a.fondo, /^linear-gradient/); }
 });
+
+import {
+  TAMANO_MIN, TAMANO_MAX, TAMANO_INICIAL, limitarTamano, limitarBrillo, normalizarGiro,
+  tamanoPorPellizco, moverCentro, cajaDelMueble, ajustarAlEspacio,
+} from "../src/lib/salaVirtual.ts";
+
+test("tamaño: nunca desaparece ni tapa toda la foto; un valor inválido vuelve al inicial", () => {
+  assert.equal(limitarTamano(0.01), TAMANO_MIN);
+  assert.equal(limitarTamano(9), TAMANO_MAX);
+  assert.equal(limitarTamano(NaN), TAMANO_INICIAL);
+  assert.equal(limitarBrillo(0), 0.5);
+  assert.equal(limitarBrillo(3), 1.5);
+});
+
+test("pellizco: el tamaño sigue la proporción de la distancia entre dedos, con tope", () => {
+  assert.equal(tamanoPorPellizco(0.5, 100, 150), 0.75);
+  assert.equal(tamanoPorPellizco(0.5, 100, 20), TAMANO_MIN);
+  assert.equal(tamanoPorPellizco(0.5, 100, 900), TAMANO_MAX);
+  assert.equal(tamanoPorPellizco(0.5, 0, 150), 0.5);          // distancia inicial inválida: no cambia
+});
+
+test("giro se normaliza a [0, 360)", () => {
+  assert.equal(normalizarGiro(-30), 330);
+  assert.equal(normalizarGiro(370), 10);
+  assert.equal(normalizarGiro(NaN), 0);
+});
+
+test("mover: el centro se desplaza en fracción de la foto y no sale de ella", () => {
+  assert.deepEqual(moverCentro({ x: 0.5, y: 0.5 }, 50, -25, 500, 250), { x: 0.6, y: 0.4 });
+  assert.deepEqual(moverCentro({ x: 0.95, y: 0.02 }, 100, -100, 500, 250), { x: 1, y: 0 });
+  assert.deepEqual(moverCentro({ x: 0.5, y: 0.5 }, 10, 10, 0, 250), { x: 0.5, y: 0.5 });
+});
+
+test("caja del mueble: cuadrada, centrada en el punto y proporcional al ancho del escenario", () => {
+  const c = cajaDelMueble({ x: 0.5, y: 0.6 }, 0.5, 400, 300);
+  assert.equal(c.lado, 200);
+  assert.equal(c.left, 100);
+  assert.equal(c.top, 80);
+});
+
+test("ajustarAlEspacio conserva la proporción de la foto", () => {
+  assert.deepEqual(ajustarAlEspacio(1600, 1200, 800, 800), { w: 800, h: 600 });
+  assert.deepEqual(ajustarAlEspacio(1200, 1600, 800, 800), { w: 600, h: 800 });
+  assert.deepEqual(ajustarAlEspacio(0, 10, 800, 800), { w: 0, h: 0 });
+});

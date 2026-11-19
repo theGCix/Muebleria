@@ -3,10 +3,12 @@
 // vistas de cámara, medidas reales tomadas del propio archivo y prueba de color del tapizado.
 // Usa <model-viewer> (ya cargado desde CDN por ModelViewer3D); sin dependencias nuevas.
 import { useEffect, useRef, useState } from "react";
-import { Camera, Loader2, Ruler, X } from "lucide-react";
+import { Camera, ImagePlus, Loader2, Ruler, X } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cargarModelViewer } from "@/lib/modelViewer";
 import { aplicarTapizado, PALETA_TAPIZADO } from "@/lib/tapizado3d";
+import type { FotoEspacio } from "@/lib/fotoEspacio";
+import { FotoEspacioPanel } from "./FotoEspacio";
 import { AMBIENTES, VISTAS_CAMARA, puntosDeMedida, type AmbienteId, type PuntoMedida } from "@/lib/salaVirtual";
 
 interface Props {
@@ -45,13 +47,38 @@ export function SalaVirtual3D({ open, onOpenChange, src, alt, poster, colorHex, 
   );
 }
 
+/** Sala (escenario 3D) o «Mi espacio» (foto del cliente); el color y la foto se conservan al alternar. */
 function Escena({ src, alt, poster, colorInicial, onProbar }: {
   src: string; alt: string; poster?: string; colorInicial: string | null; onProbar?: () => void;
+}) {
+  const [modoEspacio, setModoEspacio] = useState(false);
+  const [color, setColor] = useState<string | null>(colorInicial);
+  const [foto, setFoto] = useState<FotoEspacio | null>(null);
+
+  if (modoEspacio) {
+    return (
+      <FotoEspacioPanel
+        src={src}
+        alt={alt}
+        nombre={alt}
+        foto={foto}
+        onFoto={setFoto}
+        color={color}
+        onColor={setColor}
+        onVolver={() => setModoEspacio(false)}
+      />
+    );
+  }
+  return <EscenaSala src={src} alt={alt} poster={poster} color={color} setColor={setColor} onMiEspacio={() => setModoEspacio(true)} onProbar={onProbar} />;
+}
+
+function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }: {
+  src: string; alt: string; poster?: string; color: string | null; setColor: (hex: string | null) => void;
+  onMiEspacio: () => void; onProbar?: () => void;
 }) {
   const viewerRef = useRef<any>(null);
   const [cargado, setCargado] = useState(false);
   const [fallo, setFallo] = useState(false);
-  const [color, setColor] = useState<string | null>(colorInicial);
   const [ambienteId, setAmbienteId] = useState<AmbienteId>("dia");
   const [vistaId, setVistaId] = useState<string>(VISTAS_CAMARA[0].id);
   const [medidas, setMedidas] = useState(true);
@@ -142,7 +169,7 @@ function Escena({ src, alt, poster, colorInicial, onProbar }: {
         <div className="rounded-xl px-4 py-2.5" style={{ background: "rgba(245,241,232,.92)", color: TEXTO }}>
           <DialogTitle className="font-display text-base font-normal tracking-normal sm:text-lg">Sala virtual</DialogTitle>
           <DialogDescription className="mt-0.5 text-xs" style={{ color: "#5b564d" }}>
-            Gira, acerca y mira el mueble a su tamaño real.
+            Gira, acerca y mira el mueble a su tamaño real. Con «Mi espacio» míralo en tu sala.
           </DialogDescription>
         </div>
         <DialogClose
@@ -228,6 +255,10 @@ function Escena({ src, alt, poster, colorInicial, onProbar }: {
                   Medidas
                 </button>
               )}
+              <button type="button" onClick={onMiEspacio} className={BOTON_BASE} style={{ background: "#34443A", color: MARFIL }}>
+                <ImagePlus className="h-4 w-4" aria-hidden />
+                Mi espacio
+              </button>
               {onProbar && (
                 <button type="button" onClick={onProbar} className={BOTON_BASE} style={{ background: "#34443A", color: MARFIL }}>
                   <Camera className="h-4 w-4" aria-hidden />
