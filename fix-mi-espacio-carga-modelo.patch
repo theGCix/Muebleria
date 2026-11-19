@@ -1,0 +1,26 @@
+diff --git a/src/components/product/FotoEspacio.tsx b/src/components/product/FotoEspacio.tsx
+index a2804e5..241044d 100644
+--- a/src/components/product/FotoEspacio.tsx
++++ b/src/components/product/FotoEspacio.tsx
+@@ -72,6 +72,9 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
+   useEffect(() => { if (foto) cargarModelViewer().catch(() => setFallo(true)); }, [foto]);
+ 
+   // React 18 no enlaza eventos de elementos personalizados: se escuchan a mano
++  // El visor solo existe cuando la foto ya se midió (escenario.w > 0), así que el efecto depende de eso:
++  // si no, los eventos se buscaban antes de que el visor se montara y «load» nunca se escuchaba.
++  const hayEscena = escenario.w > 0;
+   useEffect(() => {
+     const el = visorRef.current as HTMLElement | null;
+     if (!el) return;
+@@ -79,8 +82,10 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
+     const ko = () => setFallo(true);
+     el.addEventListener("load", ok);
+     el.addEventListener("error", ko);
++    // Por si el modelo ya terminó de cargar antes de enlazar el evento
++    if ((el as any).loaded) setCargado(true);
+     return () => { el.removeEventListener("load", ok); el.removeEventListener("error", ko); };
+-  }, [src, foto]);
++  }, [src, foto, hayEscena]);
+ 
+   useEffect(() => {
+     if (!cargado || !visorRef.current) return;
