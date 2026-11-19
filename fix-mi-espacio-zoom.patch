@@ -1,0 +1,52 @@
+diff --git a/src/components/product/FotoEspacio.tsx b/src/components/product/FotoEspacio.tsx
+index deb3f85..a2804e5 100644
+--- a/src/components/product/FotoEspacio.tsx
++++ b/src/components/product/FotoEspacio.tsx
+@@ -58,7 +58,8 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
+   useEffect(() => {
+     const el = zonaRef.current;
+     if (!el) return;
+-    const medir = () => setLibre({ w: el.clientWidth, h: el.clientHeight });
++    // Se descuenta el relleno (p-2 = 8 px por lado) para que la foto quepa justo en el espacio libre
++    const medir = () => setLibre({ w: Math.max(0, el.clientWidth - 16), h: Math.max(0, el.clientHeight - 16) });
+     medir();
+     const ro = new ResizeObserver(medir);
+     ro.observe(el);
+@@ -205,7 +206,7 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
+   const puedeCompartir = typeof navigator !== "undefined" && typeof navigator.canShare === "function";
+ 
+   return (
+-    <div className="flex h-full w-full flex-col select-none" style={{ background: "#1E2621", color: MARFIL }}>
++    <div className="flex h-full min-h-0 w-full flex-col select-none" style={{ background: "#1E2621", color: MARFIL }}>
+       {/* Cabecera */}
+       <div className="flex items-center justify-between gap-2 p-3 sm:p-4" style={{ background: "rgba(245,241,232,.96)", color: TEXTO }}>
+         <button type="button" onClick={onVolver} className={BOTON} style={{ background: "#E4DCCB", color: TEXTO }}>
+@@ -262,9 +263,13 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
+       {/* Paso 2: foto + sofá en vivo */}
+       {foto && (
+         <>
+-          <div ref={zonaRef} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2">
++          <div ref={zonaRef} className="relative min-h-0 flex-1 overflow-hidden p-2">
+             {escenario.w > 0 && (
+-              <div className="relative overflow-hidden rounded-lg" style={{ width: escenario.w, height: escenario.h }}>
++              // Posición absoluta: el tamaño de la foto no puede influir en el de la zona que se mide (evita el bucle de crecimiento)
++              <div
++                className="absolute overflow-hidden rounded-lg"
++                style={{ width: escenario.w, height: escenario.h, left: 8 + (libre.w - escenario.w) / 2, top: 8 + (libre.h - escenario.h) / 2 }}
++              >
+                 <img src={foto.url} alt="Tu espacio" className="absolute inset-0 h-full w-full" draggable={false} />
+                 <model-viewer
+                   ref={visorRef}
+diff --git a/src/components/product/SalaVirtual3D.tsx b/src/components/product/SalaVirtual3D.tsx
+index 6287dfd..b68db49 100644
+--- a/src/components/product/SalaVirtual3D.tsx
++++ b/src/components/product/SalaVirtual3D.tsx
+@@ -32,7 +32,7 @@ export function SalaVirtual3D({ open, onOpenChange, src, alt, poster, colorHex,
+   return (
+     <Dialog open={open} onOpenChange={onOpenChange}>
+       <DialogContent
+-        className="left-0 top-0 h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 [&>button:last-child]:hidden"
++        className="left-0 top-0 h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-none border-0 p-0 sm:rounded-none data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 [&>button:last-child]:hidden"
+       >
+         {/* La escena solo existe mientras la sala está abierta: al cerrar se libera el contexto 3D */}
+         <Escena

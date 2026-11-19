@@ -32,7 +32,7 @@ export function SalaVirtual3D({ open, onOpenChange, src, alt, poster, colorHex, 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="left-0 top-0 h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 [&>button:last-child]:hidden"
+        className="left-0 top-0 h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-none border-0 p-0 sm:rounded-none data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 [&>button:last-child]:hidden"
       >
         {/* La escena solo existe mientras la sala está abierta: al cerrar se libera el contexto 3D */}
         <Escena
