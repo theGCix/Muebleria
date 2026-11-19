@@ -8,7 +8,8 @@ import { DialogClose, DialogDescription, DialogTitle } from "@/components/ui/dia
 import { cargarImagen } from "@/lib/recorteImagen";
 import { cargarModelViewer } from "@/lib/modelViewer";
 import { prepararFotoEspacio, type FotoEspacio as Foto } from "@/lib/fotoEspacio";
-import { aplicarTapizado, PALETA_TAPIZADO } from "@/lib/tapizado3d";
+import { aplicarTapizado } from "@/lib/tapizado3d";
+import { SelectorTela } from "./SelectorTela";
 import {
   BRILLO_MAX, BRILLO_MIN, TAMANO_INICIAL, TAMANO_MAX, TAMANO_MIN,
   ajustarAlEspacio, cajaDelMueble, limitarBrillo, limitarTamano, moverCentro, normalizarGiro, tamanoPorPellizco,
@@ -347,22 +348,8 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
             </div>
 
             <div className="mx-auto mt-2 flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium">Color del tapizado: {PALETA_TAPIZADO.find((c) => c.hex === color)?.nombre ?? "Personalizado"}</span>
-                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color del tapizado">
-                  {PALETA_TAPIZADO.map((c) => (
-                    <button
-                      key={c.nombre} type="button" role="radio" aria-checked={c.hex === color} aria-label={c.nombre} title={c.nombre}
-                      onClick={() => onColor(c.hex)}
-                      className="h-11 w-11 rounded-full border-2 transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                      style={{
-                        background: c.hex ?? "conic-gradient(#d8cfc2, #8a8d90, #d8cfc2)",
-                        borderColor: c.hex === color ? VERDE : "rgba(255,255,255,.9)",
-                        boxShadow: "0 0 0 1px rgba(0,0,0,.25)",
-                      }}
-                    />
-                  ))}
-                </div>
+              <div className="w-full min-w-0 sm:max-w-md">
+                <SelectorTela compacto value={color} onChange={onColor} acento={VERDE} texto={TEXTO} />
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

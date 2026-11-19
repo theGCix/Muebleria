@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, ImagePlus, Loader2, Ruler, X } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cargarModelViewer } from "@/lib/modelViewer";
-import { aplicarTapizado, PALETA_TAPIZADO } from "@/lib/tapizado3d";
+import { aplicarTapizado } from "@/lib/tapizado3d";
+import { SelectorTela } from "./SelectorTela";
 import type { FotoEspacio } from "@/lib/fotoEspacio";
 import { FotoEspacioPanel } from "./FotoEspacio";
 import { AMBIENTES, VISTAS_CAMARA, puntosDeMedida, type AmbienteId, type PuntoMedida } from "@/lib/salaVirtual";
@@ -204,27 +205,8 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
       {cargado && (
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 p-3 sm:p-5">
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:p-4" style={{ background: "rgba(245,241,232,.95)", color: TEXTO }}>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium">Color del tapizado: {PALETA_TAPIZADO.find((c) => c.hex === color)?.nombre ?? "Personalizado"}</span>
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color del tapizado">
-                {PALETA_TAPIZADO.map((c) => (
-                  <button
-                    key={c.nombre}
-                    type="button"
-                    role="radio"
-                    aria-checked={c.hex === color}
-                    aria-label={c.nombre}
-                    title={c.nombre}
-                    onClick={() => setColor(c.hex)}
-                    className="h-11 w-11 rounded-full border-2 transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                    style={{
-                      background: c.hex ?? "conic-gradient(#d8cfc2, #8a8d90, #d8cfc2)",
-                      borderColor: c.hex === color ? "#34443A" : "rgba(255,255,255,.9)",
-                      boxShadow: "0 0 0 1px rgba(0,0,0,.25)",
-                    }}
-                  />
-                ))}
-              </div>
+            <div className="w-full min-w-0 sm:max-w-md">
+              <SelectorTela compacto value={color} onChange={setColor} acento="#34443A" texto={TEXTO} />
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

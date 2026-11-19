@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Maximize2, RotateCcw } from "lucide-react";
 import { cargarModelViewer } from "@/lib/modelViewer";
-import { aplicarTapizado, PALETA_TAPIZADO } from "@/lib/tapizado3d";
+import { aplicarTapizado } from "@/lib/tapizado3d";
+import { SelectorTela } from "@/components/product/SelectorTela";
 
 // Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
 declare global {
@@ -97,31 +98,10 @@ export function ModelViewer3D({
         </button>
       )}
 
-      {/* Color del tapizado: prueba visual sobre el modelo */}
+      {/* Tapizado: tipo de tela y tono, prueba visual sobre el modelo */}
       {loaded && (
-        <div className="absolute bottom-4 left-4 right-44 flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-foreground/80">
-            Prueba un color: {PALETA_TAPIZADO.find((c) => c.hex === elegido)?.nombre ?? "Personalizado"}
-          </span>
-          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Color del tapizado">
-            {PALETA_TAPIZADO.map((c) => (
-              <button
-                key={c.nombre}
-                type="button"
-                role="radio"
-                aria-checked={c.hex === elegido}
-                aria-label={c.nombre}
-                title={c.nombre}
-                onClick={() => setElegido(c.hex)}
-                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  background: c.hex ?? "conic-gradient(#d8cfc2, #8a8d90, #d8cfc2)",
-                  borderColor: c.hex === elegido ? "var(--primary)" : "rgba(255,255,255,0.9)",
-                  boxShadow: "0 0 0 1px rgba(0,0,0,0.25)",
-                }}
-              />
-            ))}
-          </div>
+        <div className="absolute inset-x-3 bottom-3 max-h-[55%] overflow-y-auto rounded-xl bg-background/90 p-3 backdrop-blur sm:right-44">
+          <SelectorTela value={elegido} onChange={setElegido} />
         </div>
       )}
 
