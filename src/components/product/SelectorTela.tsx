@@ -40,7 +40,7 @@ export function SelectorTela({ value, onChange, compacto = false, acento = "var(
   const tono = buscarTono(tonoId);
 
   const elegir = (t: Tela | null, n: Tono | null) => {
-    onChange({ telaId: t?.id ?? null, imagen: t?.imagen ?? null, tonoHex: n?.hex ?? null, hex: hexTapizado(t, n) });
+    onChange({ telaId: t?.id ?? null, imagen: t?.imagen ?? null, patron: t?.patron ?? false, tonoHex: n?.hex ?? null, hex: hexTapizado(t, n) });
   };
   const alElegirTela = (t: Tela) => {
     // Al cambiar de tela se parte del color propio de la tela; el tono se elige después

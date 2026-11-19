@@ -138,13 +138,16 @@ function suavizar(v: Float32Array, w: number, h: number, r: number): Float32Arra
 }
 
 /**
- * Devuelve una copia de `data` con el tapizado (según la máscara) cubierto por la trama de la muestra de tela, repetida en
- * espejo (sin costuras). Conserva la luz y la sombra del modelo. `destino` (opcional) lleva la tela a otro tono manteniendo
- * su relieve; sin él, la tela conserva su propio color. `tile` = lado en píxeles con que se repite la muestra en la textura.
+ * Devuelve una copia de `data` con el tapizado (según la máscara) cubierto por la trama de la muestra, repetida en
+ * espejo (sin costuras) y muestreada con suavizado (sin bloques). Conserva la luz y la sombra del modelo.
+ * `destino` (opcional) lleva la tela a otro tono manteniendo su relieve; sin él, la tela conserva su color.
+ * `tile` = lado en píxeles con que se repite la muestra. `patron`: telas con dibujo (floral, jaguar…): se conserva
+ * el contraste completo de la muestra; en telas lisas solo el detalle fino de la trama. Un grano fino devuelve
+ * nitidez cuando la muestra se amplía.
  */
 export function texturizar(
   data: Uint8ClampedArray | Uint8Array, w: number, h: number, mascara: Float32Array, base: Lab,
-  muestra: Muestra, tile: number, destino: RGB | null = null,
+  muestra: Muestra, tile: number, destino: RGB | null = null, patron = false,
 ): Uint8ClampedArray {
   const out = new Uint8ClampedArray(data);
   const mw = muestra.w, mh = muestra.h, nm = mw * mh;
@@ -155,27 +158,42 @@ export function texturizar(
     L[i] = l; A[i] = a; B[i] = b; mL += l; mA += a; mB += b;
   }
   mL /= nm; mA /= nm; mB /= nm;
-  // Solo se conserva el detalle fino de la luz (la trama); los pliegues fotografiados en la muestra se descartan
-  const lisa = suavizar(L, mw, mh, Math.max(3, Math.round(Math.min(mw, mh) / 8)));
-  const fino = new Float32Array(nm);
-  for (let i = 0; i < nm; i++) fino[i] = L[i] - lisa[i];
+  // Luz relativa a la media de la muestra. Lisa: solo el detalle fino (se descartan pliegues de la foto). Con dibujo: todo.
+  const rel = new Float32Array(nm);
+  if (patron) {
+    for (let i = 0; i < nm; i++) rel[i] = L[i] - mL;
+  } else {
+    const lisa = suavizar(L, mw, mh, Math.max(3, Math.round(Math.min(mw, mh) / 8)));
+    for (let i = 0; i < nm; i++) rel[i] = (L[i] - lisa[i]) * 1.8;
+  }
   const dst = destino ? rgbALab(destino[0], destino[1], destino[2]) : null;
   const lado = Math.max(8, tile);
-  const espejo = (v: number, n: number) => { const t = Math.floor(((v % (2 * lado)) / lado) * n) % (2 * n); return t < n ? t : 2 * n - 1 - t; };
+  // Coordenada de la muestra (con decimales) para un píxel de la textura, en espejo
+  const coord = (v: number, n: number) => {
+    let f = ((v % (2 * lado)) / lado) * n;
+    if (f > n) f = 2 * n - f;
+    return Math.min(n - 1, Math.max(0, f));
+  };
+  const muestreo = (arr: Float32Array, x0: number, x1: number, y0: number, y1: number, tx: number, ty: number) =>
+    (arr[y0 * mw + x0] * (1 - tx) + arr[y0 * mw + x1] * tx) * (1 - ty) + (arr[y1 * mw + x0] * (1 - tx) + arr[y1 * mw + x1] * tx) * ty;
   for (let y = 0; y < h; y++) {
+    const fy = coord(y, mh), y0 = Math.floor(fy), y1 = Math.min(mh - 1, y0 + 1), ty = fy - y0;
     for (let x = 0; x < w; x++) {
       const p = y * w + x, wgt = mascara[p];
       if (wgt <= 0) continue;
-      const m = espejo(y, mh) * mw + espejo(x, mw);
+      const fx = coord(x, mw), x0 = Math.floor(fx), x1 = Math.min(mw - 1, x0 + 1), tx = fx - x0;
       const i = p * 4;
       const sombra = (rgbALab(data[i], data[i + 1], data[i + 2])[0] - base[0]) * 0.85; // luz del modelo
-      const Lt = (dst ? dst[0] : mL) + fino[m] * 1.4 + sombra;
-      const at = dst ? dst[1] + (A[m] - mA) * 0.6 : A[m];
-      const bt = dst ? dst[2] + (B[m] - mB) * 0.6 : B[m];
-      const [r, g, bl] = labARgb(Lt, at, bt);
-      out[i] = Math.round(data[i] + (r - data[i]) * wgt);
-      out[i + 1] = Math.round(data[i + 1] + (g - data[i + 1]) * wgt);
-      out[i + 2] = Math.round(data[i + 2] + (bl - data[i + 2]) * wgt);
+      const r = muestreo(rel, x0, x1, y0, y1, tx, ty);
+      // Grano determinista (mismo resultado cada vez), ±2 de luz: da nitidez al tejido ampliado
+      const g = ((Math.imul(x, 374761393) ^ Math.imul(y, 668265263)) >>> 0) / 4294967295 * 2 - 1;
+      const Lt = (dst ? dst[0] : mL) + r + sombra + g * 2;
+      const at = dst ? dst[1] + (muestreo(A, x0, x1, y0, y1, tx, ty) - mA) * 0.6 : muestreo(A, x0, x1, y0, y1, tx, ty);
+      const bt = dst ? dst[2] + (muestreo(B, x0, x1, y0, y1, tx, ty) - mB) * 0.6 : muestreo(B, x0, x1, y0, y1, tx, ty);
+      const [R, G, Bl] = labARgb(Lt, at, bt);
+      out[i] = Math.round(data[i] + (R - data[i]) * wgt);
+      out[i + 1] = Math.round(data[i + 1] + (G - data[i + 1]) * wgt);
+      out[i + 2] = Math.round(data[i + 2] + (Bl - data[i + 2]) * wgt);
     }
   }
   return out;
@@ -273,11 +291,15 @@ function leerMuestra(url: string): Promise<Muestra | null> {
         // Se descarta el 12 % de cada borde (etiquetas, bordes y sombras de la foto)
         const mx = Math.round(bmp.width * 0.12), my = Math.round(bmp.height * 0.12);
         const w = bmp.width - 2 * mx, h = bmp.height - 2 * my;
+        // Se amplía 2× con suavizado de alta calidad: menos bloques al repetirla sobre el modelo
+        const W = w * 2, H = h * 2;
         const c = document.createElement("canvas");
-        c.width = w; c.height = h;
+        c.width = W; c.height = H;
         const ctx = c.getContext("2d", { willReadFrequently: true })!;
-        ctx.drawImage(bmp, mx, my, w, h, 0, 0, w, h);
-        return { w, h, data: ctx.getImageData(0, 0, w, h).data };
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(bmp, mx, my, w, h, 0, 0, W, H);
+        return { w: W, h: H, data: ctx.getImageData(0, 0, W, H).data };
       } catch {
         return null;
       }
@@ -287,7 +309,7 @@ function leerMuestra(url: string): Promise<Muestra | null> {
 }
 
 /** Lo que el cliente eligió: tela (si hay) y tono; `hex` es el color resultante (sirve de respaldo y para mostrar). */
-export interface Tapizado { telaId: string | null; imagen: string | null; tonoHex: string | null; hex: string | null }
+export interface Tapizado { telaId: string | null; imagen: string | null; patron?: boolean; tonoHex: string | null; hex: string | null }
 export const SIN_TAPIZADO: Tapizado = { telaId: null, imagen: null, tonoHex: null, hex: null };
 
 /**
@@ -305,7 +327,7 @@ export async function aplicarSeleccion(viewer: any, sel: Tapizado | null | undef
     const [o, muestra] = await Promise.all([originales.get(viewer)!, leerMuestra(sel.imagen)]);
     if (!o || ultimaPeticion.get(viewer) !== turno) return false;
     if (!muestra) return aplicarTapizado(viewer, sel.hex);
-    const px = texturizar(o.data, o.w, o.h, o.mascara, o.base, muestra, Math.round(o.w / 5), hexARgb(sel.tonoHex));
+    const px = texturizar(o.data, o.w, o.h, o.mascara, o.base, muestra, Math.round(o.w / (sel.patron ? 6 : 12)), hexARgb(sel.tonoHex), !!sel.patron);
     const c = document.createElement("canvas");
     c.width = o.w; c.height = o.h;
     c.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(px), o.w, o.h), 0, 0);
