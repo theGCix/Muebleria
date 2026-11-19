@@ -1,6 +1,6 @@
 // src/components/ModelViewer3D.tsx
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Maximize2, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Maximize2, Palette, RotateCcw } from "lucide-react";
 import { cargarModelViewer } from "@/lib/modelViewer";
 import { aplicarSeleccion, SIN_TAPIZADO, type Tapizado } from "@/lib/tapizado3d";
 import { SelectorTela } from "@/components/product/SelectorTela";
@@ -29,6 +29,7 @@ export function ModelViewer3D({
 }) {
   const viewerRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
+  const [telasAbiertas, setTelasAbiertas] = useState(false); // selector plegado por defecto: no tapa el modelo
   const [failed, setFailed] = useState(false);
   // Color de prueba elegido aquí (solo visual); si la ficha manda un color, se parte de él
   const [elegido, setElegido] = useState<Tapizado>({ ...SIN_TAPIZADO, hex: colorHex ?? null });
@@ -61,6 +62,7 @@ export function ModelViewer3D({
   }, [loaded, elegido, src]);
 
   return (
+    <div className="flex w-full flex-col gap-2">
     <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-secondary/20 border border-border/40">
       {!loaded && !failed && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -98,13 +100,6 @@ export function ModelViewer3D({
         </button>
       )}
 
-      {/* Tapizado: tipo de tela y tono, prueba visual sobre el modelo */}
-      {loaded && (
-        <div className="absolute inset-x-3 bottom-3 max-h-[55%] overflow-y-auto rounded-xl bg-background/90 p-3 backdrop-blur sm:right-44">
-          <SelectorTela value={elegido} onChange={setElegido} />
-        </div>
-      )}
-
       {/* Controles flotantes */}
       {loaded && (
         <div className="absolute top-3 right-3 flex flex-col gap-1.5">
@@ -116,6 +111,27 @@ export function ModelViewer3D({
           >
             <RotateCcw className="h-4 w-4 text-foreground" />
           </button>
+        </div>
+      )}
+    </div>
+
+      {/* Tapizado: fuera del recuadro 3D para que nunca tape el modelo; plegable */}
+      {loaded && (
+        <div className="rounded-xl border border-border/40 bg-background/90">
+          <button
+            type="button"
+            onClick={() => setTelasAbiertas((v) => !v)}
+            aria-expanded={telasAbiertas}
+            className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <span className="inline-flex items-center gap-2"><Palette className="h-4 w-4" aria-hidden />Probar tapizado y telas</span>
+            {telasAbiertas ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}
+          </button>
+          {telasAbiertas && (
+            <div className="max-h-[50dvh] overflow-y-auto p-3 pt-0">
+              <SelectorTela value={elegido} onChange={setElegido} />
+            </div>
+          )}
         </div>
       )}
     </div>

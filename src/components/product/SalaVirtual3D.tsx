@@ -3,7 +3,7 @@
 // vistas de cámara, medidas reales tomadas del propio archivo y prueba de color del tapizado.
 // Usa <model-viewer> (ya cargado desde CDN por ModelViewer3D); sin dependencias nuevas.
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus, Loader2, Ruler, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, ImagePlus, Loader2, Palette, Ruler, X } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cargarModelViewer } from "@/lib/modelViewer";
 import { aplicarSeleccion, SIN_TAPIZADO, type Tapizado } from "@/lib/tapizado3d";
@@ -83,6 +83,8 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
   const [ambienteId, setAmbienteId] = useState<AmbienteId>("dia");
   const [vistaId, setVistaId] = useState<string>(VISTAS_CAMARA[0].id);
   const [medidas, setMedidas] = useState(true);
+  // En móvil el selector de telas va plegado para no tapar el modelo; en pantallas grandes siempre visible
+  const [panelTelas, setPanelTelas] = useState(false);
   const [puntos, setPuntos] = useState<PuntoMedida[]>([]);
   const ambiente = AMBIENTES.find((a) => a.id === ambienteId) ?? AMBIENTES[0];
 
@@ -119,57 +121,14 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
     viewerRef.current.cameraOrbit = vista.orbita;
   }
 
+  const colorTexto = ambienteId === "noche" ? MARFIL : TEXTO;
   return (
-    <div className="relative h-full w-full select-none" style={{ background: ambiente.fondo, transition: "background .5s" }}>
-      <model-viewer
-        ref={viewerRef}
-        src={src}
-        alt={alt}
-        poster={poster}
-        camera-controls
-        auto-rotate
-        auto-rotate-delay="2500"
-        rotation-per-second="12deg"
-        camera-orbit={VISTAS_CAMARA[0].orbita}
-        min-camera-orbit="auto 25deg auto"
-        max-camera-orbit="auto 90deg auto"
-        environment-image="neutral"
-        exposure={ambiente.exposicion}
-        shadow-intensity={ambiente.sombra}
-        shadow-softness="0.9"
-        interaction-prompt="auto"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "transparent", opacity: cargado ? 1 : 0, transition: "opacity .4s" }}
-      >
-        {medidas && puntos.map((p) => (
-          <div
-            key={p.id}
-            slot={`hotspot-${p.id}`}
-            data-position={p.posicion}
-            data-visibility-attribute="visible"
-            className="pointer-events-none rounded-full px-3 py-1 text-xs font-medium shadow-md"
-            style={{ background: TEXTO, color: MARFIL, whiteSpace: "nowrap" }}
-          >
-            {p.etiqueta}
-          </div>
-        ))}
-      </model-viewer>
-
-      {!cargado && !fallo && (
-        <div className="absolute inset-0 flex items-center justify-center" role="status" aria-label="Cargando el modelo 3D">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: ambienteId === "noche" ? MARFIL : TEXTO }} />
-        </div>
-      )}
-      {fallo && (
-        <div className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm" style={{ color: ambienteId === "noche" ? MARFIL : TEXTO }}>
-          No se pudo cargar el modelo 3D. Cierra esta ventana y mira las fotos del producto.
-        </div>
-      )}
-
-      {/* Barra superior */}
-      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-5">
-        <div className="rounded-xl px-4 py-2.5" style={{ background: "rgba(245,241,232,.92)", color: TEXTO }}>
+    <div className="relative flex h-full w-full select-none flex-col" style={{ background: ambiente.fondo, transition: "background .5s" }}>
+      {/* Barra superior (en flujo normal: ya no tapa el modelo) */}
+      <div className="flex shrink-0 items-start justify-between gap-3 p-3 sm:p-5">
+        <div className="min-w-0 rounded-xl px-4 py-2.5" style={{ background: "rgba(245,241,232,.92)", color: TEXTO }}>
           <DialogTitle className="font-display text-base font-normal tracking-normal sm:text-lg">Sala virtual</DialogTitle>
-          <DialogDescription className="mt-0.5 text-xs" style={{ color: "#5b564d" }}>
+          <DialogDescription className="sr-only sm:not-sr-only mt-0.5 text-xs" style={{ color: "#5b564d" }}>
             Gira, acerca y mira el mueble a su tamaño real. Con «Mi espacio» míralo en tu sala.
           </DialogDescription>
         </div>
@@ -182,31 +141,92 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
         </DialogClose>
       </div>
 
-      {/* Vistas de cámara */}
-      {cargado && (
-        <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-2 sm:right-5" role="radiogroup" aria-label="Vista de cámara">
-          {VISTAS_CAMARA.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="radio"
-              aria-checked={vistaId === v.id}
-              onClick={() => irAVista(v.id)}
-              className={BOTON_BASE}
-              style={{ background: vistaId === v.id ? "#34443A" : "rgba(245,241,232,.92)", color: vistaId === v.id ? MARFIL : TEXTO }}
+      {/* Zona del modelo: ocupa todo el espacio libre entre la barra y los controles */}
+      <div className="relative min-h-[35dvh] min-w-0 flex-1">
+        <model-viewer
+          ref={viewerRef}
+          src={src}
+          alt={alt}
+          poster={poster}
+          camera-controls
+          auto-rotate
+          auto-rotate-delay="2500"
+          rotation-per-second="12deg"
+          camera-orbit={VISTAS_CAMARA[0].orbita}
+          min-camera-orbit="auto 25deg auto"
+          max-camera-orbit="auto 90deg auto"
+          environment-image="neutral"
+          exposure={ambiente.exposicion}
+          shadow-intensity={ambiente.sombra}
+          shadow-softness="0.9"
+          interaction-prompt="auto"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "transparent", opacity: cargado ? 1 : 0, transition: "opacity .4s" }}
+        >
+          {medidas && puntos.map((p) => (
+            <div
+              key={p.id}
+              slot={`hotspot-${p.id}`}
+              data-position={p.posicion}
+              data-visibility-attribute="visible"
+              className="pointer-events-none rounded-full px-3 py-1 text-xs font-medium shadow-md"
+              style={{ background: TEXTO, color: MARFIL, whiteSpace: "nowrap" }}
             >
-              {v.nombre}
-            </button>
+              {p.etiqueta}
+            </div>
           ))}
-        </div>
-      )}
+        </model-viewer>
 
-      {/* Barra inferior: ambiente, medidas, color y probador */}
+        {!cargado && !fallo && (
+          <div className="absolute inset-0 flex items-center justify-center" role="status" aria-label="Cargando el modelo 3D">
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: colorTexto }} />
+          </div>
+        )}
+        {fallo && (
+          <div className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm" style={{ color: colorTexto }}>
+            No se pudo cargar el modelo 3D. Cierra esta ventana y mira las fotos del producto.
+          </div>
+        )}
+
+        {/* Vistas de cámara */}
+        {cargado && (
+          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-2 sm:right-5" role="radiogroup" aria-label="Vista de cámara">
+            {VISTAS_CAMARA.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="radio"
+                aria-checked={vistaId === v.id}
+                onClick={() => irAVista(v.id)}
+                className={BOTON_BASE}
+                style={{ background: vistaId === v.id ? "#34443A" : "rgba(245,241,232,.92)", color: vistaId === v.id ? MARFIL : TEXTO }}
+              >
+                {v.nombre}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Controles inferiores (en flujo normal, con altura máxima y scroll propio) */}
       {cargado && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 p-3 sm:p-5">
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:p-4" style={{ background: "rgba(245,241,232,.95)", color: TEXTO }}>
+        <div className="shrink-0 p-3 sm:p-5">
+          <div className="mx-auto flex max-h-[45dvh] w-full max-w-4xl flex-col gap-3 overflow-y-auto rounded-2xl p-3 sm:max-h-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 sm:overflow-visible sm:p-4" style={{ background: "rgba(245,241,232,.95)", color: TEXTO }}>
+            {/* Telas: plegable en móvil */}
             <div className="w-full min-w-0 sm:max-w-md">
-              <SelectorTela compacto value={color} onChange={setColor} acento="#34443A" texto={TEXTO} />
+              <button
+                type="button"
+                onClick={() => setPanelTelas((v) => !v)}
+                aria-expanded={panelTelas}
+                className={`${BOTON_BASE} w-full border sm:hidden`}
+                style={{ borderColor: "#8B735B", background: panelTelas ? "#D8C3A5" : "transparent", color: TEXTO }}
+              >
+                <Palette className="h-4 w-4" aria-hidden />
+                Tapizado y telas
+                {panelTelas ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronUp className="h-4 w-4" aria-hidden />}
+              </button>
+              <div className={`${panelTelas ? "mt-3 block" : "hidden"} sm:mt-0 sm:block`}>
+                <SelectorTela compacto value={color} onChange={setColor} acento="#34443A" texto={TEXTO} />
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -218,7 +238,7 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
                     role="radio"
                     aria-checked={ambienteId === a.id}
                     onClick={() => setAmbienteId(a.id)}
-                    className={BOTON_BASE}
+                    className={`${BOTON_BASE} !px-3`}
                     style={{ background: ambienteId === a.id ? "#34443A" : "transparent", color: ambienteId === a.id ? MARFIL : TEXTO }}
                   >
                     {a.nombre}
