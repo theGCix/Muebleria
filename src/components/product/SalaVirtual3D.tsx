@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, ImagePlus, Loader2, Ruler, X } from "lucide-react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cargarModelViewer } from "@/lib/modelViewer";
-import { aplicarTapizado } from "@/lib/tapizado3d";
+import { aplicarSeleccion, SIN_TAPIZADO, type Tapizado } from "@/lib/tapizado3d";
 import { SelectorTela } from "./SelectorTela";
 import type { FotoEspacio } from "@/lib/fotoEspacio";
 import { FotoEspacioPanel } from "./FotoEspacio";
@@ -53,7 +53,7 @@ function Escena({ src, alt, poster, colorInicial, onProbar }: {
   src: string; alt: string; poster?: string; colorInicial: string | null; onProbar?: () => void;
 }) {
   const [modoEspacio, setModoEspacio] = useState(false);
-  const [color, setColor] = useState<string | null>(colorInicial);
+  const [color, setColor] = useState<Tapizado>({ ...SIN_TAPIZADO, hex: colorInicial });
   const [foto, setFoto] = useState<FotoEspacio | null>(null);
 
   if (modoEspacio) {
@@ -74,7 +74,7 @@ function Escena({ src, alt, poster, colorInicial, onProbar }: {
 }
 
 function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }: {
-  src: string; alt: string; poster?: string; color: string | null; setColor: (hex: string | null) => void;
+  src: string; alt: string; poster?: string; color: Tapizado; setColor: (sel: Tapizado) => void;
   onMiEspacio: () => void; onProbar?: () => void;
 }) {
   const viewerRef = useRef<any>(null);
@@ -108,7 +108,7 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
 
   useEffect(() => {
     if (!cargado || !viewerRef.current) return;
-    void aplicarTapizado(viewerRef.current, color);
+    void aplicarSeleccion(viewerRef.current, color);
   }, [cargado, color, src]);
 
   function irAVista(id: string) {

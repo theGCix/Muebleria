@@ -8,7 +8,7 @@ import { DialogClose, DialogDescription, DialogTitle } from "@/components/ui/dia
 import { cargarImagen } from "@/lib/recorteImagen";
 import { cargarModelViewer } from "@/lib/modelViewer";
 import { prepararFotoEspacio, type FotoEspacio as Foto } from "@/lib/fotoEspacio";
-import { aplicarTapizado } from "@/lib/tapizado3d";
+import { aplicarSeleccion, type Tapizado } from "@/lib/tapizado3d";
 import { SelectorTela } from "./SelectorTela";
 import {
   BRILLO_MAX, BRILLO_MIN, TAMANO_INICIAL, TAMANO_MAX, TAMANO_MIN,
@@ -22,8 +22,8 @@ interface Props {
   nombre: string;
   foto: Foto | null;
   onFoto: (f: Foto) => void;
-  color: string | null;
-  onColor: (hex: string | null) => void;
+  color: Tapizado;
+  onColor: (sel: Tapizado) => void;
   onVolver: () => void;
 }
 
@@ -90,7 +90,7 @@ export function FotoEspacioPanel({ src, alt, nombre, foto, onFoto, color, onColo
 
   useEffect(() => {
     if (!cargado || !visorRef.current) return;
-    void aplicarTapizado(visorRef.current, color);
+    void aplicarSeleccion(visorRef.current, color);
   }, [cargado, color, src]);
 
   /* ── Foto ── */

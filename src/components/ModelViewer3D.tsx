@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Maximize2, RotateCcw } from "lucide-react";
 import { cargarModelViewer } from "@/lib/modelViewer";
-import { aplicarTapizado } from "@/lib/tapizado3d";
+import { aplicarSeleccion, SIN_TAPIZADO, type Tapizado } from "@/lib/tapizado3d";
 import { SelectorTela } from "@/components/product/SelectorTela";
 
 // Usa @google/model-viewer — web component nativo, sin bundle pesado (se carga solo al abrir «Vista 3D»)
@@ -31,8 +31,8 @@ export function ModelViewer3D({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   // Color de prueba elegido aquí (solo visual); si la ficha manda un color, se parte de él
-  const [elegido, setElegido] = useState<string | null>(colorHex ?? null);
-  useEffect(() => { setElegido(colorHex ?? null); }, [colorHex]);
+  const [elegido, setElegido] = useState<Tapizado>({ ...SIN_TAPIZADO, hex: colorHex ?? null });
+  useEffect(() => { setElegido({ ...SIN_TAPIZADO, hex: colorHex ?? null }); }, [colorHex]);
 
   useEffect(() => {
     cargarModelViewer().catch(() => setFailed(true));
@@ -57,7 +57,7 @@ export function ModelViewer3D({
   // Tapizado: se repinta al cargar el modelo y cada vez que cambia el color elegido
   useEffect(() => {
     if (!loaded || !viewerRef.current) return;
-    void aplicarTapizado(viewerRef.current, elegido);
+    void aplicarSeleccion(viewerRef.current, elegido);
   }, [loaded, elegido, src]);
 
   return (

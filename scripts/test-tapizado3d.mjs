@@ -86,3 +86,21 @@ test("extrae la textura embebida de un .glb", () => {
   assert.deepEqual([...r.bytes], [...img]);
   assert.equal(extraerTexturaGlb(new ArrayBuffer(40)), null);
 });
+
+test("texturizar cubre el tapizado con la trama de la muestra, respeta lo demás y no altera la original", async () => {
+  const { texturizar } = await import("../src/lib/tapizado3d.ts");
+  const d = textura(), w = 100, h = 100;
+  const base = detectarColorBase(d), m = crearMascara(d, base);
+  // muestra 8x8: cuadros claros y oscuros de un tejido rojizo
+  const mu = new Uint8ClampedArray(8 * 8 * 4);
+  for (let i = 0; i < 64; i++) mu.set(((i % 8) + Math.floor(i / 8)) % 2 ? [190, 60, 50, 255] : [120, 30, 25, 255], i * 4);
+  const out = texturizar(d, w, h, m, base, { w: 8, h: 8, data: mu }, 16);
+  assert.ok(out[0] > out[2], "el tapizado debe tomar el rojizo de la tela");
+  assert.deepEqual([...out.slice(8 * 4, 8 * 4 + 4)], [190, 150, 40, 255]); // dorado intacto
+  assert.deepEqual([...d.slice(0, 3)], [141, 131, 121]);
+  // con tono, el color sale del destino pero la trama sigue ahí (no queda plano)
+  const azul = texturizar(d, w, h, m, base, { w: 8, h: 8, data: mu }, 16, hexARgb("#2f4a6b"));
+  assert.ok(azul[2] > azul[0], "con tono azul debe verse azulado");
+  const Ls = new Set(); for (let p = 0; p < 800; p += 10) Ls.add(Math.round(rgbALab(azul[p * 4], azul[p * 4 + 1], azul[p * 4 + 2])[0]));
+  assert.ok(Ls.size > 3, "la trama debe variar la luz");
+});

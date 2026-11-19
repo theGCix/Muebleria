@@ -2,15 +2,16 @@
 // Selector de tapizado de las vistas 3D: primero el TIPO de tela (36, en 5 categorías) y luego el TONO.
 // Devuelve un solo valor —el hex con el que se pinta el modelo— para que los visores no cambien de contrato.
 // `compacto`: barra de la sala / «Mi espacio» (tira de muestras con scroll); sin él: rejilla con nombres (visor de la ficha).
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import type { Tapizado } from "@/lib/tapizado3d";
 import {
-  CATEGORIAS_TELA, TELAS, TONOS, buscarTela, buscarTono, hexTapizado, nombreTapizado, telasDeCategoria,
+  CATEGORIAS_TELA, TONOS, buscarTela, buscarTono, hexTapizado, nombreTapizado, telasDeCategoria,
   type Tela, type Tono,
 } from "@/lib/telas";
 
 interface Props {
-  value: string | null;
-  onChange: (hex: string | null) => void;
+  value: Tapizado;
+  onChange: (sel: Tapizado) => void;
   compacto?: boolean;
   /** Color de acento (borde de lo elegido y chip activo); por defecto el primario del tema. */
   acento?: string;
@@ -18,41 +19,28 @@ interface Props {
   texto?: string;
 }
 
-/** Qué tela/tono corresponde a un hex que viene de fuera (la ficha o la otra vista). */
-function desdeHex(hex: string | null): { tela: Tela | null; tono: Tono } {
-  const h = hex?.toLowerCase() ?? null;
-  if (!h) return { tela: null, tono: buscarTono("original")! };
-  const tela = TELAS.find((t) => t.hex.toLowerCase() === h) ?? null;
-  if (tela) return { tela, tono: buscarTono("original")! };
-  const tono = TONOS.find((t) => t.hex?.toLowerCase() === h);
-  return { tela: null, tono: tono ?? buscarTono("original")! };
-}
-
 export function SelectorTela({ value, onChange, compacto = false, acento = "var(--primary)", texto = "inherit" }: Props) {
   const uid = useId();
-  const inicial = useMemo(() => desdeHex(value), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [telaId, setTelaId] = useState<string | null>(inicial.tela?.id ?? null);
-  const [tonoId, setTonoId] = useState<string>(inicial.tono.id);
-  const [categoria, setCategoria] = useState<number>(inicial.tela?.categoria ?? CATEGORIAS_TELA[0].id);
-  const emitido = useRef<string | null>(value); // último hex que salió de aquí: evita rebotar el cambio al padre
+  // Tono que corresponde a la selección que llega de fuera (por su hex; «Original» si no coincide con ninguno)
+  const tonoDe = (v: Tapizado) => TONOS.find((t) => t.hex && t.hex.toLowerCase() === v.tonoHex?.toLowerCase())?.id
+    ?? (v.telaId ? "original" : TONOS.find((t) => t.hex && t.hex.toLowerCase() === v.hex?.toLowerCase())?.id ?? "original");
+  const [telaId, setTelaId] = useState<string | null>(value.telaId);
+  const [tonoId, setTonoId] = useState<string>(tonoDe(value));
+  const [categoria, setCategoria] = useState<number>(buscarTela(value.telaId)?.categoria ?? CATEGORIAS_TELA[0].id);
 
-  // Si otra vista (o la ficha) cambia el color, se refleja aquí sin volver a avisar
+  // Si otra vista (o la ficha) cambia la selección, se refleja aquí
   useEffect(() => {
-    if ((value ?? null) === emitido.current) return;
-    emitido.current = value ?? null;
-    const d = desdeHex(value);
-    setTelaId(d.tela?.id ?? null);
-    setTonoId(d.tono.id);
-    if (d.tela) setCategoria(d.tela.categoria);
-  }, [value]);
+    setTelaId(value.telaId);
+    setTonoId(tonoDe(value));
+    const t = buscarTela(value.telaId);
+    if (t) setCategoria(t.categoria);
+  }, [value.telaId, value.tonoHex, value.hex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tela = buscarTela(telaId);
   const tono = buscarTono(tonoId);
 
   const elegir = (t: Tela | null, n: Tono | null) => {
-    const hex = hexTapizado(t, n);
-    emitido.current = hex;
-    onChange(hex);
+    onChange({ telaId: t?.id ?? null, imagen: t?.imagen ?? null, tonoHex: n?.hex ?? null, hex: hexTapizado(t, n) });
   };
   const alElegirTela = (t: Tela) => {
     // Al cambiar de tela se parte del color propio de la tela; el tono se elige después

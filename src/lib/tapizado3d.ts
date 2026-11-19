@@ -116,6 +116,71 @@ export function recolorear(data: Uint8ClampedArray | Uint8Array, mascara: Float3
   return out;
 }
 
+// ───────────── Tela real: trama de la muestra sobre el tapizado ─────────────
+
+export interface Muestra { w: number; h: number; data: Uint8ClampedArray | Uint8Array }
+
+/** Media móvil horizontal+vertical (caja de radio r) de un canal; quita pliegues y sombras grandes de la foto de la muestra. */
+function suavizar(v: Float32Array, w: number, h: number, r: number): Float32Array {
+  const pasada = (src: Float32Array, n: number, m: number, paso: number, salto: number) => {
+    const out = new Float32Array(src.length);
+    for (let j = 0; j < m; j++) {
+      const ini = j * salto;
+      for (let i = 0; i < n; i++) {
+        let suma = 0, cnt = 0;
+        for (let d = -r; d <= r; d++) { const k = Math.min(n - 1, Math.max(0, i + d)); suma += src[ini + k * paso]; cnt++; }
+        out[ini + i * paso] = suma / cnt;
+      }
+    }
+    return out;
+  };
+  return pasada(pasada(v, w, h, 1, w), h, w, w, 1);
+}
+
+/**
+ * Devuelve una copia de `data` con el tapizado (según la máscara) cubierto por la trama de la muestra de tela, repetida en
+ * espejo (sin costuras). Conserva la luz y la sombra del modelo. `destino` (opcional) lleva la tela a otro tono manteniendo
+ * su relieve; sin él, la tela conserva su propio color. `tile` = lado en píxeles con que se repite la muestra en la textura.
+ */
+export function texturizar(
+  data: Uint8ClampedArray | Uint8Array, w: number, h: number, mascara: Float32Array, base: Lab,
+  muestra: Muestra, tile: number, destino: RGB | null = null,
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(data);
+  const mw = muestra.w, mh = muestra.h, nm = mw * mh;
+  const L = new Float32Array(nm), A = new Float32Array(nm), B = new Float32Array(nm);
+  let mL = 0, mA = 0, mB = 0;
+  for (let i = 0; i < nm; i++) {
+    const [l, a, b] = rgbALab(muestra.data[i * 4], muestra.data[i * 4 + 1], muestra.data[i * 4 + 2]);
+    L[i] = l; A[i] = a; B[i] = b; mL += l; mA += a; mB += b;
+  }
+  mL /= nm; mA /= nm; mB /= nm;
+  // Solo se conserva el detalle fino de la luz (la trama); los pliegues fotografiados en la muestra se descartan
+  const lisa = suavizar(L, mw, mh, Math.max(3, Math.round(Math.min(mw, mh) / 8)));
+  const fino = new Float32Array(nm);
+  for (let i = 0; i < nm; i++) fino[i] = L[i] - lisa[i];
+  const dst = destino ? rgbALab(destino[0], destino[1], destino[2]) : null;
+  const lado = Math.max(8, tile);
+  const espejo = (v: number, n: number) => { const t = Math.floor(((v % (2 * lado)) / lado) * n) % (2 * n); return t < n ? t : 2 * n - 1 - t; };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x, wgt = mascara[p];
+      if (wgt <= 0) continue;
+      const m = espejo(y, mh) * mw + espejo(x, mw);
+      const i = p * 4;
+      const sombra = (rgbALab(data[i], data[i + 1], data[i + 2])[0] - base[0]) * 0.85; // luz del modelo
+      const Lt = (dst ? dst[0] : mL) + fino[m] * 1.4 + sombra;
+      const at = dst ? dst[1] + (A[m] - mA) * 0.6 : A[m];
+      const bt = dst ? dst[2] + (B[m] - mB) * 0.6 : B[m];
+      const [r, g, bl] = labARgb(Lt, at, bt);
+      out[i] = Math.round(data[i] + (r - data[i]) * wgt);
+      out[i + 1] = Math.round(data[i + 1] + (g - data[i + 1]) * wgt);
+      out[i + 2] = Math.round(data[i + 2] + (bl - data[i + 2]) * wgt);
+    }
+  }
+  return out;
+}
+
 // ───────────── Pegamento con <model-viewer> (solo navegador) ─────────────
 
 interface Original { w: number; h: number; data: Uint8ClampedArray; base: Lab; mascara: Float32Array }
@@ -188,6 +253,62 @@ export async function aplicarTapizado(viewer: any, hex: string | null | undefine
     const ctx = c.getContext("2d")!;
     const px = destino ? recolorear(o.data, o.mascara, o.base, destino) : o.data;
     ctx.putImageData(new ImageData(new Uint8ClampedArray(px), o.w, o.h), 0, 0);
+    const textura = await viewer.createTexture(c.toDataURL("image/png"));
+    if (ultimaPeticion.get(viewer) !== turno) return false;
+    slot.setTexture(textura);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const muestras = new Map<string, Promise<Muestra | null>>();
+function leerMuestra(url: string): Promise<Muestra | null> {
+  if (!muestras.has(url)) {
+    muestras.set(url, (async () => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        const bmp = await createImageBitmap(await r.blob());
+        // Se descarta el 12 % de cada borde (etiquetas, bordes y sombras de la foto)
+        const mx = Math.round(bmp.width * 0.12), my = Math.round(bmp.height * 0.12);
+        const w = bmp.width - 2 * mx, h = bmp.height - 2 * my;
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        const ctx = c.getContext("2d", { willReadFrequently: true })!;
+        ctx.drawImage(bmp, mx, my, w, h, 0, 0, w, h);
+        return { w, h, data: ctx.getImageData(0, 0, w, h).data };
+      } catch {
+        return null;
+      }
+    })());
+  }
+  return muestras.get(url)!;
+}
+
+/** Lo que el cliente eligió: tela (si hay) y tono; `hex` es el color resultante (sirve de respaldo y para mostrar). */
+export interface Tapizado { telaId: string | null; imagen: string | null; tonoHex: string | null; hex: string | null }
+export const SIN_TAPIZADO: Tapizado = { telaId: null, imagen: null, tonoHex: null, hex: null };
+
+/**
+ * Pinta el modelo con la selección: con tela, cubre el tapizado con la trama de su muestra (y el tono si lo hay);
+ * sin tela, solo recolorea como antes. Si la muestra no carga, cae al color. No lanza.
+ */
+export async function aplicarSeleccion(viewer: any, sel: Tapizado | null | undefined): Promise<boolean> {
+  if (!sel || !sel.telaId || !sel.imagen) return aplicarTapizado(viewer, sel?.hex ?? null);
+  try {
+    const slot = viewer?.model?.materials?.[0]?.pbrMetallicRoughness?.baseColorTexture;
+    if (!slot) return false;
+    const turno = (ultimaPeticion.get(viewer) ?? 0) + 1;
+    ultimaPeticion.set(viewer, turno);
+    if (!originales.has(viewer)) originales.set(viewer, leerOriginal(viewer));
+    const [o, muestra] = await Promise.all([originales.get(viewer)!, leerMuestra(sel.imagen)]);
+    if (!o || ultimaPeticion.get(viewer) !== turno) return false;
+    if (!muestra) return aplicarTapizado(viewer, sel.hex);
+    const px = texturizar(o.data, o.w, o.h, o.mascara, o.base, muestra, Math.round(o.w / 5), hexARgb(sel.tonoHex));
+    const c = document.createElement("canvas");
+    c.width = o.w; c.height = o.h;
+    c.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(px), o.w, o.h), 0, 0);
     const textura = await viewer.createTexture(c.toDataURL("image/png"));
     if (ultimaPeticion.get(viewer) !== turno) return false;
     slot.setTexture(textura);
