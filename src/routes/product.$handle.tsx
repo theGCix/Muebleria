@@ -1048,12 +1048,19 @@ function ProductView({ product: base }: { product: ProductData }) {
                 </ProductGallery>
               )}
 
-              {acabadosEspacio.length > 0 && (
+              {(has3D || acabadosEspacio.length > 0) && (
                 <button
                   type="button"
                   onClick={() => {
-                    setEspacioMontado(true);
-                    setEspacioOpen(true);
+                    // Con modelo 3D, «Pruébalo en tu espacio» lleva directo a la sala virtual;
+                    // sin modelo 3D se mantiene el probador con foto (la sala necesita un modelo)
+                    if (has3D) {
+                      setSalaMontada(true);
+                      setSalaOpen(true);
+                    } else {
+                      setEspacioMontado(true);
+                      setEspacioOpen(true);
+                    }
                   }}
                   className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -1297,10 +1304,6 @@ function ProductView({ product: base }: { product: ProductData }) {
               alt={product.nombre}
               poster={displayImg ?? undefined}
               colorHex={hayColoresFoto ? acabado?.hex : null}
-              onProbar={() => {
-                setEspacioMontado(true);
-                setEspacioOpen(true);
-              }}
             />
           </Suspense>
         )}
