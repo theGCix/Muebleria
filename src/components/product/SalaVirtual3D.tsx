@@ -168,7 +168,7 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
               slot={`hotspot-${p.id}`}
               data-position={p.posicion}
               data-visibility-attribute="visible"
-              className="pointer-events-none rounded-full px-3 py-1 text-xs font-medium shadow-md"
+              className="pointer-events-none rounded-full px-2 py-0.5 text-[10px] font-medium shadow-md sm:px-3 sm:py-1 sm:text-xs"
               style={{ background: TEXTO, color: MARFIL, whiteSpace: "nowrap" }}
             >
               {p.etiqueta}
@@ -189,7 +189,7 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
 
         {/* Vistas de cámara */}
         {cargado && (
-          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-2 sm:right-5" role="radiogroup" aria-label="Vista de cámara">
+          <div className="absolute inset-x-3 top-1 flex justify-center gap-1.5 sm:inset-x-auto sm:right-5 sm:top-1/2 sm:-translate-y-1/2 sm:flex-col sm:gap-2" role="radiogroup" aria-label="Vista de cámara">
             {VISTAS_CAMARA.map((v) => (
               <button
                 key={v.id}
@@ -197,7 +197,7 @@ function EscenaSala({ src, alt, poster, color, setColor, onMiEspacio, onProbar }
                 role="radio"
                 aria-checked={vistaId === v.id}
                 onClick={() => irAVista(v.id)}
-                className={BOTON_BASE}
+                className={`${BOTON_BASE} !min-h-9 !px-3 sm:!min-h-11 sm:!px-4`}
                 style={{ background: vistaId === v.id ? "#34443A" : "rgba(245,241,232,.92)", color: vistaId === v.id ? MARFIL : TEXTO }}
               >
                 {v.nombre}
