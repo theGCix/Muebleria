@@ -4,10 +4,8 @@
 // `compacto`: barra de la sala / «Mi espacio» (tira de muestras con scroll); sin él: rejilla con nombres (visor de la ficha).
 import { useEffect, useId, useState } from "react";
 import type { Tapizado } from "@/lib/tapizado3d";
-import {
-  CATEGORIAS_TELA, TONOS, buscarTela, buscarTono, hexTapizado, nombreTapizado, telasDeCategoria,
-  type Tela, type Tono,
-} from "@/lib/telas";
+import { TONOS, buscarTono, hexTapizado, nombreTapizado, type Tela, type Tono } from "@/lib/telas";
+import { useCatalogoTelas } from "@/hooks/useCatalogoTelas";
 
 interface Props {
   value: Tapizado;
@@ -21,12 +19,14 @@ interface Props {
 
 export function SelectorTela({ value, onChange, compacto = false, acento = "var(--primary)", texto = "inherit" }: Props) {
   const uid = useId();
+  // Catálogo editable desde el panel (/telas); si no carga, el fijo de lib/telas
+  const { categorias, buscarTela, telasDeCategoria } = useCatalogoTelas();
   // Tono que corresponde a la selección que llega de fuera (por su hex; «Original» si no coincide con ninguno)
   const tonoDe = (v: Tapizado) => TONOS.find((t) => t.hex && t.hex.toLowerCase() === v.tonoHex?.toLowerCase())?.id
     ?? (v.telaId ? "original" : TONOS.find((t) => t.hex && t.hex.toLowerCase() === v.hex?.toLowerCase())?.id ?? "original");
   const [telaId, setTelaId] = useState<string | null>(value.telaId);
   const [tonoId, setTonoId] = useState<string>(tonoDe(value));
-  const [categoria, setCategoria] = useState<number>(buscarTela(value.telaId)?.categoria ?? CATEGORIAS_TELA[0].id);
+  const [categoria, setCategoria] = useState<number>(buscarTela(value.telaId)?.categoria ?? categorias[0]?.id ?? 1);
 
   // Si otra vista (o la ficha) cambia la selección, se refleja aquí
   useEffect(() => {
@@ -58,7 +58,9 @@ export function SelectorTela({ value, onChange, compacto = false, acento = "var(
     elegir(null, buscarTono("original"));
   };
 
-  const enCategoria = telasDeCategoria(categoria);
+  // Si la categoría guardada ya no existe en el catálogo (se editó en el panel), se usa la primera
+  const categoriaActiva = categorias.some((c) => c.id === categoria) ? categoria : (categorias[0]?.id ?? categoria);
+  const enCategoria = telasDeCategoria(categoriaActiva);
   const lado = compacto ? "w-10 h-10" : "w-14 h-14";
   const anillo = (activo: boolean) => ({
     borderColor: activo ? acento : "rgba(255,255,255,0.9)",
@@ -84,8 +86,8 @@ export function SelectorTela({ value, onChange, compacto = false, acento = "var(
 
       {/* Tipo de tela: categorías + muestras */}
       <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Categoría de tela">
-        {CATEGORIAS_TELA.map((c) => {
-          const activa = c.id === categoria;
+        {categorias.map((c) => {
+          const activa = c.id === categoriaActiva;
           return (
             <button
               key={c.id}

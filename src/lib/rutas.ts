@@ -7,7 +7,7 @@ export const RUTAS_STAFF = [
   "/admin", "/analytics", "/caja", "/carritos-abandonados", "/carrusel", "/central", "/clientes",
   "/combos", "/correos-pedidos", "/crm", "/cupones", "/dashboard", "/despachos", "/devoluciones",
   "/fotos-clientes", "/gestionar-proyectos", "/insumos", "/leads", "/mi-produccion", "/pedidos",
-  "/pos", "/produccion", "/productos", "/proveedores", "/resenas", "/usuarios", "/ventas",
+  "/pos", "/produccion", "/productos", "/proveedores", "/resenas", "/telas", "/usuarios", "/ventas",
 ];
 
 /** Rutas del cliente sin valor para buscadores (cuenta, pago, enlaces por pedido). */
